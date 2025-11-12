@@ -44,6 +44,65 @@ class ReclamoProveedorController(BaseController):
         
         return reclamo_data, items_data
 
+    def _parse_flexible_reclamo_form_data(self, form_data):
+        orden_ids = form_data.getlist('orden_compra_ids[]')
+        
+        reclamo_data = {
+            'proveedor_id': form_data.get('proveedor_id'),
+            'motivo': form_data.get('motivo'),
+            'descripcion_problema': form_data.get('descripcion_problema'),
+            'orden_compra_ids': ",".join(orden_ids) if orden_ids else None,
+            'orden_compra_id': None  # Inicializar por defecto
+        }
+
+        # Si solo hay una orden de compra, la asignamos a la clave principal
+        if len(orden_ids) == 1:
+            reclamo_data['orden_compra_id'] = orden_ids[0]
+
+        items_data = []
+        insumo_ids = form_data.getlist('insumo_id[]')
+        cantidades = form_data.getlist('cantidad_reclamada[]')
+        motivos = form_data.getlist('motivo_item[]')
+
+        for i in range(len(insumo_ids)):
+            if insumo_ids[i] and float(cantidades[i] or 0) > 0:
+                items_data.append({
+                    'insumo_id': insumo_ids[i],
+                    'cantidad_reclamada': float(cantidades[i]),
+                    'motivo': motivos[i] if i < len(motivos) else None
+                })
+        
+        return reclamo_data, items_data
+
+    def crear_reclamo_flexible(self, form_data):
+        try:
+            reclamo_data, items_data = self._parse_flexible_reclamo_form_data(form_data)
+
+            validated_data = self.schema.load(reclamo_data)
+            validated_data['estado'] = 'ABIERTO'
+
+            response = self.model.create(validated_data)
+
+            if not response.get('success'):
+                return self.error_response(response.get('error', 'Error al crear el reclamo.'), 500)
+
+            reclamo_creado = response.get('data')
+            reclamo_id = reclamo_creado.get('id')
+
+            for item_data in items_data:
+                item_data['reclamo_id'] = reclamo_id
+                validated_item_data = self.item_schema.load(item_data)
+                self.item_model.create(validated_item_data)
+            
+            return self.success_response(reclamo_creado, "Reclamo creado exitosamente.")
+
+        except ValidationError as e:
+            logger.error(f"Error de validación al crear reclamo flexible: {e.messages}")
+            return self.error_response(e.messages, 400)
+        except Exception as e:
+            logger.error(f"Error inesperado al crear reclamo flexible: {e}", exc_info=True)
+            return self.error_response(f"Error inesperado: {str(e)}", 500)
+
     def crear_reclamo_con_items(self, form_data):
         try:
             reclamo_data, items_data = self._parse_reclamo_form_data(form_data)
@@ -79,11 +138,18 @@ class ReclamoProveedorController(BaseController):
     def get_all_reclamos(self, filtros=None):
         try:
             enriched_query = "*, proveedor:proveedores(nombre), orden:ordenes_compra(codigo_oc)"
-            # Pasa los filtros al modelo
             response = self.model.find_all(select_query=enriched_query, filters=filtros, order_by='created_at.desc')
             
             if response.get('success'):
-                return self.success_response(response['data'])
+                reclamos = response['data']
+                for reclamo in reclamos:
+                    if reclamo.get('orden_compra_ids'):
+                        oc_ids = [int(oc_id) for oc_id in reclamo['orden_compra_ids'].split(',') if oc_id.isdigit()]
+                        if oc_ids:
+                            oc_response = self.orden_compra_model.find_all(filters={'id': ('in', oc_ids)}, select_query='codigo_oc')
+                            if oc_response.get('success'):
+                                reclamo['ordenes_compra_codigos'] = [oc['codigo_oc'] for oc in oc_response['data']]
+                return self.success_response(reclamos)
             
             return self.success_response([], "No se encontraron reclamos.")
         except Exception as e:
@@ -114,6 +180,13 @@ class ReclamoProveedorController(BaseController):
                 return self.error_response("Reclamo no encontrado.", 404)
 
             reclamo_data = response['data'][0]
+            
+            if reclamo_data.get('orden_compra_ids'):
+                oc_ids = [int(oc_id) for oc_id in reclamo_data['orden_compra_ids'].split(',') if oc_id.isdigit()]
+                if oc_ids:
+                    oc_response = self.orden_compra_model.find_all(filters={'id': ('in', oc_ids)}, select_query='codigo_oc')
+                    if oc_response.get('success'):
+                        reclamo_data['ordenes_compra_codigos'] = [oc['codigo_oc'] for oc in oc_response['data']]
 
             items_query = "*, insumo:insumos_catalogo(nombre)"
             items_response = self.item_model.find_all(filters={'reclamo_id': reclamo_id}, select_query=items_query)

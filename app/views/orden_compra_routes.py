@@ -456,3 +456,39 @@ def cerrar_reclamo(reclamo_id):
         flash(response.get("error", "Error al cerrar el reclamo."), "error")
     
     return redirect(url_for("orden_compra.detalle_reclamo", reclamo_id=reclamo_id))
+
+from app.utils.estados import ESTADOS_INSPECCION
+
+@orden_compra_bp.route("/reclamos/nuevo", methods=['GET', 'POST'])
+@jwt_required()
+@permission_required(accion='crear_reclamo_proveedor')
+def nuevo_reclamo():
+    proveedor_controller = ProveedorController()
+    reclamo_controller = ReclamoProveedorController()
+
+    if request.method == 'POST':
+        resultado, status_code = reclamo_controller.crear_reclamo_flexible(request.form)
+        if status_code == 200 and resultado.get("success"):
+            flash("Reclamo creado exitosamente.", "success")
+            return redirect(url_for("orden_compra.listar_reclamos"))
+        else:
+            error_msg = resultado.get('error', 'Error desconocido')
+            flash(f"Error al crear el reclamo: {error_msg}", "error")
+            # Volver a renderizar el formulario con los datos y el error
+            proveedores_resp, _ = proveedor_controller.obtener_proveedores()
+            proveedores = proveedores_resp.get('data', [])
+            return render_template(
+                "reclamos_proveedor/nuevo_reclamo.html",
+                proveedores=proveedores,
+                motivos_cuarentena=ESTADOS_INSPECCION,
+                form_data=request.form
+            ), 400
+
+    proveedores_resp, _ = proveedor_controller.obtener_proveedores()
+    proveedores = proveedores_resp.get('data', [])
+    
+    return render_template(
+        "reclamos_proveedor/nuevo_reclamo.html",
+        proveedores=proveedores,
+        motivos_cuarentena=ESTADOS_INSPECCION
+    )

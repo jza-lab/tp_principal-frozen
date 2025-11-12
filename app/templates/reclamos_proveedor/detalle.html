@@ -7,10 +7,16 @@
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
         <div>
             <h1 class="h2 mb-1">Detalle de Reclamo #{{ reclamo.id }}</h1>
-            <p class="text-muted mb-0">Asociado a la Orden de Compra: 
+            <p class="text-muted mb-0">Asociado a la Orden de Compra:
+                {% if reclamo.orden_compra_id %}
                 <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
                     <code>{{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}</code>
                 </a>
+                {% elif reclamo.ordenes_compra_codigos %}
+                    <code>{{ reclamo.ordenes_compra_codigos | join(', ') }}</code>
+                {% else %}
+                    <code>N/A</code>
+                {% endif %}
             </p>
         </div>
         <div class="btn-toolbar">

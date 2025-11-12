@@ -1,0 +1,223 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Crear Nuevo Reclamo a Proveedor - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-plus-circle-fill me-2"></i>Crear Nuevo Reclamo a Proveedor</h4>
+                </div>
+                <div class="card-body">
+                    <form id="form-nuevo-reclamo" action="{{ url_for('orden_compra.nuevo_reclamo') }}" method="POST">
+                        {{ csrf_form.csrf_token }}
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="mb-3">
+                                    <label for="proveedor_id" class="form-label">1. Seleccione el Proveedor</label>
+                                    <select class="form-select" id="proveedor_id" name="proveedor_id" required>
+                                        <option value="">Seleccione un proveedor...</option>
+                                        {% for p in proveedores %}
+                                            <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="ordenes-container" class="mb-3" style="display: none;">
+                            <label class="form-label">2. Órdenes de Compra (Opcional)</label>
+                            <div id="ordenes-list" class="list-group">
+                                <!-- Las órdenes de compra se cargarán aquí dinámicamente -->
+                            </div>
+                        </div>
+
+                        <div id="insumos-section" style="display: none;">
+                            <hr class="my-4">
+                            <h5 class="mb-3">3. Ítems del Reclamo</h5>
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Insumo</th>
+                                            <th class="text-center" style="width: 20%;">Cantidad Reclamada</th>
+                                            <th>Motivo del Reclamo (Ítem)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="insumos-list">
+                                        <!-- Los insumos se cargarán aquí dinámicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div id="details-section" style="display: none;">
+                            <div class="mb-3">
+                                <label for="motivo" class="form-label">4. Título General del Reclamo</label>
+                                <input type="text" class="form-control" id="motivo" name="motivo" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="descripcion_problema" class="form-label">5. Descripción General</label>
+                                <textarea class="form-control" id="descripcion_problema" name="descripcion_problema" rows="3" required></textarea>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{{ url_for('orden_compra.listar_reclamos') }}" class="btn btn-secondary me-2">
+                                <i class="bi bi-x-circle me-1"></i>Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-primary" id="submit-button" style="display: none;">
+                                <i class="bi bi-check-circle-fill me-1"></i>Guardar Reclamo
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const MOTIVOS_CUARENTENA = {{ motivos_cuarentena | tojson | safe }};
+    const form = document.getElementById('form-nuevo-reclamo');
+    const proveedorSelect = document.getElementById('proveedor_id');
+    const ordenesContainer = document.getElementById('ordenes-container');
+    const ordenesList = document.getElementById('ordenes-list');
+    const insumosSection = document.getElementById('insumos-section');
+    const insumosList = document.getElementById('insumos-list');
+    const detailsSection = document.getElementById('details-section');
+    const submitButton = document.getElementById('submit-button');
+
+    proveedorSelect.addEventListener('change', async function() {
+        const proveedorId = this.value;
+
+        if (!proveedorId) {
+            ordenesContainer.style.display = 'none';
+            insumosSection.style.display = 'none';
+            detailsSection.style.display = 'none';
+            submitButton.style.display = 'none';
+            ordenesList.innerHTML = '';
+            insumosList.innerHTML = '';
+            return;
+        }
+
+        ordenesList.innerHTML = '<div class="list-group-item text-center"><div class="spinner-border spinner-border-sm" role="status"></div></div>';
+        ordenesContainer.style.display = 'block';
+        insumosSection.style.display = 'block';
+        detailsSection.style.display = 'block';
+        submitButton.style.display = 'block';
+
+        const ordenesResponse = await fetch(`/api/proveedores/${proveedorId}/ordenes-compra`);
+        if (ordenesResponse.ok) {
+            const ordenes = await ordenesResponse.json();
+            ordenesList.innerHTML = '';
+            if (ordenes.length > 0) {
+                ordenes.forEach(oc => {
+                    const item = document.createElement('label');
+                    item.className = 'list-group-item';
+                    item.innerHTML = `
+                        <input class="form-check-input me-1" type="checkbox" name="orden_compra_ids[]" value="${oc.id}">
+                        ${oc.codigo_oc} - ${new Date(oc.fecha_creacion).toLocaleDateString()} <span class="badge bg-info">${oc.estado}</span>
+                    `;
+                    ordenesList.appendChild(item);
+                });
+            } else {
+                ordenesList.innerHTML = '<div class="list-group-item text-muted">No se encontraron órdenes de compra.</div>';
+            }
+        }
+        
+        await fetchAndRenderInsumos();
+
+        ordenesList.addEventListener('change', fetchAndRenderInsumos);
+    });
+
+    async function fetchAndRenderInsumos() {
+        const proveedorId = proveedorSelect.value;
+        const selectedOrdenes = Array.from(ordenesList.querySelectorAll('input:checked')).map(input => input.value);
+        
+        let url = `/api/proveedores/${proveedorId}/insumos`;
+        if (selectedOrdenes.length > 0) {
+            const params = new URLSearchParams();
+            selectedOrdenes.forEach(id => params.append('orden_ids[]', id));
+            url += `?${params.toString()}`;
+        }
+
+        insumosList.innerHTML = '<tr><td colspan="3" class="text-center"><div class="spinner-border spinner-border-sm" role="status"></div></td></tr>';
+        
+        const response = await fetch(url);
+        if (response.ok) {
+            const insumos = await response.json();
+            renderInsumos(insumos);
+        } else {
+            insumosList.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Error al cargar los insumos.</td></tr>';
+        }
+    }
+
+    function renderInsumos(insumos) {
+        insumosList.innerHTML = '';
+        if (insumos.length > 0) {
+            insumos.forEach(insumo => {
+                const row = document.createElement('tr');
+                let insumoName = insumo.nombre;
+                if (insumo.ordenes_compra_codigos && insumo.ordenes_compra_codigos.length > 0) {
+                    insumoName += ` <small class="text-muted">(${insumo.ordenes_compra_codigos.join(', ')})</small>`;
+                }
+                let motivoSelect = `<select name="motivo_item[]" class="form-select">`;
+                motivoSelect += `<option value="">Seleccione un motivo...</option>`;
+                MOTIVOS_CUARENTENA.forEach(motivo => {
+                    motivoSelect += `<option value="${motivo}">${motivo.replace(/_/g, ' ')}</option>`;
+                });
+                motivoSelect += `</select>`;
+                row.innerHTML = `
+                    <td>
+                        ${insumoName}
+                        <input type="hidden" name="insumo_id[]" value="${insumo.id_insumo}">
+                    </td>
+                    <td><input type="number" name="cantidad_reclamada[]" class="form-control" value="0" min="0" step="any"></td>
+                    <td>${motivoSelect}</td>
+                `;
+                insumosList.appendChild(row);
+            });
+        } else {
+            insumosList.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No hay insumos para mostrar.</td></tr>';
+        }
+    }
+
+    form.addEventListener('submit', async function(event) {
+        event.preventDefault();
+
+        const formData = new FormData(form);
+        
+        try {
+            const response = await fetch(form.action, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                window.location.href = "{{ url_for('orden_compra.listar_reclamos') }}";
+            } else {
+                const errorData = await response.json();
+                let errorMessage = "Error al crear el reclamo. Por favor, revise los campos.";
+                if (errorData && errorData.error) {
+                    if (typeof errorData.error === 'object') {
+                         errorMessage = Object.entries(errorData.error).map(([key, value]) => `${key}: ${value.join(', ')}`).join('<br>');
+                    } else {
+                        errorMessage = errorData.error;
+                    }
+                }
+                showNotificationModal('Error de Validación', errorMessage, 'error');
+            }
+        } catch (error) {
+            showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
+        }
+    });
+});
+</script>
+{% endblock %}

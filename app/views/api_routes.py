@@ -241,3 +241,38 @@ def get_resumen_reclamos_proveedor(proveedor_id):
     controller = ReclamoProveedorController()
     resultado, status_code = controller.get_resumen_reclamos_por_proveedor(proveedor_id)
     return jsonify(resultado), status_code
+
+from app.controllers.orden_compra_controller import OrdenCompraController
+
+@api_bp.route('/proveedores/<int:proveedor_id>/ordenes-compra', methods=['GET'])
+@permission_required(accion='crear_reclamo_proveedor')
+def get_ordenes_por_proveedor(proveedor_id):
+    """
+    Devuelve las órdenes de compra de un proveedor específico.
+    """
+    orden_controller = OrdenCompraController()
+    response, _ = orden_controller.get_all_ordenes({'proveedor_id': proveedor_id})
+    if response.get("success"):
+        return jsonify(response.get("data", []))
+    return jsonify([]), 500
+
+@api_bp.route('/proveedores/<int:proveedor_id>/insumos', methods=['GET'])
+@permission_required(accion='crear_reclamo_proveedor')
+def get_insumos_por_proveedor(proveedor_id):
+    """
+    Devuelve los insumos asociados a un proveedor.
+    Si se pasan 'orden_ids' como parámetro, filtra los insumos por esas órdenes.
+    """
+    insumo_controller = InsumoController()
+    orden_ids = request.args.getlist('orden_ids[]')
+    
+    filtros = {'proveedor_id': proveedor_id}
+    if orden_ids:
+        filtros['orden_ids'] = orden_ids
+
+    response, _ = insumo_controller.obtener_insumos_para_reclamo(filtros)
+    
+    if response.get("success"):
+        return jsonify(response.get("data", []))
+    
+    return jsonify([]), 500

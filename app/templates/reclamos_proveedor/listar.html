@@ -10,6 +10,9 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h1 class="h3 text-gray-800">Gestión de Reclamos a Proveedores</h1>
+        <a href="{{ url_for('orden_compra.nuevo_reclamo') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Crear Nuevo Reclamo
+        </a>
     </div>
 
     <!-- Pestañas de Navegación -->
@@ -67,9 +70,15 @@
                             <tr>
                                 <td>{{ reclamo.id }}</td>
                                 <td>
+                                    {% if reclamo.orden_compra_id %}
                                     <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
                                         {{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}
                                     </a>
+                                    {% elif reclamo.ordenes_compra_codigos %}
+                                        {{ reclamo.ordenes_compra_codigos | join(', ') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
                                 </td>
                                 <td>{{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</td>
                                 <td>{{ reclamo.motivo }}</td>
