@@ -1,0 +1,79 @@
+{% extends 'layouts/app_layout.html' %}
+{% block app_content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <form action="{{ url_for('main_routes.global_search_results') }}" method="GET" class="mb-4">
+                <div class="input-group">
+                    <input type="search" name="q" class="form-control" value="{{ query_string }}" placeholder="Buscar producto, cliente, pedido..." aria-label="Search">
+                    <button class="btn btn-primary" type="submit">Buscar</button>
+                </div>
+            </form>
+
+            <p class="text-muted">Mostrando resultados para: "{{ query_string }}"</p>
+            <hr>
+
+            <div class="search-results">
+                <h2 class="h4">Productos Encontrados</h2>
+                {% if results.productos %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in results.productos %}
+                        <li class="list-group-item"><a href="{{ url_for('productos.obtener_producto_por_id', id_producto=item.id) }}">{{ item.nombre }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No se encontraron productos.</p>
+                {% endif %}
+
+                <hr>
+                <h2 class="h4">Clientes Encontrados</h2>
+                {% if results.clientes %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in results.clientes %}
+                        <li class="list-group-item"><a href="{{ url_for('clientes_proveedores.ver_perfil_cliente', id=item.id) }}">{{ item.nombre }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No se encontraron clientes.</p>
+                {% endif %}
+
+                <hr>
+                <h2 class="h4">Pedidos Encontrados</h2>
+                {% if results.pedidos %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in results.pedidos %}
+                        <li class="list-group-item"><a href="{{ url_for('orden_venta.detalle', id=item.id) }}">Pedido #{{ item.id }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No se encontraron pedidos.</p>
+                {% endif %}
+
+                <hr>
+                <h2 class="h4">Órdenes de Compra Encontradas</h2>
+                {% if results.ordenes_compra %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in results.ordenes_compra %}
+                        <li class="list-group-item"><a href="{{ url_for('orden_compra.detalle', id=item.id) }}">{{ item.codigo_oc }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No se encontraron órdenes de compra.</p>
+                {% endif %}
+
+                <hr>
+                <h2 class="h4">Órdenes de Producción Encontradas</h2>
+                {% if results.ordenes_produccion %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in results.ordenes_produccion %}
+                        <li class="list-group-item"><a href="{{ url_for('orden_produccion.detalle', id=item.id) }}">{{ item.codigo }}</a></li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>No se encontraron órdenes de producción.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
