@@ -76,10 +76,11 @@ class ReclamoProveedorController(BaseController):
             logger.error(f"Error inesperado al crear reclamo: {e}", exc_info=True)
             return self.error_response(f"Error inesperado: {str(e)}", 500)
 
-    def get_all_reclamos(self):
+    def get_all_reclamos(self, filtros=None):
         try:
             enriched_query = "*, proveedor:proveedores(nombre), orden:ordenes_compra(codigo_oc)"
-            response = self.model.find_all(select_query=enriched_query, order_by='created_at.desc')
+            # Pasa los filtros al modelo
+            response = self.model.find_all(select_query=enriched_query, filters=filtros, order_by='created_at.desc')
             
             if response.get('success'):
                 return self.success_response(response['data'])
@@ -145,4 +146,25 @@ class ReclamoProveedorController(BaseController):
                 return self.error_response(response.get('error', 'No se pudo cerrar el reclamo.'), 500)
         except Exception as e:
             logger.error(f"Error cerrando el reclamo: {e}", exc_info=True)
+            return self.error_response(f"Error inesperado: {str(e)}", 500)
+
+    def get_resumen_reclamos_por_proveedor(self, proveedor_id):
+        try:
+            response = self.model.find_all(filters={'proveedor_id': proveedor_id})
+            
+            if not response.get('success'):
+                return self.error_response(f"No se pudieron obtener los reclamos para el proveedor {proveedor_id}.", 404)
+
+            reclamos = response.get('data', [])
+            resumen = {}
+            for reclamo in reclamos:
+                motivo = reclamo.get('motivo', 'SIN MOTIVO').upper()
+                resumen[motivo] = resumen.get(motivo, 0) + 1
+            
+            # Convertir a un formato compatible con Chart.js (lista de objetos)
+            chart_data = [{'motivo': key, 'cantidad': value} for key, value in resumen.items()]
+
+            return self.success_response(chart_data)
+        except Exception as e:
+            logger.error(f"Error generando resumen de reclamos: {e}", exc_info=True)
             return self.error_response(f"Error inesperado: {str(e)}", 500)

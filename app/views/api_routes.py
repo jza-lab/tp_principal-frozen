@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.trazabilidad_controller import TrazabilidadController
+from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
 from app.utils.decorators import permission_any_of, permission_required
 
 # Blueprint para endpoints de API interna
@@ -229,4 +230,14 @@ def buscar_insumos():
         
         resultado['data'] = insumos_con_proveedor
     
+    return jsonify(resultado), status_code
+
+@api_bp.route('/proveedores/<int:proveedor_id>/resumen-reclamos', methods=['GET'])
+@permission_required(accion='consultar_ordenes_de_compra')
+def get_resumen_reclamos_proveedor(proveedor_id):
+    """
+    Devuelve un resumen de los reclamos de un proveedor, agrupados por motivo.
+    """
+    controller = ReclamoProveedorController()
+    resultado, status_code = controller.get_resumen_reclamos_por_proveedor(proveedor_id)
     return jsonify(resultado), status_code

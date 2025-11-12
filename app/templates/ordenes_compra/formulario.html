@@ -45,15 +45,17 @@
                             <select id="insumo-select" class="form-select" size="8">
                                 <option value="">Seleccione un insumo...</option>
                                 {% for insumo in insumos %}
-                                <option value="{{ insumo.id_insumo }}" 
-                                        data-nombre="{{ insumo.nombre }}" 
-                                        data-precio="{{ insumo.precio_unitario }}" 
-                                        data-proveedor-id="{{ insumo.proveedor.id }}" 
-                                        data-proveedor-nombre="{{ insumo.proveedor.nombre }}"
-                                        data-stock-actual="{{ insumo.stock_actual|default(0) }}"
-                                        data-stock-max="{{ insumo.stock_max|default(999999) }}">
-                                    {{ insumo.nombre }} - {{ insumo.proveedor.nombre }}
-                                </option>
+                                    {% set proveedor_rating = proveedores|selectattr('id', 'equalto', insumo.proveedor.id)|first %}
+                                    {% set rating_stars = ('★' * proveedor_rating.rating + '☆' * (5 - proveedor_rating.rating)) if proveedor_rating else '' %}
+                                    <option value="{{ insumo.id_insumo }}" 
+                                            data-nombre="{{ insumo.nombre }}" 
+                                            data-precio="{{ insumo.precio_unitario }}" 
+                                            data-proveedor-id="{{ insumo.proveedor.id }}" 
+                                            data-proveedor-nombre="{{ insumo.proveedor.nombre }}"
+                                            data-stock-actual="{{ insumo.stock_actual|default(0) }}"
+                                            data-stock-max="{{ insumo.stock_max|default(999999) }}">
+                                        {{ insumo.nombre }} - {{ insumo.proveedor.nombre }} {{ rating_stars }}
+                                    </option>
                                 {% endfor %}
                             </select>
                         </div>
