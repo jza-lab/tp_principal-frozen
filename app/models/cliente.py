@@ -29,7 +29,7 @@ class ClienteModel(BaseModel):
             # En caso de error, retornamos 0 para evitar fallos.
             return 0
 
-    def get_all(self, filtros: Optional[Dict] = None) -> Dict:
+    def get_all(self, filtros: Optional[Dict] = None, limit: Optional[int] = None) -> Dict:
         """Obtener todos los clientes, con filtros opcionales de búsqueda y activos."""
         try:
             query = self.db.table(self.get_table_name()).select("*, direccion:direccion_id(*)")
@@ -49,7 +49,12 @@ class ClienteModel(BaseModel):
                     query = query.eq(key, value)
 
             # Ordenar por activo descendente por defecto
-            response = query.order('activo', desc=True).execute() 
+            query = query.order('activo', desc=True)
+            
+            if limit:
+                query = query.limit(limit)
+                
+            response = query.execute()
             
             return {'success': True, 'data': response.data}
         except Exception as e:

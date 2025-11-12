@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libjpeg62-turbo \
     libtiff5 \
     libopenblas0 \
+    libcairo2-dev \
     libx11-6 \
     libsm6 \
     libxext6 \

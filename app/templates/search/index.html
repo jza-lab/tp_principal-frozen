@@ -1,0 +1,33 @@
+{% extends 'layouts/app_layout.html' %}
+{% block app_content %}
+<style>
+    .search-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 70vh;
+    }
+    .search-form {
+        width: 100%;
+        max-width: 600px;
+    }
+    .search-input {
+        border-radius: 25px;
+        padding: 10px 20px;
+    }
+    .search-button {
+        border-radius: 25px;
+    }
+</style>
+<div class="search-container">
+    <div class="search-form text-center">
+        <h1 class="mb-4">Búsqueda Global</h1>
+        <form action="{{ url_for('main_routes.global_search_results') }}" method="GET">
+            <div class="input-group">
+                <input type="search" name="q" class="form-control search-input" placeholder="Buscar producto, cliente, pedido, orden de compra o producción..." aria-label="Search">
+                <button class="btn btn-primary search-button" type="submit">Buscar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
