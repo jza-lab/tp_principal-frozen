@@ -1,0 +1,389 @@
+/* --- ESTRUCTURA PRINCIPAL --- */
+.despacho-container {
+    display: flex;
+    height: calc(100vh - 120px); /* Ajustar según la altura de tu navbar/header */
+    font-family: 'Inter', sans-serif;
+    background-color: #f8f9fa;
+}
+
+.panel {
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel-izquierdo {
+    flex: 2;
+    border-right: 1px solid #dee2e6;
+}
+
+.panel-derecho {
+    flex: 1;
+    background-color: #fff;
+    overflow-y: auto;
+}
+
+/* --- HEADER DEL PANEL IZQUIERDO --- */
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.view-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.view-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #e9ecef;
+    color: #333;
+    transition: all 0.2s;
+}
+
+.view-btn.active {
+    background: #0d6efd;
+    color: #fff;
+}
+.view-btn:hover:not(.active) {
+    background: #d3d6d9;
+}
+
+/* --- CONTENIDO DEL PANEL IZQUIERDO --- */
+.panel-content {
+    flex-grow: 1;
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.view-wrapper {
+    display: none;
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+}
+.view-wrapper.active {
+    display: block;
+}
+
+#map-container {
+    height: 100%;
+    width: 100%;
+}
+
+#list-view {
+    padding: 20px;
+}
+#disponibles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+}
+
+/* --- ESTILOS DEL MAPA (LEAFLET) --- */
+.custom-depot-marker {
+    font-size: 32px;
+    text-shadow: 0 0 5px white;
+}
+.marker-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+}
+.marker-content {
+    background: #6c757d;
+    color: #fff;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 13px;
+    font-weight: bold;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    border: 2px solid #fff;
+}
+.marker-wrapper.selected .marker-content {
+    background: #0d6efd;
+    animation: pulse 1.5s infinite;
+}
+.marker-order-number {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 20px;
+    height: 20px;
+    background: #0d6efd;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: bold;
+    border: 2px solid white;
+    z-index: 10;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7); }
+  70% { box-shadow: 0 0 0 10px rgba(13, 110, 253, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+}
+
+
+/* --- TARJETAS DE PEDIDO --- */
+.pedido-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 16px;
+    border: 2px solid #dee2e6;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+.pedido-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.pedido-card.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 4px 12px rgba(13,110,253,0.2);
+}
+
+.card-order-number {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 28px;
+    height: 28px;
+    background: #0d6efd;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-weight: bold;
+}
+.card-header .badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #fff;
+}
+.card-header .badge.alta { background: #dc3545; }
+.card-header .badge.media { background: #ffc107; color: #000; }
+
+.card-body p {
+    margin: 0 0 8px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #495057;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid #f1f3f5;
+    font-size: 13px;
+    color: #6c757d;
+}
+.card-footer span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* --- LISTA DE RUTA OPTIMIZADA --- */
+.lista-seccion { margin-bottom: 24px; }
+.lista-seccion h4 { margin-bottom: 16px; font-weight: 600; }
+.ruta-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.ruta-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+.ruta-icono, .ruta-orden {
+    font-size: 24px;
+    flex-shrink: 0;
+}
+.ruta-orden {
+    width: 32px;
+    height: 32px;
+    background: #adb5bd;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: bold;
+}
+.ruta-info strong {
+    display: block;
+    color: #212529;
+}
+.ruta-info span {
+    color: #6c757d;
+    font-size: 14px;
+}
+.ruta-flecha {
+    text-align: center;
+    color: #adb5bd;
+    font-weight: bold;
+}
+.ruta-item.inicio { background: #e7f5ff; }
+.ruta-item.fin { background: #e6fcf5; }
+
+
+/* --- PANEL DERECHO --- */
+.despacho-info-card {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+.despacho-info-card h4 {
+    margin: 0;
+    font-weight: 600;
+}
+.form-section label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: 8px;
+}
+.input-group {
+    display: flex;
+}
+.input-group input {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px 0 0 6px;
+    font-size: 14px;
+}
+.input-group button {
+    padding: 10px 16px;
+    background: #6c757d;
+    color: #fff;
+    border: 1px solid #6c757d;
+    border-radius: 0 6px 6px 0;
+    cursor: pointer;
+}
+
+.info-section h5 { font-weight: 600; margin-bottom: 12px; }
+.info-section p { margin: 0 0 8px 0; }
+.resumen-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.resumen-grid p { margin: 0; }
+.resumen-grid span { font-weight: bold; }
+
+.progress-bar-container {
+    height: 25px;
+    background: #e9ecef;
+    border-radius: 6px;
+    overflow: hidden;
+}
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #0d6efd;
+    transition: width 0.3s;
+}
+.progress-bar.sobrecarga {
+    background: #dc3545;
+}
+.alerta-sobrecarga {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: #f8d7da;
+    color: #721c24;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    font-size: 14px;
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.btn-confirmar {
+    width: 100%;
+    padding: 14px;
+    background: #0d6efd;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+.btn-confirmar:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+.btn-confirmar:not(:disabled):hover {
+    background: #0b5ed7;
+}
+
+.ayuda-box {
+    margin-top: 16px;
+    padding: 12px;
+    background: #fff3cd;
+    border: 1px solid #ffeeba;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #856404;
+}
