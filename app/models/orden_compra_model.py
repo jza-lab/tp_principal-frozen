@@ -173,7 +173,7 @@ class OrdenCompraModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name()).select(
-                "*, proveedor:proveedores(nombre), usuario_creador:usuarios!usuario_creador_id(nombre), usuario_aprobador:usuarios!usuario_aprobador_id(nombre)"
+                "*, proveedor:proveedores(nombre), usuario_creador:usuarios!usuario_creador_id(nombre), usuario_aprobador:usuarios!usuario_aprobador_id(nombre), orden_produccion:ordenes_produccion!ordenes_compra_orden_produccion_id_fkey(codigo)"
             )
 
             if filters:
@@ -223,6 +223,12 @@ class OrdenCompraModel(BaseModel):
                     del orden['proveedor']
                 else:
                     orden['proveedor_nombre'] = 'N/A'
+
+                if orden.get('orden_produccion'):
+                    orden['orden_produccion_codigo'] = orden['orden_produccion']['codigo']
+                    del orden['orden_produccion']
+                else:
+                    orden['orden_produccion_codigo'] = None
                 
                 if orden.get('usuario_creador'):
                     orden['usuario_creador_nombre'] = orden['usuario_creador']['nombre']

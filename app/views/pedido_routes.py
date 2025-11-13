@@ -1,7 +1,9 @@
 import os
 import random
-from flask import Blueprint, current_app, render_template, request, redirect, session, url_for, flash, jsonify
+from flask import Blueprint, current_app, render_template, request, redirect, session, url_for, flash, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
+import qrcode
+import io
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.utils.decorators import permission_required
@@ -488,3 +490,42 @@ def registrar_pago(id):
         return jsonify({'success': True, 'message': response.get('message')}), 200
     else:
         return jsonify({'success': False, 'message': response.get('error')}), status_code
+
+@orden_venta_bp.route('/<int:id_pedido>/qr')
+@jwt_required()
+@permission_required(accion='logistica_gestion_ov')
+def generar_qr_pedido(id_pedido):
+    """
+    Genera un código QR que apunta a la página de trazabilidad pública del pedido.
+    """
+    try:
+        # 1. Generar la URL pública
+        url_publica = url_for('public.mostrar_trazabilidad_publica', id_pedido=id_pedido, _external=True)
+
+        # 2. Crear el QR en memoria
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(url_publica)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        # 3. Guardar la imagen en un buffer de bytes
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        # 4. Devolver la imagen
+        return send_file(buffer, mimetype='image/png')
+
+    except Exception as e:
+        # En caso de error, puedes devolver un placeholder o un mensaje.
+        # Esto es importante para que no se rompa la vista de detalle.
+        flash(f'Error al generar el código QR: {e}', 'danger')
+        # Idealmente, deberías tener una imagen de error placeholder.
+        # Por ahora, devolvemos un 404.
+        return "Error generando QR", 404

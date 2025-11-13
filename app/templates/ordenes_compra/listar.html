@@ -150,6 +150,9 @@
 
                 <div class="card-secondary-details mb-3">
                     <span><i class="bi bi-upc-scan"></i> <code>{{ orden.codigo_oc }}</code></span>
+                    {% if orden.orden_produccion_codigo %}
+                        <span><i class="bi bi-box-fill"></i> <code>{{ orden.orden_produccion_codigo }}</code></span>
+                    {% endif %}
                     <span><i class="bi bi-currency-dollar"></i> <b>{{ orden.total | formato_moneda }}</b></span>
                     <span><i class="bi bi-calendar-event"></i> {{ orden.fecha_emision }}</span>
                 </div>
