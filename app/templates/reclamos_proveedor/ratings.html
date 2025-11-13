@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     const reclamosUrl = new URL("{{ url_for('orden_compra.listar_reclamos', _external=True) }}");
                     reclamosUrl.searchParams.set('proveedor_id', providerId);
                     
-                    buttonContainer.innerHTML = `<a href="${reclamosUrl.href}" class="btn btn-sm btn-primary w-100 mt-auto">Ver Historial de Reclamos</a>`;
+                    buttonContainer.innerHTML = `<a href="${reclamosUrl.href}" class="btn btn-sm btn-secundary w-100 mt-auto">Ver Historial de Reclamos</a>`;
 
                 } catch (error) {
                     summaryContainer.innerHTML = '';

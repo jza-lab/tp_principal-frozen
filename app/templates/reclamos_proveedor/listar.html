@@ -83,8 +83,13 @@
                                 <td>{{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</td>
                                 <td>{{ reclamo.motivo }}</td>
                                 <td>
-                                    <span class="badge bg-primary">{{ reclamo.estado }}</span>
+                                    {% if reclamo.estado == 'ABIERTO' %}
+                                        <span class="badge bg-warning bi-exclamation-triangle-fill text-black"> {{ reclamo.estado }}</span>
+                                    {% elif reclamo.estado == 'CERRADO' %}
+                                        <span class="badge bi-x-circle bg-info text-black"> {{ reclamo.estado }}</span>
+                                    {% endif %}
                                 </td>
+
                                 <td>{{ reclamo.created_at.strftime('%Y-%m-%d %H:%M') if reclamo.created_at else 'N/A' }}</td>
                                 <td>
                                     <a href="{{ url_for('orden_compra.detalle_reclamo', reclamo_id=reclamo.id) }}" class="btn btn-sm btn-primary">
