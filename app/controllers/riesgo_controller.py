@@ -95,10 +95,13 @@ class RiesgoController(BaseController):
         from app.controllers.lote_producto_controller import LoteProductoController
         from app.controllers.orden_produccion_controller import OrdenProduccionController
         from app.models.inventario import InventarioModel
+        from app.models.reserva_insumo import ReservaInsumoModel
+
         inventario_model= InventarioModel()
         inventario_controller = InventarioController()
         lote_producto_controller = LoteProductoController()
         op_controller = OrdenProduccionController()
+        reserva_insumo_model = ReservaInsumoModel()
         
         logger.info(f"Procesando efectos para {len(afectados)} afectados. Motivo: {motivo_log}")
 
@@ -110,10 +113,23 @@ class RiesgoController(BaseController):
             # 1. Marcar todas las entidades como 'en_alerta'
             self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
 
-            # 2. Poner lotes en cuarentena
+            # 2. Poner lotes en cuarentena y marcar OPs relacionadas en alerta
             if tipo == 'lote_insumo':
+                # Marcar OPs asociadas en alerta (pausa simulada)
+                reservas = reserva_insumo_model.find_all({'lote_inventario_id': entidad_id}).get('data', [])
+                for reserva in reservas:
+                    op_id = reserva.get('orden_produccion_id')
+                    if op_id:
+                        op_res = op_controller.model.find_by_id(op_id, 'id')
+                        if op_res.get('success') and op_res.get('data'):
+                            orden_produccion = op_res['data']
+                            if orden_produccion.get('estado') not in ['COMPLETADA', 'EN CONTROL DE CALIDAD', 'FINALIZADA', 'CANCELADA']:
+                                logger.info(f"Lote de insumo {entidad_id} en alerta afecta a la OP {op_id}. Marcando OP en alerta.")
+                                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad('orden_produccion', op_id, True)
+
+                # Poner el lote de insumo en cuarentena
                 lote_info_res = inventario_model.find_by_id(entidad_id, id_field='id_lote')
-                if lote_info_res.get('success') and lote_info_res.get('data') and len(lote_info_res.get('data')) > 0:
+                if lote_info_res.get('success') and lote_info_res.get('data'):
                     lote_info = lote_info_res.get('data')
                     if lote_info.get('cantidad_disponible', 0) <= 0:
                         logger.info(f"Lote de insumo {entidad_id} está agotado. Marcando como resuelto.")
@@ -128,6 +144,7 @@ class RiesgoController(BaseController):
                         inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
                 else:
                      inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
+
             elif tipo == 'lote_producto':
                 lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
 
@@ -193,22 +210,31 @@ class RiesgoController(BaseController):
 
             # Obtener detalles del creador
             creador_id = alerta.get('id_usuario_creador')
-            if creador_id:
-                alerta['creador_info'] = usuario_controller.obtener_detalles_completos_usuario(creador_id)
-            else:
-                alerta['creador_info'] = None
-
-            # Siempre obtener los detalles de las entidades afectadas y su estado
+            alerta['creador_info'] = usuario_controller.obtener_detalles_completos_usuario(creador_id) if creador_id else None
+            
             afectados_con_estado = self.alerta_riesgo_model.obtener_afectados_con_estado(alerta['id'])
+            # --- INICIO: Enriquecimiento de datos ---
+            ids_por_tipo = {tipo: [a['id_entidad'] for a in afectados_con_estado if a['tipo_entidad'] == tipo] for tipo in set(a['tipo_entidad'] for a in afectados_con_estado)}
+
+            detalles_enriquecidos = {}
+            if ids_por_tipo.get('lote_insumo'):
+                insumos_res = self.alerta_riesgo_model.db.table('insumos_inventario').select('id_lote, numero_lote_proveedor, cantidad_en_cuarentena, insumos_catalogo:id_insumo(nombre), proveedores:id_proveedor(nombre)').in_('id_lote', list(set(ids_por_tipo['lote_insumo']))).execute().data
+                detalles_enriquecidos['lote_insumo'] = {str(i['id_lote']): i for i in insumos_res}
+
+            if ids_por_tipo.get('orden_produccion'):
+                ops_res = self.alerta_riesgo_model.db.table('ordenes_produccion').select('id, codigo, cantidad_planificada, estado, productos(nombre)').in_('id', [int(i) for i in set(ids_por_tipo['orden_produccion'])]).execute().data                
+                detalles_enriquecidos['orden_produccion'] = {i['id']: i for i in ops_res}
+
+            if ids_por_tipo.get('lote_producto'):
+                lotes_res = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_en_cuarentena, fecha_vencimiento, productos(nombre)').in_('id_lote', [int(i) for i in set(ids_por_tipo['lote_producto'])]).execute().data
+                detalles_enriquecidos['lote_producto'] = {i['id_lote']: i for i in lotes_res}
+            
             participantes = {}
             for afectado in afectados_con_estado:
                 resolutor_id = afectado.get('id_usuario_resolucion')
                 if resolutor_id and afectado.get('estado') == 'resuelto':
                     if resolutor_id not in participantes:
-                        participantes[resolutor_id] = {
-                            'info': usuario_controller.obtener_detalles_completos_usuario(resolutor_id),
-                            'acciones': []
-                        }
+                        participantes[resolutor_id] = {'info': usuario_controller.obtener_detalles_completos_usuario(resolutor_id), 'acciones': []}
                     
                     accion_desc = f"{afectado.get('resolucion_aplicada', 'Acción desconocida').replace('_', ' ').title()} sobre {afectado.get('tipo_entidad', '').replace('_', ' ')} #{afectado.get('id_entidad')}"
                     participantes[resolutor_id]['acciones'].append(accion_desc)
@@ -218,133 +244,74 @@ class RiesgoController(BaseController):
             
             # Obtener los detalles completos (código, nombre, etc.)
             afectados_detalle = self.alerta_riesgo_model.obtener_afectados_detalle_para_previsualizacion(afectados_con_estado)
-
-            # Enriquecer los detalles con el estado de resolución
-            estado_map = {f"{a['tipo_entidad']}-{a['id_entidad']}": (a['estado'], a.get('resolucion_aplicada')) for a in afectados_con_estado}
-            
-            map_plural_a_singular = {
-                'lotes_insumo': 'lote_insumo',
-                'ordenes_produccion': 'orden_produccion',
-                'lotes_producto': 'lote_producto',
-                'pedidos': 'pedido'
-            }
-
-            for tipo_entidad_plural, lista_entidades in afectados_detalle.items():
-                tipo_entidad_singular = map_plural_a_singular.get(tipo_entidad_plural)
-                if not tipo_entidad_singular:
-                    logger.warning(f"No se encontró mapeo para el tipo de entidad plural: {tipo_entidad_plural}")
-                    continue
-
-                id_field = 'id_lote' if 'lote' in tipo_entidad_singular else 'id'
-
-                for entidad in lista_entidades:
+            map_plural_a_singular = {'lotes_insumo': 'lote_insumo', 'ordenes_produccion': 'orden_produccion', 'lotes_producto': 'lote_producto', 'pedidos': 'pedido'}
+            for tipo_plural, entidades in afectados_detalle.items():
+                tipo_singular = map_plural_a_singular.get(tipo_plural)
+                if not tipo_singular: continue
+                id_field = 'id_lote' if 'lote' in tipo_singular else 'id'
+                for entidad in entidades:
                     entidad_id = entidad.get(id_field)
-                    if not entidad_id:
-                        continue
-                        
-                    key = f"{tipo_entidad_singular}-{entidad_id}"
-                    estado, resolucion = estado_map.get(key, ('pendiente', None))
-                    entidad['estado_resolucion'] = estado
-                    entidad['resolucion_aplicada'] = resolucion
+                    if detalles_enriquecidos.get(tipo_singular, {}).get(entidad_id):
+                        entidad.update(detalles_enriquecidos[tipo_singular][entidad_id])
+            
+            # Enriquecer pedidos con detalles de resolución
+            from app.controllers.nota_credito_controller import NotaCreditoController
+            nc_controller = NotaCreditoController()
+            for afectado in [a for a in afectados_con_estado if a['tipo_entidad'] == 'pedido']:
+                pedido_id = int(afectado['id_entidad'])
+                pedido_en_detalle = next((p for p in afectados_detalle.get('pedidos', []) if p['id'] == pedido_id), None)
+                if not pedido_en_detalle: continue
+                
+                pedido_en_detalle['estado_resolucion'] = afectado.get('estado', 'pendiente')
+                pedido_en_detalle['resolucion_aplicada'] = afectado.get('resolucion_aplicada')
+                if afectado.get('id_usuario_resolucion'):
+                    pedido_en_detalle['resolutor_info'] = usuario_controller.obtener_detalles_completos_usuario(afectado['id_usuario_resolucion'])
+                if afectado.get('resolucion_aplicada') == 'nota_credito' and afectado.get('id_documento_relacionado'):
+                    nc_res = nc_controller.obtener_detalle_nc_por_id(afectado['id_documento_relacionado'])
+                    if nc_res.get('success'):
+                        pedido_en_detalle['nota_credito'] = nc_res['data']
 
-            alerta['afectados_detalle'] = afectados_detalle
-
-            # --- INICIO: Calcular porcentajes de afectación para pedidos ---
             if 'pedidos' in afectados_detalle:
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
-                afectados_trazabilidad_completa = self.trazabilidad_model.obtener_afectados_para_alerta(
-                    alerta['origen_tipo_entidad'], 
-                    alerta['origen_id_entidad']
-                )
-                lotes_producto_afectados_ids = [
-                    str(afectado['id_entidad']) 
-                    for afectado in afectados_trazabilidad_completa 
-                    if afectado['tipo_entidad'] == 'lote_producto'
-                ]
+                afectados_trazabilidad_completa = self.trazabilidad_model.obtener_afectados_para_alerta(alerta['origen_tipo_entidad'], alerta['origen_id_entidad'])
+                lotes_producto_afectados_ids = {str(a['id_entidad']) for a in afectados_trazabilidad_completa if a['tipo_entidad'] == 'lote_producto'}
+
 
                 for pedido in afectados_detalle['pedidos']:
-                    try:
-                        res_pedido, _ = pedido_controller.obtener_pedido_por_id(pedido['id'])
-                        if not res_pedido.get('success'):
-                            pedido['afectacion_items_str'] = "Error al cargar"
-                            pedido['afectacion_valor_str'] = "Error"
-                            continue
-
-                        pedido_completo = res_pedido.get('data', {})
-                        items_pedido = pedido_completo.get('items', [])
-
-                        if not items_pedido:
-                            pedido['afectacion_items_str'] = "0 de 0"
-                            pedido['afectacion_valor_str'] = "0%"
-                            continue
+                   
+                    res_pedido, _ = pedido_controller.obtener_pedido_por_id(pedido['id'])
+                    if not res_pedido.get('success'):
+                        pedido.update({'afectacion_items_str': "Error", 'afectacion_valor_str': "Error"})
+                        continue
+                    items_pedido = res_pedido.get('data', {}).get('items', [])
+                    total_items = len(items_pedido)
+                    total_valor = sum(float(i.get('producto_nombre', {}).get('precio_unitario', 0)) * float(i.get('cantidad', 0)) for i in items_pedido)
+                    
+                    items_afectados_count = 0
+                    valor_afectado = 0.0
                         
-                        total_items_count = len(items_pedido)
-                        total_valor = 0
-                        for item in items_pedido:
-                            try:
-                                # Acceder al precio unitario anidado
-                                precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
-                                cantidad = float(item.get('cantidad', 0))
-                                total_valor += cantidad * precio
-                            except (ValueError, TypeError):
-                                continue
+                    from app.models.pedido import PedidoModel
+                    pedido_model = PedidoModel()
 
-                        items_afectados_count = 0
-                        valor_afectado = 0.0
-                        
-                        from app.models.pedido import PedidoModel
-                        pedido_model = PedidoModel()
-
-                        for item in items_pedido:
-                            reservas_del_item = pedido_model.get_reservas_for_item(item['id'])
-                            item_es_afectado = any(
-                                str(reserva.get('lote_producto_id')) in lotes_producto_afectados_ids 
-                                for reserva in reservas_del_item
-                            )
-
-                            if item_es_afectado:
-                                items_afectados_count += 1
-                                try:
-                                    precio = float(item.get('producto_nombre', {}).get('precio_unitario', 0))
-                                    cantidad = float(item.get('cantidad', 0))
-                                    valor_afectado += cantidad * precio
-                                except (ValueError, TypeError):
-                                    continue
-
-                        pedido['afectacion_items_str'] = f"{items_afectados_count} de {total_items_count}"
-                        
-                        if total_valor > 0:
-                            porcentaje_valor = round((valor_afectado / total_valor) * 100)
-                            pedido['afectacion_valor_str'] = f"{porcentaje_valor}%"
-                        else:
-                            pedido['afectacion_valor_str'] = "0%"
-                            
-                    except Exception as e:
-                        logger.error(f"Error al calcular afectación para pedido {pedido['id']}: {e}", exc_info=True)
-                        pedido['afectacion_items_str'] = "Error"
-                        pedido['afectacion_valor_str'] = "Error"
+                    for item in items_pedido:
+                        reservas = pedido_model.get_reservas_for_item(item['id'])
+                        if any(str(r.get('lote_producto_id')) in lotes_producto_afectados_ids for r in reservas):
+                            items_afectados_count += 1
+                            valor_afectado += float(item.get('producto_nombre', {}).get('precio_unitario', 0)) * float(item.get('cantidad', 0))
+                    
+                    pedido['afectacion_items_str'] = f"{items_afectados_count} de {total_items}"
+                    pedido['afectacion_valor_str'] = f"{round((valor_afectado / total_valor) * 100)}%" if total_valor > 0 else "0%"
+            
+            alerta['afectados_detalle'] = afectados_detalle
             # --- FIN: Calcular porcentajes de afectación para pedidos ---
 
             if alerta['estado'] in ['Resuelta', 'Cerrada']:
                 ncs_asociadas_res = self.nota_credito_controller.obtener_detalle_nc_por_alerta(alerta['id'])
                 alerta['notas_de_credito'] = ncs_asociadas_res.get('data', [])
                         # Lógica para el botón de resolución masiva
-            
-            hay_no_aptos = any(
-                afectado.get('resolucion_aplicada') == 'no_apto'
-                for afectado in afectados_con_estado if afectado.get('estado') == 'resuelto'
-            )
-
-            # Lógica mejorada para el botón de resolución masiva
-            entidades_no_pedidos = [
-                a for a in afectados_con_estado if a.get('tipo_entidad') != 'pedido'
-            ]
-            
-            todos_no_pedidos_resueltos = all(
-                a.get('estado') == 'resuelto' for a in entidades_no_pedidos
-            )
-
+            hay_no_aptos = any(a.get('resolucion_aplicada') == 'no_apto' for a in afectados_con_estado if a.get('estado') == 'resuelto')
+            todos_no_pedidos_resueltos = all(a.get('estado') == 'resuelto' for a in afectados_con_estado if a.get('tipo_entidad') != 'pedido')
             alerta['puede_resolver_pedidos_masivamente'] = todos_no_pedidos_resueltos and not hay_no_aptos
 
             return {"success": True, "data": alerta}, 200
@@ -734,4 +701,36 @@ class RiesgoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error al resolver alerta manualmente: {e}", exc_info=True)
+            return {"success": False, "error": "Error interno del servidor."}, 500
+    
+    
+    def resolver_cuarentena_lote(self, datos, usuario_id):
+        lote_id = datos.get('lote_id')
+        tipo_lote = datos.get('tipo_lote') # 'lote_insumo' o 'lote_producto'
+        resolucion = datos.get('resolucion') # 'apto' o 'no_apto'
+
+        if not all([lote_id, tipo_lote, resolucion]):
+            return {"success": False, "error": "Faltan parámetros requeridos."}, 400
+        
+        try:
+            if tipo_lote == 'lote_insumo':
+                from app.controllers.inventario_controller import InventarioController
+                controller = InventarioController()
+                if resolucion == 'apto':
+                    resultado, status_code = controller.marcar_lote_como_apto(lote_id, usuario_id)
+                else:
+                    resultado, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+            elif tipo_lote == 'lote_producto':
+                from app.controllers.lote_producto_controller import LoteProductoController
+                controller = LoteProductoController()
+                if resolucion == 'apto':
+                    resultado, status_code = controller.marcar_lote_como_apto(lote_id, usuario_id)
+                else:
+                    resultado, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+            else:
+                return {"success": False, "error": "Tipo de lote no válido."}, 400
+            
+            return resultado, status_code
+        except Exception as e:
+            logger.error(f"Error en resolver_cuarentena_lote: {e}", exc_info=True)
             return {"success": False, "error": "Error interno del servidor."}, 500

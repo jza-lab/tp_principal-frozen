@@ -15,6 +15,23 @@ document.addEventListener('DOMContentLoaded', function () {
     let datosCompletosCache = null;
 
     // --- Funciones auxiliares ---
+    function wrapLabel(label, maxWidth = 20) {
+        if (label.length <= maxWidth) return label;
+        
+        let wrappedLabel = '';
+        let currentLine = '';
+        const words = label.split(' ');
+
+        words.forEach(word => {
+            if ((currentLine + word).length > maxWidth) {
+                wrappedLabel += currentLine.trim() + '\n';
+                currentLine = '';
+            }
+            currentLine += word + ' ';
+        });
+        wrappedLabel += currentLine.trim();
+        return wrappedLabel;
+    }
     function agruparPorTipo(items) {
         return items.reduce((acc, item) => {
             (acc[item.tipo] = acc[item.tipo] || []).push(item);
@@ -111,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const nodeLabels = {};
         diagrama.nodes.forEach(node => {
-            nodeLabels[node.id] = node.label;
+            nodeLabels[node.id] = wrapLabel(node.label); // Aplicar envoltura de texto
         });
 
         const rows = diagrama.edges.map(edge => [
@@ -121,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ]);
 
         data.addRows(rows);
-        const options = { width: '100%', height: '100%', sankey: { node: { label: { fontSize: 12 } }, link: { colorMode: 'gradient' } } };
+        const options = { width: '100%', height: '100%', sankey: { node: { label: { fontSize: 10 } }, link: { colorMode: 'gradient' } } };
         
         if (chart) chart.clearChart();
         chart = new google.visualization.Sankey(sankeyContainer);

@@ -1111,7 +1111,7 @@ class LoteProductoController(BaseController):
         """Obtiene los lotes y el conteo en un estado específico, usando datos enriquecidos."""
         try:
             # Usamos el método que ya trae los datos enriquecidos para la vista
-            result = self.model.get_all_lotes_for_view(filtros={'estado': estado})
+            result = self.model.find_all(filtros={'estado': estado})
             if result.get('success'):
                 lotes = result.get('data', [])
                 return {'count': len(lotes), 'data': lotes}

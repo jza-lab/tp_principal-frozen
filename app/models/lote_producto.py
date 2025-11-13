@@ -80,16 +80,21 @@ class LoteProductoModel(BaseModel):
             logger.error(f"Error obteniendo composición de inventario de productos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def get_all_lotes_for_view(self):
+    def get_all_lotes_for_view(self, filtros: Optional[Dict] = None):
         """
         Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto y cantidad reservada)
         para ser mostrados en la vista de listado.
         """
         try:
-            # 1. Obtener todos los lotes con el nombre del producto
-            lotes_result = self.db.table(self.get_table_name()).select(
+            query = self.db.table(self.get_table_name()).select(
                 '*, producto:productos(nombre)'
-            ).order('created_at', desc=True).execute()
+            )
+
+            if filtros:
+                for key, value in filtros.items():
+                    query = query.eq(key, value)
+            
+            lotes_result = query.order('created_at', desc=True).execute()
 
             if not hasattr(lotes_result, 'data'):
                  raise Exception("La consulta de lotes no devolvió datos.")
