@@ -37,8 +37,8 @@ class InsumoModel(BaseModel):
             proveedor_ids = filters_copy.pop('id_proveedor', [])
             categorias = filters_copy.pop('categoria', [])
 
-            if isinstance(proveedor_ids, str):
-                proveedor_ids = [proveedor_ids] if proveedor_ids else []
+            if proveedor_ids and not isinstance(proveedor_ids, list):
+                proveedor_ids = [proveedor_ids]
             if isinstance(categorias, str):
                 categorias = [categorias] if categorias else []
 
@@ -73,11 +73,19 @@ class InsumoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def find_by_id(self, id_value: str, id_field: str = 'id_insumo') -> Dict:
-        """Sobrescribe find_by_id para convertir timestamps."""
-        result = super().find_by_id(id_value, id_field)
-        if result.get('success'):
-            result['data'] = self._convert_timestamps(result['data'])
-        return result
+        """Sobrescribe find_by_id para asegurar que se obtiene vida_util_dias."""
+        try:
+            # Consulta explícita para evitar problemas de caché o selección de columnas
+            result = self.db.table(self.get_table_name()).select('*, proveedor:proveedores(*)').eq(id_field, id_value).execute()
+
+            if result.data:
+                return {'success': True, 'data': self._convert_timestamps(result.data[0])}
+            
+            return {'success': False, 'error': 'Registro no encontrado'}
+
+        except Exception as e:
+            logger.error(f"Error al buscar en {self.get_table_name()}: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def find_by_codigo(self, codigo: str, tipo_codigo: str = 'interno') -> Dict:
         """Buscar insumo por código interno o EAN"""
@@ -224,3 +232,65 @@ class InsumoModel(BaseModel):
         Quita la marca de 'en espera de reestock' de un insumo.
         """
         return self.update(id_insumo, {'en_espera_de_reestock': False}, 'id_insumo')
+
+    def find_by_orden_compra_ids(self, orden_compra_ids: list) -> Dict:
+        """
+        Encuentra todos los insumos únicos asociados a una lista de IDs de órdenes de compra,
+        incluyendo los códigos de las OCs en las que aparecen.
+        """
+        try:
+            if not orden_compra_ids:
+                return {'success': True, 'data': []}
+
+            # Consulta que une items de OC con las OCs para obtener el código y con los insumos
+            # para obtener los detalles del insumo.
+            query = """
+                SELECT 
+                    ic.*, 
+                    array_agg(oc.codigo_oc) as ordenes_compra_codigos
+                FROM insumos_catalogo ic
+                JOIN orden_compra_items oci ON ic.id_insumo = oci.insumo_id
+                JOIN ordenes_compra oc ON oci.orden_compra_id = oc.id
+                WHERE oci.orden_compra_id = ANY(%s)
+                GROUP BY ic.id_insumo
+            """
+            
+            # Supabase no soporta llamadas a procedimientos almacenados (rpc) con `ANY`,
+            # por lo que usaremos una consulta directa si la librería lo permite,
+            # o construiremos la query con `in_`.
+            
+            # Solución con `in_` que es más compatible:
+            items_response = self.db.table('orden_compra_items').select('insumo_id, orden:ordenes_compra(codigo_oc)').in_('orden_compra_id', orden_compra_ids).execute()
+            
+            if not items_response.data:
+                return {'success': True, 'data': []}
+
+            insumos_con_ocs = {}
+            for item in items_response.data:
+                insumo_id = item['insumo_id']
+                codigo_oc = item['orden']['codigo_oc'] if item.get('orden') else None
+                
+                if insumo_id not in insumos_con_ocs:
+                    insumos_con_ocs[insumo_id] = {'ocs': set()}
+                if codigo_oc:
+                    insumos_con_ocs[insumo_id]['ocs'].add(codigo_oc)
+
+            insumo_ids = list(insumos_con_ocs.keys())
+
+            if not insumo_ids:
+                 return {'success': True, 'data': []}
+
+            insumos_detalles_response = self.db.table(self.get_table_name()).select('*').in_('id_insumo', insumo_ids).execute()
+
+            if not insumos_detalles_response.data:
+                return {'success': False, 'error': 'No se encontraron detalles de insumos.'}
+            
+            for insumo in insumos_detalles_response.data:
+                insumo_id = insumo['id_insumo']
+                insumo['ordenes_compra_codigos'] = sorted(list(insumos_con_ocs.get(insumo_id, {}).get('ocs', [])))
+
+            return {'success': True, 'data': self._convert_timestamps(insumos_detalles_response.data)}
+
+        except Exception as e:
+            logger.error(f"Error en find_by_orden_compra_ids: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

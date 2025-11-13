@@ -245,3 +245,71 @@ class ProveedorController(BaseController):
 
         # Si no se encontró por ninguno de los dos métodos
         return None
+
+    def get_proveedores_con_rating(self):
+        """
+        Obtiene todos los proveedores y les calcula un rating basado en la cantidad de reclamos.
+        """
+        try:
+            # 1. Obtener todos los proveedores
+            proveedores_response, status_code = self.obtener_proveedores()
+            if status_code != 200:
+                logger.error(f"Fallo al obtener proveedores. Status: {status_code}, Response: {proveedores_response}")
+                return self.error_response("Error al obtener la lista de proveedores.", status_code)
+            
+            proveedores = proveedores_response.get('data', [])
+
+            # 2. Obtener todos los reclamos (Importación Local)
+            from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
+            reclamo_controller = ReclamoProveedorController()
+            reclamos_response, reclamos_status_code = reclamo_controller.get_all_reclamos()
+            
+            reclamos = []
+            if reclamos_status_code == 200:
+                reclamos = reclamos_response.get('data', [])
+            else:
+                # Si no se pueden obtener los reclamos, se loggea pero se continúa,
+                # asumiendo 0 reclamos para no bloquear la funcionalidad principal.
+                logger.warning(f"No se pudieron obtener los reclamos (status: {reclamos_status_code}). Se calculará el rating asumiendo 0 reclamos para todos.")
+
+            # 3. Contar reclamos por proveedor
+            reclamos_por_proveedor = {}
+            for reclamo in reclamos:
+                proveedor_id = reclamo.get('proveedor_id')
+                if proveedor_id:
+                    reclamos_por_proveedor[proveedor_id] = reclamos_por_proveedor.get(proveedor_id, 0) + 1
+
+            # 4. Calcular rating y enriquecer datos del proveedor
+            proveedores_con_rating = []
+            for proveedor in proveedores:
+                proveedor_id = proveedor.get('id')
+                num_reclamos = reclamos_por_proveedor.get(proveedor_id, 0)
+                
+                # Lógica de rating acordada
+                if 0 <= num_reclamos <= 1:
+                    rating = 5
+                elif 2 <= num_reclamos <= 4:
+                    rating = 4
+                elif 5 <= num_reclamos <= 7:
+                    rating = 3
+                elif 8 <= num_reclamos <= 10:
+                    rating = 2
+                elif 11 <= num_reclamos <= 15:
+                    rating = 1
+                else: # 16 o más
+                    rating = 0
+                
+                proveedor['num_reclamos'] = num_reclamos
+                proveedor['rating'] = rating
+                proveedores_con_rating.append(proveedor)
+            
+            # 5. Ordenar por rating (de mayor a menor) y luego por nombre alfabéticamente
+            # Python's sort is stable. First sort by name, then by rating.
+            proveedores_con_rating.sort(key=lambda p: p.get('nombre', '').lower())
+            proveedores_con_rating.sort(key=lambda p: p['rating'], reverse=True)
+
+            return self.success_response(proveedores_con_rating)
+
+        except Exception as e:
+            logger.error(f"Error crítico calculando rating de proveedores: {str(e)}", exc_info=True)
+            return self.error_response(f'Error interno del servidor: {str(e)}', 500)

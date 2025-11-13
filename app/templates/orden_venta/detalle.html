@@ -394,6 +394,21 @@
                 </div>
             </div>
         </div>
+
+        <!-- Nueva Tarjeta para el QR -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-qr-code me-2"></i>Etiqueta de Trazabilidad</h5>
+            </div>
+            <div class="card-body text-center">
+                <p class="text-muted">Escanee este código para ver la trazabilidad pública del pedido.</p>
+                <img src="{{ url_for('orden_venta.generar_qr_pedido', id_pedido=pedido.id) }}" 
+                     alt="Código QR de Trazabilidad" 
+                     class="img-fluid" 
+                     style="max-width: 200px; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
+            </div>
+        </div>
+        
     </div>
 </div>
 {% include "admin_riesgos/_modal_crear_alerta.html" %}

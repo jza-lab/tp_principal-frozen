@@ -4,7 +4,11 @@ from datetime import datetime, timedelta
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
 from app.controllers.consulta_controller import ConsultaController
+from app.database import Database
 from flask_wtf import FlaskForm
+# Modelos a utilizar para la consulta directa
+from app.models.lote_producto import LoteProductoModel
+from app.models.orden_produccion import OrdenProduccionModel
 
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
@@ -271,3 +275,82 @@ def buscar_cliente_por_cuit():
     else:
         # Si no se encuentra, devolvemos un éxito falso pero sin error de servidor
         return jsonify({'success': False, 'message': 'Cliente no encontrado'}), 404
+
+@public_bp.route('/trazabilidad/pedido/<int:id_pedido>')
+def mostrar_trazabilidad_publica(id_pedido):
+    """
+    Muestra la página pública de trazabilidad para un pedido específico,
+    obteniendo los datos de forma directa y enriquecida.
+    """
+    pedido_controller = PedidoController()
+    lote_model = LoteProductoModel()
+    op_model = OrdenProduccionModel()
+    db = Database().client
+
+    # 1. Obtener el pedido y sus items
+    pedido_resp, _ = pedido_controller.obtener_pedido_por_id(id_pedido)
+    if not pedido_resp.get('success'):
+        flash('El pedido que buscas no fue encontrado.', 'danger')
+        return redirect(url_for('public.index'))
+    pedido = pedido_resp.get('data')
+    pedido_items = pedido.get('items', [])
+    if not pedido_items:
+        flash('Este pedido no tiene productos para mostrar trazabilidad.', 'warning')
+        return redirect(url_for('public.index'))
+
+    # 2. Obtener las reservas para los items de este pedido
+    item_ids = [item['id'] for item in pedido_items]
+    try:
+        reservas_res = db.table('reservas_productos').select('*').in_('pedido_item_id', item_ids).execute()
+        if not reservas_res.data:
+            flash('No se encontró información de lotes para este pedido.', 'warning')
+            return redirect(url_for('public.index'))
+    except Exception as e:
+        flash(f'Error al consultar la base de datos: {e}', 'danger')
+        return redirect(url_for('public.index'))
+    
+    # 3. Mapear reservas por item_id para fácil acceso
+    reservas_por_item = {r['pedido_item_id']: r for r in reservas_res.data}
+
+    # 4. Construir la lista de datos enriquecidos para el template
+    productos_enriquecidos = []
+    for item in pedido_items:
+        reserva = reservas_por_item.get(item['id'])
+        if not reserva:
+            continue
+
+        # Obtener detalles del Lote de Producto
+        lote_id = reserva.get('lote_producto_id')
+        lote_resp = lote_model.find_by_id(lote_id, id_field='id_lote')
+        lote = lote_resp.get('data') if lote_resp.get('success') else {}
+
+        # Obtener detalles de la Orden de Producción (si existe)
+        op_id = lote.get('orden_produccion_id')
+        orden_produccion = {}
+        insumos_utilizados = []
+        if op_id:
+            op_resp = op_model.find_by_id(op_id)
+            if op_resp.get('success'):
+                orden_produccion = op_resp.get('data')
+                # Ahora, buscar los insumos para esta OP, incluyendo fecha de vencimiento y fecha de ingreso
+                insumos_res = db.table('reservas_insumos').select(
+                    'lote:insumos_inventario(numero_lote_proveedor, f_vencimiento, f_ingreso, insumo:insumos_catalogo(nombre))'
+                ).eq('orden_produccion_id', op_id).execute()
+                if insumos_res.data:
+                    insumos_utilizados = insumos_res.data
+        
+        # Unir toda la información en un solo diccionario por producto
+        productos_enriquecidos.append({
+            'item_pedido': item,
+            'reserva': reserva,
+            'lote': lote,
+            'orden_produccion': orden_produccion,
+            'insumos': insumos_utilizados
+        })
+
+    # 5. Renderizar el template
+    return render_template(
+        'public/trazabilidad_pedido.html',
+        pedido=pedido,
+        productos=productos_enriquecidos
+    )

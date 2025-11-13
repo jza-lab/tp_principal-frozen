@@ -1,54 +1,111 @@
-x{% extends 'layouts/app_layout.html' %}
+{% extends 'layouts/app_layout.html' %}
 
-{% block title %}Reclamos a Proveedores - Sistema Frozen{% endblock %}
+{% block title %}Reclamos a Proveedores{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/proveedores/proveedor_ratings.css') }}">
+{% endblock %}
 
 {% block app_content %}
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
-        <h1 class="h2">Reclamos a Proveedores</h1>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 text-gray-800">Gestión de Reclamos a Proveedores</h1>
+        <a href="{{ url_for('orden_compra.nuevo_reclamo') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Crear Nuevo Reclamo
+        </a>
+    </div>
+
+    <!-- Pestañas de Navegación -->
+    <div class="custom-tabs-container">
+        <a class="custom-tab active" href="{{ url_for('orden_compra.listar_reclamos') }}">
+            <i class="fas fa-list-ul me-2"></i>Listado de Reclamos
+        </a>
+        <a class="custom-tab" href="{{ url_for('orden_compra.ver_ratings_proveedores') }}">
+            <i class="fas fa-star me-2"></i>Rating de Proveedores
+        </a>
+    </div>
+
+    <!-- Filtros de Búsqueda -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('orden_compra.listar_reclamos') }}">
+                <div class="row justify-content-center g-3 align-items-end">
+                    <div class="col-md-8">
+                        <label for="proveedor_id" class="form-label">Filtrar por Proveedor</label>
+                        <select class="form-select" id="proveedor_id" name="proveedor_id" onchange="this.form.submit()">
+                            <option value="">Mostrar todos los proveedores</option>
+                            {% for p in proveedores %}
+                                <option value="{{ p.id }}" {% if p.id == selected_proveedor %}selected{% endif %}>
+                                    {{ p.nombre }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                         <a href="{{ url_for('orden_compra.listar_reclamos') }}" class="btn btn-secondary w-100">Limpiar</a>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="card shadow-sm">
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
+                <table class="table table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
                         <tr>
-                            <th scope="col">ID Reclamo</th>
-                            <th scope="col">Orden de Compra</th>
-                            <th scope="col">Proveedor</th>
-                            <th scope="col">Título</th>
-                            <th scope="col">Estado</th>
-                            <th scope="col">Fecha Creación</th>
-                            <th scope="col">Acciones</th>
+                            <th>ID Reclamo</th>
+                            <th>Orden de Compra</th>
+                            <th>Proveedor</th>
+                            <th>Motivo</th>
+                            <th>Estado</th>
+                            <th>Fecha Creación</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for reclamo in reclamos %}
-                        <tr>
-                            <td>{{ reclamo.id }}</td>
-                            <td>
-                                <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
-                                    {{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}
-                                </a>
-                            </td>
-                            <td>{{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</td>
-                            <td>{{ reclamo.motivo }}</td>
-                            <td>
-                                <span class="badge bg-primary">{{ reclamo.estado }}</span>
-                            </td>
-                            <td>{{ reclamo.created_at.strftime('%Y-%m-%d %H:%M') if reclamo.created_at else 'N/A' }}</td>
-                            <td>
-                                <a href="{{ url_for('orden_compra.detalle_reclamo', reclamo_id=reclamo.id) }}" class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-eye-fill me-1"></i> Ver Detalle
-                                </a>
-                            </td>
-                        </tr>
+                        {% if reclamos %}
+                            {% for reclamo in reclamos %}
+                            <tr>
+                                <td>{{ reclamo.id }}</td>
+                                <td>
+                                    {% if reclamo.orden_compra_id %}
+                                    <a href="{{ url_for('orden_compra.detalle', id=reclamo.orden_compra_id) }}">
+                                        {{ reclamo.orden.codigo_oc if reclamo.orden else 'N/A' }}
+                                    </a>
+                                    {% elif reclamo.ordenes_compra_codigos %}
+                                        {{ reclamo.ordenes_compra_codigos | join(', ') }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>{{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</td>
+                                <td>{{ reclamo.motivo }}</td>
+                                <td>
+                                    {% if reclamo.estado == 'ABIERTO' %}
+                                        <span class="badge bg-warning bi-exclamation-triangle-fill text-black"> {{ reclamo.estado }}</span>
+                                    {% elif reclamo.estado == 'CERRADO' %}
+                                        <span class="badge bi-x-circle bg-info text-black"> {{ reclamo.estado }}</span>
+                                    {% endif %}
+                                </td>
+
+                                <td>{{ reclamo.created_at.strftime('%Y-%m-%d %H:%M') if reclamo.created_at else 'N/A' }}</td>
+                                <td>
+                                    <a href="{{ url_for('orden_compra.detalle_reclamo', reclamo_id=reclamo.id) }}" class="btn btn-sm btn-primary">
+                                        Ver Detalle
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
                         {% else %}
-                        <tr>
-                            <td colspan="6" class="text-center text-muted py-4">No se encontraron reclamos.</td>
-                        </tr>
-                        {% endfor %}
+                            <tr>
+                                <td colspan="7" class="text-center p-5">
+                                    <h4>No hay reclamos registrados</h4>
+                                    <p>Cuando se genere un reclamo, aparecerá en esta lista.</p>
+                                </td>
+                            </tr>
+                        {% endif %}
                     </tbody>
                 </table>
             </div>

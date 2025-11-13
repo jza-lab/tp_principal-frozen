@@ -53,6 +53,44 @@ def format_datetime_art(value, format='%d/%m/%Y %H:%M:%S'):
     return art_datetime.strftime(format)
 
 
+def format_date_art(value, format='%d/%m/%Y'):
+    """
+    Filtro Jinja para convertir una fecha o string de fecha a la zona horaria de Argentina (ART)
+    y formatearla solo como fecha.
+    """
+    if value is None:
+        return ""
+    
+    utc_timezone = pytz.utc
+    art_timezone = pytz.timezone('America/Argentina/Buenos_Aires')
+
+    if isinstance(value, str):
+        try:
+            # Intentar parsear como datetime completo primero
+            dt_value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            try:
+                # Si falla, intentar parsear solo como fecha
+                dt_value = datetime.strptime(value, '%Y-%m-%d')
+            except ValueError:
+                return value # Devolver original si no se puede parsear
+
+    elif isinstance(value, datetime):
+        dt_value = value
+    else:
+        # Si no es string ni datetime, devolver como está
+        return value
+
+    # Asegurarse de que la fecha tenga información de zona horaria (asumir UTC si no tiene)
+    if dt_value.tzinfo is None:
+        dt_value = utc_timezone.localize(dt_value)
+
+    # Convertir a la zona horaria de Argentina
+    art_datetime = dt_value.astimezone(art_timezone)
+    
+    return art_datetime.strftime(format)
+
+
 def format_time_filter(value):
     """Filtro para formatear HH:MM:SS a HH:MM."""
     if isinstance(value, str) and len(value.split(':')) == 3:

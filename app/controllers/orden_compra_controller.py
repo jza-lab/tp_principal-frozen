@@ -8,7 +8,7 @@ from app.models.orden_compra_model import OrdenCompra
 from app.controllers.inventario_controller import InventarioController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import logging
 import time
 import math
@@ -691,6 +691,23 @@ class OrdenCompraController:
                 'estado': estado_lote, # 'disponible' o 'cuarentena'
                 'orden_produccion_id': orden_data.get('orden_produccion_id')
             }
+
+            # --- INICIO: CALCULAR FECHA DE VENCIMIENTO ---
+            insumo_id_para_lote = item_data.get('insumo_id')
+            if insumo_id_para_lote:
+                insumo_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id_para_lote)
+                if insumo_res.get('success') and insumo_res.get('data'):
+                    insumo_data = insumo_res['data']
+                    vida_util_raw = insumo_data.get('vida_util_dias')
+                    if vida_util_raw is not None:
+                        try:
+                            vida_util = int(vida_util_raw)
+                            if vida_util > 0:
+                                fecha_vencimiento = datetime.now().date() + timedelta(days=vida_util)
+                                lote_data['f_vencimiento'] = fecha_vencimiento.isoformat()
+                        except (ValueError, TypeError):
+                            logger.warning(f"El valor de 'vida_util_dias' ({vida_util_raw}) para el insumo {insumo_id_para_lote} no es un entero válido.")
+            # --- FIN: CALCULAR FECHA DE VENCIMIENTO ---
             
             try:
                 lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)

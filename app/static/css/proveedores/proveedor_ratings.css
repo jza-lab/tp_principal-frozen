@@ -1,0 +1,393 @@
+/* =========================================== */
+/* 1. LAYOUT GENERAL Y PESTAÑAS PERSONALIZADAS */
+/* =========================================== */
+
+.container-fluid {
+    padding-top: 20px;
+}
+
+/* Estilos de Pestañas */
+.custom-tabs-container {
+    display: flex;
+    margin-bottom: 25px;
+    border-bottom: 3px solid #e0e0e0;
+}
+
+.custom-tab {
+    padding: 10px 20px;
+    text-decoration: none;
+    color: #6c757d;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -3px; 
+}
+
+.custom-tab:hover {
+    color: #007bff;
+    background-color: #f8f9fa;
+}
+
+.custom-tab.active {
+    color: #007bff;
+    font-weight: 700;
+    border-bottom: 3px solid #007bff;
+}
+
+/* =========================================== */
+/* 2. GRÁFICO Y LEYENDA */
+/* =========================================== */
+
+/* Contenedor del Gráfico */
+.card .chart-container {
+    height: 200px;
+    width: 200px;
+    margin-right: 40px;
+}
+
+.card-body.d-flex {
+    flex-wrap: wrap; 
+    justify-content: center; 
+}
+
+/* Contenedor de Leyenda */
+.legend-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px;
+    min-width: 200px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.legend-color-box {
+    width: 15px;
+    height: 15px;
+    margin-right: 8px;
+    border-radius: 3px;
+    flex-shrink: 0; 
+}
+
+/* =========================================== */
+/* 3. CARD DE EXPLICACIÓN DEL RATING (NUEVO) */
+/* =========================================== */
+.info-card {
+    height: 100%; /* Garantiza que la tarjeta se alinee en altura con el gráfico */
+    border: none;
+    border-left: 5px solid #17a2b8; /* Borde izquierdo de color info */
+    border-radius: 8px;
+}
+
+.info-card .card-header {
+    background-color: #17a2b8 !important; /* Color info */
+    border-bottom: none;
+    padding: 10px 15px;
+}
+
+.info-card .card-header h6 {
+    color: white !important;
+}
+
+.rating-criteria-table {
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
+.rating-criteria-table .row {
+    padding: 8px 15px;
+    margin: 0;
+    align-items: center;
+}
+
+.rating-criteria-table .header-row {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.rating-criteria-table .data-row {
+    border-bottom: 1px solid #ebebeb;
+}
+
+.rating-criteria-table .data-row:last-child {
+    border-bottom: none;
+}
+
+.rating-criteria-table .star-display {
+    font-weight: bold;
+}
+
+/* Colores para las estrellas */
+.rating-criteria-table .star-display {
+    color: #ffc107; /* Dorado */
+}
+
+/* Destacar la fila de peor rating */
+.rating-criteria-table .low-rating {
+    background-color: #f8d7da; /* Rojo muy claro */
+    color: #721c24; /* Texto rojo oscuro */
+}
+.rating-criteria-table .low-rating .star-display {
+    color: #dc3545; /* Estrellas rojas */
+}
+
+/* =========================================== */
+/* 4. BARRA DE FILTROS */
+/* =========================================== */
+.input-group .form-control,
+.input-group .form-select {
+    border-color: #ced4da;
+    box-shadow: none;
+}
+.input-group .form-control:focus,
+.input-group .form-select:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* =========================================== */
+/* 5. TARJETAS DE PROVEEDORES (FLIP CARDS) */
+/* =========================================== */
+
+/* Contenedor de la Tarjeta (para animación de entrada y filtros) */
+.provider-card-wrapper {
+    perspective: 1000px; 
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    opacity: 0; 
+    transform: translateY(20px);
+}
+
+/* Efecto de atenuación/resaltado al filtrar por gráfico */
+.provider-card-wrapper.dimmed {
+    opacity: 0.3;
+    filter: grayscale(80%);
+}
+
+.provider-card-wrapper.highlighted {
+    opacity: 1;
+    filter: none;
+    box-shadow: 0 0 15px rgba(0, 123, 255, 0.6) !important; 
+}
+
+/* Contenedor de Flip */
+.provider-card {
+    background-color: transparent;
+    width: 100%;
+    height: 180px; 
+    border: none;
+    cursor: pointer;
+}
+
+.provider-card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    transition: transform 0.8s;
+    transform-style: preserve-3d;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+/* Estado volteado */
+.provider-card.is-flipped .provider-card-inner {
+    transform: rotateY(180deg);
+}
+
+.provider-card-front,
+.provider-card-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    -webkit-backface-visibility: hidden; 
+    backface-visibility: hidden;
+    border-radius: 10px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Frente de la tarjeta */
+.provider-card-front {
+    background: linear-gradient(135deg, #ffffff 60%, #f1f5f9 100%);
+    color: #333;
+    justify-content: space-between;
+    text-align: left;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Detrás de la tarjeta */
+.provider-card-back {
+    background-color: #f8f9fa; 
+    color: #333;
+    transform: rotateY(180deg);
+    justify-content: space-between;
+    align-items: stretch;
+    text-align: left;
+}
+
+
+/* =========================================== */
+/* 6. CONTENIDO DE LAS TARJETAS */
+/* =========================================== */
+
+/* Información Principal */
+.provider-info {
+    flex-grow: 1;
+    margin-right: 15px;
+    min-width: 50%;
+}
+
+.provider-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #495057;
+    margin-bottom: 5px;
+    line-height: 1.3;
+}
+
+.provider-claims {
+    display: block;
+    font-size: 0.8rem;
+    color: #999;
+    margin-top: 5px;
+}
+
+/* Estrellas */
+.provider-stars {
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+    color: #ffc107; 
+}
+
+.provider-stars .far.fa-star {
+    color: #e9ecef; 
+}
+
+/* Icono del Proveedor */
+.provider-icon {
+    align-self: flex-end;
+    color: #1cc88a; 
+    opacity: 0.8;
+}
+
+/* Ranking Badge */
+.provider-rank {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background-color: #4e73df; 
+    color: white;
+    padding: 5px 10px;
+    border-radius: 0 10px 0 10px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+/* Indicador de Tendencia */
+.provider-trend {
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-size: 1rem;
+    padding: 7px 10px;
+    border-radius: 10px 0 10px 0;
+    color: white;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Colores según la tendencia */
+.provider-trend-up {
+    background-color: #28a745; 
+}
+
+.provider-trend-down {
+    background-color: #dc3545; 
+}
+
+.provider-trend-same {
+    background-color: #ffc107; 
+}
+
+
+/* Contenido Detrás (Back Face) */
+.claims-summary-container {
+    flex-grow: 1;
+    overflow-y: auto; 
+    padding-bottom: 10px;
+}
+
+.summary-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #343a40;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.claims-summary-container ul li {
+    font-size: 0.9rem;
+    padding: 2px 0;
+}
+
+.action-button-container {
+    margin-top: auto; 
+    padding-top: 10px;
+}
+
+/* Loader Spinners */
+.spinner-border {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: 30% auto;
+    display: block;
+}
+
+/* Media Queries para responsividad */
+
+@media (max-width: 1200px) {
+    .card .chart-container {
+        margin-right: 20px;
+    }
+}
+
+@media (max-width: 768px) {
+    .card-body.d-flex {
+        flex-direction: column;
+    }
+    .card .chart-container {
+        margin-right: 0;
+        margin-bottom: 20px;
+    }
+    .provider-card-front {
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+    }
+    .provider-icon {
+        align-self: flex-start;
+        margin-top: 10px;
+    }
+    .input-group {
+        flex-direction: column;
+    }
+    .input-group .form-control,
+    .input-group .form-select {
+        margin-bottom: 10px;
+        max-width: 100% !important;
+    }
+}

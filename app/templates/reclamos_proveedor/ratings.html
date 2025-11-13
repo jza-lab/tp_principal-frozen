@@ -1,0 +1,408 @@
+{% extends 'layouts/app_layout.html' %}
+
+{% block title %}Dashboard de Ratings - Proveedores{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/proveedores/proveedor_ratings.css') }}">
+{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 text-gray-800">Gestión de Reclamos a Proveedores</h1>
+    </div>
+
+    <div class="custom-tabs-container">
+        <a class="custom-tab" href="{{ url_for('orden_compra.listar_reclamos') }}">
+            <i class="fas fa-list-ul me-2"></i>Listado de Reclamos
+        </a>
+        <a class="custom-tab active" href="{{ url_for('orden_compra.ver_ratings_proveedores') }}">
+            <i class="fas fa-star me-2"></i>Rating de Proveedores
+        </a>
+    </div>
+
+    <div class="dashboard-content">
+
+        <div class="row mb-4">
+            
+            <div class="col-lg-6 col-12 mb-4">
+                <div class="card shadow-sm h-100 fade-in">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">Distribución de Ratings (Basado en Reclamos)</h6>
+                    </div>
+                    <div class="card-body d-flex flex-column align-items-center">
+                        <div class="chart-container">
+                            <canvas id="ratingsDonutChart"></canvas>
+                        </div>
+                        <div class="legend-container">
+                            </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6 col-12 mb-4">
+                <div class="card shadow-sm h-100 info-card">
+                    <div class="card-header py-3 bg-info text-white">
+                        <h6 class="m-0 font-weight-bold"><i class="fas fa-info-circle me-2"></i>Criterios de Puntuación de Proveedores</h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">La puntuación de cada proveedor se basa estrictamente en la <b>cantidad total de reclamos</b> registrados. A <b>mayor número de reclamos, menor es el rating</b>.</p>
+                        <div class="rating-criteria-table">
+                            <div class="row header-row">
+                                <div class="col-6 fw-bold">Rango de Reclamos (Cantidad)</div>
+                                <div class="col-6 fw-bold text-center">Rating (Estrellas)</div>
+                            </div>
+                            <div class="row data-row">
+                                <div class="col-6">0 - 1 reclamo</div>
+                                <div class="col-6 text-center star-display rating-5">★★★★★ (5)</div>
+                            </div>
+                            <div class="row data-row">
+                                <div class="col-6">2 - 4 reclamos</div>
+                                <div class="col-6 text-center star-display rating-4">★★★★☆ (4)</div>
+                            </div>
+                            <div class="row data-row">
+                                <div class="col-6">5 - 7 reclamos</div>
+                                <div class="col-6 text-center star-display rating-3">★★★☆☆ (3)</div>
+                            </div>
+                            <div class="row data-row">
+                                <div class="col-6">8 - 10 reclamos</div>
+                                <div class="col-6 text-center star-display rating-2">★★☆☆☆ (2)</div>
+                            </div>
+                            <div class="row data-row">
+                                <div class="col-6">11 - 15 reclamos</div>
+                                <div class="col-6 text-center star-display rating-1">★☆☆☆☆ (1)</div>
+                            </div>
+                            <div class="row data-row low-rating">
+                                <div class="col-6">16 o más reclamos</div>
+                                <div class="col-6 text-center star-display rating-0">☆☆☆☆☆ (0)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+
+        <div class="row mb-4">
+            <div class="col-lg-12">
+                <div class="input-group">
+                    <input type="text" id="search-provider" class="form-control" placeholder="Buscar proveedor por nombre...">
+                    <select id="sort-providers" class="form-select" style="max-width: 250px;">
+                        <option value="rating-desc">Ordenar por Rating (Mayor)</option>
+                        <option value="rating-asc">Ordenar por Rating (Menor)</option>
+                        <option value="claims-desc">Ordenar por Reclamos (Mayor)</option>
+                        <option value="claims-asc">Ordenar por Reclamos (Menor)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row provider-grid">
+            {% if proveedores %}
+                {% for p in proveedores %}
+                <div class="col-xl-4 col-md-6 mb-4 provider-card-wrapper" data-rating="{{ p.rating }}" data-provider-id="{{ p.id }}">
+                    <div class="provider-card">
+                        <div class="provider-card-inner">
+                            <div class="provider-card-front">
+                                <div class="provider-info">
+                                    <p class="provider-name">{{ p.nombre }}</p>
+                                    <div class="provider-stars">
+                                        {% for i in range(5) %}{% if i < p.rating %}<i class="fas fa-star"></i>{% else %}<i class="far fa-star"></i>{% endif %}{% endfor %}
+                                    </div>
+                                    <span class="provider-claims">{{ p.num_reclamos }} reclamo(s) registrado(s)</span>
+                                </div>
+                                <div class="provider-icon">
+                                    <i class="fas fa-truck fa-2x"></i>
+                                </div>
+                                <div class="provider-rank">#{{ loop.index }}</div>
+                                
+                                {# INDICADOR DE TENDENCIA #}
+                                {% if p.rating_trend %}
+                                <div class="provider-trend provider-trend-{{ p.rating_trend }}">
+                                    {% if p.rating_trend == 'up' %}
+                                        <i class="fas fa-arrow-up"></i>
+                                    {% elif p.rating_trend == 'down' %}
+                                        <i class="fas fa-arrow-down"></i>
+                                    {% else %}
+                                        <i class="fas fa-minus"></i>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                
+                            </div>
+                            <div class="provider-card-back">
+                                <div class="claims-summary-container">
+                                    </div>
+                                <div class="action-button-container">
+                                    </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12">
+                    <p class="text-center text-muted">No se encontraron proveedores.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const proveedores = {{ proveedores | tojson | safe }}; 
+    if (proveedores.length === 0) return;
+
+    // Crear el mapa de ratingsData para el gráfico
+    const ratingsData = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0, 0: 0 };
+    proveedores.forEach(p => {
+        const rating = Math.round(p.rating); 
+        if (rating in ratingsData) ratingsData[rating]++;
+    });
+    
+    // --- LÓGICA DE GRÁFICO Y LEYENDA ---
+    const allColors = {'5': '#1cc88a', '4': '#4e73df', '3': '#36b9cc', '2': '#f6c23e', '1': '#e74a3b', '0': '#858796'};
+    const allLabels = {
+        '5': '★★★★★', '4': '★★★★☆', '3': '★★★☆☆', '2': '★★☆☆☆', '1': '★☆☆☆☆', '0': '☆☆☆☆☆'
+    };
+
+    const chartData = [];
+    const chartLabels = [];
+    const chartColors = [];
+
+    for (let rating = 5; rating >= 0; rating--) {
+        if (ratingsData[rating] > 0) {
+            chartData.push(ratingsData[rating]);
+            chartLabels.push(`${allLabels[rating]} (${ratingsData[rating]})`);
+            chartColors.push(allColors[rating]);
+        }
+    }
+    
+    // Leyenda Personalizada
+    const legendContainer = document.querySelector('.legend-container');
+    legendContainer.innerHTML = '';
+    chartLabels.forEach((label, index) => {
+        const ratingMatch = label.match(/(\d+)★/);
+        const rating = ratingMatch ? parseInt(ratingMatch[1]) : 0; 
+        const legendItem = `
+            <div class="legend-item" data-rating="${rating}">
+                <span class="legend-color-box" style="background-color: ${chartColors[index]}"></span>
+                <span class="legend-label">${label}</span>
+            </div>
+        `;
+        legendContainer.innerHTML += legendItem;
+    });
+
+    const ctx = document.getElementById('ratingsDonutChart').getContext('2d');
+    const ratingsChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: chartLabels,
+            datasets: [{
+                data: chartData,
+                backgroundColor: chartColors,
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '70%',
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: function(context) { return context.label; } } }
+            },
+            onClick: (event, chartElement) => {
+                const chart = event.chart;
+                if (chartElement.length > 0) {
+                    const activeLabel = chart.data.labels[chartElement[0].index];
+                    const ratingMatch = activeLabel.match(/★/g);
+                    let rating = ratingMatch ? ratingMatch.length : 0;
+                    
+                    if (chart.activeRating === rating) {
+                        chart.activeRating = null;
+                        highlightCards(null);
+                    } else {
+                        chart.activeRating = rating;
+                        highlightCards(rating);
+                    }
+                }
+            },
+            onHover: (event, chartElement) => {
+                event.native.target.style.cursor = chartElement.length > 0 ? 'pointer' : 'default';
+            }
+        }
+    });
+
+    // Añadir el comportamiento de clic a la leyenda personalizada
+    document.querySelectorAll('.legend-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const rating = parseInt(this.dataset.rating);
+            if (ratingsChart.activeRating === rating) {
+                ratingsChart.activeRating = null;
+                highlightCards(null);
+            } else {
+                ratingsChart.activeRating = rating;
+                highlightCards(rating);
+            }
+        });
+    });
+
+    // --- Lógica de Búsqueda y Ordenamiento ---
+
+    const providerGrid = document.querySelector('.provider-grid');
+    const searchInput = document.getElementById('search-provider');
+    const sortSelect = document.getElementById('sort-providers');
+
+    function filterAndSortProviders() {
+        const searchTerm = searchInput.value.toLowerCase();
+        const sortValue = sortSelect.value;
+        
+        let filteredProviders = proveedores.filter(p => p.nombre.toLowerCase().includes(searchTerm));
+        
+        // Lógica de ordenamiento
+        filteredProviders.sort((a, b) => {
+            if (sortValue === 'rating-desc') {
+                return b.rating - a.rating;
+            } else if (sortValue === 'rating-asc') {
+                return a.rating - b.rating;
+            } else if (sortValue === 'claims-desc') {
+                return b.num_reclamos - a.num_reclamos;
+            } else if (sortValue === 'claims-asc') {
+                return a.num_reclamos - b.num_reclamos;
+            }
+            return 0;
+        });
+
+        const wrappersMap = new Map();
+        document.querySelectorAll('.provider-card-wrapper').forEach(wrapper => {
+            wrappersMap.set(parseInt(wrapper.dataset.providerId), wrapper);
+            wrapper.style.display = 'none';
+        });
+
+        // Reordenar el grid basándose en el array filtrado y ordenado
+        let hasResults = false;
+        filteredProviders.forEach(p => {
+            const wrapper = wrappersMap.get(p.id);
+            if (wrapper) {
+                wrapper.style.display = 'block';
+                providerGrid.appendChild(wrapper); 
+                hasResults = true;
+            }
+        });
+
+        // Mostrar mensaje si no hay resultados
+        let msg = document.getElementById('no-results-message');
+        if (!hasResults) {
+            if (!msg) {
+                providerGrid.innerHTML = '<div class="col-12" id="no-results-message"><p class="text-center text-muted">No se encontraron proveedores que coincidan con los criterios.</p></div>';
+            }
+        } else {
+            if(msg) msg.remove();
+        }
+    }
+
+    searchInput.addEventListener('input', filterAndSortProviders);
+    sortSelect.addEventListener('change', filterAndSortProviders);
+
+    // Ejecutar el ordenamiento inicial al cargar
+    filterAndSortProviders(); 
+
+    // --- Lógica de Resaltado (Highlight) ---
+
+    function highlightCards(rating) {
+        const wrappers = document.querySelectorAll('.provider-card-wrapper');
+        wrappers.forEach(wrapper => {
+            if (rating === null) {
+                wrapper.classList.remove('dimmed', 'highlighted');
+            } else {
+                if (parseInt(wrapper.dataset.rating) === rating) {
+                    wrapper.classList.add('highlighted');
+                    wrapper.classList.remove('dimmed');
+                } else {
+                    wrapper.classList.add('dimmed');
+                    wrapper.classList.remove('highlighted');
+                }
+            }
+        });
+    }
+
+    // --- Animación de Entrada y Flip Card ---
+
+    // Animación de entrada para las tarjetas
+    window.addEventListener('load', () => {
+        const wrappers = document.querySelectorAll('.provider-card-wrapper');
+        wrappers.forEach((wrapper, index) => {
+            setTimeout(() => {
+                wrapper.style.opacity = 1;
+                wrapper.style.transform = 'translateY(0)';
+            }, index * 100);
+        });
+    });
+
+    // Lógica para el flip de las tarjetas (Versión Final)
+    const cards = document.querySelectorAll('.provider-card');
+    cards.forEach(card => {
+        card.addEventListener('click', async (event) => {
+            if (event.target.tagName === 'A' || event.target.closest('a')) {
+                event.stopPropagation();
+                return;
+            }
+
+            if (card.classList.contains('is-flipped')) {
+                card.classList.remove('is-flipped');
+            } else {
+                const providerId = card.closest('.provider-card-wrapper').dataset.providerId;
+                const backFace = card.querySelector('.provider-card-back');
+                const summaryContainer = backFace.querySelector('.claims-summary-container');
+                const buttonContainer = backFace.querySelector('.action-button-container');
+
+                summaryContainer.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="sr-only">Cargando...</span></div>';
+                buttonContainer.innerHTML = '';
+                
+                // Cierra cualquier otra tarjeta abierta
+                document.querySelectorAll('.provider-card.is-flipped').forEach(flippedCard => {
+                    if (flippedCard !== card) {
+                        flippedCard.classList.remove('is-flipped');
+                    }
+                });
+                
+                card.classList.add('is-flipped');
+                
+                try {
+                    const response = await fetch(`/api/proveedores/${providerId}/resumen-reclamos`);
+                    const result = await response.json();
+                    
+                    summaryContainer.innerHTML = ''; 
+
+                    if (result.success && result.data.length > 0) {
+                        let summaryHtml = '<h6 class="summary-title">Resumen de Reclamos</h6><ul class="list-unstyled mb-0">';
+                        result.data.forEach(item => {
+                            summaryHtml += `<li class="d-flex justify-content-between"><span>${item.motivo}</span><span class="fw-bold">${item.cantidad}</span></li>`;
+                        });
+                        summaryHtml += '</ul>';
+                        summaryContainer.innerHTML = summaryHtml;
+                    } else {
+                        summaryContainer.innerHTML = '<p class="text-muted small text-center my-3">Este proveedor no tiene reclamos registrados.</p>';
+                    }
+
+                    const reclamosUrl = new URL("{{ url_for('orden_compra.listar_reclamos', _external=True) }}");
+                    reclamosUrl.searchParams.set('proveedor_id', providerId);
+                    
+                    buttonContainer.innerHTML = `<a href="${reclamosUrl.href}" class="btn btn-sm btn-secundary w-100 mt-auto">Ver Historial de Reclamos</a>`;
+
+                } catch (error) {
+                    summaryContainer.innerHTML = '';
+                    buttonContainer.innerHTML = '<p class="text-danger small text-center">Error al cargar datos.</p>';
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

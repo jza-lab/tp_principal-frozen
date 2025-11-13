@@ -74,6 +74,8 @@ def nueva():
     
     controller = OrdenCompraController()
     insumo_controller = InsumoController()
+    proveedor_controller = ProveedorController()
+
     if request.method == "POST":
         usuario_id = get_jwt_identity()
         resultado = controller.crear_orden_desde_form(request.form, usuario_id)
@@ -89,9 +91,15 @@ def nueva():
     today = datetime.now().strftime("%Y-%m-%d")
     insumos_resp, _ = insumo_controller.obtener_insumos()
     insumos = insumos_resp.get("data", [])
+
+    # Obtener proveedores con su rating
+    proveedores_resp, _ = proveedor_controller.get_proveedores_con_rating()
+    proveedores = proveedores_resp.get("data", [])
+
     return render_template(
         "ordenes_compra/formulario.html",
         insumos=insumos,
+        proveedores=proveedores, # Pasar proveedores con rating a la plantilla
         today=today,
     )
 
@@ -354,30 +362,60 @@ def crear_reclamo(orden_id):
         motivo_principal=motivo_principal
     )
 
+@orden_compra_bp.route("/proveedores/ratings")
+@jwt_required()
+@permission_required(accion='consultar_ordenes_de_compra')
+def ver_ratings_proveedores():
+    """
+    Muestra el dashboard de ratings de proveedores.
+    """
+    proveedor_controller = ProveedorController()
+    response, _ = proveedor_controller.get_proveedores_con_rating()
+    
+    proveedores = []
+    if response and response.get("success"):
+        proveedores = response.get("data", [])
+    else:
+        flash("Error al cargar los ratings de los proveedores.", "error")
+        
+    return render_template("reclamos_proveedor/ratings.html", proveedores=proveedores)
+
 @orden_compra_bp.route("/reclamos")
 @jwt_required()
 @permission_required(accion='consultar_ordenes_de_compra')
 def listar_reclamos():
-    controller = ReclamoProveedorController()
-    response, _ = controller.get_all_reclamos()
+    reclamo_controller = ReclamoProveedorController()
+    proveedor_controller = ProveedorController()
+
+    # Obtener filtro de proveedor de la URL
+    proveedor_id = request.args.get('proveedor_id', type=int)
+    filtros = {'proveedor_id': proveedor_id} if proveedor_id else {}
+
+    # Obtener reclamos con filtros
+    response, _ = reclamo_controller.get_all_reclamos(filtros=filtros)
     reclamos = []
     if response and response.get("success"):
         reclamos_data = response.get("data", [])
         for reclamo in reclamos_data:
             if reclamo.get('created_at'):
-                # Asegurarse de que el formato coincida con lo que devuelve la BD
                 try:
                     reclamo['created_at'] = datetime.fromisoformat(reclamo['created_at'])
                 except (ValueError, TypeError):
-                    # Si falla, simplemente lo dejamos como string para no romper la app
                     pass
         reclamos = reclamos_data
-    elif response:
-        flash(response.get("error", "Error al cargar los reclamos."), "error")
     else:
-        flash("Error desconocido al cargar los reclamos.", "error")
+        flash(response.get("error", "Error al cargar los reclamos."), "error")
+
+    # Obtener todos los proveedores para el dropdown
+    proveedores_resp, _ = proveedor_controller.obtener_proveedores()
+    proveedores = proveedores_resp.get('data', [])
         
-    return render_template("reclamos_proveedor/listar.html", reclamos=reclamos)
+    return render_template(
+        "reclamos_proveedor/listar.html", 
+        reclamos=reclamos,
+        proveedores=proveedores,
+        selected_proveedor=proveedor_id
+    )
 
 @orden_compra_bp.route("/reclamos/<int:reclamo_id>")
 @jwt_required()
@@ -418,3 +456,39 @@ def cerrar_reclamo(reclamo_id):
         flash(response.get("error", "Error al cerrar el reclamo."), "error")
     
     return redirect(url_for("orden_compra.detalle_reclamo", reclamo_id=reclamo_id))
+
+from app.utils.estados import ESTADOS_INSPECCION
+
+@orden_compra_bp.route("/reclamos/nuevo", methods=['GET', 'POST'])
+@jwt_required()
+@permission_required(accion='crear_reclamo_proveedor')
+def nuevo_reclamo():
+    proveedor_controller = ProveedorController()
+    reclamo_controller = ReclamoProveedorController()
+
+    if request.method == 'POST':
+        resultado, status_code = reclamo_controller.crear_reclamo_flexible(request.form)
+        if status_code == 200 and resultado.get("success"):
+            flash("Reclamo creado exitosamente.", "success")
+            return redirect(url_for("orden_compra.listar_reclamos"))
+        else:
+            error_msg = resultado.get('error', 'Error desconocido')
+            flash(f"Error al crear el reclamo: {error_msg}", "error")
+            # Volver a renderizar el formulario con los datos y el error
+            proveedores_resp, _ = proveedor_controller.obtener_proveedores()
+            proveedores = proveedores_resp.get('data', [])
+            return render_template(
+                "reclamos_proveedor/nuevo_reclamo.html",
+                proveedores=proveedores,
+                motivos_cuarentena=ESTADOS_INSPECCION,
+                form_data=request.form
+            ), 400
+
+    proveedores_resp, _ = proveedor_controller.obtener_proveedores()
+    proveedores = proveedores_resp.get('data', [])
+    
+    return render_template(
+        "reclamos_proveedor/nuevo_reclamo.html",
+        proveedores=proveedores,
+        motivos_cuarentena=ESTADOS_INSPECCION
+    )

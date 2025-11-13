@@ -703,3 +703,30 @@ class InsumoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico en _generar_oc_automatica_por_proveedor para ID {proveedor_id}: {e}", exc_info=True)
+
+    def obtener_insumos_para_reclamo(self, filtros: Dict) -> tuple:
+        """
+        Obtiene insumos para el formulario de reclamos.
+        Filtra por proveedor_id y opcionalmente por una lista de orden_ids.
+        """
+        try:
+            proveedor_id = filtros.get('proveedor_id')
+            orden_ids = filtros.get('orden_ids')
+
+            if not proveedor_id:
+                return self.error_response("El proveedor_id es requerido.", 400)
+
+            if orden_ids:
+                response = self.insumo_model.find_by_orden_compra_ids(orden_ids)
+            else:
+                response = self.insumo_model.find_all(filters={'id_proveedor': proveedor_id})
+
+            if response.get('success'):
+                return self.success_response(data=response.get('data', []))
+            else:
+                logger.error(f"Error al obtener insumos para reclamo: {response.get('error')}")
+                return self.error_response(response.get('error', 'Error al obtener insumos.'), 500)
+
+        except Exception as e:
+            logger.error(f"Error obteniendo insumos para reclamo: {str(e)}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
