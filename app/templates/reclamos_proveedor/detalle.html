@@ -36,7 +36,13 @@
                     <div class="row">
                         <div class="col-md-6">
                             <p><strong>Proveedor:</strong> {{ reclamo.proveedor.nombre if reclamo.proveedor else 'N/A' }}</p>
-                            <p><strong>Estado:</strong> <span class="badge bg-warning text-dark">{{ reclamo.estado }}</span></p>
+                            <p><strong>Estado:</strong>
+                                    {% if reclamo.estado == 'ABIERTO' %}
+                                        <span class="badge bg-warning bi-exclamation-triangle-fill text-black"> {{ reclamo.estado }}</span>
+                                    {% elif reclamo.estado == 'CERRADO' %}
+                                        <span class="badge bi-x-circle bg-info text-black"> {{ reclamo.estado }}</span>
+                                    {% endif %}
+                            </p>
                             <p><strong>Fecha de Creación:</strong> {{ reclamo.created_at.strftime('%d/%m/%Y %H:%M') if reclamo.created_at else 'N/A' }}</p>
                         </div>
                         <div class="col-md-6">
