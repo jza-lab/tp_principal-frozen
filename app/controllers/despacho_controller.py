@@ -98,8 +98,15 @@ class DespachoController(BaseController):
         # 5. Enriquecer cada pedido con su zona y peso total calculado
         pedidos_enriquecidos = []
         for pedido in pedidos:
+            cliente = pedido.get('cliente')
+            if not cliente: continue
+
+            direccion = cliente.get('direccion')
+            if not direccion or not direccion.get('latitud') or not direccion.get('longitud'): continue
+
+
             # Asignar zona
-            localidad = pedido.get('direccion', {}).get('localidad', 'Sin Localidad')
+            localidad = direccion.get('localidad', 'Sin Localidad')
             pedido['zona'] = {'nombre': zona_map.get(localidad, 'Sin Zona Asignada')}
 
             # Calcular peso total usando el mapa de pesos
@@ -108,11 +115,10 @@ class DespachoController(BaseController):
                 cantidad = item.get('cantidad', 0)
                 peso_unitario = pesos_map.get(item.get('producto_id'), 0)
                 peso_total_gramos += cantidad * peso_unitario
-            
+
             pedido['peso_total_calculado_kg'] = round(peso_total_gramos / 1000, 2)
-            
+
             # Calcular distancia y tiempo estimado
-            direccion = pedido.get('direccion', {})
             latitud = direccion.get('latitud')
             longitud = direccion.get('longitud')
             distancia = self._calcular_distancia(latitud, longitud)
