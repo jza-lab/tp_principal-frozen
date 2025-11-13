@@ -129,31 +129,21 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const updateListView = () => {
-        // Renderizar tarjetas de pedidos disponibles
-        disponiblesGrid.innerHTML = pedidosSimulados.map(pedido => {
-            const isSelected = selectedPedidos.has(pedido.id);
-            const orderIndex = sortedRoute.findIndex(p => p.id === pedido.id);
-            const orderNumber = orderIndex !== -1 ? orderIndex + 1 : 0;
-            
-            return `
-            <div class="pedido-card ${isSelected ? 'selected' : ''}" data-id="${pedido.id}">
-                ${isSelected ? `<div class="card-order-number">${orderNumber}</div>` : ''}
-                <div class="card-header">
-                    <span>PED-${pedido.id}</span>
-                    <span class="badge ${pedido.prioridad === 'alta' ? 'alta' : 'media'}">${pedido.prioridad || 'Normal'}</span>
-                </div>
-                <div class="card-body">
-                    <p><i class="bi bi-person"></i> ${pedido.cliente.nombre}</p>
-                    <p><i class="bi bi-geo-alt"></i> ${pedido.direccion.calle} ${pedido.direccion.altura}, ${pedido.direccion.localidad}</p>
-                </div>
-                <div class="card-footer">
-                    <span><i class="bi bi-box-seam"></i> ${pedido.peso_total_calculado_kg} kg</span>
-                    <span><i class="bi bi-signpost-split"></i> ${pedido.distancia_km} km</span>
-                    <span><i class="bi bi-clock"></i> ${pedido.tiempo_estimado}</span>
-                </div>
-            </div>`;
-        }).join('');
-        
+        // Sincronizar el estado de los checkboxes en la tabla con el estado de la aplicación
+        document.querySelectorAll('#list-view .pedido-checkbox').forEach(checkbox => {
+            const pedidoId = parseInt(checkbox.value, 10);
+            const row = checkbox.closest('tr');
+            if (row) { // Asegurarse de que la fila exista
+                if (selectedPedidos.has(pedidoId)) {
+                    checkbox.checked = true;
+                    row.classList.add('table-primary'); // Clase de Bootstrap para resaltar
+                } else {
+                    checkbox.checked = false;
+                    row.classList.remove('table-primary');
+                }
+            }
+        });
+
         // Renderizar lista de ruta optimizada
         if (sortedRoute.length > 0) {
             const rutaHtml = `
@@ -353,11 +343,10 @@ document.addEventListener('DOMContentLoaded', () => {
         viewMapBtn.classList.remove('active');
     });
     
-    // Usar delegación de eventos para las tarjetas de pedido
-    listView.addEventListener('click', (e) => {
-        const card = e.target.closest('.pedido-card');
-        if (card) {
-            const id = parseInt(card.dataset.id, 10);
+    // Usar delegación de eventos para los checkboxes de la tabla de pedidos
+    listView.addEventListener('change', (e) => {
+        if (e.target.classList.contains('pedido-checkbox')) {
+            const id = parseInt(e.target.value, 10);
             handlePedidoSelection(id);
         }
     });
