@@ -218,7 +218,7 @@ class RiesgoController(BaseController):
 
             detalles_enriquecidos = {}
             if ids_por_tipo.get('lote_insumo'):
-                insumos_res = self.alerta_riesgo_model.db.table('insumos_inventario').select('id_lote, numero_lote_proveedor, cantidad_en_cuarentena, insumos_catalogo:id_insumo(nombre), proveedores:id_proveedor(nombre)').in_('id_lote', list(set(ids_por_tipo['lote_insumo']))).execute().data
+                insumos_res = self.alerta_riesgo_model.db.table('insumos_inventario').select('id_lote, numero_lote_proveedor, f_ingreso, f_vencimiento, cantidad_en_cuarentena, insumos_catalogo:id_insumo(nombre), proveedores:id_proveedor(nombre)').in_('id_lote', list(set(ids_por_tipo['lote_insumo']))).execute().data
                 detalles_enriquecidos['lote_insumo'] = {str(i['id_lote']): i for i in insumos_res}
 
             if ids_por_tipo.get('orden_produccion'):
@@ -226,7 +226,7 @@ class RiesgoController(BaseController):
                 detalles_enriquecidos['orden_produccion'] = {i['id']: i for i in ops_res}
 
             if ids_por_tipo.get('lote_producto'):
-                lotes_res = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_en_cuarentena, fecha_vencimiento, productos(nombre)').in_('id_lote', [int(i) for i in set(ids_por_tipo['lote_producto'])]).execute().data
+                lotes_res = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_en_cuarentena,fecha_produccion, fecha_vencimiento, productos(nombre)').in_('id_lote', [int(i) for i in set(ids_por_tipo['lote_producto'])]).execute().data
                 detalles_enriquecidos['lote_producto'] = {i['id_lote']: i for i in lotes_res}
             
             participantes = {}

@@ -35,25 +35,33 @@
             <div class="row">
                 <div class="col-lg-4 col-md-12 mb-4">
                     <div class="sticky-top" style="top: 20px;">
+                        
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta
-                                </h5>
-                                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
-                                {% if alerta.comentarios %}
-                                <p><strong>Comentarios:</strong> {{ alerta.comentarios }}</p>
-                                {% endif %}
-                                {% if alerta.url_evidencia %}
-                                <p><strong>Evidencia:</strong></p>
-                                <a href="{{ alerta.url_evidencia }}" target="_blank">
-                                    <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta"
-                                        class="img-thumbnail" style="max-width: 150px; cursor: pointer;">
-                                </a>
-                                {% endif %}
+                                <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta</h5>
+                                <ul class="list-group list-group-flush mt-3">
+                                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center flex-wrap">
+                                        <strong class="me-2">Motivo:</strong>
+                                        <span class="text-end">{{ alerta.motivo }}</span>
+                                    </li>
+                                    {% if alerta.comentarios %}
+                                    <li class="list-group-item px-0">
+                                        <strong>Comentarios:</strong>
+                                        <p class="mb-0 small text-muted">{{ alerta.comentarios }}</p>
+                                    </li>
+                                    {% endif %}
+                                    {% if alerta.url_evidencia %}
+                                    <li class="list-group-item px-0">
+                                        <strong>Evidencia:</strong>
+                                        <a href="{{ alerta.url_evidencia }}" target="_blank">
+                                            <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta"
+                                                class="img-thumbnail mt-2" style="max-width: 150px; cursor: pointer;">
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
                             </div>
                         </div>
-
-
                         <div class="card mt-4">
                             <div class="card-body">
                                 <h5 class="card-title mb-3"><i class="bi bi-people-fill me-2"></i>Personal Involucrado
@@ -75,10 +83,10 @@
                                                         style="font-size: 3rem; color: #6c757d;"></i>
                                                 </div>
                                                 <div class="flex-grow-1">
-                                                    <h6 class="card-title mb-1">{{ participante.info.nombre_completo }}
+                                                    <h6 class="card-title mb-1">{{ participante.info['nombre_completo'] }}
                                                     </h6>
                                                     <p class="card-text mb-1"><small class="text-muted">{{
-                                                            participante.info.rol }}</small></p>
+                                                            participante.info['rol'] }}</small></p>
                                                 </div>
                                             </div>
                                             <div class="mt-3">
@@ -102,26 +110,64 @@
                 <div class="col-lg-8 col-md-12">
                     {% from 'admin_riesgos/_macros_lista_desplegable.html' import render_collapsible_item %}
 
-                    <div class="card mb-4">
-                        <div class="card-header"><h5 class="mb-0">Lotes de Insumo Afectados</h5></div>
+                    <div class="d-flex justify-content-end gap-2 mb-3">
+                        <button class="btn btn-outline-warning btn-sm" id="btn-expandir-pendientes"><i class="bi bi-filter-circle me-1"></i> Expandir Pendientes</button>
+                        <button class="btn btn-outline-primary btn-sm" id="btn-expandir-todos"><i class="bi bi-arrows-expand me-1"></i> Expandir Todos</button>
+                        <button class="btn btn-outline-secondary btn-sm" id="btn-colapsar-todos"><i class="bi bi-arrows-collapse me-1"></i> Colapsar Todos</button>
+                    </div>
+                    <div class="card mb-4" id="lista-lotes-insumo">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Lotes de Insumo Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
                         <div class="card-body">
                             {% set lotes = alerta.afectados_detalle.lotes_insumo %}
                             {% if lotes %}
                                 {% for lote in lotes %}
                                     {% call render_collapsible_item(lote, 'lote_insumo') %}
                                         <div class="row">
-                                            <div class="col-md-8">
-                                                <p><strong>Proveedor:</strong> {{ lote.proveedores.nombre if lote.proveedores else 'N/A' }}</p>
-                                                <p><strong>Cantidad en Cuarentena:</strong> {{ lote.cantidad_en_cuarentena or '0' }}</p>
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles del Lote de Insumo</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Proveedor</small>
+                                                        <span class="fw-bold">{{ lote.proveedores['nombre'] if lote.proveedores else 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Recepción</small>
+                                                        <span class="fw-bold">{{ lote['f_ingreso'] | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad en Cuarentena</small>
+                                                        <span class="fw-bold text-danger">{{ lote.cantidad_en_cuarentena or '0' }} {{ lote.insumos_catalogo['unidad_medida'] or '' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Alerta</small>
+                                                        {% if lote.estado_resolucion == 'resuelto' %}
+                                                            <span class="badge bg-success">Resuelto</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">Pendiente</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="col-md-4 text-end">
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
-                                                    <div class="btn-group" role="group">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto">Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto">No Apto</button>
+                                                    <p class="small text-muted mb-2">Definir el estado de este lote:</p>
+                                                    <div class="d-grid gap-2">
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
-                                                     <p class="mb-0"><strong>Resolución:</strong> <span class="badge bg-info">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></p>
+                                                    <p class="small text-muted">Este lote fue resuelto como:</p>
+                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% else %}
+                                                    <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
                                                 {% endif %}
                                             </div>
                                         </div>
@@ -133,15 +179,48 @@
                         </div>
                     </div>
 
-                    <div class="card mb-4">
-                         <div class="card-header"><h5 class="mb-0">Órdenes de Producción Afectadas</h5></div>
+                    <div class="card mb-4" id="lista-ops">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Órdenes de Producción Afectadas</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
                         <div class="card-body">
                             {% set ordenes = alerta.afectados_detalle.ordenes_produccion %}
                             {% if ordenes %}
                                 {% for op in ordenes %}
                                     {% call render_collapsible_item(op, 'orden_produccion') %}
-                                        <p><strong>Cantidad Planificada:</strong> {{ op.cantidad_planificada }}</p>
-                                        <p><strong>Estado Actual:</strong> <span class="badge bg-secondary">{{ op.estado }}</span></p>
+                                        <div class="row">
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles de la Orden</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad Planificada</small>
+                                                        <span class="fw-bold">{{ op.cantidad_planificada }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad Producida</small>
+                                                        <span class="fw-bold">{{ op.cantidad_producida or '0' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Inicio</small>
+                                                        <span class="fw-bold">{{ op.fecha_inicio | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Estado</h6>
+                                                <small class="text-muted d-block mb-1">Estado Actual de OP:</small>
+                                                <h4><span class="badge bg-secondary">{{ op.estado }}</span></h4>
+                                                
+                                                {% if op.estado_resolucion == 'resuelto' %}
+                                                    <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
+                                                    <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                     {% endcall %}
                                 {% endfor %}
                             {% else %}
@@ -150,26 +229,59 @@
                         </div>
                     </div>
 
-                    <div class="card mb-4">
-                         <div class="card-header"><h5 class="mb-0">Lotes de Producto Afectados</h5></div>
+                    <div class="card mb-4" id="lista-lotes-producto">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Lotes de Producto Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
                         <div class="card-body">
                             {% set lotes = alerta.afectados_detalle.lotes_producto %}
                             {% if lotes %}
                                 {% for lote in lotes %}
                                     {% call render_collapsible_item(lote, 'lote_producto') %}
                                         <div class="row">
-                                            <div class="col-md-8">
-                                                <p><strong>Fecha de Vencimiento:</strong> {{ lote.fecha_vencimiento or 'N/A' }}</p>
-                                                <p><strong>Cantidad en Cuarentena:</strong> {{ lote.cantidad_en_cuarentena or '0' }}</p>
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles del Lote de Producto</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Elaboración</small>
+                                                        <span class="fw-bold">{{ lote.fecha_produccion | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Vencimiento</small>
+                                                        <span class="fw-bold">{{ lote.fecha_vencimiento | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad en Cuarentena</small>
+                                                        <span class="fw-bold text-danger">{{ lote.cantidad_en_cuarentena or '0' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Alerta</small>
+                                                        {% if lote.estado_resolucion == 'resuelto' %}
+                                                            <span class="badge bg-success">Resuelto</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">Pendiente</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="col-md-4 text-end">
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
                                                  {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
-                                                    <div class="btn-group" role="group">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto">Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">No Apto</button>
+                                                    <p class="small text-muted mb-2">Definir el estado de este lote:</p>
+                                                    <div class="d-grid gap-2">
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
-                                                     <p class="mb-0"><strong>Resolución:</strong> <span class="badge bg-info">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></p>
+                                                    <p class="small text-muted">Este lote fue resuelto como:</p>
+                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% else %}
+                                                    <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
                                                 {% endif %}
                                             </div>
                                         </div>
@@ -181,8 +293,14 @@
                         </div>
                     </div>
 
-                    <div class="card mb-4">
-                         <div class="card-header"><h5 class="mb-0">Pedidos Afectados</h5></div>
+                    <div class="card mb-4" id="lista-pedidos">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Pedidos Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
                         <div class="card-body">
                              <form id="form-gestion-riesgo" action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}" method="POST">
                                 {{ csrf_form.csrf_token }}
@@ -207,14 +325,32 @@
                                                     {% set nc = pedido.nota_credito %}
                                                     {% include 'admin_riesgos/_nota_credito_cuerpo.html' %}
                                                 {% else %}
-                                                    <p><strong>Resolución:</strong> {{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</p>
+                                                    <h6 class="text-primary mb-3">Resolución del Pedido</h6>
+                                                    <p class="mb-1"><strong>Resolución:</strong> {{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</p>
                                                     {% if pedido.resolutor_info %}
-                                                    <p><strong>Resuelto por:</strong> {{ pedido.resolutor_info.nombre_completo }}</p>
+                                                    <p><strong>Resuelto por:</strong> {{ pedido.resolutor_info['nombre_completo'] }}</p>
                                                     {% endif %}
                                                 {% endif %}
                                             {% else %}
-                                                <p><strong>Afectación (Items):</strong> {{ pedido.afectacion_items_str }}</p>
-                                                {# El checkbox ahora está en el macro, se quita de aquí #}
+                                                <h6 class="text-primary mb-3">Detalles del Pedido</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Pedido</small>
+                                                        <span class="fw-bold">N/A</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Pedido</small>
+                                                        <span class="badge bg-light text-dark">{{ pedido.estado or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Afectación (Items)</small>
+                                                        <span class="fw-bold">{{ pedido.afectacion_items_str }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Afectación (Valor)</small>
+                                                        <span class="fw-bold text-danger">{{ pedido.afectacion_valor_str }}</span>
+                                                    </div>
+                                                </div>
                                             {% endif %}
                                         {% endcall %}
                                     {% endfor %}
@@ -259,12 +395,12 @@
 
 {% if alerta.notas_de_credito %}
 {% for nc in alerta.notas_de_credito %}
-<div class="modal fade" id="modal-nc-{{ nc.id }}" tabindex="-1" aria-labelledby="modal-nc-label-{{ nc.id }}"
+<div class="modal fade" id="modal-nc-{{ nc['id'] }}" tabindex="-1" aria-labelledby="modal-nc-label-{{ nc['id'] }}"
     aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modal-nc-label-{{ nc.id }}">Detalle Nota de Crédito NC-{{ nc.id }}</h5>
+                <h5 class="modal-title" id="modal-nc-label-{{ nc['id'] }}">Detalle Nota de Crédito NC-{{ nc['id'] }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -299,7 +435,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary btn-descargar-pdf" data-nc-id="{{ nc.id }}">Descargar
+                <button type="button" class="btn btn-primary btn-descargar-pdf" data-nc-id="{{ nc['id'] }}">Descargar
                     PDF</button>
             </div>
         </div>
@@ -319,7 +455,6 @@
         if (seleccionarTodosPedidos) {
             seleccionarTodosPedidos.addEventListener('change', function () {
                 pedidoCheckboxes.forEach(checkbox => {
-                    // Solo afecta a los checkboxes que no están deshabilitados (aunque aquí no los deshabilitamos)
                     if (!checkbox.disabled) checkbox.checked = this.checked;
                 });
             });
@@ -329,11 +464,11 @@
         pedidoCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', function() {
                 if (!this.checked) {
-                    seleccionarTodosPedidos.checked = false;
+                    if (seleccionarTodosPedidos) seleccionarTodosPedidos.checked = false;
                 } else {
                     // Si todos están marcados, marca el 'seleccionar-todos'
                     if (document.querySelectorAll('.pedido-checkbox:not(:checked)').length === 0) {
-                        seleccionarTodosPedidos.checked = true;
+                        if (seleccionarTodosPedidos) seleccionarTodosPedidos.checked = true;
                     }
                 }
             });
@@ -344,40 +479,35 @@
         if (form) {
             form.querySelectorAll('button[type="submit"]').forEach(button => {
                 button.addEventListener('click', function (e) {
-                    e.preventDefault(); // Prevenir el envío tradicional del formulario
+                    e.preventDefault(); 
 
                     const accion = this.value;
                     const formData = new FormData(form);
-                    formData.append('accion', accion); // Añadir explícitamente la acción a los datos del formulario
+                    formData.append('accion', accion); 
 
-                    // Validar que haya algo seleccionado si la acción lo requiere
                     const selectedItems = form.querySelectorAll('.pedido-checkbox:checked');
                     if (selectedItems.length === 0) {
                         showNotificationModal('Error', 'Debe seleccionar al menos un pedido para ejecutar una acción.', 'error');
                         return;
                     }
                     
-                    // Asegurarse de que solo los pedidos seleccionados se envíen
-                    // Limpiamos los 'pedido_ids' que FormData pudo haber tomado del macro
                     formData.delete('pedido_ids'); 
                     selectedItems.forEach(cb => {
                         formData.append('pedido_ids', cb.value);
                     });
 
 
-                    // Enviar los datos con Fetch API
                     fetch(form.action, {
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest' // Para que el backend sepa que es AJAX
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
                                 showNotificationModal('Éxito', data.message || 'Acción completada.', 'success');
-                                // Recargar la página para ver los cambios después de cerrar el modal
                                 document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
                                     location.reload();
                                 });
@@ -475,7 +605,7 @@
             modalContactar.addEventListener('show.bs.modal', function () {
                 const pedidosSeleccionados = document.querySelectorAll('.pedido-checkbox:checked');
 
-                listaPedidosDiv.innerHTML = ''; // Limpiar lista anterior
+                listaPedidosDiv.innerHTML = ''; 
 
                 if (pedidosSeleccionados.length === 0) {
                     listaPedidosDiv.innerHTML = '<p class="text-danger">No se ha seleccionado ningún pedido. Por favor, cierre este modal y seleccione al menos un pedido de la lista.</p>';
@@ -487,7 +617,6 @@
 
                 btnEnviarCorreo.disabled = false;
                 const form = document.getElementById('formContactarClientes');
-                // Limpiar inputs ocultos previos antes de añadir los nuevos
                 form.querySelectorAll('input[name="pedido_ids[]"]').forEach(el => el.remove());
 
                 const ul = document.createElement('ul');
@@ -497,7 +626,6 @@
                 pedidosSeleccionados.forEach(checkbox => {
                     const pedidoId = checkbox.value;
                     const collapsibleHeader = checkbox.closest('.collapsible-item').querySelector('.card-header');
-                    // Extraer nombre del cliente del texto del macro
                     const clienteNombre = collapsibleHeader.querySelector('.text-muted.small').textContent.replace('- ', '').trim();
 
                     const li = document.createElement('li');
@@ -505,7 +633,6 @@
                     li.textContent = `Pedido #${pedidoId} - Cliente: ${clienteNombre}`;
                     ul.appendChild(li);
 
-                    // Añadir como input oculto para el formulario
                     const hiddenInput = document.createElement('input');
                     hiddenInput.type = 'hidden';
                     hiddenInput.name = 'pedido_ids[]';
@@ -517,14 +644,13 @@
 
                 listaPedidosDiv.appendChild(ul);
 
-                // Pre-llenar asunto y cuerpo
                 if (pedidosData.length === 1) {
                     asuntoInput.value = `Información sobre su pedido #${pedidosData[0].id}`;
                 } else {
                     asuntoInput.value = 'Información sobre su pedido';
                 }
 
-                cuerpoTextarea.value = `Estimado/a cliente,\n\nNos ponemos en contacto con usted en relación a su reciente pedido.\n\nHemos identificado una situación que requiere nuestra atención con respecto a algunos de los productos incluidos en su orden. Nuestro equipo ya está trabajando para resolverlo con la mayor celeridad posible.\n\nNos comunicaremos nuevamente con usted a la brevemad para proporcionarle más detalles y coordinar los siguientes pasos.\n\nAgradecemos su comprensión y paciencia.\n\nAtentamente,\nEl equipo de [Nombre de la Empresa]`;
+                cuerpoTextarea.value = `Estimado/a cliente,\n\nNos ponemos en contacto con usted en relación a su reciente pedido.\n\nHemos identificado una situación que requiere nuestra atención con respecto a algunos de los productos incluidos en su orden. Nuestro equipo ya está trabajando para resolverlo con la mayor celeridad posible.\n\nNos comunicaremos nuevamente con usted a la brevedad para proporcionarle más detalles y coordinar los siguientes pasos.\n\nAgradecemos su comprensión y paciencia.\n\nAtentamente,\nEl equipo de [Nombre de la Empresa]`;
             });
 
             btnEnviarCorreo.addEventListener('click', function () {
@@ -532,7 +658,6 @@
                 const formData = new FormData(form);
                 const spinner = this.querySelector('.spinner-border');
 
-                // Validar
                 if (!asuntoInput.value.trim() || !cuerpoTextarea.value.trim()) {
                     showNotificationModal('Error', 'El asunto y el cuerpo del correo no pueden estar vacíos.', 'error');
                     return;
@@ -592,7 +717,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const tipoLote = this.dataset.tipoLote;
             const resolucion = this.dataset.resolucion;
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const actionContainer = this.parentElement;
+            const actionContainer = this.closest('.border-start-lg'); // Buscar el contenedor padre (nuestra nueva columna)
 
             fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote') }}", {
                 method: 'POST',
@@ -606,10 +731,27 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(data => {
                 if (data.success) {
                     showNotificationModal('Éxito', data.message, 'success');
-                    actionContainer.innerHTML = `<p class="mb-0"><strong>Resolución:</strong> <span class="badge bg-info">${resolucion.replace('_', ' ')}</span></p>`;
-                    // Opcional: recargar la página para ver todos los cambios de estado
+                    
+                    // Reemplazar botones con badge de resolución
+                    let resolucionTexto = resolucion.replace('_', ' ');
+                    let resolucionClase = resolucion === 'apto' ? 'success' : 'danger';
+                    actionContainer.innerHTML = `
+                        <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                        <p class="small text-muted">Este lote fue resuelto como:</p>
+                        <h4><span class="badge bg-${resolucionClase}">${resolucionTexto.charAt(0).toUpperCase() + resolucionTexto.slice(1)}</span></h4>
+                    `;
+                    
+                    // Actualizar el badge de estado en la info
+                    const infoContainer = actionContainer.previousElementSibling;
+                    const estadoBadge = infoContainer.querySelector('.badge.bg-warning');
+                    if(estadoBadge) {
+                        estadoBadge.classList.remove('bg-warning', 'text-dark');
+                        estadoBadge.classList.add('bg-success');
+                        estadoBadge.textContent = 'Resuelto';
+                    }
+
                      document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
-                        location.reload();
+                        location.reload(); // Recargar para actualizar el estado general de la alerta
                     });
                 } else {
                     showNotificationModal('Error', data.error, 'error');
@@ -619,11 +761,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
     
-    // (El script duplicado del formulario de pedidos fue removido de aquí, 
-    // ya que está combinado en el primer bloque <script>)
-
 });
 </script>
+
 <style>
     .bi-chevron-down {
         transition: transform 0.2s ease-in-out;
@@ -633,6 +773,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     .card-header[data-bs-toggle="collapse"] {
         cursor: pointer;
+    }
+    /* Estilos para la card de info mejorada */
+    .list-group-item strong {
+        min-width: 100px;
+        display: inline-block;
+    }
+
+    /* Estilos para la línea vertical en pantallas grandes */
+    @media (min-width: 992px) { 
+        .border-start-lg {
+            border-left: 1px solid #dee2e6 !important;
+            padding-left: 1rem !important;
+        }
     }
 </style>
 <script>
@@ -644,7 +797,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     'Confirmar Resolución',
                     '¿Está seguro de que desea marcar esta alerta como resuelta? Esta acción forzará la resolución de todos los items pendientes y el estado "Alertado" será removido de todas las entidades (si no están afectadas por otra alerta activa). Esta acción no se puede deshacer.',
                     function() {
-                        // Si el usuario confirma, enviar la solicitud POST
                         const url = "{{ url_for('admin_riesgo.resolver_alerta_riesgo_manualmente', codigo_alerta=alerta.codigo) }}";
                         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
@@ -654,14 +806,12 @@ document.addEventListener('DOMContentLoaded', function () {
                                 'Content-Type': 'application/json',
                                 'X-CSRFToken': csrfToken
                             },
-                            body: JSON.stringify({}) // Cuerpo vacío ya que la acción no necesita datos
+                            body: JSON.stringify({})
                         })
                         .then(response => {
-                            // La respuesta de un redirect es opaca, simplemente recargamos la página
                             if (response.ok || response.redirected) {
                                 window.location.reload();
                             } else {
-                                // Si hay un error, intentamos mostrarlo
                                 return response.json().then(data => {
                                     showNotificationModal('Error', data.error || 'No se pudo resolver la alerta.', 'error');
 
@@ -677,6 +827,72 @@ document.addEventListener('DOMContentLoaded', function () {
                 );
             });
         }
+
+        // === INICIO: SCRIPT PARA BOTONES DE COLAPSO ===
+        const btnColapsarTodos = document.getElementById('btn-colapsar-todos');
+        const btnExpandirTodos = document.getElementById('btn-expandir-todos');
+        const btnExpandirPendientes = document.getElementById('btn-expandir-pendientes');
+        const allCollapsibleItems = document.querySelectorAll('.collapsible-item .collapse');
+        
+        // Helper para obtener la instancia de collapse de Bootstrap
+        function getCollapseInstance(element) {
+            return bootstrap.Collapse.getOrCreateInstance(element);
+        }
+
+        if (btnColapsarTodos) {
+            btnColapsarTodos.addEventListener('click', () => {
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+            });
+        }
+
+        if (btnExpandirTodos) {
+            btnExpandirTodos.addEventListener('click', () => {
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).show());
+            });
+        }
+
+        if (btnExpandirPendientes) {
+            btnExpandirPendientes.addEventListener('click', () => {
+                // 1. Primero, colapsar todo
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+
+                // 2. Luego, expandir solo los pendientes
+                document.querySelectorAll('.collapsible-item').forEach(item => {
+                    const header = item.querySelector('.card-header');
+                    // El badge 'bg-warning' es el indicador de 'pendiente'
+                    if (header && header.querySelector('.bg-warning')) {
+                        const collapseElement = item.querySelector('.collapse');
+                        if (collapseElement) {
+                            getCollapseInstance(collapseElement).show();
+                        }
+                    }
+                });
+            });
+        }
+
+        // === INICIO: NUEVO SCRIPT PARA BOTONES LOCALES ===
+        document.querySelectorAll('.local-collapse-controls').forEach(group => {
+            const cardBody = group.closest('.card').querySelector('.card-body');
+            if (!cardBody) return;
+
+            const localCollapsibleItems = cardBody.querySelectorAll('.collapsible-item .collapse');
+            const btnExpand = group.querySelector('.btn-expand-local');
+            const btnCollapse = group.querySelector('.btn-collapse-local');
+
+            if (btnExpand) {
+                btnExpand.addEventListener('click', () => {
+                    localCollapsibleItems.forEach(el => getCollapseInstance(el).show());
+                });
+            }
+
+            if (btnCollapse) {
+                btnCollapse.addEventListener('click', () => {
+                    localCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+                });
+            }
+        });
+        // === FIN: NUEVO SCRIPT PARA BOTONES LOCALES ===
+        // === FIN: SCRIPT PARA BOTONES DE COLAPSO ===
     });
 </script>
 {% endblock %}

@@ -1111,7 +1111,7 @@ class LoteProductoController(BaseController):
         """Obtiene los lotes y el conteo en un estado específico, usando datos enriquecidos."""
         try:
             # Usamos el método que ya trae los datos enriquecidos para la vista
-            result = self.model.find_all(filtros={'estado': estado})
+            result = self.model.get_all_lotes_for_view(filtros={'estado': estado})
             if result.get('success'):
                 lotes = result.get('data', [])
                 return {'count': len(lotes), 'data': lotes}
@@ -1190,43 +1190,29 @@ class LoteProductoController(BaseController):
     
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int) -> tuple:
         """
-        Marca un lote de producto como 'NO APTO', actualiza su estado y las alertas.
+        Marca un lote de producto como 'NO APTO' delegando a la lógica de cuarentena.
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
-            # Actualizar el estado del lote
-            update_data = {
-                'estado': 'retirado',
-                'cantidad_actual': 0,
-                'cantidad_en_cuarentena': 0
-            }
-            update_result = self.model.update(lote_id, update_data, 'id_lote')
-            if not update_result.get('success'):
-                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
+            lote = lote_res['data']
+            cantidad_total = float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
+            
+            # Llamar a la lógica de cuarentena con un motivo específico
+            response, status_code = self.poner_lote_en_cuarentena(
+                lote_id=lote_id,
+                motivo='Marcado como NO APTO manualmente.',
+                cantidad=cantidad_total
+            )
 
-            # Registrar evento en el historial de calidad (si existe un controlador para ello)
-            try:
-                from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
-                cc_controller = ControlCalidadProductoController()
-                cc_controller.crear_registro(lote_id, usuario_id, 'NO_APTO', 'Lote marcado como no apto manualmente.')
-            except ImportError:
-                logger.warning("No se encontró ControlCalidadProductoController, no se creará registro de calidad.")
-            except Exception as e_cc:
-                logger.error(f"Error creando registro de calidad para lote de producto {lote_id}: {e_cc}")
+            if response.get('success'):
+                # Adicionalmente, actualizar la alerta si el lote está en una
+                alerta_model = AlertaRiesgoModel()
+                alerta_model.actualizar_estado_afectados_por_entidad('lote_producto', lote_id, 'no_apto', usuario_id)
 
-
-            # Actualizar el estado de la alerta de riesgo si existe
-            alerta_model = AlertaRiesgoModel()
-            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).execute().data
-            if alertas_asociadas:
-                alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
-                for alerta_id in alerta_ids:
-                    alerta_model.actualizar_estado_afectados(alerta_id, [lote_id], 'no_apto', 'lote_producto', usuario_id)
-
-            return self.success_response(message="Lote de producto marcado como No Apto con éxito.")
+            return response, status_code
 
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)
