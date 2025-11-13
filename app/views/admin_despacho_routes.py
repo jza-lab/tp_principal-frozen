@@ -5,6 +5,7 @@ from app.controllers.vehiculo_controller import VehiculoController
 from app.utils.decorators import permission_required
 import json
 from app.json_encoder import CustomJSONEncoder
+from collections import defaultdict
 
 despacho_bp = Blueprint('despacho', __name__, url_prefix='/admin/despachos')
 despacho_controller = DespachoController()
@@ -47,9 +48,17 @@ def gestion_despachos_vista():
         flash(response_despachos.get('error', 'Error al cargar el historial de despachos.'), 'danger')
         despachos_existentes = []
 
-    # 3. Renderizar la plantilla con ambos conjuntos de datos
+    # 3. Agrupar pedidos por zona para la vista de tarjetas
+    pedidos_por_grupo = defaultdict(list)
+    for pedido in pedidos:
+        # Usar 'get' para evitar errores si 'zona' o 'nombre' no existen
+        nombre_zona = pedido.get('zona', {}).get('nombre', 'Sin Zona Asignada')
+        pedidos_por_grupo[nombre_zona].append(pedido)
+
+    # 4. Renderizar la plantilla con todos los datos necesarios
     return render_template('despachos/gestion_despachos.html',
                            pedidos_json=json.dumps(pedidos, cls=CustomJSONEncoder),
+                           pedidos_por_grupo=pedidos_por_grupo,
                            despachos=despachos_existentes)
 
 @despacho_bp.route('/api/vehiculo/<patente>', methods=['GET'])

@@ -59,7 +59,9 @@ class DespachoController(BaseController):
         zona y calcula su peso total de forma optimizada.
         """
         # 1. Obtener los pedidos base
-        pedidos_response, _ = self.pedido_controller.obtener_pedidos(filtros={'estado': 'LISTO_PARA_ENTREGA'})
+        pedidos_response = self.pedido_controller.model.get_all_with_items(
+            filtros={'estado': 'LISTO_PARA_ENTREGA'}
+        )
         if not pedidos_response.get('success'):
             return pedidos_response
 
@@ -101,8 +103,12 @@ class DespachoController(BaseController):
             cliente = pedido.get('cliente')
             if not cliente: continue
 
-            direccion = cliente.get('direccion')
-            if not direccion or not direccion.get('latitud') or not direccion.get('longitud'): continue
+            # --- MODIFICACIÓN: La dirección ahora está en el nivel superior del pedido ---
+            # La consulta get_all_with_items anida la dirección del cliente en el pedido, no en el cliente.
+            direccion_entrega = pedido.get('direccion')
+            if not direccion_entrega or not direccion_entrega.get('latitud') or not direccion_entrega.get('longitud'):
+                continue
+            # --- FIN MODIFICACIÓN ---
 
 
             # Asignar zona
@@ -119,8 +125,8 @@ class DespachoController(BaseController):
             pedido['peso_total_calculado_kg'] = round(peso_total_gramos / 1000, 2)
 
             # Calcular distancia y tiempo estimado
-            latitud = direccion.get('latitud')
-            longitud = direccion.get('longitud')
+            latitud = direccion_entrega.get('latitud')
+            longitud = direccion_entrega.get('longitud')
             distancia = self._calcular_distancia(latitud, longitud)
             pedido['distancia_km'] = distancia
             # Estimación simple de tiempo: 2.5 minutos por km + 5 minutos fijos por parada
