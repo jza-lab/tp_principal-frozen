@@ -320,10 +320,41 @@
                                 {% if pedidos %}
                                     {% for pedido in pedidos %}
                                         {% call render_collapsible_item(pedido, 'pedido') %}
+                                            
                                             {% if pedido.estado_resolucion == 'resuelto' %}
+                                                
                                                 {% if pedido.nota_credito %}
                                                     {% set nc = pedido.nota_credito %}
-                                                    {% include 'admin_riesgos/_nota_credito_cuerpo.html' %}
+                                                    
+                                                    <h6 class="text-primary mb-3">Información del Pedido</h6>
+                                                    <div class="row g-3 mb-3">
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Resolución</small>
+                                                            <span class="fw-bold">{{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Resuelto por</small>
+                                                            <span class="fw-bold">{{ pedido.resolutor_info['nombre_completo'] if pedido.resolutor_info else 'N/A' }}</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Fecha Pedido</small>
+                                                            <span class="fw-bold">N/A</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Estado Pedido</small>
+                                                            <span class="badge bg-success">{{ pedido.estado or 'Resuelto' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <hr>
+
+                                                    <div class="nc-preview-wrapper" data-bs-toggle="modal" data-bs-target="#modal-nc-preview-{{ pedido.id }}" title="Haz clic para ver la nota de crédito completa">
+                                                        <small class="text-muted d-block mb-2">Vista Previa: Nota de Crédito</small>
+                                                        <div class="nc-preview-content">
+                                                             {# Usamos el template que pediste #}
+                                                             {% include 'orden_venta/_nota_credito_cuerpo.html' %}
+                                                        </div>
+                                                    </div>
+                                                
                                                 {% else %}
                                                     <h6 class="text-primary mb-3">Resolución del Pedido</h6>
                                                     <p class="mb-1"><strong>Resolución:</strong> {{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</p>
@@ -331,6 +362,7 @@
                                                     <p><strong>Resuelto por:</strong> {{ pedido.resolutor_info['nombre_completo'] }}</p>
                                                     {% endif %}
                                                 {% endif %}
+
                                             {% else %}
                                                 <h6 class="text-primary mb-3">Detalles del Pedido</h6>
                                                 <div class="row g-3">
@@ -352,7 +384,7 @@
                                                     </div>
                                                 </div>
                                             {% endif %}
-                                        {% endcall %}
+                                            {% endcall %}
                                     {% endfor %}
                                 {% else %}
                                     <p class="text-muted small">No hay pedidos afectados.</p>
@@ -393,6 +425,31 @@
 </div>
 {% include 'admin_riesgos/_modal_contactar_clientes.html' %}
 
+{% set pedidos = alerta.afectados_detalle.pedidos %}
+{% if pedidos %}
+    {% for pedido in pedidos %}
+        {% if pedido.nota_credito %}
+            {% set nc = pedido.nota_credito %}
+            <div class="modal fade" id="modal-nc-preview-{{ pedido.id }}" tabindex="-1" aria-labelledby="modal-nc-preview-label-{{ pedido.id }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modal-nc-preview-label-{{ pedido.id }}">Nota de Crédito: {{ nc.codigo if nc.codigo else 'NC-' + nc['id']|string }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            {# Incluimos el template que pediste #}
+                            {% include 'orden_venta/_nota_credito_cuerpo.html' %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}
 {% if alerta.notas_de_credito %}
 {% for nc in alerta.notas_de_credito %}
 <div class="modal fade" id="modal-nc-{{ nc['id'] }}" tabindex="-1" aria-labelledby="modal-nc-label-{{ nc['id'] }}"
@@ -787,6 +844,47 @@ document.addEventListener('DOMContentLoaded', function () {
             padding-left: 1rem !important;
         }
     }
+
+    /* === INICIO: Estilos para Vista Previa de NC === */
+    .nc-preview-wrapper {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem; /* var(--bs-border-radius) */
+        padding: 1rem;
+        cursor: pointer;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        background-color: #f8f9fa;
+    }
+    .nc-preview-wrapper:hover {
+        background-color: #f1f3f5;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .nc-preview-content {
+        font-size: 0.85rem; /* "Un poco más pequeño" */
+        overflow: hidden;
+        max-height: 250px; /* Límite de altura para la preview */
+        position: relative;
+        /* Deshabilitamos los bordes internos del template incluido si es que los tiene */
+        & > :first-child {
+            border: none !important;
+            box-shadow: none !important;
+            margin-bottom: 0 !important;
+        }
+    }
+    /* Efecto de "fade-out" en la parte inferior de la preview */
+    .nc-preview-content::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 50px;
+        /* El fondo debe coincidir con el del wrapper */
+        background: linear-gradient(to bottom, transparent, #f8f9fa); 
+    }
+    .nc-preview-wrapper:hover .nc-preview-content::after {
+        background: linear-gradient(to bottom, transparent, #f1f3f5);
+    }
+    /* === FIN: Estilos para Vista Previa de NC === */
 </style>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -870,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
-        // === INICIO: NUEVO SCRIPT PARA BOTONES LOCALES ===
+        // === INICIO: SCRIPT PARA BOTONES LOCALES ===
         document.querySelectorAll('.local-collapse-controls').forEach(group => {
             const cardBody = group.closest('.card').querySelector('.card-body');
             if (!cardBody) return;
@@ -891,7 +989,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             }
         });
-        // === FIN: NUEVO SCRIPT PARA BOTONES LOCALES ===
+        // === FIN: SCRIPT PARA BOTONES LOCALES ===
         // === FIN: SCRIPT PARA BOTONES DE COLAPSO ===
     });
 </script>

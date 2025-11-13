@@ -1190,29 +1190,37 @@ class LoteProductoController(BaseController):
     
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int) -> tuple:
         """
-        Marca un lote de producto como 'NO APTO' delegando a la lógica de cuarentena.
+        Marca un lote de producto como 'RETIRADO' y anula su stock.
+        Esta acción es para lotes que ya están en inventario y se decide retirar.
         """
         try:
+            # 1. Verificar que el lote existe
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
-            lote = lote_res['data']
-            cantidad_total = float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
-            
-            # Llamar a la lógica de cuarentena con un motivo específico
-            response, status_code = self.poner_lote_en_cuarentena(
-                lote_id=lote_id,
-                motivo='Marcado como NO APTO manualmente.',
-                cantidad=cantidad_total
-            )
+            # 2. Preparar los datos para la actualización
+            update_data = {
+                'estado': 'RETIRADO',
+                'cantidad_actual': 0,
+                'cantidad_en_cuarentena': 0,
+                'motivo_cuarentena': f'Retirado manualmente por usuario {usuario_id} por no ser apto.'
+            }
 
-            if response.get('success'):
-                # Adicionalmente, actualizar la alerta si el lote está en una
+            # 3. Actualizar el lote en la base de datos
+            result = self.model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # 4. (Opcional pero recomendado) Actualizar el estado en cualquier alerta de riesgo
+            try:
                 alerta_model = AlertaRiesgoModel()
-                alerta_model.actualizar_estado_afectados_por_entidad('lote_producto', lote_id, 'no_apto', usuario_id)
+                alerta_model.actualizar_estado_afectados_por_entidad('lote_producto', lote_id, 'retirado_manual', usuario_id)
+            except Exception as e_alert:
+                logger.error(f"Error al actualizar alertas para el lote {lote_id} retirado: {e_alert}", exc_info=True)
+                # No se devuelve un error al usuario, pero se registra para auditoría.
 
-            return response, status_code
+            return self.success_response(message="Lote marcado como RETIRADO con éxito.")
 
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)

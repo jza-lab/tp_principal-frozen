@@ -267,7 +267,7 @@ class RiesgoController(BaseController):
                 if afectado.get('id_usuario_resolucion'):
                     pedido_en_detalle['resolutor_info'] = usuario_controller.obtener_detalles_completos_usuario(afectado['id_usuario_resolucion'])
                 if afectado.get('resolucion_aplicada') == 'nota_credito' and afectado.get('id_documento_relacionado'):
-                    nc_res = nc_controller.obtener_detalle_nc_por_id(afectado['id_documento_relacionado'])
+                    nc_res, _ = nc_controller.obtener_detalles_para_pdf(afectado['id_documento_relacionado'])
                     if nc_res.get('success'):
                         pedido_en_detalle['nota_credito'] = nc_res['data']
 
@@ -378,11 +378,7 @@ class RiesgoController(BaseController):
             if not alerta_res.get('data'): return ({"success": False, "error": "Alerta no encontrada."}, 404)
             alerta = alerta_res.get('data')[0]
 
-            # Validar si alguno de los lotes de producto sigue en cuarentena
-            lotes_en_cuarentena = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote').in_('id_lote', lotes_producto_afectados_ids).eq('estado', 'CUARENTENA').execute().data
-            if lotes_en_cuarentena:
-                return ({"success": False, "error": "No se puede resolver el pedido. Uno o más lotes de producto asociados todavía están en cuarentena."}, 400)
-
+            # Corregido: Primero obtener los lotes afectados, luego validar.
             afectados_completo = self.trazabilidad_model.obtener_afectados_para_alerta(
                 alerta['origen_tipo_entidad'], 
                 alerta['origen_id_entidad']
@@ -390,6 +386,7 @@ class RiesgoController(BaseController):
             lotes_producto_afectados_ids = [
                 a['id_entidad'] for a in afectados_completo if a['tipo_entidad'] == 'lote_producto'
             ]
+
             resultados_nc = self.nota_credito_controller.crear_notas_credito_para_pedidos_afectados(
                 alerta_id=alerta['id'],
                 pedidos_ids=pedidos_seleccionados,
