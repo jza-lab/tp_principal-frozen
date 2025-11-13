@@ -253,23 +253,51 @@ class RiesgoController(BaseController):
                     entidad_id = entidad.get(id_field)
                     if detalles_enriquecidos.get(tipo_singular, {}).get(entidad_id):
                         entidad.update(detalles_enriquecidos[tipo_singular][entidad_id])
-            
-            # Enriquecer pedidos con detalles de resolución
-            from app.controllers.nota_credito_controller import NotaCreditoController
-            nc_controller = NotaCreditoController()
-            for afectado in [a for a in afectados_con_estado if a['tipo_entidad'] == 'pedido']:
-                pedido_id = int(afectado['id_entidad'])
-                pedido_en_detalle = next((p for p in afectados_detalle.get('pedidos', []) if p['id'] == pedido_id), None)
-                if not pedido_en_detalle: continue
+             # --- INICIO: Enriquecer TODAS las entidades con detalles de resolución ---
+            map_plural_a_singular = {'lotes_insumo': 'lote_insumo', 'ordenes_produccion': 'orden_produccion', 'lotes_producto': 'lote_producto', 'pedidos': 'pedido'}
+            map_singular_a_plural = {v: k for k, v in map_plural_a_singular.items()}
+            id_field_map = {
+                'lote_insumo': 'id_lote',
+                'orden_produccion': 'id',
+                'lote_producto': 'id_lote',
+                'pedido': 'id'
+            }
+
+            for afectado in afectados_con_estado:
+                tipo_singular = afectado.get('tipo_entidad')
+                if not tipo_singular: continue
+
+                tipo_plural = map_singular_a_plural.get(tipo_singular)
+                id_field = id_field_map.get(tipo_singular)
                 
-                pedido_en_detalle['estado_resolucion'] = afectado.get('estado', 'pendiente')
-                pedido_en_detalle['resolucion_aplicada'] = afectado.get('resolucion_aplicada')
+                if not tipo_plural or not id_field or not afectados_detalle.get(tipo_plural): continue
+
+                entidad_id_str = afectado.get('id_entidad')
+                
+                try:
+                    # El ID de la entidad en `afectados_detalle` puede ser int o str. Hay que comparar con el tipo correcto.
+                    # Hacemos una comparación flexible.
+                    entidad_en_detalle = next((e for e in afectados_detalle.get(tipo_plural, []) if str(e.get(id_field)) == str(entidad_id_str)), None)
+                except (ValueError, TypeError):
+                    logger.warning(f"No se pudo comparar el ID {entidad_id_str} para {tipo_singular}")
+                    continue
+
+                if not entidad_en_detalle: continue
+
+                # Enriquecer la entidad
+                entidad_en_detalle['estado_resolucion'] = afectado.get('estado', 'pendiente')
+                entidad_en_detalle['resolucion_aplicada'] = afectado.get('resolucion_aplicada')
+                
                 if afectado.get('id_usuario_resolucion'):
-                    pedido_en_detalle['resolutor_info'] = usuario_controller.obtener_detalles_completos_usuario(afectado['id_usuario_resolucion'])
-                if afectado.get('resolucion_aplicada') == 'nota_credito' and afectado.get('id_documento_relacionado'):
+                     entidad_en_detalle['resolutor_info'] = usuario_controller.obtener_detalles_completos_usuario(afectado['id_usuario_resolucion'])
+                
+                # Caso especial para notas de crédito en pedidos
+                if tipo_singular == 'pedido' and afectado.get('resolucion_aplicada') == 'nota_credito' and afectado.get('id_documento_relacionado'):
+                    from app.controllers.nota_credito_controller import NotaCreditoController
+                    nc_controller = NotaCreditoController()
                     nc_res, _ = nc_controller.obtener_detalles_para_pdf(afectado['id_documento_relacionado'])
                     if nc_res.get('success'):
-                        pedido_en_detalle['nota_credito'] = nc_res['data']
+                        entidad_en_detalle['nota_credito'] = nc_res['data']
 
             if 'pedidos' in afectados_detalle:
                 from app.controllers.pedido_controller import PedidoController
@@ -284,7 +312,12 @@ class RiesgoController(BaseController):
                     if not res_pedido.get('success'):
                         pedido.update({'afectacion_items_str': "Error", 'afectacion_valor_str': "Error"})
                         continue
-                    items_pedido = res_pedido.get('data', {}).get('items', [])
+                    
+                    # Fusionar los datos completos del pedido (incluyendo el cliente) en el diccionario existente
+                    pedido_completo = res_pedido.get('data', {})
+                    pedido.update(pedido_completo)
+
+                    items_pedido = pedido_completo.get('items', [])
                     total_items = len(items_pedido)
                     total_valor = sum(float(i.get('producto_nombre', {}).get('precio_unitario', 0)) * float(i.get('cantidad', 0)) for i in items_pedido)
                     

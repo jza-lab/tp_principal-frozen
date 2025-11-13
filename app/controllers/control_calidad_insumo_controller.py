@@ -278,8 +278,13 @@ class ControlCalidadInsumoController(BaseController):
             if not alerta_ids:
                 logger.info(f"El lote {lote_liberado_id} fue liberado pero no estaba asociado a ninguna alerta activa.")
                 return
+            
+            # Obtener las OPs afectadas por este lote
+            reservas_op = reserva_insumo_model.find_all({'lote_inventario_id': lote_liberado_id}).get('data', [])
+            op_ids_afectadas = list(set([r['orden_produccion_id'] for r in reservas_op]))
 
             for alerta_id in alerta_ids:
+                # 3. Marcar el lote de insumo como resuelto en la alerta
                 alerta_model.actualizar_estado_afectados(
                     alerta_id, 
                     [lote_liberado_id], 
@@ -288,7 +293,13 @@ class ControlCalidadInsumoController(BaseController):
                     usuario_id
                 )
                 
-                # 3. Verificar si la alerta se puede cerrar
+                # 4. Verificar si alguna de las OPs afectadas puede ser marcada como resuelta
+                for op_id in op_ids_afectadas:
+                    alerta_model.resolver_orden_produccion_si_corresponde(op_id, alerta_id, usuario_id)
+
+                # 5. (Opcional pero bueno) El propio 'actualizar_estado_afectados' ya llama a 'verificar_y_cerrar_alerta'.
+                # Llamarlo de nuevo no es dañino, pero es redundante si solo se resolvió el lote.
+                # Lo dejamos por si una OP se resuelve y eso cierra la alerta.
                 alerta_model.verificar_y_cerrar_alerta(alerta_id)
 
             logger.info(f"Lote {lote_liberado_id} liberado de cuarentena y sus alertas asociadas han sido actualizadas.")
