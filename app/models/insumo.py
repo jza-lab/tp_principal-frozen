@@ -73,11 +73,19 @@ class InsumoModel(BaseModel):
             return {'success': False, 'error': str(e)}
 
     def find_by_id(self, id_value: str, id_field: str = 'id_insumo') -> Dict:
-        """Sobrescribe find_by_id para convertir timestamps."""
-        result = super().find_by_id(id_value, id_field)
-        if result.get('success'):
-            result['data'] = self._convert_timestamps(result['data'])
-        return result
+        """Sobrescribe find_by_id para asegurar que se obtiene vida_util_dias."""
+        try:
+            # Consulta explícita para evitar problemas de caché o selección de columnas
+            result = self.db.table(self.get_table_name()).select('*, proveedor:proveedores(*)').eq(id_field, id_value).execute()
+
+            if result.data:
+                return {'success': True, 'data': self._convert_timestamps(result.data[0])}
+            
+            return {'success': False, 'error': 'Registro no encontrado'}
+
+        except Exception as e:
+            logger.error(f"Error al buscar en {self.get_table_name()}: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def find_by_codigo(self, codigo: str, tipo_codigo: str = 'interno') -> Dict:
         """Buscar insumo por código interno o EAN"""
