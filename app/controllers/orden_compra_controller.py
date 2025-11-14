@@ -895,8 +895,35 @@ class OrdenCompraController:
                     update_result = self.model.update(orden_id, {'estado': 'RECEPCION_COMPLETA'})
                     
                     if update_result.get('success'):
-                        id_padre = orden_actual.get('complementa_a_orden_id') 
+                        # --- INICIO DE LA NUEVA LÓGICA ---
+                        id_op_vinculada = orden_actual.get('orden_produccion_id')
+                        if id_op_vinculada:
+                            # 1. Buscar todas las OCs para esta OP
+                            todas_ocs_res = self.model.get_all({'orden_produccion_id': id_op_vinculada})
+                            if todas_ocs_res.get('success'):
+                                todas_ocs = todas_ocs_res.get('data', [])
+                                
+                                # Sobrescribir el estado de la OC actual en la lista, ya que puede no estar actualizado
+                                for oc in todas_ocs:
+                                    if oc['id'] == orden_id:
+                                        oc['estado'] = 'RECEPCION_COMPLETA'
+                                        break
+
+                                # 2. Verificar si TODAS están completas
+                                if all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in todas_ocs):
+                                    logger.info(f"Todas las OCs para la OP {id_op_vinculada} están completas. Actualizando OP a 'LISTA PARA PRODUCIR'.")
+                                    # Llamar al método que verifica stock y cambia el estado de la OP
+                                    orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
+                                else:
+                                    ocs_pendientes = [oc.get('codigo_oc') for oc in todas_ocs if oc.get('estado') != 'RECEPCION_COMPLETA']
+                                    logger.info(f"La OC {orden_actual.get('codigo_oc')} se completó, pero la OP {id_op_vinculada} aún espera las OCs: {', '.join(ocs_pendientes)}.")
+                        else:
+                             # Si la OC es manual, se ejecuta la verificación general para todas las OPs en espera.
+                            logger.info(f"La OC {orden_actual.get('codigo_oc')} es manual. Verificando todas las OPs en espera de insumos.")
+                            orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
+                        # --- FIN DE LA NUEVA LÓGICA ---
                         
+                        id_padre = orden_actual.get('complementa_a_orden_id') 
                         if id_padre:
                             logger.info(f"La OC Hija {orden_actual.get('codigo_oc')} se completó. Cerrando OC Padre ID: {id_padre}.")
                             padre_update_result = self.model.update(id_padre, {'estado': 'RECEPCION_COMPLETA'})
@@ -909,16 +936,6 @@ class OrdenCompraController:
                             else:
                                 logger.error(f"Error al intentar cerrar la OC Padre ID: {id_padre}. Error: {padre_update_result.get('error')}")
 
-                    id_op_vinculada = orden_actual.get('orden_produccion_id')
-                    if id_op_vinculada:
-                        # Si la OC está vinculada, se verifica SÓLO esa OP específica.
-                        logger.info(f"La OC {orden_actual.get('codigo_oc')} está vinculada a la OP {id_op_vinculada}. Verificando estado de esa OP.")
-                        orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
-                    else:
-                        # Si la OC es manual, se ejecuta la verificación general para todas las OPs en espera.
-                        logger.info(f"La OC {orden_actual.get('codigo_oc')} es manual. Verificando todas las OPs en espera de insumos.")
-                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
-                    
                     return {'success': True, 'message': f'Escenario Exitoso: Recepción completada y {lotes_creados} lotes creados y reservados.'}
                 # --- FIN LÓGICA PASO 2 ---
 

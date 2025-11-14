@@ -549,29 +549,24 @@ class ProduccionKanbanController(BaseController):
             foto_url = self._subir_foto_y_obtener_url(foto_file, op_id)
 
             cc_data = {
-                'lote_producto_id': None, # No tenemos el ID del lote todavía
+                'lote_producto_id': None, # Se asignará después de crear el lote
                 'usuario_supervisor_id': usuario_id,
                 'decision_final': decision,
                 'orden_produccion_id': op_id,
                 'comentarios': comentarios,
                 'resultado_inspeccion': resultado_inspeccion,
-                'foto_url': foto_url
+                'foto_url': foto_url,
+                'cantidad_cuarentena': cantidad_cuarentena,
+                'cantidad_rechazada': cantidad_rechazada,
+                'decision_inspeccion': decision # Pasar también la decisión original del form
             }
-            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
-            if not cc_res.get('success'):
-                 # Si falla, solo registramos el error. La lógica principal (cambiar estado OP) debe continuar.
-                 logger.error(f"Falló la creación del registro de C.C. para la OP {op_id}: {cc_res.get('error')}")
-            # --- FIN DE LA CORRECCIÓN ---
-
-            # Actualizar OP
             nuevo_estado_op = 'COMPLETADA'
             if cantidad_rechazada == cantidad_producida:
                 nuevo_estado_op = 'CANCELADA'
-            
-            # Usar el método completo 'cambiar_estado_orden' en lugar de 'cambiar_estado_orden_simple'.
-            # Esto asegura que se ejecute la lógica post-cambio, como la actualización del estado del pedido de venta asociado.
-            # ¡Y ahora también la creación del lote y sus reservas!
-            self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado_op, usuario_id)
+
+            response, status_code = self.orden_produccion_controller.cambiar_estado_orden(op_id, nuevo_estado_op, usuario_id, qc_data=cc_data)
+            if status_code >= 400:
+                return self.error_response(response.get('error', 'Error al cambiar el estado de la orden.'), status_code)
 
             return self.success_response(message="Decisión de calidad procesada exitosamente.")
 

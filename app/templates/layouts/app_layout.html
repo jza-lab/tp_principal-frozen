@@ -271,10 +271,9 @@
                             </a>
                             </li>
                         {% endif %}
-                        {% if can_gestionar_consultas and not is_dev %}
+                        {% if can_gestionar_consultas %}
                         <li>
-                            <hr class="dropdown-divider">
-                        </li>
+
                         <li>
                             <a class="dropdown-item {% if request.endpoint.startswith('consulta_admin') %}active{% endif %}"
                                 href="{{ url_for('consulta_admin.listar_consultas') }}">
@@ -282,6 +281,7 @@
                             </a>
                         </li>
                         {% endif %}
+                        </li>
                         {% if can_configurar_chatbot %}
                         <li>
                             <hr class="dropdown-divider">

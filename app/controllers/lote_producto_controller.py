@@ -16,6 +16,11 @@ from app.schemas.reserva_producto_schema import ReservaProductoSchema
 from app.controllers.configuracion_controller import ConfiguracionController
 from app.models.alerta_riesgo import AlertaRiesgoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
+from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+from app.database import Database
+from werkzeug.utils import secure_filename
+import os
+from storage3.exceptions import StorageApiError
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +34,7 @@ class LoteProductoController(BaseController):
         self.reserva_model = ReservaProductoModel()
         self.reserva_schema = ReservaProductoSchema()
         self.config_controller = ConfiguracionController()
+        self.control_calidad_producto_controller = ControlCalidadProductoController()
 
     def crear_lote(self, data: Dict):
         """Crea un nuevo lote de producto."""
@@ -128,18 +134,33 @@ class LoteProductoController(BaseController):
             logger.error(f"Error en actualizar_lote: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500), 500
 
-    def eliminar_lote_logico(self, lote_id: int):
-        """Eliminación lógica de un lote (cambia estado a RETIRADO)."""
+    def eliminar_lote_logico(self, lote_id: int, usuario_id: int, motivo: str, resultado_inspeccion: str):
+        """Eliminación lógica de un lote (cambia estado a RETIRADO) y crea un registro de CC."""
         try:
-            data = {'estado': 'RETIRADO'}
-            result = self.model.update(lote_id, data, 'id_lote')
-            if result['success']:
-                return self.success_response(message="Lote retirado correctamente."), 200
-            else:
-                return self.error_response(result['error'], 500), 500
+            # Primero, actualiza el estado del lote
+            update_data = {'estado': 'RETIRADO', 'motivo_cuarentena': motivo}
+            result = self.model.update(lote_id, update_data, 'id_lote')
+
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # Luego, crea el registro de control de calidad
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': 'RETIRADO',
+                'comentarios': motivo,
+                'resultado_inspeccion': resultado_inspeccion,
+            }
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                logger.error(f"Lote {lote_id} retirado, pero falló la creación del registro de C.C.: {cc_res.get('error')}")
+
+            return self.success_response(message="Lote retirado correctamente.")
+
         except Exception as e:
-            logger.error(f"Error eliminando lote: {str(e)}")
-            return self.error_response(f'Error interno: {str(e)}', 500), 500
+            logger.error(f"Error en eliminar_lote_logico: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
 
 
     def obtener_stock_producto(self, producto_id: int):
@@ -947,9 +968,9 @@ class LoteProductoController(BaseController):
             logger.error(f"Error al generar la plantilla de lotes: {str(e)}", exc_info=True)
             return None
 
-    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str, foto_file) -> tuple:
         """
-        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA.
+        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA y crea un registro de control de calidad.
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
@@ -960,7 +981,6 @@ class LoteProductoController(BaseController):
             cantidad_actual_disponible = lote.get('cantidad_actual') or 0
             cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
 
-            # Validar estado (ahora puede estar DISPONIBLE o ya en CUARENTENA)
             if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
                 msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
                 return self.error_response(msg, 400)
@@ -975,13 +995,12 @@ class LoteProductoController(BaseController):
             if cantidad_a_mover > cantidad_actual_disponible:
                 logger.warning(f"La cantidad de cuarentena solicitada ({cantidad}) excede el disponible ({cantidad_actual_disponible}). Se pondrá en cuarentena todo el disponible.")
                 cantidad_a_mover = cantidad_actual_disponible
-            
-            # Lógica de resta y suma
+
             nueva_cantidad_disponible = cantidad_actual_disponible - cantidad_a_mover
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
 
             update_data = {
-                'estado': 'CUARENTENA', # Siempre se marca o se mantiene como CUARENTENA
+                'estado': 'CUARENTENA',
                 'motivo_cuarentena': motivo,
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible
@@ -990,6 +1009,20 @@ class LoteProductoController(BaseController):
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': 'CUARENTENA',
+                'comentarios': motivo,
+                'resultado_inspeccion': resultado_inspeccion,
+                'foto_url': foto_url,
+                'cantidad_inspeccionada': cantidad
+            }
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                 logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {cc_res.get('error')}")
 
             return self.success_response(message="Cantidad puesta en cuarentena con éxito.")
 
@@ -1172,40 +1205,67 @@ class LoteProductoController(BaseController):
             logger.error(f"Error contando lotes sin trazabilidad: {str(e)}")
             return 0
 
-    def crear_lote_y_reservas_desde_op(self, orden_produccion_data: Dict, usuario_id: int) -> tuple:
+    def crear_lote_y_reservas_desde_op(self, orden_produccion_data: Dict, usuario_id: int, qc_data: Optional[Dict] = None) -> tuple:
         """
         Crea un lote de producto a partir de una OP completada.
-        Si la OP está vinculada a items de pedido, crea el lote como 'RESERVADO'
-        y genera los registros de reserva correspondientes.
+        Utiliza qc_data para determinar el estado inicial y las cantidades del lote.
+        Si la OP está vinculada a items de pedido, crea registros de reserva.
         """
         from app.models.pedido import PedidoModel
         pedido_model = PedidoModel()
         orden_id = orden_produccion_data['id']
 
         try:
-            items_a_surtir_res = pedido_model.find_all_items(
-                filters={'orden_produccion_id': orden_id}
-            )
-            items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
-            estado_lote_inicial = 'DISPONIBLE'
+            cantidad_producida = float(orden_produccion_data.get('cantidad_producida', 0))
 
-            # 3. Preparar y crear el lote con el estado decidido
+            # --- LÓGICA COMPLETA DE CÁLCULO DE CANTIDADES ---
+            cantidad_rechazada = 0
+            cantidad_cuarentena = 0
+            
+            if qc_data:
+                decision = qc_data.get('decision_inspeccion')
+                cantidad_rechazada = float(qc_data.get('cantidad_rechazada', 0))
+                cantidad_cuarentena = float(qc_data.get('cantidad_cuarentena', 0))
+
+            # La cantidad inicial del lote es lo que se produjo menos lo que se rechazó.
+            cantidad_inicial_lote = cantidad_producida - cantidad_rechazada
+            
+            # La cantidad actualmente disponible es la inicial menos lo que va a cuarentena.
+            cantidad_actual_disponible = cantidad_inicial_lote - cantidad_cuarentena
+            
+            # Determinar el estado final del lote
+            estado_lote_final = 'AGOTADO' # Estado por defecto si no hay cantidad disponible
+            if cantidad_actual_disponible > 0:
+                estado_lote_final = 'DISPONIBLE'
+            elif cantidad_cuarentena == cantidad_inicial_lote and cantidad_inicial_lote > 0:
+                estado_lote_final = 'CUARENTENA'
+
+            motivo = qc_data.get('comentarios') or qc_data.get('motivo_inspeccion') if qc_data else None
+            # --- FIN DE LA LÓGICA COMPLETA ---
+
             datos_lote = {
                 'producto_id': orden_produccion_data['producto_id'],
-                'cantidad_inicial': orden_produccion_data['cantidad_planificada'],
+                'cantidad_inicial': cantidad_inicial_lote,
+                'cantidad_actual': cantidad_actual_disponible,
+                'cantidad_en_cuarentena': cantidad_cuarentena,
+                'motivo_cuarentena': motivo,
                 'orden_produccion_id': orden_id,
                 'fecha_produccion': date.today().isoformat(),
-                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(), # <-- Fecha de vencimiento
-                'estado': estado_lote_inicial
+                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(),
+                'estado': estado_lote_final
             }
+            
             resultado_lote, status_lote = self.crear_lote_desde_formulario(datos_lote, usuario_id=usuario_id)
             if status_lote >= 400:
                 return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
 
             lote_creado = resultado_lote['data']
-            message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_inicial}'."
+            message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_final}'."
 
-            # 4. Si hay items vinculados, crear los registros de reserva
+            # Crear reservas si la OP está vinculada a un pedido
+            items_a_surtir_res = pedido_model.find_all_items(filters={'orden_produccion_id': orden_id})
+            items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
+
             if items_vinculados:
                 for item in items_vinculados:
                     datos_reserva = {
@@ -1214,11 +1274,9 @@ class LoteProductoController(BaseController):
                         'pedido_item_id': item['id'],
                         'cantidad_reservada': float(item['cantidad']),
                         'usuario_reserva_id': usuario_id,
-                        'estado': 'RESERVADO' # Estado de la reserva, no del lote
+                        'estado': 'RESERVADO'
                     }
-                    self.reserva_model.create(
-                        self.reserva_schema.load(datos_reserva)
-                    )
+                    self.reserva_model.create(self.reserva_schema.load(datos_reserva))
                 logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
                 message_to_use += " y vinculado a los pedidos correspondientes."
 
@@ -1229,40 +1287,80 @@ class LoteProductoController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
     
     
-    def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int) -> tuple:
+    def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int, motivo: str, resultado_inspeccion: str) -> tuple:
         """
-        Marca un lote de producto como 'RETIRADO' y anula su stock.
-        Esta acción es para lotes que ya están en inventario y se decide retirar.
+        Marca un lote de producto como 'NO_APTO' y anula su stock.
+        También crea un registro de control de calidad para la trazabilidad.
         """
         try:
-            # 1. Verificar que el lote existe
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
-            # 2. Preparar los datos para la actualización
             update_data = {
-                'estado': 'RETIRADO',
+                'estado': 'NO_APTO',
                 'cantidad_actual': 0,
                 'cantidad_en_cuarentena': 0,
-                'motivo_cuarentena': f'Retirado manualmente por usuario {usuario_id} por no ser apto.'
+                'motivo_cuarentena': motivo
             }
-
-            # 3. Actualizar el lote en la base de datos
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
 
-            # 4. (Opcional pero recomendado) Actualizar el estado en cualquier alerta de riesgo
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': 'NO_APTO',
+                'comentarios': motivo,
+                'resultado_inspeccion': resultado_inspeccion,
+            }
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                logger.error(f"Lote {lote_id} marcado como NO APTO, pero falló la creación del registro de C.C.: {cc_res.get('error')}")
+
             try:
                 alerta_model = AlertaRiesgoModel()
                 alerta_model.actualizar_estado_afectados_por_entidad('lote_producto', lote_id, 'retirado_manual', usuario_id)
             except Exception as e_alert:
-                logger.error(f"Error al actualizar alertas para el lote {lote_id} retirado: {e_alert}", exc_info=True)
-                # No se devuelve un error al usuario, pero se registra para auditoría.
+                logger.error(f"Error al actualizar alertas para el lote {lote_id} no apto: {e_alert}", exc_info=True)
 
-            return self.success_response(message="Lote marcado como RETIRADO con éxito.")
+            return self.success_response(message="Lote marcado como NO APTO con éxito.")
 
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def _subir_foto_y_obtener_url(self, file_storage, lote_id: int) -> str | None:
+        if not file_storage or not file_storage.filename:
+            return None
+        try:
+            db_client = Database().client
+            bucket_name = "fotos_control_calidad"
+
+            filename = secure_filename(file_storage.filename)
+            extension = os.path.splitext(filename)[1]
+            unique_filename = f"productos/lote_{lote_id}_{int(datetime.now().timestamp())}{extension}"
+
+            file_content = file_storage.read()
+            
+            db_client.storage.from_(bucket_name).upload(
+                path=unique_filename,
+                file=file_content,
+                file_options={"content-type": file_storage.mimetype}
+            )
+            
+            url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
+            logger.info(f"Foto subida con éxito para el lote {lote_id}. URL: {url_response}")
+            return url_response
+
+        except StorageApiError as e:
+            if "Bucket not found" in str(e):
+                error_message = f"Error de configuración: El bucket de almacenamiento '{bucket_name}' no se encontró en Supabase."
+                logger.error(error_message)
+                raise Exception(error_message)
+            else:
+                logger.error(f"Error de Supabase Storage al subir foto para el lote {lote_id}: {e}", exc_info=True)
+                raise e
+        except Exception as e:
+            logger.error(f"Excepción general al subir foto para el lote {lote_id}: {e}", exc_info=True)
+            raise e
