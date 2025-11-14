@@ -141,15 +141,9 @@ class NotaCreditoController(BaseController):
             nc_data['cliente_razon_social'] = cliente_info.get('razon_social', 'N/A')
             nc_data['cliente_cuit'] = cliente_info.get('cuit', 'N/A')
             
-            nc_data['items'] = [
-                {
-                    'producto_nombre': item.get('productos', {}).get('nombre', 'N/A'),
-                    'lote_numero': item.get('lotes_productos', {}).get('numero_lote', 'N/A'),
-                    'cantidad': item.get('cantidad'),
-                    'precio_unitario': item.get('precio_unitario'),
-                    'subtotal': item.get('subtotal')
-                } for item in items
-            ]
+            # Asignar directamente los items, ya que el modelo los devuelve con la estructura correcta
+            nc_data['items'] = items
+            
             return {"success": True, "data": nc_data}, 200
 
         except Exception as e:

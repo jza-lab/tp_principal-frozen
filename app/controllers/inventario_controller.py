@@ -1233,49 +1233,35 @@ class InventarioController(BaseController):
 
     def marcar_lote_como_no_apto(self, lote_id: str, usuario_id: int) -> tuple:
         """
-        Marca un lote como 'NO APTO', actualiza su estado y maneja las consecuencias.
+        Delega la acción de marcar un lote como 'NO APTO' al controlador de calidad.
         """
         from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
-        from app.models.alerta_riesgo import AlertaRiesgoModel
-        from flask import flash
-
+        
         try:
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            
-            # Actualizar el estado del lote
-            update_data = {
-                'estado': 'retirado',
-                'cantidad_actual': 0,
-                'cantidad_en_cuarentena': 0
-            }
-            update_result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-            if not update_result.get('success'):
-                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
+            cantidad_total = float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
 
-            # Reutilizar la lógica de rechazo para manejar OPs
+            # Simular los datos del formulario que esperaría el controlador de calidad
+            form_data = {
+                'cantidad': str(cantidad_total),
+                'comentarios': 'Marcado como NO APTO manualmente desde el listado de inventario.'
+            }
+
+            # Llamar al método centralizado en el controlador de calidad
             cc_controller = ControlCalidadInsumoController()
-            resultados_op = cc_controller.manejar_rechazo_cuarentena(lote_id, usuario_id)
-            for msg in resultados_op:
-                flash(msg, 'info')
-            # Registrar el evento en el historial de calidad
-            cc_controller.crear_registro_control_calidad(
+            response, status_code = cc_controller.procesar_inspeccion(
                 lote_id=lote_id,
-                usuario_id=usuario_id,
-                decision='NO_APTO',
-                comentarios='Lote marcado como no apto manualmente.'
+                decision='Rechazar',
+                form_data=form_data,
+                foto_file=None, # No hay foto en esta acción
+                usuario_id=usuario_id
             )
 
-            # Actualizar el estado de la alerta de riesgo si existe
-            alerta_model = AlertaRiesgoModel()
-            alerta_model.actualizar_estado_afectados_por_entidad('lote_insumo', lote_id, 'no_apto', usuario_id)
-
-            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
-
-            return self.success_response(message="Lote marcado como No Apto con éxito.")
+            return response, status_code
 
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto: {e}", exc_info=True)

@@ -1,0 +1,54 @@
+{# मैक्रो para renderizar un ítem de la lista desplegable #}
+{% macro render_collapsible_item(entidad, tipo) %}
+<div class="collapsible-item card mb-2">
+    <div class="card-header d-flex justify-content-between align-items-center p-2" data-bs-toggle="collapse" 
+         href="#collapse-{{ tipo }}-{{ entidad['id'] if tipo != 'lote_insumo' else entidad['id_lote'] }}" 
+         role="button" aria-expanded="false">
+        
+        <div class="d-flex align-items-center">
+            
+            {% if tipo == 'pedido' and entidad.estado_resolucion == 'pendiente' %}
+                <input type="checkbox" name="pedido_ids" value="{{ entidad.id }}" class="form-check-input ms-1 me-3 pedido-checkbox" checked 
+                       onclick="event.stopPropagation();"> {# Evita que el click en el check colapse el item #}
+            {% else %}
+                <span class="badge me-3 ms-1 {{ 'bg-success' if entidad.estado_resolucion == 'resuelto' else 'bg-warning text-dark' }}" 
+                      style="font-size: 0.5rem; border-radius: 50%; padding: 0.5em;">&nbsp;</span>
+            {% endif %}
+
+            <div>
+                <strong class="d-block" style="line-height: 1.2;">
+                    {% if tipo == 'lote_insumo' %} <i class="bi bi-box-seam me-1"></i> Lote Insumo: {{ entidad.numero_lote_proveedor or 'N/A' }}
+                    {% elif tipo == 'orden_produccion' %} <i class="bi bi-gear-wide-connected me-1"></i> OP: {{ entidad.codigo or 'N/A' }}
+                    {% elif tipo == 'lote_producto' %} <i class="bi bi-box me-1"></i> Lote Producto: {{ entidad.numero_lote or 'N/A' }}
+                    {% elif tipo == 'pedido' %} <i class="bi bi-truck me-1"></i> Pedido #{{ entidad.id }}
+                    {% endif %}
+                </strong>
+                <span class="text-muted small">
+                    {% if tipo == 'lote_insumo' %} - {{ entidad.insumos_catalogo['nombre'] if entidad.insumos_catalogo else 'Insumo desconocido' }}
+                    {% elif tipo == 'orden_produccion' %} - {{ entidad.productos['nombre'] if entidad.productos else 'Producto desconocido' }}
+                    {% elif tipo == 'lote_producto' %} - {{ entidad.productos['nombre'] if entidad.productos else 'Producto desconocido' }}
+                    {% elif tipo == 'pedido' %} - {{ entidad.nombre_cliente }}
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        <div class="d-flex align-items-center">
+             {% if tipo == 'pedido' %}
+                <div class="progress me-3" style="width: 100px; height: 10px;">
+                    <div class="progress-bar bg-danger" role="progressbar" style="width: {{ entidad.afectacion_valor_str }};" aria-valuenow="{{ entidad.afectacion_valor_str.replace('%', '') }}" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <small class="me-3 text-danger fw-bold">{{ entidad.afectacion_valor_str }}</small>
+            {% endif %}
+            <i class="bi bi-chevron-down"></i>
+        </div>
+    </div>
+    <div class="collapse" id="collapse-{{ tipo }}-{{ entidad['id'] if tipo != 'lote_insumo' else entidad['id_lote'] }}">
+        <div class="card-body p-3">
+            {# Aquí va el contenido detallado (que definiremos en detalle.html) #}
+            {% if caller %}
+                {{ caller() }}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endmacro %}

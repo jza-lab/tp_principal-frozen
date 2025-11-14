@@ -1190,43 +1190,37 @@ class LoteProductoController(BaseController):
     
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int) -> tuple:
         """
-        Marca un lote de producto como 'NO APTO', actualiza su estado y las alertas.
+        Marca un lote de producto como 'RETIRADO' y anula su stock.
+        Esta acción es para lotes que ya están en inventario y se decide retirar.
         """
         try:
+            # 1. Verificar que el lote existe
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
-            # Actualizar el estado del lote
+            # 2. Preparar los datos para la actualización
             update_data = {
-                'estado': 'retirado',
+                'estado': 'RETIRADO',
                 'cantidad_actual': 0,
-                'cantidad_en_cuarentena': 0
+                'cantidad_en_cuarentena': 0,
+                'motivo_cuarentena': f'Retirado manualmente por usuario {usuario_id} por no ser apto.'
             }
-            update_result = self.model.update(lote_id, update_data, 'id_lote')
-            if not update_result.get('success'):
-                return self.error_response(f"Error al actualizar el estado del lote: {update_result.get('error')}", 500)
 
-            # Registrar evento en el historial de calidad (si existe un controlador para ello)
+            # 3. Actualizar el lote en la base de datos
+            result = self.model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # 4. (Opcional pero recomendado) Actualizar el estado en cualquier alerta de riesgo
             try:
-                from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
-                cc_controller = ControlCalidadProductoController()
-                cc_controller.crear_registro(lote_id, usuario_id, 'NO_APTO', 'Lote marcado como no apto manualmente.')
-            except ImportError:
-                logger.warning("No se encontró ControlCalidadProductoController, no se creará registro de calidad.")
-            except Exception as e_cc:
-                logger.error(f"Error creando registro de calidad para lote de producto {lote_id}: {e_cc}")
+                alerta_model = AlertaRiesgoModel()
+                alerta_model.actualizar_estado_afectados_por_entidad('lote_producto', lote_id, 'retirado_manual', usuario_id)
+            except Exception as e_alert:
+                logger.error(f"Error al actualizar alertas para el lote {lote_id} retirado: {e_alert}", exc_info=True)
+                # No se devuelve un error al usuario, pero se registra para auditoría.
 
-
-            # Actualizar el estado de la alerta de riesgo si existe
-            alerta_model = AlertaRiesgoModel()
-            alertas_asociadas = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).execute().data
-            if alertas_asociadas:
-                alerta_ids = {a['alerta_id'] for a in alertas_asociadas}
-                for alerta_id in alerta_ids:
-                    alerta_model.actualizar_estado_afectados(alerta_id, [lote_id], 'no_apto', 'lote_producto', usuario_id)
-
-            return self.success_response(message="Lote de producto marcado como No Apto con éxito.")
+            return self.success_response(message="Lote marcado como RETIRADO con éxito.")
 
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)

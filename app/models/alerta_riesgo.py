@@ -122,13 +122,15 @@ class AlertaRiesgoModel(BaseModel):
         if documento_id:
             update_data['id_documento_relacionado'] = documento_id
 
-        query = self.db.table('alerta_riesgo_afectados').update(update_data).eq('alerta_id', alerta_id)
-        
-        # PostgREST no soporta `in` con múltiples valores en un `update` directamente sobre una lista.
-        # Se debe iterar o usar una función RPC. Iterar es más simple aquí.
-        for entidad_id in entidad_ids:
-            self.db.table('alerta_riesgo_afectados').update(update_data).eq('alerta_id', alerta_id).eq('id_entidad', entidad_id).eq('tipo_entidad', tipo_entidad).execute()
-          
+        # Convertir todos los IDs a string para consistencia en la consulta
+        entidad_ids_str = [str(eid) for eid in entidad_ids]
+
+        self.db.table('alerta_riesgo_afectados').update(update_data)\
+            .eq('alerta_id', alerta_id)\
+            .eq('tipo_entidad', tipo_entidad)\
+            .in_('id_entidad', entidad_ids_str)\
+            .execute()
+
         return self.verificar_y_cerrar_alerta(alerta_id)
 
     def verificar_y_cerrar_alerta(self, alerta_id):
@@ -152,6 +154,38 @@ class AlertaRiesgoModel(BaseModel):
 
             return True # Indica que la alerta se cerró
         return False # Indica que la alerta sigue abierta
+
+    def resolver_orden_produccion_si_corresponde(self, op_id: int, alerta_id: int, usuario_id: int):
+        import logging
+        logger = logging.getLogger(__name__)
+
+        try:
+            # 1. Obtener todos los lotes de insumo asociados a la OP
+            reservas_res = self.db.table('reserva_insumos').select('lote_inventario_id').eq('orden_produccion_id', op_id).execute().data
+            if not reservas_res:
+                logger.info(f"OP {op_id} no tiene insumos reservados. Marcando como resuelta en alerta {alerta_id}.")
+                self.actualizar_estado_afectados(alerta_id, [op_id], 'sin_insumos_comprometidos', 'orden_produccion', usuario_id)
+                return
+
+            lote_insumo_ids = [r['lote_inventario_id'] for r in reservas_res]
+
+            # 2. Verificar si alguno de esos lotes sigue en cuarentena DENTRO DE ESTA ALERTA
+            cuarentena_res = self.db.table('alerta_riesgo_afectados')\
+                .select('id', count='exact')\
+                .eq('alerta_id', alerta_id)\
+                .eq('tipo_entidad', 'lote_insumo')\
+                .in_('id_entidad', lote_insumo_ids)\
+                .eq('estado', 'pendiente')\
+                .execute()
+
+            # 3. Si no hay lotes pendientes en esta alerta, resolver la OP para esta alerta
+            if cuarentena_res.count == 0:
+                logger.info(f"Todos los insumos para la OP {op_id} han sido liberados en el contexto de la alerta {alerta_id}. Marcando OP como resuelta.")
+                self.actualizar_estado_afectados(alerta_id, [op_id], 'insumos_liberados', 'orden_produccion', usuario_id)
+
+        except Exception as e:
+            logger.error(f"Error en resolver_orden_produccion_si_corresponde para OP {op_id}, Alerta {alerta_id}: {e}", exc_info=True)
+
 
     def _actualizar_flag_en_alerta_entidad(self, tipo_entidad, id_entidad, en_alerta):
         """

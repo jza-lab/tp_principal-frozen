@@ -1,0 +1,57 @@
+<div class="nota-credito-body p-3 border rounded">
+    <div class="text-center mb-4">
+        <h4 class="mb-1"><strong>Nota de Crédito</strong></h4>
+        <p class="mb-0"><strong>Nº:</strong> {{ nc.codigo_nc }}</p>
+    </div>
+    <div class="row mb-4">
+        <div class="col-6">
+            <p class="mb-1"><strong>Fecha de Emisión:</strong></p>
+            <p>{{ nc.fecha_emision | format_datetime }}</p>
+        </div>
+        <div class="col-6 text-end">
+            <p class="mb-1"><strong>Pedido Original:</strong></p>
+            <p><a href="{{ url_for('orden_venta.detalle', id=nc.pedido_origen_id) }}">#{{ nc.pedido_origen_id }}</a></p>
+        </div>
+    </div>
+    
+    <p><strong>Motivo:</strong> {{ nc.motivo }}</p>
+    {% if nc.detalle %}<p><strong>Detalle:</strong> {{ nc.detalle }}</p>{% endif %}
+    
+    <h5 class="mt-4 mb-3">Items Incluidos</h5>
+    <div class="table-responsive">
+        <table class="table table-sm table-bordered">
+            <thead class="table-light">
+                <tr>
+                    <th>Producto</th>
+                    <th>Lote Afectado</th>
+                    <th>Cantidad</th>
+                    <th>Precio Unitario</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in nc['items'] %}
+                <tr>
+                    <td>{{ item.productos.nombre if item.productos else item.producto_nombre }}</td>
+                    <td>{{ item.lotes_productos.numero_lote if item.lotes_productos else item.lote_numero }}</td>
+                    <td>{{ item.cantidad }}</td>
+                    <td class="text-end">$ {{ "%.2f"|format(item.precio_unitario) }}</td>
+                    <td class="text-end">$ {{ "%.2f"|format(item.subtotal) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-end fw-bold">Total Acreditado:</td>
+                    <td class="text-end fw-bold">$ {{ "%.2f"|format(nc.monto) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-end mt-4">
+        <button type="button" class="btn btn-primary btn-sm btn-descargar-pdf" data-nc-id="{{ nc.id }}">
+            <i class="bi bi-download me-2"></i>Descargar PDF
+        </button>
+    </div>
+</div>

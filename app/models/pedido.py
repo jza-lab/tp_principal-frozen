@@ -483,15 +483,18 @@ class PedidoModel(BaseModel):
     def find_by_id_list(self, pedido_ids: List[int]) -> Dict:
         """
         Busca pedidos de venta completos basándose en una lista de IDs.
+        (CORREGIDO: Ahora incluye datos anidados de cliente y dirección)
         """
         if not pedido_ids:
             return {'success': True, 'data': []}
 
         try:            
-            # La relación 'vendedor:id_vendedor' puede causar un error 400 si no existe en el esquema.
-            # Se hace la consulta básica primero para evitar que un error en una relación opcional
-            # rompa la funcionalidad principal de obtener los pedidos.
-            result = self.db.table(self.get_table_name()).select('*').in_('id', pedido_ids).execute()
+            # Consulta corregida para incluir relaciones que se usan en los templates
+            result = self.db.table(self.get_table_name()).select(
+                '*, '
+                'cliente:clientes(email, nombre, cuit, razon_social), '
+                'direccion:id_direccion_entrega(*)'
+            ).in_('id', pedido_ids).execute()
             
             if result.data:
                 return {'success': True, 'data': result.data}

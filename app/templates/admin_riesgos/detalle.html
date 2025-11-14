@@ -35,26 +35,33 @@
             <div class="row">
                 <div class="col-lg-4 col-md-12 mb-4">
                     <div class="sticky-top" style="top: 20px;">
+                        
                         <div class="card">
                             <div class="card-body">
-                                <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta
-                                </h5>
-                                <p><strong>Motivo:</strong> {{ alerta.motivo }}</p>
-                                {% if alerta.comentarios %}
-                                <p><strong>Comentarios:</strong> {{ alerta.comentarios }}</p>
-                                {% endif %}
-                                {% if alerta.url_evidencia %}
-                                <p><strong>Evidencia:</strong></p>
-                                <a href="{{ alerta.url_evidencia }}" target="_blank">
-                                    <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta"
-                                        class="img-thumbnail" style="max-width: 150px; cursor: pointer;">
-                                </a>
-                                {% endif %}
+                                <h5 class="card-title"><i class="bi bi-journal-text me-2"></i>Información de la Alerta</h5>
+                                <ul class="list-group list-group-flush mt-3">
+                                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center flex-wrap">
+                                        <strong class="me-2">Motivo:</strong>
+                                        <span class="text-end">{{ alerta.motivo }}</span>
+                                    </li>
+                                    {% if alerta.comentarios %}
+                                    <li class="list-group-item px-0">
+                                        <strong>Comentarios:</strong>
+                                        <p class="mb-0 small text-muted">{{ alerta.comentarios }}</p>
+                                    </li>
+                                    {% endif %}
+                                    {% if alerta.url_evidencia %}
+                                    <li class="list-group-item px-0">
+                                        <strong>Evidencia:</strong>
+                                        <a href="{{ alerta.url_evidencia }}" target="_blank">
+                                            <img src="{{ alerta.url_evidencia }}" alt="Evidencia de la alerta"
+                                                class="img-thumbnail mt-2" style="max-width: 150px; cursor: pointer;">
+                                        </a>
+                                    </li>
+                                    {% endif %}
+                                </ul>
                             </div>
                         </div>
-
-
-                        <!-- Sección de Usuarios Involucrados -->
                         <div class="card mt-4">
                             <div class="card-body">
                                 <h5 class="card-title mb-3"><i class="bi bi-people-fill me-2"></i>Personal Involucrado
@@ -62,10 +69,8 @@
 
                                 {% from 'admin_riesgos/_user_card.html' import render_user_card %}
 
-                                <!-- Creador de la Alerta -->
                                 {{ render_user_card(alerta.creador_info, 'Creador de la Alerta', is_primary=True) }}
 
-                                <!-- Participantes en la Resolución -->
                                 {% if alerta.participantes_resolucion %}
                                 <div class="mt-4">
                                     <h6>Participantes en la Resolución</h6>
@@ -78,10 +83,10 @@
                                                         style="font-size: 3rem; color: #6c757d;"></i>
                                                 </div>
                                                 <div class="flex-grow-1">
-                                                    <h6 class="card-title mb-1">{{ participante.info.nombre_completo }}
+                                                    <h6 class="card-title mb-1">{{ participante.info['nombre_completo'] }}
                                                     </h6>
                                                     <p class="card-text mb-1"><small class="text-muted">{{
-                                                            participante.info.rol }}</small></p>
+                                                            participante.info['rol'] }}</small></p>
                                                 </div>
                                             </div>
                                             <div class="mt-3">
@@ -102,234 +107,316 @@
                     </div>
                 </div>
 
-                <!-- Columna Principal de Gestión (Derecha) -->
                 <div class="col-lg-8 col-md-12">
-                    <!-- Sección Resultado de la Acción (Movida) -->
-                    
-                    {% from 'admin_riesgos/_resolution_badge.html' import render_resolution_badge %}
-                    <form id="form-gestion-riesgo"
-                        action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}"
-                        method="POST">
-                        {{ csrf_form.csrf_token }}
-                        <div class="row">
-                            <!-- Lotes de Insumo -->
-                            <div class="col-md-4 mb-4">
-                                <div class="card h-100">
-                                    <div class="card-header">
-                                        <h6 class="mb-0 fw-bold">Lotes de Insumo Afectados</h6>
-                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
-                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
-                                    </div>
-                                    <div class="card-body">
-                                        {% set lotes_insumo = alerta.afectados_detalle.lotes_insumo %}
-                                        {% if lotes_insumo %}
-                                        <ul class="list-group list-group-flush">
-                                            {% for lote in lotes_insumo %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <a
-                                                        href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}">{{
-                                                        lote.numero_lote_proveedor }}</a>
-                                                    <small class="d-block text-muted">{{ lote.insumos_catalogo.nombre
-                                                        }}</small>
-                                                </div>
-                                                {{ render_resolution_badge(lote) }}
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% else %}
-                                        <p class="text-muted small">No hay lotes de insumo afectados.</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
+                    {% from 'admin_riesgos/_macros_lista_desplegable.html' import render_collapsible_item %}
+
+                    <div class="d-flex justify-content-end gap-2 mb-3">
+                        <button class="btn btn-outline-warning btn-sm" id="btn-expandir-pendientes"><i class="bi bi-filter-circle me-1"></i> Expandir Pendientes</button>
+                        <button class="btn btn-outline-primary btn-sm" id="btn-expandir-todos"><i class="bi bi-arrows-expand me-1"></i> Expandir Todos</button>
+                        <button class="btn btn-outline-secondary btn-sm" id="btn-colapsar-todos"><i class="bi bi-arrows-collapse me-1"></i> Colapsar Todos</button>
+                    </div>
+                    <div class="card mb-4" id="lista-lotes-insumo">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Lotes de Insumo Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
                             </div>
-                            <!-- Órdenes de Producción -->
-                            <div class="col-md-4 mb-4">
-                                <div class="card h-100">
-                                    <div class="card-header">
-                                        <h6 class="mb-0 fw-bold">Órdenes de Producción</h6>
-
-                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
-                                                class="bi bi-shield-lock-fill me-1 "></i>En Pausa</span>
-                                    </div>
-                                    <div class="card-body">
-                                        {% set ordenes = alerta.afectados_detalle.ordenes_produccion %}
-                                        {% if ordenes %}
-                                        <ul class="list-group list-group-flush">
-                                            {% for op in ordenes %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}">{{
-                                                    op.codigo }}</a>
-                                                {{ render_resolution_badge(op) }}
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% else %}
-                                        <p class="text-muted small">No hay órdenes de producción afectadas.</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Lotes de Producto -->
-                            <div class="col-md-4 mb-4">
-                                <div class="card h-100">
-                                    <div class="card-header">
-                                        <h6 class="mb-0 fw-bold">Lotes de Producto</h6>
-
-                                        <span class="fw-bold text-uppercase text-black badge bg-warning "><i
-                                                class="bi bi-shield-lock-fill me-1 "></i>En Cuarentena</span>
-
-                                    </div>
-                                    <div class="card-body">
-                                        {% set lotes_producto = alerta.afectados_detalle.lotes_producto %}
-                                        {% if lotes_producto %}
-                                        <ul class="list-group list-group-flush">
-                                            {% for lote in lotes_producto %}
-                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                <a
-                                                    href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}">{{
-                                                    lote.numero_lote }}</a>
-                                                {{ render_resolution_badge(lote) }}
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                        {% else %}
-                                        <p class="text-muted small">No hay lotes de producto afectados.</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Sección Inferior: Pedidos Afectados -->
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h6>Pedidos Afectados</h6>
-                            </div>
-                            <div class="card-body">
-                                {% set pedidos = alerta.afectados_detalle.pedidos |
-                                sort(attribute='estado_resolucion') %}
-                                {% if pedidos %}
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th><input type="checkbox" id="seleccionar-todos-pedidos"></th>
-                                                <th>Pedido</th>
-                                                <th>Cliente</th>
-                                                <th>Afectación (Items)</th>
-                                                <th>Afectación (Valor)</th>
-                                                <th>Estado</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for pedido in pedidos %}
-                                            <tr
-                                                class="{% if pedido.estado_resolucion == 'resuelto' %}table-light text-muted{% endif %}">
-                                                <td>
-                                                    <input type="checkbox" name="pedido_ids" value="{{ pedido.id }}"
-                                                        class="pedido-checkbox" {% if alerta.estado != 'Pendiente' or
-                                                        pedido.estado_resolucion=='resuelto' %}disabled{% endif %}>
-                                                </td>
-                                                <td><a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}">#{{
-                                                        pedido.id }}</a></td>
-
-                                                <td>{{ pedido.nombre_cliente }}</td>
-                                                <td><span class="badge bg-secondary">{{ pedido.afectacion_items_str
-                                                        }}</span></td>
-                                                <td><span class="badge bg-danger">{{ pedido.afectacion_valor_str
-                                                        }}</span></td>
-                                                <td>
-                                                    {{ render_resolution_badge(pedido) }}
-                                                </td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                {% else %}
-                                <p class="text-muted small">No hay pedidos afectados.</p>
-                                {% endif %}
-                                {% if alerta.estado == 'Pendiente' and pedidos %}
-                                <div class="d-flex justify-content-end mt-3">
-                                    <button type="button" class="btn btn-info" data-bs-toggle="modal"
-                                        data-bs-target="#modalContactarClientes">
-                                        <i class="bi bi-envelope-fill me-2"></i>Contactar Clientes
-                                    </button>
-                                </div>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Sección de Acciones (solo si la alerta está pendiente y hay pedidos) -->
-                        {% if alerta.estado == 'Pendiente' and pedidos %}
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="bi bi-lightning-charge me-2"></i>Acciones de Respuesta</h5>
-                            </div>
-                            <div class="card-body">
-                                <p class="text-muted small">Seleccione los pedidos de la lista de arriba y luego
-                                    elija una acción a ejecutar.</p>
-                                <h6 class="mt-3">Acciones sobre Pedidos</h6>
-
-                                <div class="d-flex flex-wrap gap-2 align-items-center">
-                                    <button type="submit" name="accion" value="nota_credito" class="btn btn-primary">
-                                        <i class="bi bi-receipt me-1"></i> Generar Nota de Crédito
-
-                                    </button>
-                                    <button type="submit" name="accion" value="inhabilitar_pedido"
-                                        class="btn btn-warning">
-                                        <i class="bi bi-x-circle me-1"></i> Inhabilitar Pedidos
-                                    </button>
-                                    <div class="form-check form-switch ms-md-3">
-                                        <input class="form-check-input" type="checkbox" id="recrear_pedido"
-                                            name="recrear_pedido">
-                                        <label class="form-check-label" for="recrear_pedido">Recrear pedido con
-                                            items no afectados</label>
-                                    </div>
-                                </div>
-                                {% if alerta.puede_resolver_pedidos_masivamente %}
-                                <hr>
-                                <h6 class="mt-3">Acciones Generales</h6>
-                                <p class="text-muted small">Como todos los lotes fueron aprobados o resueltos sin ser "No Aptos", puede resolver todos los pedidos pendientes de una vez.</p>
-                                <button type="submit" name="accion" value="resolver_pedidos" class="btn btn-success">
-                                    <i class="bi bi-check-circle-fill me-1"></i> Marcar Todos los Pedidos como Resueltos
-                                </button>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
-                    </form>
-
-                    <!-- Sección Resultado de la Acción (Movida) -->
-                    {% if alerta.estado in ['Resuelta', 'Cerrada'] or alerta.notas_de_credito %}
-                    <div class="card mt-4">
-                        <div class="card-header">
-                            <h5><i class="bi bi-check-circle-fill me-2"></i>Alerta Procesada</h5>
                         </div>
                         <div class="card-body">
-                            {% if alerta.estado in ['Resuelta', 'Cerrada'] %}
-                            <p class="mb-0">Todos los pedidos afectados han sido resueltos. La alerta está cerrada.</p>
-                            {% endif %}
-
-                            {% if alerta.notas_de_credito %}
-                            <h6 class="mt-3">Notas de Crédito Generadas</h6>
-                            <div class="list-group">
-                                {% for nc in alerta.notas_de_credito %}
-                                <a href="#" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" data-bs-toggle="modal" data-bs-target="#modal-nc-{{ nc.id }}">
-                                    <div>
-                                        <strong>{{ nc.codigo_nc }}</strong> para Pedido #{{ nc.pedido_origen_id }}
-                                        <small class="d-block text-muted">{{ nc.motivo }}</small>
-                                    </div>
-                                    <span class="badge bg-primary rounded-pill">$ {{ nc.monto }}</span>
-                                </a>
+                            {% set lotes = alerta.afectados_detalle.lotes_insumo %}
+                            {% if lotes %}
+                                {% for lote in lotes %}
+                                    {% call render_collapsible_item(lote, 'lote_insumo') %}
+                                        <div class="row">
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles del Lote de Insumo</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Proveedor</small>
+                                                        <span class="fw-bold">{{ lote.proveedores['nombre'] if lote.proveedores else 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Recepción</small>
+                                                        <span class="fw-bold">{{ lote['f_ingreso'] | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad en Cuarentena</small>
+                                                        <span class="fw-bold text-danger">{{ lote.cantidad_en_cuarentena or '0' }} {{ lote.insumos_catalogo['unidad_medida'] or '' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Alerta</small>
+                                                        {% if lote.estado_resolucion == 'resuelto' %}
+                                                            <span class="badge bg-success">Resuelto</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">Pendiente</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                                                {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                    <p class="small text-muted mb-2">Definir el estado de este lote:</p>
+                                                    <div class="d-grid gap-2">
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                    </div>
+                                                {% elif lote.estado_resolucion == 'resuelto' %}
+                                                    <p class="small text-muted">Este lote fue resuelto como:</p>
+                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% else %}
+                                                    <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endcall %}
                                 {% endfor %}
-                            </div>
+                            {% else %}
+                                <p class="text-muted">No hay lotes de insumo afectados.</p>
                             {% endif %}
                         </div>
                     </div>
-                    {% endif %}
+
+                    <div class="card mb-4" id="lista-ops">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Órdenes de Producción Afectadas</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% set ordenes = alerta.afectados_detalle.ordenes_produccion %}
+                            {% if ordenes %}
+                                {% for op in ordenes %}
+                                    {% call render_collapsible_item(op, 'orden_produccion') %}
+                                        <div class="row">
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles de la Orden</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad Planificada</small>
+                                                        <span class="fw-bold">{{ op.cantidad_planificada }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad Producida</small>
+                                                        <span class="fw-bold">{{ op.cantidad_producida or '0' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Inicio</small>
+                                                        <span class="fw-bold">{{ op.fecha_inicio | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Estado</h6>
+                                                <small class="text-muted d-block mb-1">Estado Actual de OP:</small>
+                                                <h4><span class="badge bg-secondary">{{ op.estado }}</span></h4>
+                                                
+                                                {% if op.estado_resolucion == 'resuelto' %}
+                                                    <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
+                                                    <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endcall %}
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">No hay órdenes de producción afectadas.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card mb-4" id="lista-lotes-producto">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Lotes de Producto Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            {% set lotes = alerta.afectados_detalle.lotes_producto %}
+                            {% if lotes %}
+                                {% for lote in lotes %}
+                                    {% call render_collapsible_item(lote, 'lote_producto') %}
+                                        <div class="row">
+                                            <div class="col-lg-8">
+                                                <h6 class="text-primary mb-3">Detalles del Lote de Producto</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Elaboración</small>
+                                                        <span class="fw-bold">{{ lote.fecha_produccion | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Vencimiento</small>
+                                                        <span class="fw-bold">{{ lote.fecha_vencimiento | format_datetime or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Cantidad en Cuarentena</small>
+                                                        <span class="fw-bold text-danger">{{ lote.cantidad_en_cuarentena or '0' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Alerta</small>
+                                                        {% if lote.estado_resolucion == 'resuelto' %}
+                                                            <span class="badge bg-success">Resuelto</span>
+                                                        {% else %}
+                                                            <span class="badge bg-warning text-dark">Pendiente</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
+                                                <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                    <p class="small text-muted mb-2">Definir el estado de este lote:</p>
+                                                    <div class="d-grid gap-2">
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                    </div>
+                                                {% elif lote.estado_resolucion == 'resuelto' %}
+                                                    <p class="small text-muted">Este lote fue resuelto como:</p>
+                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% else %}
+                                                    <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endcall %}
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-muted">No hay lotes de producto afectados.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card mb-4" id="lista-pedidos">
+                         <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Pedidos Afectados</h5>
+                            <div class="btn-group btn-group-sm local-collapse-controls" role="group">
+                                <button type="button" class="btn btn-outline-secondary btn-expand-local" title="Expandir esta sección"><i class="bi bi-arrows-expand"></i></button>
+                                <button type="button" class="btn btn-outline-secondary btn-collapse-local" title="Colapsar esta sección"><i class="bi bi-arrows-collapse"></i></button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                             <form id="form-gestion-riesgo" action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}" method="POST">
+                                {{ csrf_form.csrf_token }}
+
+                                {% set pedidos_pendientes = (alerta.afectados_detalle.pedidos | selectattr('estado_resolucion', 'equalto', 'pendiente') | list) %}
+                                {% if pedidos_pendientes | length > 0 %}
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="seleccionar-todos-pedidos" checked>
+                                    <label class="form-check-label" for="seleccionar-todos-pedidos">
+                                        <strong>Seleccionar todos los {{ pedidos_pendientes | length }} pedidos pendientes</strong>
+                                    </label>
+                                </div>
+                                <hr class="mt-0">
+                                {% endif %}
+
+                                {% set pedidos = alerta.afectados_detalle.pedidos | sort(attribute='estado_resolucion') %}
+                                {% if pedidos %}
+                                    {% for pedido in pedidos %}
+                                        {% call render_collapsible_item(pedido, 'pedido') %}
+                                            
+                                            {% if pedido.estado_resolucion == 'resuelto' %}
+                                                
+                                                {% if pedido.nota_credito %}
+                                                    {% set nc = pedido.nota_credito %}
+                                                    
+                                                    <h6 class="text-primary mb-3">Información del Pedido</h6>
+                                                    <div class="row g-3 mb-3">
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Resolución</small>
+                                                            <span class="fw-bold">{{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Resuelto por</small>
+                                                            <span class="fw-bold">{{ pedido.resolutor_info['nombre_completo'] if pedido.resolutor_info else 'N/A' }}</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Fecha Pedido</small>
+                                                            <span class="fw-bold">{{ pedido.fecha_solicitud | format_datetime }}</span>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <small class="text-muted d-block">Estado Pedido</small>
+                                                            <span class="badge bg-success">{{ pedido.estado or 'Resuelto' }}</span>
+                                                        </div>
+                                                    </div>
+                                                    <hr>
+
+                                                    <div class="nc-preview-wrapper" data-bs-toggle="modal" data-bs-target="#modal-nc-preview-{{ pedido.id }}" title="Haz clic para ver la nota de crédito completa">
+                                                        <small class="text-muted d-block mb-2">Vista Previa: Nota de Crédito</small>
+                                                        <div class="nc-preview-content">
+                                                             {# Usamos el template que pediste #}
+                                                             {% include 'orden_venta/_nota_credito_cuerpo.html' %}
+                                                        </div>
+                                                    </div>
+                                                
+                                                {% else %}
+                                                    <h6 class="text-primary mb-3">Resolución del Pedido</h6>
+                                                    <p class="mb-1"><strong>Resolución:</strong> {{ pedido.resolucion_aplicada | replace('_', ' ') | title }}</p>
+                                                    {% if pedido.resolutor_info %}
+                                                    <p><strong>Resuelto por:</strong> {{ pedido.resolutor_info['nombre_completo'] }}</p>
+                                                    {% endif %}
+                                                {% endif %}
+
+                                            {% else %}
+                                                <h6 class="text-primary mb-3">Detalles del Pedido</h6>
+                                                <div class="row g-3">
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Fecha Pedido</small>
+                                                        <span class="fw-bold">{{ pedido.fecha_solicitud | format_datetime }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Estado Pedido</small>
+                                                        <span class="badge bg-light text-dark">{{ pedido.estado or 'N/A' }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Afectación (Items)</small>
+                                                        <span class="fw-bold">{{ pedido.afectacion_items_str }}</span>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <small class="text-muted d-block">Afectación (Valor)</small>
+                                                        <span class="fw-bold text-danger">{{ pedido.afectacion_valor_str }}</span>
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            {% endcall %}
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-muted small">No hay pedidos afectados.</p>
+                                {% endif %}
+                                
+                                {% if alerta.estado == 'Pendiente' and pedidos and (pedidos | selectattr('estado_resolucion', 'equalto', 'pendiente') | list | length > 0) %}
+                                <div class="card mt-4">
+                                     <div class="card-body bg-light">
+                                         <h6 class="mb-3">Acciones de Respuesta para Pedidos Pendientes</h6>
+                                         <p class="text-muted small">Las acciones se aplicarán a todos los pedidos pendientes seleccionados.</p>
+                                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                                            <button type="submit" name="accion" value="nota_credito" class="btn btn-primary btn-sm"><i class="bi bi-receipt me-1"></i> Generar Nota de Crédito</button>
+                                            <button type="submit" name="accion" value="inhabilitar_pedido" class="btn btn-warning btn-sm"><i class="bi bi-x-circle me-1"></i> Inhabilitar Pedidos</button>
+                                            <div class="form-check form-switch ms-md-3">
+                                                <input class="form-check-input" type="checkbox" id="recrear_pedido" name="recrear_pedido">
+                                                <label class="form-check-label" for="recrear_pedido">Recrear pedido con items no afectados</label>
+                                            </div>
+                                        </div>
+                                         {% if alerta.puede_resolver_pedidos_masivamente %}
+                                        <hr>
+                                        <p class="text-muted small">Como todos los lotes fueron aprobados o resueltos sin ser "No Aptos", puede resolver todos los pedidos pendientes de una vez.</p>
+                                        <button type="submit" name="accion" value="resolver_pedidos" class="btn btn-success btn-sm"><i class="bi bi-check-circle-fill me-1"></i> Marcar Todos como Resueltos</button>
+                                        {% endif %}
+                                         <div class="mt-3">
+                                            <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#modalContactarClientes"><i class="bi bi-envelope-fill me-2"></i>Contactar Clientes</button>
+                                         </div>
+                                     </div>
+                                </div>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -338,15 +425,39 @@
 </div>
 {% include 'admin_riesgos/_modal_contactar_clientes.html' %}
 
-<!-- Modals para NC -->
+{% set pedidos = alerta.afectados_detalle.pedidos %}
+{% if pedidos %}
+    {% for pedido in pedidos %}
+        {% if pedido.nota_credito %}
+            {% set nc = pedido.nota_credito %}
+            <div class="modal fade" id="modal-nc-preview-{{ pedido.id }}" tabindex="-1" aria-labelledby="modal-nc-preview-label-{{ pedido.id }}" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="modal-nc-preview-label-{{ pedido.id }}">Nota de Crédito: {{ nc.codigo if nc.codigo else 'NC-' + nc['id']|string }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            {# Incluimos el template que pediste #}
+                            {% include 'orden_venta/_nota_credito_cuerpo.html' %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endfor %}
+{% endif %}
 {% if alerta.notas_de_credito %}
 {% for nc in alerta.notas_de_credito %}
-<div class="modal fade" id="modal-nc-{{ nc.id }}" tabindex="-1" aria-labelledby="modal-nc-label-{{ nc.id }}"
+<div class="modal fade" id="modal-nc-{{ nc['id'] }}" tabindex="-1" aria-labelledby="modal-nc-label-{{ nc['id'] }}"
     aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="modal-nc-label-{{ nc.id }}">Detalle Nota de Crédito NC-{{ nc.id }}</h5>
+                <h5 class="modal-title" id="modal-nc-label-{{ nc['id'] }}">Detalle Nota de Crédito NC-{{ nc['id'] }}</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -381,7 +492,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                <button type="button" class="btn btn-primary btn-descargar-pdf" data-nc-id="{{ nc.id }}">Descargar
+                <button type="button" class="btn btn-primary btn-descargar-pdf" data-nc-id="{{ nc['id'] }}">Descargar
                     PDF</button>
             </div>
         </div>
@@ -406,37 +517,54 @@
             });
         }
 
+        // Sincronizar 'seleccionar-todos' si se desmarca uno individual
+        pedidoCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                if (!this.checked) {
+                    if (seleccionarTodosPedidos) seleccionarTodosPedidos.checked = false;
+                } else {
+                    // Si todos están marcados, marca el 'seleccionar-todos'
+                    if (document.querySelectorAll('.pedido-checkbox:not(:checked)').length === 0) {
+                        if (seleccionarTodosPedidos) seleccionarTodosPedidos.checked = true;
+                    }
+                }
+            });
+        });
+
+
         const form = document.getElementById('form-gestion-riesgo');
         if (form) {
             form.querySelectorAll('button[type="submit"]').forEach(button => {
                 button.addEventListener('click', function (e) {
-                    e.preventDefault(); // Prevenir el envío tradicional del formulario
+                    e.preventDefault(); 
 
                     const accion = this.value;
                     const formData = new FormData(form);
-                    formData.append('accion', accion); // Añadir explícitamente la acción a los datos del formulario
+                    formData.append('accion', accion); 
 
-
-                    // Validar que haya algo seleccionado si la acción lo requiere
-                    const selectedItems = form.querySelectorAll('input[type="checkbox"]:checked:not(:disabled)');
+                    const selectedItems = form.querySelectorAll('.pedido-checkbox:checked');
                     if (selectedItems.length === 0) {
-                        showNotificationModal('Error', 'Debe seleccionar al menos un item para ejecutar una acción.', 'error');
+                        showNotificationModal('Error', 'Debe seleccionar al menos un pedido para ejecutar una acción.', 'error');
                         return;
                     }
+                    
+                    formData.delete('pedido_ids'); 
+                    selectedItems.forEach(cb => {
+                        formData.append('pedido_ids', cb.value);
+                    });
 
-                    // Enviar los datos con Fetch API
+
                     fetch(form.action, {
                         method: 'POST',
                         body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest' // Para que el backend sepa que es AJAX
+                            'X-Requested-With': 'XMLHttpRequest'
                         }
                     })
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
                                 showNotificationModal('Éxito', data.message || 'Acción completada.', 'success');
-                                // Recargar la página para ver los cambios después de cerrar el modal
                                 document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
                                     location.reload();
                                 });
@@ -532,9 +660,9 @@
             const btnEnviarCorreo = document.getElementById('btnEnviarCorreoClientes');
 
             modalContactar.addEventListener('show.bs.modal', function () {
-                const pedidosSeleccionados = document.querySelectorAll('.pedido-checkbox:checked:not(:disabled)');
+                const pedidosSeleccionados = document.querySelectorAll('.pedido-checkbox:checked');
 
-                listaPedidosDiv.innerHTML = ''; // Limpiar lista anterior
+                listaPedidosDiv.innerHTML = ''; 
 
                 if (pedidosSeleccionados.length === 0) {
                     listaPedidosDiv.innerHTML = '<p class="text-danger">No se ha seleccionado ningún pedido. Por favor, cierre este modal y seleccione al menos un pedido de la lista.</p>';
@@ -546,7 +674,6 @@
 
                 btnEnviarCorreo.disabled = false;
                 const form = document.getElementById('formContactarClientes');
-                // Limpiar inputs ocultos previos antes de añadir los nuevos
                 form.querySelectorAll('input[name="pedido_ids[]"]').forEach(el => el.remove());
 
                 const ul = document.createElement('ul');
@@ -555,15 +682,14 @@
 
                 pedidosSeleccionados.forEach(checkbox => {
                     const pedidoId = checkbox.value;
-                    const fila = checkbox.closest('tr');
-                    const clienteNombre = fila.querySelector('td:nth-child(3)').textContent;
+                    const collapsibleHeader = checkbox.closest('.collapsible-item').querySelector('.card-header');
+                    const clienteNombre = collapsibleHeader.querySelector('.text-muted.small').textContent.replace('- ', '').trim();
 
                     const li = document.createElement('li');
                     li.className = 'list-group-item';
                     li.textContent = `Pedido #${pedidoId} - Cliente: ${clienteNombre}`;
                     ul.appendChild(li);
 
-                    // Añadir como input oculto para el formulario
                     const hiddenInput = document.createElement('input');
                     hiddenInput.type = 'hidden';
                     hiddenInput.name = 'pedido_ids[]';
@@ -575,7 +701,6 @@
 
                 listaPedidosDiv.appendChild(ul);
 
-                // Pre-llenar asunto y cuerpo
                 if (pedidosData.length === 1) {
                     asuntoInput.value = `Información sobre su pedido #${pedidosData[0].id}`;
                 } else {
@@ -590,7 +715,6 @@
                 const formData = new FormData(form);
                 const spinner = this.querySelector('.spinner-border');
 
-                // Validar
                 if (!asuntoInput.value.trim() || !cuerpoTextarea.value.trim()) {
                     showNotificationModal('Error', 'El asunto y el cuerpo del correo no pueden estar vacíos.', 'error');
                     return;
@@ -630,6 +754,139 @@
     });
 </script>
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Rotar íconos en el colapso
+    var collapsibles = document.querySelectorAll('.collapsible-item .collapse');
+    collapsibles.forEach(function (collapse) {
+        collapse.addEventListener('show.bs.collapse', function () {
+            this.previousElementSibling.querySelector('.bi-chevron-down').classList.add('rotate-180');
+        });
+        collapse.addEventListener('hide.bs.collapse', function () {
+            this.previousElementSibling.querySelector('.bi-chevron-down').classList.remove('rotate-180');
+        });
+    });
+
+    // Acción de resolver lotes
+    document.querySelectorAll('.btn-resolver-lote').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation(); 
+            const loteId = this.dataset.loteId;
+            const tipoLote = this.dataset.tipoLote;
+            const resolucion = this.dataset.resolucion;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const actionContainer = this.closest('.border-start-lg'); // Buscar el contenedor padre (nuestra nueva columna)
+
+            fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ lote_id: loteId, tipo_lote: tipoLote, resolucion: resolucion })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal('Éxito', data.message, 'success');
+                    
+                    // Reemplazar botones con badge de resolución
+                    let resolucionTexto = resolucion.replace('_', ' ');
+                    let resolucionClase = resolucion === 'apto' ? 'success' : 'danger';
+                    actionContainer.innerHTML = `
+                        <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                        <p class="small text-muted">Este lote fue resuelto como:</p>
+                        <h4><span class="badge bg-${resolucionClase}">${resolucionTexto.charAt(0).toUpperCase() + resolucionTexto.slice(1)}</span></h4>
+                    `;
+                    
+                    // Actualizar el badge de estado en la info
+                    const infoContainer = actionContainer.previousElementSibling;
+                    const estadoBadge = infoContainer.querySelector('.badge.bg-warning');
+                    if(estadoBadge) {
+                        estadoBadge.classList.remove('bg-warning', 'text-dark');
+                        estadoBadge.classList.add('bg-success');
+                        estadoBadge.textContent = 'Resuelto';
+                    }
+
+                     document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
+                        location.reload(); // Recargar para actualizar el estado general de la alerta
+                    });
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                }
+            })
+            .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
+        });
+    });
+    
+});
+</script>
+
+<style>
+    .bi-chevron-down {
+        transition: transform 0.2s ease-in-out;
+    }
+    .rotate-180 {
+        transform: rotate(180deg);
+    }
+    .card-header[data-bs-toggle="collapse"] {
+        cursor: pointer;
+    }
+    /* Estilos para la card de info mejorada */
+    .list-group-item strong {
+        min-width: 100px;
+        display: inline-block;
+    }
+
+    /* Estilos para la línea vertical en pantallas grandes */
+    @media (min-width: 992px) { 
+        .border-start-lg {
+            border-left: 1px solid #dee2e6 !important;
+            padding-left: 1rem !important;
+        }
+    }
+
+    /* === INICIO: Estilos para Vista Previa de NC === */
+    .nc-preview-wrapper {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem; /* var(--bs-border-radius) */
+        padding: 1rem;
+        cursor: pointer;
+        transition: background-color 0.2s, box-shadow 0.2s;
+        background-color: #f8f9fa;
+    }
+    .nc-preview-wrapper:hover {
+        background-color: #f1f3f5;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .nc-preview-content {
+        font-size: 0.85rem; /* "Un poco más pequeño" */
+        overflow: hidden;
+        max-height: 250px; /* Límite de altura para la preview */
+        position: relative;
+        /* Deshabilitamos los bordes internos del template incluido si es que los tiene */
+        & > :first-child {
+            border: none !important;
+            box-shadow: none !important;
+            margin-bottom: 0 !important;
+        }
+    }
+    /* Efecto de "fade-out" en la parte inferior de la preview */
+    .nc-preview-content::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 50px;
+        /* El fondo debe coincidir con el del wrapper */
+        background: linear-gradient(to bottom, transparent, #f8f9fa); 
+    }
+    .nc-preview-wrapper:hover .nc-preview-content::after {
+        background: linear-gradient(to bottom, transparent, #f1f3f5);
+    }
+    /* === FIN: Estilos para Vista Previa de NC === */
+</style>
+<script>
     document.addEventListener('DOMContentLoaded', function () {
         const btnResolver = document.getElementById('btn-resolver-alerta');
         if (btnResolver) {
@@ -638,7 +895,6 @@
                     'Confirmar Resolución',
                     '¿Está seguro de que desea marcar esta alerta como resuelta? Esta acción forzará la resolución de todos los items pendientes y el estado "Alertado" será removido de todas las entidades (si no están afectadas por otra alerta activa). Esta acción no se puede deshacer.',
                     function() {
-                        // Si el usuario confirma, enviar la solicitud POST
                         const url = "{{ url_for('admin_riesgo.resolver_alerta_riesgo_manualmente', codigo_alerta=alerta.codigo) }}";
                         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
 
@@ -648,16 +904,15 @@
                                 'Content-Type': 'application/json',
                                 'X-CSRFToken': csrfToken
                             },
-                            body: JSON.stringify({}) // Cuerpo vacío ya que la acción no necesita datos
+                            body: JSON.stringify({})
                         })
                         .then(response => {
-                            // La respuesta de un redirect es opaca, simplemente recargamos la página
                             if (response.ok || response.redirected) {
                                 window.location.reload();
                             } else {
-                                // Si hay un error, intentamos mostrarlo
                                 return response.json().then(data => {
                                     showNotificationModal('Error', data.error || 'No se pudo resolver la alerta.', 'error');
+
                                 });
                             }
                         })
@@ -670,6 +925,72 @@
                 );
             });
         }
+
+        // === INICIO: SCRIPT PARA BOTONES DE COLAPSO ===
+        const btnColapsarTodos = document.getElementById('btn-colapsar-todos');
+        const btnExpandirTodos = document.getElementById('btn-expandir-todos');
+        const btnExpandirPendientes = document.getElementById('btn-expandir-pendientes');
+        const allCollapsibleItems = document.querySelectorAll('.collapsible-item .collapse');
+        
+        // Helper para obtener la instancia de collapse de Bootstrap
+        function getCollapseInstance(element) {
+            return bootstrap.Collapse.getOrCreateInstance(element);
+        }
+
+        if (btnColapsarTodos) {
+            btnColapsarTodos.addEventListener('click', () => {
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+            });
+        }
+
+        if (btnExpandirTodos) {
+            btnExpandirTodos.addEventListener('click', () => {
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).show());
+            });
+        }
+
+        if (btnExpandirPendientes) {
+            btnExpandirPendientes.addEventListener('click', () => {
+                // 1. Primero, colapsar todo
+                allCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+
+                // 2. Luego, expandir solo los pendientes
+                document.querySelectorAll('.collapsible-item').forEach(item => {
+                    const header = item.querySelector('.card-header');
+                    // El badge 'bg-warning' es el indicador de 'pendiente'
+                    if (header && header.querySelector('.bg-warning')) {
+                        const collapseElement = item.querySelector('.collapse');
+                        if (collapseElement) {
+                            getCollapseInstance(collapseElement).show();
+                        }
+                    }
+                });
+            });
+        }
+
+        // === INICIO: SCRIPT PARA BOTONES LOCALES ===
+        document.querySelectorAll('.local-collapse-controls').forEach(group => {
+            const cardBody = group.closest('.card').querySelector('.card-body');
+            if (!cardBody) return;
+
+            const localCollapsibleItems = cardBody.querySelectorAll('.collapsible-item .collapse');
+            const btnExpand = group.querySelector('.btn-expand-local');
+            const btnCollapse = group.querySelector('.btn-collapse-local');
+
+            if (btnExpand) {
+                btnExpand.addEventListener('click', () => {
+                    localCollapsibleItems.forEach(el => getCollapseInstance(el).show());
+                });
+            }
+
+            if (btnCollapse) {
+                btnCollapse.addEventListener('click', () => {
+                    localCollapsibleItems.forEach(el => getCollapseInstance(el).hide());
+                });
+            }
+        });
+        // === FIN: SCRIPT PARA BOTONES LOCALES ===
+        // === FIN: SCRIPT PARA BOTONES DE COLAPSO ===
     });
 </script>
 {% endblock %}

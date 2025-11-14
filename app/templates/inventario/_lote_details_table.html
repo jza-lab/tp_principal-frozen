@@ -101,6 +101,16 @@
                     <i class="bi bi-shield-check"></i>
                 </button>
                 {% endif %}
+
+                <!-- Botón para Marcar como No Apto -->
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        title="Marcar como No Apto"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalNoApto"
+                        data-lote-id="{{ lote.id_lote }}"
+                        data-lote-numero="{{ lote.numero_lote_proveedor }}">
+                    <i class="bi bi-slash-circle"></i>
+                </button>
             </td>
         </tr>
         {% else %}

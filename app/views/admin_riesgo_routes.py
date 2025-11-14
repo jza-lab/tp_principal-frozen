@@ -32,7 +32,7 @@ def detalle_alerta_riesgo(codigo_alerta):
     
     if status_code != 200:
         flash(response.get('error', 'No se pudo cargar la alerta.'), 'danger')
-        return redirect(url_for('main.index')) # Fallback a una página principal
+        return redirect(url_for('admin_dashboard.index')) # Fallback a una página principal
 
     alerta = response.get('data')
     return render_template('admin_riesgos/detalle.html', alerta=alerta)
@@ -175,3 +175,15 @@ def resolver_alerta_riesgo_manualmente(codigo_alerta):
         flash(resultado.get('error', 'No se pudo resolver la alerta.'), 'danger')
         
     return redirect(url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=codigo_alerta))
+
+@admin_riesgo_bp.route('/api/lote/resolver-cuarentena', methods=['POST'])
+@jwt_required()
+@permission_required(accion='gestionar_reclamos')
+def resolver_cuarentena_lote():
+    datos = request.json
+    usuario_id = get_jwt_identity()
+    
+    controller = RiesgoController()
+    resultado, status_code = controller.resolver_cuarentena_lote(datos, usuario_id)
+    
+    return jsonify(resultado), status_code
