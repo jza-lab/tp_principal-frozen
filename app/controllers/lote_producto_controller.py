@@ -1189,13 +1189,23 @@ class LoteProductoController(BaseController):
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
             estado_lote_inicial = 'DISPONIBLE'
 
+            # --- NUEVA LÓGICA: CALCULAR FECHA DE VENCIMIENTO ---
+            producto_id = orden_produccion_data['producto_id']
+            producto_res = self.producto_model.find_by_id(producto_id, 'id')
+            vida_util = 90  # Default de 90 días
+            if producto_res.get('success') and producto_res.get('data'):
+                vida_util = producto_res['data'].get('vida_util_dias') or 90
+
+            fecha_vencimiento = (date.today() + timedelta(days=vida_util)).isoformat()
+            # --- FIN NUEVA LÓGICA ---
+
             # 3. Preparar y crear el lote con el estado decidido
             datos_lote = {
-                'producto_id': orden_produccion_data['producto_id'],
+                'producto_id': producto_id,
                 'cantidad_inicial': orden_produccion_data['cantidad_planificada'],
                 'orden_produccion_id': orden_id,
                 'fecha_produccion': date.today().isoformat(),
-                'fecha_vencimiento': (date.today() + timedelta(days=90)).isoformat(), # <-- Fecha de vencimiento
+                'fecha_vencimiento': fecha_vencimiento,
                 'estado': estado_lote_inicial
             }
             resultado_lote, status_lote = self.crear_lote_desde_formulario(datos_lote, usuario_id=usuario_id)

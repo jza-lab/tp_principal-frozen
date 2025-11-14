@@ -56,3 +56,9 @@ class ProductoSchema(Schema):
         load_default=0,
         validate=validate.Range(min=0, error="El stock mínimo no puede ser negativo.")
     )
+    vida_util_dias = fields.Int(
+        required=False,
+        allow_none=True,
+        load_default=0,
+        validate=validate.Range(min=0, error="La vida útil no puede ser negativa.")
+    )

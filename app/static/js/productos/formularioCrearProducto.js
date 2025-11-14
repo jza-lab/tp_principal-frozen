@@ -3,10 +3,82 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtotalInput = document.getElementById('subtotal');
     const ivaCheckbox = document.getElementById('iva');
     const totalInput = document.getElementById('total');
-    const addItemBtn = document.getElementById('addItemBtn');
     const porcentajeExtraInput = document.getElementById('porcentaje_extra');
     const formulario = document.getElementById('formulario-producto');
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
+
+    // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
+    const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
+    const searchFilterInput = document.getElementById('insumo-search-filter');
+    const insumoSelect = document.getElementById('insumo-select');
+
+    function poblarInsumosEnModal() {
+        insumoSelect.innerHTML = ''; // Limpiar opciones existentes
+        insumosData.forEach(insumo => {
+            const option = document.createElement('option');
+            option.value = insumo.id;
+            option.textContent = `${insumo.nombre} (${insumo.unidad_medida})`;
+            option.dataset.id = insumo.id;
+            option.dataset.unidad = insumo.unidad_medida;
+            option.dataset.precio = insumo.precio_unitario;
+            insumoSelect.appendChild(option);
+        });
+    }
+
+    searchFilterInput.addEventListener('input', function () {
+        const searchTerm = this.value.toLowerCase();
+        Array.from(insumoSelect.options).forEach(option => {
+            const text = option.textContent.toLowerCase();
+            option.style.display = text.includes(searchTerm) ? '' : 'none';
+        });
+    });
+
+    insumoSelect.addEventListener('dblclick', function () {
+        const selectedOption = this.options[this.selectedIndex];
+        if (!selectedOption || !selectedOption.value) return;
+
+        agregarItemAReceta(selectedOption.dataset);
+        insumoSearchModal.hide();
+    });
+
+    document.getElementById('insumoSearchModal').addEventListener('shown.bs.modal', function () {
+        poblarInsumosEnModal();
+        searchFilterInput.focus();
+    });
+
+    function agregarItemAReceta(insumo) {
+        const row = document.createElement('div');
+        row.className = 'row g-3 align-items-end item-row mb-2';
+
+        row.innerHTML = `
+            <div class="col-md-4">
+                <label class="form-label">Insumo</label>
+                <select class="form-select insumo-selector" name="insumo_id[]" required>
+                    <option value="${insumo.id}" data-id="${insumo.id}" data-unidad="${insumo.unidad}" data-precio="${insumo.precio}" selected>${insumo.nombre || insumosData.find(i => i.id == insumo.id)?.nombre}</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Cantidad <span class="unidad-receta-display">(${insumo.unidad})</span></label>
+                <input type="number" min="0.01" step="0.01" max="5000" class="form-control cantidad" name="cantidad[]" value="1" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Precio Unitario</label>
+                <input type="text" class="form-control precio_unitario" name="precio_unitario[]" value="${formatearADinero(insumo.precio)}" readonly>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Subtotal</label>
+                <input type="text" class="form-control subtotal-item" value="${formatearADinero(insumo.precio)}" readonly>
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
+            </div>
+        `;
+        itemsContainer.appendChild(row);
+        calcularTotales();
+        updateAvailableInsumos();
+    }
+    // --- FIN LÓGICA DEL MODAL ---
+
 
     // [FUNCIONES DE FORMATO DE DINERO]
 
@@ -142,44 +214,11 @@ document.addEventListener('DOMContentLoaded', function () {
     ivaCheckbox.addEventListener('change', calcularTotales);
 
     // [FUNCIÓN CLAVE: AÑADIR ITEM SIN TEMPLATE]
-    addItemBtn.addEventListener('click', function () {
-        const row = document.createElement('div');
-        row.className = 'row g-3 align-items-end item-row mb-2';
-
-        let optionsHtml = '<option value="">Seleccione un insumo...</option>';
-        insumosData.forEach(insumo => {
-            optionsHtml += `<option value="${insumo.id}" data-id="${insumo.id}" data-unidad="${insumo.unidad_medida}" data-precio="${insumo.precio_unitario}">${insumo.nombre}</option>`;
-        });
-
-        // Generación de HTML como string (sin usar <template>)
-        row.innerHTML = `
-            <div class="col-md-4">
-                <label class="form-label">Insumo</label>
-                <select class="form-select insumo-selector" name="insumo_id[]" required>${optionsHtml}</select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Cantidad <span class="unidad-receta-display"></span></label>
-                <input type="number" min="0.01" step="0.01" max="5000" class="form-control cantidad" name="cantidad[]" value="1" required>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Precio Unitario</label>
-                <input type="text" class="form-control precio_unitario" name="precio_unitario[]" readonly>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Subtotal</label>
-                <input type="text" class="form-control subtotal-item" value="${formatearADinero(0.00)}" readonly>
-            </div>
-            <div class="col-md-2">
-                <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
-            </div>
-        `;
-        itemsContainer.appendChild(row);
-        updateAvailableInsumos();
-    });
-
-
+    // La función agregarItemAReceta se encarga de añadir la fila con su botón de eliminar.
+    // Este listener se encarga de la acción de eliminar.
     itemsContainer.addEventListener('click', function (e) {
-        if (e.target.classList.contains('removeItemBtn')) {
+        // Usamos .closest() para asegurarnos de que el click en el ícono dentro del botón también funcione
+        if (e.target.closest('.removeItemBtn')) {
             e.target.closest('.item-row').remove();
             calcularTotales();
             updateAvailableInsumos();
