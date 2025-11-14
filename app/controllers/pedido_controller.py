@@ -938,8 +938,8 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error interno en planificar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-
-    def despachar_pedido(self, pedido_id: int, form_data: Optional[Dict] = None) -> tuple:
+    
+    def despachar_pedido(self, pedido_id: int, form_data: Optional[Dict] = None, dry_run: bool = False) -> tuple:
         """
         Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
         del despacho en la nueva tabla 'despachos'.
@@ -980,7 +980,11 @@ class PedidoController(BaseController):
 
             # 4. *** Consumir el stock reservado ANTES de cualquier otra acción ***
             logger.info(f"Consumiendo stock reservado para el pedido {pedido_id}...")
-            consumo_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id)
+            consumo_result = self.lote_producto_controller.despachar_stock_reservado_por_pedido(pedido_id, dry_run=dry_run)
+
+            if dry_run:
+                # En modo dry_run, si el consumo fue exitoso, devolvemos éxito sin cambiar estado.
+                return self.success_response(message="Verificación de stock exitosa.")
 
             if not consumo_result.get('success'):
                 error_msg = consumo_result.get('error', 'No se pudo consumir el stock reservado.')

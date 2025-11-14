@@ -187,9 +187,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const tiempoTotal = sortedRoute.reduce((sum, p) => sum + parseInt(p.tiempo_estimado), 0);
         
         selectedCount.textContent = selectedPedidos.size;
-        totalWeight.textContent = `${pesoTotal.toFixed(2)} kg`;
-        totalDistance.textContent = `${distanciaTotal.toFixed(1)} km`;
-        totalTime.textContent = `~${tiempoTotal} min`;
+        totalWeight.textContent = `${pesoTotal.toFixed(2)}`;
+        totalDistance.textContent = `${distanciaTotal.toFixed(1)}`;
+        totalTime.textContent = `~${tiempoTotal}`;
 
         if (vehiculo) {
             capacidadContainer.style.display = 'block';
@@ -209,7 +209,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         ayudaDespacho.style.display = selectedPedidos.size === 0 ? 'block' : 'none';
-        confirmarDespachoBtn.disabled = !vehiculo || selectedPedidos.size === 0 || pesoTotal === 0;
+        
+        const sobrecargado = vehiculo && pesoTotal > vehiculo.capacidad_kg;
+        confirmarDespachoBtn.disabled = !vehiculo || selectedPedidos.size === 0 || pesoTotal === 0 || sobrecargado;
     };
     
     // --- LÓGICA DE OPTIMIZACIÓN ---
@@ -288,7 +290,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const handleConfirmarDespacho = async () => {
-        if (!vehiculo || selectedPedidos.size === 0) return;
+        if (confirmarDespachoBtn.disabled) return;
+
+        const originalButtonHtml = confirmarDespachoBtn.innerHTML;
+        confirmarDespachoBtn.disabled = true;
+        confirmarDespachoBtn.innerHTML = `
+            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+            Procesando...
+        `;
 
         const data = {
             vehiculo_id: vehiculo.id,
@@ -301,7 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Asumiendo que hay un token CSRF global disponible si es necesario
                 },
                 body: JSON.stringify(data)
             });
@@ -309,15 +317,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (result.success) {
-                alert(`Despacho #${result.data.despacho_id} creado con éxito.`);
-                // Redirigir o recargar la página
+                // El éxito redirige, no es necesario restaurar el botón.
                 window.location.href = result.redirect_url || '/admin/despachos/gestion?tab=historial';
             } else {
-                alert(`Error al crear el despacho: ${result.error}`);
+                // Mostrar el modal de error
+                const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+                document.getElementById('errorModalMessage').textContent = result.error || 'Ocurrió un error desconocido.';
+                errorModal.show();
+
+                confirmarDespachoBtn.disabled = false;
+                confirmarDespachoBtn.innerHTML = originalButtonHtml;
             }
         } catch (error) {
             console.error('Error al confirmar despacho:', error);
-            alert('Error de red al confirmar el despacho.');
+            const errorModal = new bootstrap.Modal(document.getElementById('errorModal'));
+            document.getElementById('errorModalMessage').textContent = 'Error de conexión o respuesta inesperada del servidor.';
+            errorModal.show();
+            confirmarDespachoBtn.disabled = false;
+            confirmarDespachoBtn.innerHTML = originalButtonHtml;
         }
     };
     

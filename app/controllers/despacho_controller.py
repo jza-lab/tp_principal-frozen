@@ -1,12 +1,14 @@
 import math
+import logging
 from app.controllers.base_controller import BaseController
 from app.models.despacho import DespachoModel
 from app.models.base_model import BaseModel as GenericBaseModel
 
-class DespachoController(BaseController):
-    DEPOSITO_LAT = -34.603722
-    DEPOSITO_LNG = -58.381592
+logger = logging.getLogger(__name__)
 
+class DespachoController(BaseController):
+    DEPOSITO_LAT = -34.522947
+    DEPOSITO_LNG = -58.700461
     def _calcular_distancia(self, lat2, lng2):
         """Calcula la distancia Haversine en km."""
         if lat2 is None or lng2 is None:
@@ -112,7 +114,7 @@ class DespachoController(BaseController):
 
 
             # Asignar zona
-            localidad = direccion.get('localidad', 'Sin Localidad')
+            localidad = direccion_entrega.get('localidad', 'Sin Localidad')
             pedido['zona'] = {'nombre': zona_map.get(localidad, 'Sin Zona Asignada')}
 
             # Calcular peso total usando el mapa de pesos
@@ -177,31 +179,107 @@ class DespachoController(BaseController):
 
     def crear_despacho_y_actualizar_pedidos(self, vehiculo_id, pedido_ids, observaciones):
         """
-        Crea un nuevo despacho y actualiza el estado de los pedidos a 'EN_TRANSITO'.
+        Crea un nuevo despacho y actualiza el estado de los pedidos a 'EN_TRANSITO',
+        con validación de peso en el backend.
         """
+        from app.models.vehiculo import VehiculoModel
+        # 1. Obtener datos del vehículo
+        vehiculo_model = VehiculoModel()
+        vehiculo_res = vehiculo_model.find_by_id(vehiculo_id, 'id')
+        if not vehiculo_res.get('success') or not vehiculo_res.get('data'):
+            return self.error_response('Vehículo no encontrado.', 404)
+        
+        vehiculo = vehiculo_res['data']
+        capacidad_maxima = vehiculo.get('capacidad_kg', 0)
+
+        # 2. Calcular el peso total de los pedidos de forma optimizada
+        if not pedido_ids:
+            peso_total_pedidos_kg = 0
+        else:
+            # Obtenemos todos los items de los pedidos en una sola consulta
+            items_res = self.pedido_controller.model.db.table('pedido_items').select('*').in_('pedido_id', pedido_ids).execute()
+            
+            if not items_res.data:
+                peso_total_pedidos_kg = 0
+            else:
+                # Recolectamos los IDs de productos para obtener sus pesos en una sola consulta
+                producto_ids = list(set(item['producto_id'] for item in items_res.data if 'producto_id' in item))
+                pesos_map = {}
+                if producto_ids:
+                    producto_model = self.producto_controller.model
+                    try:
+                        response = producto_model.db.table(producto_model.get_table_name()).select('id, peso_total_gramos').in_('id', producto_ids).execute()
+                        for prod in response.data:
+                            pesos_map[prod['id']] = prod.get('peso_total_gramos', 0) or 0
+                    except Exception as e:
+                        print(f"Error al obtener pesos de productos para validación: {e}")
+                        return self.error_response("Error interno al verificar pesos de productos.", 500)
+
+                # Calculamos el peso total
+                peso_total_gramos = sum(
+                    (item.get('cantidad', 0) * pesos_map.get(item.get('producto_id'), 0))
+                    for item in items_res.data
+                )
+                peso_total_pedidos_kg = peso_total_gramos / 1000
+
+        # 3. Validar el peso
+        if peso_total_pedidos_kg > capacidad_maxima:
+            error_msg = f"El peso total de los pedidos ({peso_total_pedidos_kg:.2f} kg) excede la capacidad del vehículo ({capacidad_maxima} kg)."
+            return self.error_response(error_msg, 400)
+
+        # Antes de crear nada, verificamos que todos los pedidos se puedan despachar.
+        for pedido_id in pedido_ids:
+            # Usamos el método despachar_pedido que ya contiene la lógica de consumo de stock.
+            # Pero lo llamamos de una forma que no confirme la transacción si algo falla.
+            # En este caso, el método ya es destructivo, así que si falla, el rollback se encargará.
+            # Una mejora futura sería tener un método de "verificación" no destructivo.
+            respuesta_despacho, status_code = self.pedido_controller.despachar_pedido(pedido_id, form_data=None, dry_run=True)
+            if status_code >= 400:
+                error_msg = respuesta_despacho.get('error', f'Error de pre-verificación al despachar pedido {pedido_id}.')
+                logger.error(f"Fallo en la pre-verificación del despacho: {error_msg}")
+                return self.error_response(f"No se puede crear el despacho. {error_msg}", 400)
+        
+        logger.info("Pre-verificación de stock para todos los pedidos completada con éxito.")
+
+        # 4. Crear el despacho si la validación es exitosa
         despacho_data = {'vehiculo_id': vehiculo_id, 'observaciones': observaciones}
         despacho_response = self.model.create(despacho_data)
         
-        if not despacho_response['success']:
+        if not despacho_response.get('success'):
             return despacho_response
 
         despacho_id = despacho_response['data']['id']
         
-        # Se define una clase de modelo concreta para despacho_items
+        # Define una clase de modelo temporal para la tabla 'despacho_items'
         class DespachoItemModel(GenericBaseModel):
             def get_table_name(self):
                 return 'despacho_items'
 
+        # Crea una instancia del modelo temporal
         despacho_items_model = DespachoItemModel()
-
+        errores_despacho = []
         for pedido_id in pedido_ids:
-            # Asociar pedido al despacho
             despacho_items_model.create({'despacho_id': despacho_id, 'pedido_id': pedido_id})
             
-            # Actualizar estado del pedido
-            # Esto asegura que el stock se consuma y las reservas se actualicen.
-            # Pasamos form_data=None porque los datos del transportista ya están en la tabla 'despachos'.
-            despacho_pedido_res, _ = self.pedido_controller.despachar_pedido(pedido_id, form_data=None)
+            # despachar_pedido ahora devuelve una tupla (respuesta, status_code)
+            respuesta_despacho, status_code = self.pedido_controller.despachar_pedido(pedido_id, form_data=None)
+            
+            if status_code != 200: # Asumiendo que 200 es éxito
+                # Acumular el error y continuar con los demás pedidos si es necesario,
+                # o detenerse inmediatamente. Por ahora, nos detenemos.
+                error_msg = respuesta_despacho.get('error', f'Error desconocido al despachar pedido {pedido_id}.')
+                errores_despacho.append(error_msg)
+                break # Detener el bucle al primer error
+
+        if errores_despacho:
+            # Si hubo errores, revertir la creación del despacho
+            logger.error(f"Errores durante el despacho del lote de pedidos. Revertiendo creación del despacho ID {despacho_id}...")
+            despacho_items_model.db.table(despacho_items_model.get_table_name()).delete().eq('despacho_id', despacho_id).execute()
+            self.model.db.table(self.model.get_table_name()).delete().eq('id', despacho_id).execute()
+            
+            # Devolver el primer error encontrado al frontend
+            return self.error_response(errores_despacho[0], 500)
+        # --- FIN NUEVO MANEJO DE ERRORES ---
 
         return {'success': True, 'data': {'despacho_id': despacho_id}}
 

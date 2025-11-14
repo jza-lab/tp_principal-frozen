@@ -21,8 +21,8 @@ class VehiculoController(BaseController):
         # Validación de capacidad_kg
         try:
             capacidad_kg = float(data.get('capacidad_kg'))
-            if not 100 <= capacidad_kg <= 500:
-                return {'success': False, 'error': 'La capacidad de carga debe estar entre 100 y 500 kg.'}
+            if not 250 <= capacidad_kg <= 1500:
+                return {'success': False, 'error': 'La capacidad de carga debe estar entre 250 y 1500 kg.'}
         except (ValueError, TypeError):
             return {'success': False, 'error': 'La capacidad de carga debe ser un número válido.'}
 

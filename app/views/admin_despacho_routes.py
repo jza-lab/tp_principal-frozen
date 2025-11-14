@@ -89,19 +89,19 @@ def api_crear_despacho():
     if not vehiculo_id or not pedido_ids:
         return {'success': False, 'error': 'Faltan datos requeridos (vehiculo_id, pedido_ids)'}, 400
 
-    response = despacho_controller.crear_despacho_y_actualizar_pedidos(
+    response_data, status_code = despacho_controller.crear_despacho_y_actualizar_pedidos(
         vehiculo_id,
         pedido_ids,
         observaciones
     )
 
-    if response['success']:
-        flash(f"Despacho #{response['data']['despacho_id']} creado exitosamente.", 'success')
+    if response_data.get('success'):
+        flash(f"Despacho #{response_data['data']['despacho_id']} creado exitosamente.", 'success')
         # Redirigir a la misma página de gestión, pero a la pestaña de historial.
-        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial')
-        return {'success': True, 'data': response['data'], 'redirect_url': redirect_url}, 201
+        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial') # type: ignore
+        return {'success': True, 'data': response_data['data'], 'redirect_url': redirect_url}, status_code
     else:
-        return {'success': False, 'error': response.get('error', 'Error interno al crear el despacho')}, 500
+        return {'success': False, 'error': response_data.get('error', 'Error interno al crear el despacho')}, status_code
 
 @despacho_bp.route('/hoja-de-ruta/<int:despacho_id>')
 @permission_required('consultar_despachos')

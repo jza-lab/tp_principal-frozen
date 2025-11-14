@@ -169,7 +169,8 @@ class PedidoModel(BaseModel):
         try:
             query = self.db.table(self.get_table_name()).select(
                 '*, '
-                'cliente:clientes(*, direccion:direccion_id(*)), '
+                'cliente:clientes(*),'
+                'direccion:id_direccion_entrega(*),'
                 'pedido_items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre))'
             )
             if filtros:

@@ -595,7 +595,7 @@ class LoteProductoController(BaseController):
             return {'success': False, 'error': f'Error interno al despachar stock: {str(e)}'}
 
 
-    def despachar_stock_reservado_por_pedido(self, pedido_id: int) -> dict:
+    def despachar_stock_reservado_por_pedido(self, pedido_id: int, dry_run: bool = False) -> dict:
         """
         Despacha el stock que fue PREVIAMENTE RESERVADO para un pedido.
         Actualiza los lotes y el estado de las reservas.
@@ -629,6 +629,10 @@ class LoteProductoController(BaseController):
 
                 if cantidad_en_lote < cantidad_a_despachar:
                     raise Exception(f"Inconsistencia de stock: El lote {lote_actual.get('numero_lote')} no tiene suficiente cantidad para cubrir la reserva.")
+
+                # Si es un dry_run, solo verificamos y continuamos al siguiente. No modificamos nada.
+                if dry_run:
+                    continue
 
                 # a. Calcular nueva cantidad y preparar actualización del lote
                 nueva_cantidad_lote = cantidad_en_lote - cantidad_a_despachar
