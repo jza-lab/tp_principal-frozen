@@ -189,11 +189,14 @@ def descargar_plantilla_lotes():
         return redirect(url_for('lote_producto.cargar_lotes_excel'))
 
 @lote_producto_bp.route('/<int:id_lote>/cuarentena', methods=['POST'])
-# @jwt_required()
-# @permission_required(accion='gestionar_cuarentena_lotes')
+@jwt_required()
+@permission_required(accion='gestionar_cuarentena_lotes')
 def poner_en_cuarentena(id_lote):
-    controller = LoteProductoController() # <-- AÑADIDO AQUÍ
+    controller = LoteProductoController()
     motivo = request.form.get('motivo_cuarentena')
+    resultado_inspeccion = request.form.get('resultado_inspeccion')
+    foto_file = request.files.get('foto_url')
+    usuario_id = get_jwt_identity()
 
     try:
         cantidad = float(request.form.get('cantidad_cuarentena'))
@@ -201,7 +204,7 @@ def poner_en_cuarentena(id_lote):
         flash('La cantidad debe ser un número válido.', 'danger')
         return redirect(url_for('lote_producto.listar_lotes'))
 
-    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad)
+    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id, resultado_inspeccion, foto_file)
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')

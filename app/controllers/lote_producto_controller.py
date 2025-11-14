@@ -15,6 +15,11 @@ from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.reserva_producto_schema import ReservaProductoSchema
 from app.controllers.configuracion_controller import ConfiguracionController
 from app.models.alerta_riesgo import AlertaRiesgoModel
+from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+from app.database import Database
+from werkzeug.utils import secure_filename
+import os
+from storage3.exceptions import StorageApiError
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +33,7 @@ class LoteProductoController(BaseController):
         self.reserva_model = ReservaProductoModel()
         self.reserva_schema = ReservaProductoSchema()
         self.config_controller = ConfiguracionController()
+        self.control_calidad_producto_controller = ControlCalidadProductoController()
 
     def crear_lote(self, data: Dict):
         """Crea un nuevo lote de producto."""
@@ -906,9 +912,9 @@ class LoteProductoController(BaseController):
             logger.error(f"Error al generar la plantilla de lotes: {str(e)}", exc_info=True)
             return None
 
-    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str, foto_file) -> tuple:
         """
-        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA.
+        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA y crea un registro de control de calidad.
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
@@ -919,7 +925,6 @@ class LoteProductoController(BaseController):
             cantidad_actual_disponible = lote.get('cantidad_actual') or 0
             cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
 
-            # Validar estado (ahora puede estar DISPONIBLE o ya en CUARENTENA)
             if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
                 msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
                 return self.error_response(msg, 400)
@@ -934,13 +939,12 @@ class LoteProductoController(BaseController):
             if cantidad_a_mover > cantidad_actual_disponible:
                 logger.warning(f"La cantidad de cuarentena solicitada ({cantidad}) excede el disponible ({cantidad_actual_disponible}). Se pondrá en cuarentena todo el disponible.")
                 cantidad_a_mover = cantidad_actual_disponible
-            
-            # Lógica de resta y suma
+
             nueva_cantidad_disponible = cantidad_actual_disponible - cantidad_a_mover
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
 
             update_data = {
-                'estado': 'CUARENTENA', # Siempre se marca o se mantiene como CUARENTENA
+                'estado': 'CUARENTENA',
                 'motivo_cuarentena': motivo,
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible
@@ -949,6 +953,19 @@ class LoteProductoController(BaseController):
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
+            cc_data = {
+                'lote_producto_id': lote_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': 'CUARENTENA',
+                'comentarios': motivo,
+                'resultado_inspeccion': resultado_inspeccion,
+                'foto_url': foto_url
+            }
+            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+            if not cc_res.get('success'):
+                 logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {cc_res.get('error')}")
 
             return self.success_response(message="Cantidad puesta en cuarentena con éxito.")
 
@@ -1225,3 +1242,38 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def _subir_foto_y_obtener_url(self, file_storage, lote_id: int) -> str | None:
+        if not file_storage or not file_storage.filename:
+            return None
+        try:
+            db_client = Database().client
+            bucket_name = "fotos_control_calidad"
+
+            filename = secure_filename(file_storage.filename)
+            extension = os.path.splitext(filename)[1]
+            unique_filename = f"productos/lote_{lote_id}_{int(datetime.now().timestamp())}{extension}"
+
+            file_content = file_storage.read()
+
+            db_client.storage.from_(bucket_name).upload(
+                path=unique_filename,
+                file=file_content,
+                file_options={"content-type": file_storage.mimetype}
+            )
+
+            url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
+            logger.info(f"Foto subida con éxito para el lote {lote_id}. URL: {url_response}")
+            return url_response
+
+        except StorageApiError as e:
+            if "Bucket not found" in str(e):
+                error_message = f"Error de configuración: El bucket de almacenamiento '{bucket_name}' no se encontró en Supabase."
+                logger.error(error_message)
+                raise Exception(error_message)
+            else:
+                logger.error(f"Error de Supabase Storage al subir foto para el lote {lote_id}: {e}", exc_info=True)
+                raise e
+        except Exception as e:
+            logger.error(f"Excepción general al subir foto para el lote {lote_id}: {e}", exc_info=True)
+            raise e

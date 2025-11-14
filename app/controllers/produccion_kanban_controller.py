@@ -554,14 +554,14 @@ class ProduccionKanbanController(BaseController):
                 'decision_final': decision,
                 'orden_produccion_id': op_id,
                 'comentarios': comentarios,
-                'resultado_inspeccion': resultado_inspeccion,
+                'resultado_inspeccion': resultado_inspeccion, # Aseguramos que este campo se capture
                 'foto_url': foto_url
             }
             cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
             if not cc_res.get('success'):
-                 # Si falla, solo registramos el error. La lógica principal (cambiar estado OP) debe continuar.
-                 logger.error(f"Falló la creación del registro de C.C. para la OP {op_id}: {cc_res.get('error')}")
-            # --- FIN DE LA CORRECCIÓN ---
+                # Si falla, solo registramos el error. La lógica principal (cambiar estado OP) debe continuar.
+                logger.error(f"Falló la creación del registro de C.C. para la OP {op_id}: {cc_res.get('error')}")
+
 
             # Actualizar OP
             nuevo_estado_op = 'COMPLETADA'
