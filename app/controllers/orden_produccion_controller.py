@@ -607,14 +607,16 @@ class OrdenProduccionController(BaseController):
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cancelación', detalle)
         return result
 
-    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
+    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None, qc_data: Optional[Dict] = None) -> tuple:
         """
         Cambia el estado de una orden.
-        Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
-        vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
+        Si es 'COMPLETADA', crea el lote, el registro de calidad y lo deja 'RESERVADO'
+        si está vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
         """
         try:
             from flask_jwt_extended import get_jwt_identity
+            from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+            cc_controller = ControlCalidadProductoController()
 
             orden_result = self.obtener_orden_por_id(orden_id)
             if not orden_result.get('success'):
@@ -623,29 +625,42 @@ class OrdenProduccionController(BaseController):
             estado_actual = orden_produccion['estado']
 
             update_data = {}
+            lote_creado = None
             if nuevo_estado == 'COMPLETADA':
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                # Asignar el aprobador de calidad usando el ID del usuario actual.
                 usuario_id_actual = get_jwt_identity()
                 update_data['aprobador_calidad_id'] = usuario_id_actual
 
-                # Lógica de creación de lote y reservas centralizada
                 lote_result, lote_status = self.lote_producto_controller.crear_lote_y_reservas_desde_op(
                     orden_produccion_data=orden_produccion,
-                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    usuario_id=orden_produccion.get('usuario_creador_id', 1),
+                    qc_data=qc_data
                 )
 
                 if lote_status >= 400:
                     return self.error_response(f"Fallo al procesar el lote/reserva: {lote_result.get('error')}", 500)
 
                 message_to_use = f"Orden completada. {lote_result.get('message', '')}"
+                lote_creado = lote_result.get('data')
 
-            # Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
+                # Punto crítico: Después de crear el lote y tener su ID, creamos el registro histórico.
+                if lote_creado and qc_data:
+                    qc_data['lote_producto_id'] = lote_creado.get('id_lote')
+                    # Asegurarse de que otros campos necesarios estén presentes
+                    qc_data.setdefault('usuario_supervisor_id', usuario_id_actual)
+                    
+                    cc_res, _ = cc_controller.crear_registro_control_calidad(qc_data)
+                    if not cc_res.get('success'):
+                        # Log del error, pero no detener el flujo principal
+                        logger.error(f"Falló la creación del registro de C.C. para el lote {lote_creado.get('id_lote')}: {cc_res.get('error')}")
+
+            # Mover el cambio de estado aquí para que se ejecute después de la lógica de CC
             result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
                 op = result.get('data')
+                op['lote_creado'] = lote_creado
                 detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
                 # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
