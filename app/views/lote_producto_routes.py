@@ -3,8 +3,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_wtf import FlaskForm
 from app.controllers.lote_producto_controller import LoteProductoController
-from app.controllers.producto_controller import ProductoController # Para el formulario
+from app.controllers.producto_controller import ProductoController
 from app.utils.decorators import permission_required
+from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
 import logging
 from datetime import date
 from flask import jsonify
@@ -37,7 +38,13 @@ def detalle_lote(id_lote):
         flash(response.get('error'), 'error')
         return redirect(url_for('lote_producto.listar_lotes'))
 
-    return render_template('lotes_productos/detalle.html', lote=response.get('data'))
+    motivo_model = MotivoDesperdicioLoteModel()
+    motivos_res = motivo_model.get_all()
+    motivos = motivos_res.get('data', [])
+    
+    csrf_form = FlaskForm()
+
+    return render_template('lotes_productos/detalle.html', lote=response.get('data'), motivos=motivos, csrf_form=csrf_form)
 
 
 @lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])

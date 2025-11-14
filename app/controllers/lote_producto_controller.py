@@ -15,6 +15,7 @@ from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.reserva_producto_schema import ReservaProductoSchema
 from app.controllers.configuracion_controller import ConfiguracionController
 from app.models.alerta_riesgo import AlertaRiesgoModel
+from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
 
 
 logger = logging.getLogger(__name__)
@@ -456,6 +457,7 @@ class LoteProductoController(BaseController):
     def obtener_lote_por_id_para_vista(self, id_lote: int) -> tuple:
         """Obtiene el detalle de un lote de producto para la vista, incluyendo el historial de calidad."""
         from app.controllers.control_calidad_producto_controller import ControlCalidadProductoController
+        from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
         try:
             result = self.model.get_lote_detail_for_view(id_lote)
             if not result.get('success') or not result.get('data'):
@@ -467,6 +469,41 @@ class LoteProductoController(BaseController):
             cc_controller = ControlCalidadProductoController()
             historial_res, _ = cc_controller.obtener_registros_por_lote_producto(id_lote)
             lote['historial_calidad'] = historial_res.get('data', []) if historial_res.get('success') else []
+
+            # Enriquecer con historial de desperdicios
+            registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
+            historial_desp_res = registro_desperdicio_model.get_by_lote_id(id_lote)
+            historial_desperdicios = historial_desp_res.get('data', []) if historial_desp_res.get('success') else []
+
+            # Enriquecer con nombres de usuario (solución al join cross-schema)
+            if historial_desperdicios:
+                from app.models.usuario import UsuarioModel
+                user_model = UsuarioModel()
+                # CORRECCIÓN: Iterar y buscar cada usuario por su ID individualmente.
+                for h in historial_desperdicios:
+                    if h.get('usuario_id'):
+                        user_res = user_model.find_by_id(h['usuario_id'])
+                        if user_res.get('success'):
+                            h['usuario'] = user_res.get('data')
+                
+                # CORRECCIÓN: Convertir 'created_at' de string a objeto datetime.
+                for h in historial_desperdicios:
+                    if h.get('created_at') and isinstance(h['created_at'], str):
+                        try:
+                            # Supabase devuelve timestamps con timezone (formato ISO 8601)
+                            h['created_at'] = datetime.fromisoformat(h['created_at'])
+                        except ValueError:
+                            # Fallback por si el formato es inesperado
+                            logger.warning(f"No se pudo convertir la fecha: {h['created_at']}")
+                            pass
+
+
+            lote['historial_desperdicios'] = historial_desperdicios
+            
+            # Cargar motivos de desperdicio para el formulario
+            motivo_model = MotivoDesperdicioLoteModel()
+            motivos_res = motivo_model.get_all()
+            lote['motivos_desperdicio'] = motivos_res.get('data', []) if motivos_res.get('success') else []
 
 
             # Convertir strings de fecha a objetos datetime
