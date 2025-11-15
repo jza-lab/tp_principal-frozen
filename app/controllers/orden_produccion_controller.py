@@ -1593,10 +1593,11 @@ class OrdenProduccionController(BaseController):
 
     def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
-        Registra el avance de producción para una orden, incluyendo desperdicios,
-        y opcionalmente finaliza la orden.
+        Registra el avance de producción. La lógica de consumo de stock de desperdicio
+        y creación de OPs hijas solo se activa cuando se completa la cantidad total.
         """
         try:
+            # 1. Validación de datos de entrada
             try:
                 cantidad_buena = Decimal(data.get('cantidad_buena', '0'))
                 cantidad_desperdicio_str = data.get('cantidad_desperdicio')
@@ -1605,106 +1606,138 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(f"Valor numérico inválido: {e}", 400)
 
             motivo_desperdicio_id = data.get('motivo_desperdicio_id')
-
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
-
             if cantidad_buena == 0 and cantidad_desperdicio == 0:
-                return self.error_response("Debe reportar al menos una cantidad (producida o de desperdicio).", 400)
+                return self.error_response("Debe reportar al menos una cantidad.", 400)
+            if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
+                return self.error_response("Se requiere un motivo para el desperdicio.", 400)
 
-            # 1. Obtener estado actual de la orden
+            # 2. Obtener estado actual y calcular totales
             orden_actual_res = self.model.find_by_id(orden_id)
             if not orden_actual_res.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_actual = orden_actual_res.get('data', {})
 
-            # 2. Validar cantidades contra lo restante
-            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
-            cantidad_restante = cantidad_planificada - cantidad_producida_actual
-            logger.info(f"OP {orden_id} - Validación de avance: Planificada={cantidad_planificada}, Producida={cantidad_producida_actual}, Restante={cantidad_restante}")
+            desperdicio_model = RegistroDesperdicioModel()
+            desperdicios_anteriores_res = desperdicio_model.find_all({'orden_produccion_id': orden_id})
+            total_desperdicio_anterior = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_anteriores_res.get('data', []))
+            
+            total_unidades_procesadas_antes = cantidad_producida_actual + total_desperdicio_anterior
+            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
 
-            if (cantidad_buena + cantidad_desperdicio) > cantidad_restante + Decimal('0.001'):
-                return self.error_response(
-                    f"El total reportado ({cantidad_buena + cantidad_desperdicio:.2f}) supera la cantidad restante por producir ({cantidad_restante:.2f}).", 400
-                )
-
-            # 3. Gestionar DESPERDICIO (requiere consumo de stock adicional)
-            if cantidad_desperdicio > 0:
-                if not motivo_desperdicio_id:
-                    return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
-
-                # Intentar consumir stock para el desperdicio
-                consumo_result = self.inventario_controller.consumir_stock_por_cantidad_producto(
-                    receta_id=orden_actual['receta_id'],
-                    cantidad_producto=float(cantidad_desperdicio),
-                    op_id_referencia=orden_id,
-                    motivo='DESPERDICIO_PRODUCCION'
-                )
-
-                if not consumo_result.get('success'):
-                    logger.warning(f"No hay stock para cubrir el desperdicio en OP {orden_id}. "
-                                   f"Error: {consumo_result.get('error')}. Iniciando partición de OP.")
-                    
-                    # Si no hay stock para el desperdicio, se parte la OP. Esto finaliza la actual.
-                    gestion_result = self._gestionar_op_parcial_por_falta_de_stock(orden_actual, cantidad_buena, cantidad_desperdicio, usuario_id)
-                    
-                    if gestion_result.get('success'):
-                        mensaje_final = gestion_result.get('message', 'La OP se dividió correctamente.')
-                        if gestion_result.get('warning'):
-                            mensaje_final += f" Advertencia: {gestion_result.get('warning')}"
-                        return self.success_response(message=mensaje_final)
-                    else:
-                        error_msg = f"No hay stock para el desperdicio y falló la división de la OP: {gestion_result.get('error')}"
-                        return self.error_response(error_msg, 500)
-
-                # Si el consumo fue exitoso, registrar el desperdicio
-                desperdicio_model = RegistroDesperdicioModel()
-                desperdicio_data = {
-                    'orden_produccion_id': orden_id,
-                    'motivo_desperdicio_id': int(motivo_desperdicio_id),
-                    'cantidad': cantidad_desperdicio,
-                    'usuario_id': usuario_id
-                }
-                desperdicio_model.create(desperdicio_data)
-
-            # Esta lógica se ejecuta si solo se reportaron unidades buenas, o si se reportó desperdicio y había stock para cubrirlo.
-            nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
-
+            # Nueva validación de sobreproducción total
             tolerancia_porcentaje = self.configuracion_controller.obtener_valor_configuracion(
                 TOLERANCIA_SOBREPRODUCCION_PORCENTAJE, DEFAULT_TOLERANCIA_SOBREPRODUCCION
             )
             tolerancia_decimal = Decimal(tolerancia_porcentaje) / Decimal(100)
             cantidad_maxima_permitida = cantidad_planificada * (Decimal(1) + tolerancia_decimal)
             
-            if nueva_cantidad_producida > cantidad_maxima_permitida + Decimal('0.001'):
-                excedente = nueva_cantidad_producida - cantidad_planificada
+            total_reportado_ahora = cantidad_buena + cantidad_desperdicio
+            if (total_unidades_procesadas_antes + total_reportado_ahora) > cantidad_maxima_permitida + Decimal('0.001'):
+                excedente = (total_unidades_procesadas_antes + total_reportado_ahora) - cantidad_planificada
                 return self.error_response(
-                    f"La cantidad reportada excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
-                    f"Excedente: {excedente:.2f} kg.", 400
+                    f"El total reportado excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
+                    f"Excedente: {excedente:.2f} unidades.", 400
                 )
 
-            update_data = {'cantidad_producida': nueva_cantidad_producida}
+            # 3. Registrar avance (siempre se hace)
+            update_data = {'cantidad_producida': cantidad_producida_actual + cantidad_buena}
+            if cantidad_desperdicio > 0:
+                desperdicio_model.create({
+                    'orden_produccion_id': orden_id,
+                    'motivo_desperdicio_id': int(motivo_desperdicio_id),
+                    'cantidad': cantidad_desperdicio,
+                    'usuario_id': usuario_id
+                })
 
-            # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
-            if nueva_cantidad_producida >= cantidad_planificada:
+            # 4. Verificar si la OP se ha completado en este reporte
+            total_unidades_procesadas_ahora = total_unidades_procesadas_antes + cantidad_buena + cantidad_desperdicio
+            mensaje_final = "Avance reportado correctamente."
+            datos_respuesta = {}
+
+            if total_unidades_procesadas_ahora >= cantidad_planificada:
+                logger.info(f"OP {orden_id} completada. Cantidad procesada: {total_unidades_procesadas_ahora}. Pasando a CONTROL DE CALIDAD.")
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 update_data['fecha_fin'] = datetime.now().isoformat()
+                
+                # Llamar a la lógica de gestión de desperdicio
+                gestion_desperdicio_res = self._gestionar_finalizacion_op_con_desperdicio(orden_actual, usuario_id)
+                
+                if not gestion_desperdicio_res.get('success'):
+                    logger.error(f"Error en gestión de desperdicio para OP {orden_id}: {gestion_desperdicio_res.get('error')}")
+                    mensaje_final = "OP completada, pero hubo un error al gestionar el stock de desperdicio."
+                else:
+                    mensaje_final = gestion_desperdicio_res.get('message')
+                    if gestion_desperdicio_res.get('data', {}).get('op_hija_creada'):
+                        datos_respuesta['op_hija_creada'] = True
 
+            # 5. Aplicar la actualización a la base de datos
             self.model.update(orden_id, update_data)
 
-            detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Cantidad Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
+            detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle)
 
-            mensaje_final = "Avance reportado correctamente."
-            if update_data.get('estado') == 'CONTROL_DE_CALIDAD':
-                mensaje_final += " La orden pasó a Control de Calidad."
-
-            return self.success_response(message=mensaje_final)
+            return self.success_response(message=mensaje_final, data=datos_respuesta)
 
         except Exception as e:
             logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def _gestionar_finalizacion_op_con_desperdicio(self, orden_actual: Dict, usuario_id: int) -> Dict:
+        """
+        Lógica centralizada que se ejecuta cuando una OP se completa.
+        Verifica el stock para el desperdicio total y actúa en consecuencia.
+        """
+        try:
+            orden_id = orden_actual['id']
+            desperdicio_model = RegistroDesperdicioModel()
+            desperdicios_res = desperdicio_model.find_all({'orden_produccion_id': orden_id})
+            total_desperdicio = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_res.get('data', []))
+
+            if total_desperdicio == 0:
+                return {'success': True, 'message': 'Orden completada y pasada a Control de Calidad.'}
+
+            # Verificar si hay stock para CUBRIR el desperdicio
+            consumo_result = self.inventario_controller.consumir_stock_por_cantidad_producto(
+                receta_id=orden_actual['receta_id'],
+                cantidad_producto=float(total_desperdicio),
+                op_id_referencia=orden_id,
+                motivo='DESPERDICIO_PRODUCCION'
+            )
+
+            if consumo_result.get('success'):
+                logger.info(f"Stock consumido exitosamente para cubrir el desperdicio de {total_desperdicio} en OP {orden_id}.")
+                return {'success': True, 'message': 'Orden completada, stock de desperdicio consumido.'}
+            else:
+                logger.warning(f"No hay stock para cubrir el desperdicio total ({total_desperdicio}) en OP {orden_id}. Se creará OP hija.")
+                
+                # Crear OP hija por la cantidad de desperdicio que no se pudo cubrir
+                datos_nueva_op = {
+                    'producto_id': orden_actual['producto_id'],
+                    'cantidad_planificada': float(total_desperdicio),
+                    'receta_id': orden_actual['receta_id'],
+                    'prioridad': 'ALTA',
+                    'observaciones': f"OP hija creada para reponer desperdicio no cubierto de la OP: {orden_actual.get('codigo', orden_id)}.",
+                    'estado': 'PENDIENTE',
+                    'orden_compra_id': orden_actual.get('orden_compra_id') # Heredar el pedido
+                }
+                
+                resultado_creacion_op = self.crear_orden(datos_nueva_op, usuario_id)
+
+                if not resultado_creacion_op.get('success'):
+                    error_msg = f"OP completada, pero falló la creación de la OP hija para el desperdicio: {resultado_creacion_op.get('error')}"
+                    return {'success': False, 'error': error_msg}
+                
+                nueva_op = resultado_creacion_op['data']
+                msg = f"Orden completada. Se creó la OP hija {nueva_op.get('codigo')} para reponer el desperdicio."
+                
+                return {'success': True, 'message': msg, 'data': {'op_hija_creada': True}}
+
+        except Exception as e:
+            logger.error(f"Error crítico en _gestionar_finalizacion_op_con_desperdicio para OP {orden_actual['id']}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
         """
