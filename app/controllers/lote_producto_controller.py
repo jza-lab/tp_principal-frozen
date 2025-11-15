@@ -184,11 +184,11 @@ class LoteProductoController(BaseController):
 
     def obtener_stock_disponible_real(self, producto_id: int):
         """
-        Calcula el stock real disponible para un producto, restando las reservas activas.
-        Stock Real = Stock Físico Total ('DISPONIBLE') - Stock Reservado ('RESERVADO')
+        Calcula el stock real disponible para un producto en un modelo de "reserva dura".
+        El stock disponible es la suma de `cantidad_actual` de todos los lotes 'DISPONIBLE'.
+        No se restan las reservas porque `cantidad_actual` ya se descuenta al reservar.
         """
         try:
-            # 1. Calcular Stock Físico Total (lotes en estado 'DISPONIBLE')
             filtros_lotes = {'producto_id': producto_id, 'estado': 'DISPONIBLE'}
             lotes_result = self.model.find_all(filtros_lotes)
 
@@ -196,30 +196,9 @@ class LoteProductoController(BaseController):
                 return self.error_response(lotes_result.get('error'), 500)
 
             lotes_disponibles = lotes_result.get('data', [])
-            stock_fisico_total = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
+            stock_disponible_real = sum(lote.get('cantidad_actual', 0) for lote in lotes_disponibles)
 
-            # 2. Obtener IDs de todos los lotes para este producto para buscar sus reservas
-            lote_ids = [lote['id_lote'] for lote in lotes_disponibles]
-
-            if not lote_ids:
-                stock_reservado = 0
-            else:
-                # 3. Calcular Stock Reservado (reservas en estado 'RESERVADO' para esos lotes)
-                filtros_reservas = {
-                    'lote_producto_id': ('in', lote_ids),
-                    'estado': 'RESERVADO'
-                }
-                reservas_result = self.reserva_model.find_all(filtros_reservas)
-
-                if not reservas_result.get('success'):
-                    return self.error_response(reservas_result.get('error'), 500)
-
-                stock_reservado = sum(reserva.get('cantidad_reservada', 0) for reserva in reservas_result.get('data', []))
-
-            # 4. Calcular Stock Real Disponible
-            stock_disponible_real = stock_fisico_total - stock_reservado
-
-            return self.success_response(data={'stock_disponible_real': stock_disponible_real, 'stock_fisico': stock_fisico_total, 'stock_reservado': stock_reservado})
+            return self.success_response(data={'stock_disponible_real': stock_disponible_real, 'stock_fisico': stock_disponible_real, 'stock_reservado': 0})
 
         except Exception as e:
             logger.error(f"Error calculando stock real para producto {producto_id}: {e}", exc_info=True)
