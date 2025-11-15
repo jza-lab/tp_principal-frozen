@@ -179,64 +179,63 @@ class OrdenProduccionController(BaseController):
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una o varias órdenes de producción.
+        Valida datos y crea una orden.
+        MODIFICADO: Espera 'fecha_meta' en lugar de 'fecha_planificada' desde el formulario.
         """
-        from app.models.receta import RecetaModel
+        from app.models.receta import RecetaModel # Mover importación local si es necesario
         receta_model = RecetaModel()
 
         try:
-            productos = form_data.get('productos')
-            if not productos:
-                return {'success': False, 'error': 'No se han seleccionado productos para crear las órdenes.'}
+            form_data = form_data.copy()
+            # ----------------------------------------------------
 
-            ordenes_creadas = []
-            errores = []
+            # Limpiar supervisor si viene vacío
+            if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
+                form_data.pop('supervisor_responsable_id')
 
-            for producto_data in productos:
-                producto_id = producto_data.get('id')
-                cantidad = producto_data.get('cantidad')
+            producto_id = form_data.get('producto_id')
+            if not producto_id:
+                return {'success': False, 'error': 'El campo producto_id es requerido.'}
 
-                if not producto_id or not cantidad:
-                    errores.append(f"Producto inválido o cantidad faltante: {producto_data}")
-                    continue
+            # Renombrar 'cantidad' a 'cantidad_planificada' para el schema/modelo
+            if 'cantidad' in form_data:
+                form_data['cantidad_planificada'] = form_data.pop('cantidad')
 
-                datos_op = {
-                    'producto_id': int(producto_id),
-                    'cantidad_planificada': float(cantidad),
-                    'fecha_meta': form_data.get('fecha_meta'),
-                    'observaciones': form_data.get('observaciones'),
-                    'estado': 'PENDIENTE'
-                }
+            if 'fecha_meta' not in form_data or not form_data.get('fecha_meta'):
+                 pass # Opcional: añadir lógica si la fecha meta es obligatoria
 
+            # Eliminar fecha_planificada si existe en los datos del form (no debería con el cambio HTML)
+            form_data.pop('fecha_planificada', None)
+
+            # Buscar receta si no se provee (sin cambios)
+            if not form_data.get('receta_id'):
                 receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
                 if not receta_result.get('success') or not receta_result.get('data'):
-                    errores.append(f'No se encontró una receta activa para el producto ID: {producto_id}.')
-                    continue
-                
-                datos_op['receta_id'] = receta_result['data'][0]['id']
+                    return {'success': False, 'error': f'No se encontró una receta activa para el producto ID: {producto_id}.'}
+                receta = receta_result['data'][0]
+                form_data['receta_id'] = receta['id']
 
-                try:
-                    validated_data = self.schema.load(datos_op)
-                    validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-                    validated_data['usuario_creador_id'] = usuario_id
+            # Estado por defecto PENDIENTE (sin cambios)
+            if 'estado' not in form_data or not form_data['estado']:
+                form_data['estado'] = 'PENDIENTE'
 
-                    result = self.model.create(validated_data)
-                    if result.get('success'):
-                        op = result.get('data')
-                        ordenes_creadas.append(op)
-                        detalle = f"Se creó la orden de producción {op.get('codigo')}."
-                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
-                    else:
-                        errores.append(f"Error al crear OP para producto {producto_id}: {result.get('error')}")
+            form_data.pop('csrf_token', None)
 
-                except ValidationError as e:
-                    errores.append(f"Datos inválidos para producto {producto_id}: {e.messages}")
+            validated_data = self.schema.load(form_data)
+            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            validated_data['usuario_creador_id'] = usuario_id
 
-            if errores:
-                return {'success': False, 'error': '; '.join(errores), 'data': {'creadas': ordenes_creadas}}
-            
-            return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
+            # Crear en la base de datos
+            result = self.model.create(validated_data)
+            if result.get('success'):
+                op = result.get('data')
+                detalle = f"Se creó la orden de producción {op.get('codigo')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
+            return result
 
+        except ValidationError as e:
+            logger.error(f"Error de validación al crear orden: {e.messages}")
+            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
@@ -295,22 +294,27 @@ class OrdenProduccionController(BaseController):
 
             # 3. Si no hay faltantes, proceder a reservar y cambiar estado
             if not insumos_faltantes:
-                logger.info(f"Stock completo encontrado para OP {orden_produccion_id}. Procediendo a reservar...")
+                logger.info(f"Stock completo encontrado para OP {orden_produccion_id}. Procediendo a reservar y actualizar estado.")
                 
+                # Se necesita el ID del usuario que originalmente creó la orden para asignarle la reserva.
                 usuario_creador_id = orden.get('usuario_creador_id')
                 if not usuario_creador_id:
-                    error_msg = f"La OP {orden_produccion_id} no tiene un usuario creador. No se puede reservar el stock."
+                    # Si no hay un creador, no podemos continuar.
+                    error_msg = f"La OP {orden_produccion_id} no tiene un usuario creador asociado. No se puede reservar el stock."
                     logger.error(error_msg)
                     return {'success': False, 'error': error_msg}
 
-                # Reservar el stock
+                # 1. Reservar el stock
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden, usuario_creador_id)
                 if not reserva_result.get('success'):
                     error_msg = f"Stock disponible para OP {orden_produccion_id}, pero la reserva falló: {reserva_result.get('error')}"
                     logger.error(error_msg)
+                    # No cambiamos el estado si la reserva falla.
                     return {'success': False, 'error': error_msg}
                 
-                # Cambiar el estado
+                logger.info(f"Stock para la OP {orden_produccion_id} reservado con éxito.")
+                
+                # 2. Cambiar el estado de la orden a 'LISTA PARA PRODUCIR'
                 nuevo_estado = 'LISTA PARA PRODUCIR'
                 cambio_estado_result = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
 
