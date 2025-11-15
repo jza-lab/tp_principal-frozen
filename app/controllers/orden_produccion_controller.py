@@ -180,21 +180,14 @@ class OrdenProduccionController(BaseController):
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
         Valida datos y crea una o varias órdenes de producción.
-        --- CORREGIDO ---
         Ahora maneja tanto una lista de 'productos' (desde el form)
         como una llamada directa con 'producto_id' (desde consolidación).
         """
-        from app.models.receta import RecetaModel # Mover importación local si es necesario
+        from app.models.receta import RecetaModel
         receta_model = RecetaModel()
-
         try:
             productos = form_data.get('productos')
-
-            # --- ¡INICIO DE LA CORRECCIÓN! ---
             if not productos:
-                # Si no se pasó una lista 'productos', asumimos que es una
-                # llamada interna (como la consolidación) que pasa los datos
-                # en el nivel superior de form_data.
                 if form_data.get('producto_id') and form_data.get('cantidad_planificada'):
                     # Construir la lista 'productos' manualmente
                     productos = [{
@@ -204,23 +197,22 @@ class OrdenProduccionController(BaseController):
                 else:
                     # Si no, ahora sí es un error.
                     return {'success': False, 'error': 'No se han seleccionado productos para crear las órdenes.'}
+            ordenes_creadas = []
+            errores = []
 
-            # Limpiar supervisor si viene vacío
-            if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
-                form_data.pop('supervisor_responsable_id')
-
-            producto_id = form_data.get('producto_id')
-            if not producto_id:
-                return {'success': False, 'error': 'El campo producto_id es requerido.'}
-
-            # Renombrar 'cantidad' a 'cantidad_planificada' para el schema/modelo
-            if 'cantidad' in form_data:
-                form_data['cantidad_planificada'] = form_data.pop('cantidad')
-
-            if 'fecha_meta' not in form_data or not form_data.get('fecha_meta'):
-                 pass # Opcional: añadir lógica si la fecha meta es obligatoria
-
-                # --- ¡CAMBIO! Añadir receta_id si ya viene (de consolidación) ---
+            for producto_data in productos:
+                producto_id = producto_data.get('id')
+                cantidad = producto_data.get('cantidad')
+                if not producto_id or not cantidad:
+                    errores.append(f"Producto inválido o cantidad faltante: {producto_data}")
+                    continue
+                datos_op = {
+                    'producto_id': int(producto_id),
+                    'cantidad_planificada': float(cantidad),
+                    'fecha_meta': form_data.get('fecha_meta'),
+                    'observaciones': form_data.get('observaciones'),
+                    'estado': 'PENDIENTE'
+                }
                 if form_data.get('receta_id'):
                     datos_op['receta_id'] = form_data.get('receta_id')
                 else:
@@ -230,11 +222,10 @@ class OrdenProduccionController(BaseController):
                         errores.append(f'No se encontró una receta activa para el producto ID: {producto_id}.')
                         continue
                     datos_op['receta_id'] = receta_result['data'][0]['id']
-
-            # Estado por defecto PENDIENTE (sin cambios)
-            if 'estado' not in form_data or not form_data['estado']:
-                form_data['estado'] = 'PENDIENTE'
-
+                try:
+                    validated_data = self.schema.load(datos_op)
+                    validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+                    validated_data['usuario_creador_id'] = usuario_id
                     result = self.model.create(validated_data)
                     if result.get('success'):
                         op = result.get('data')
@@ -248,24 +239,15 @@ class OrdenProduccionController(BaseController):
                             logger.warning(f"No se pudo registrar en log (sin contexto de usuario): {detalle}")
                     else:
                         errores.append(f"Error al crear OP para producto {producto_id}: {result.get('error')}")
-
-            validated_data = self.schema.load(form_data)
-            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-            validated_data['usuario_creador_id'] = usuario_id
-
+                except ValidationError as e:
+                    errores.append(f"Datos inválidos para producto {producto_id}: {e.messages}")
             if errores:
                 return {'success': False, 'error': '; '.join(errores), 'data': {'creadas': ordenes_creadas}}
-
-            # --- ¡CAMBIO! Devolver solo la OP (si es consolidación) o la lista ---
             if len(ordenes_creadas) == 1 and not form_data.get('productos'):
                 # Si era una llamada de consolidación, devolver solo el objeto OP
                 return {'success': True, 'data': ordenes_creadas[0], 'message': 'Orden de producción consolidada creada.'}
             else:
                 return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
-
-        except ValidationError as e:
-            logger.error(f"Error de validación al crear orden: {e.messages}")
-            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}
