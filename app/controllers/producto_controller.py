@@ -10,6 +10,7 @@ from app.models.receta import RecetaModel
 from app.schemas.producto_schema import ProductoSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
+from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class ProductoController(BaseController):
 
         # 2. Encontrar el último código con esa base para determinar el sufijo numérico
         last_producto_result = self.model.find_last_by_base_codigo(base_codigo)
-        
+
         nuevo_sufijo_num = 1
         if last_producto_result.get('success') and last_producto_result.get('data'):
             ultimo_codigo = last_producto_result['data']['codigo']
@@ -53,7 +54,7 @@ class ProductoController(BaseController):
             except (ValueError, IndexError):
                 # Si el formato no es el esperado, se inicia desde 1
                 pass
-        
+
         # 3. Formatear el nuevo código con ceros a la izquierda
         return f"{base_codigo}-{str(nuevo_sufijo_num).zfill(4)}"
 
@@ -100,7 +101,7 @@ class ProductoController(BaseController):
             if not result_receta.get('success'):
                 self.model.delete(producto_id, 'id') # Rollback manual
                 return self.error_response(result_receta.get('error', 'Error al crear la receta para el producto.'), 500)
-            
+
             receta_creada = result_receta['data']
             receta_id = receta_creada['id']
 
@@ -130,7 +131,7 @@ class ProductoController(BaseController):
 
             if 'codigo' in validated_data and validated_data['codigo'] != self.model.find_by_id(producto_id, 'id')['data']['codigo']:
                  return self.error_response('El código de un producto no se puede modificar.', 400)
-            
+
             validated_data['updated_at'] = datetime.now().isoformat()
             result_producto = self.model.update(producto_id, validated_data, 'id')
             if not result_producto.get('success'):
@@ -151,7 +152,7 @@ class ProductoController(BaseController):
                 if not result_receta.get('success'):
                     return self.error_response('Error al crear la receta para el producto actualizado.', 500)
                 receta_id = result_receta['data']['id']
-            
+
             if receta_items is not None:
                 gestion_result = self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
                 if not gestion_result.get('success'):
@@ -160,7 +161,7 @@ class ProductoController(BaseController):
             producto_actualizado = result_producto.get('data')
             detalle = f"Se actualizó el producto '{producto_actualizado['nombre']}' (ID: {producto_id})."
             self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Actualización', detalle)
-            
+
             return self.success_response(producto_actualizado, "Producto actualizado con éxito")
 
         except ValidationError as e:
@@ -174,16 +175,16 @@ class ProductoController(BaseController):
         try:
 
             productos_a_actualizar = set()
-            
+
             # 1. Recorrer los insumos actualizados y recopilar todos los productos afectados.
             for insumo in insumos_id:
                 insumo_id = insumo.get('id_insumo')
                 if not insumo_id:
                     continue
-                
+
                 # Buscar todas las recetas que usan este insumo
                 recetas_result = self.receta_model.find_all_recetas_by_insumo(insumo_id)
-                
+
 
                 if recetas_result.get('success') and recetas_result.get('data'):
                     recetas = recetas_result['data']
@@ -193,7 +194,7 @@ class ProductoController(BaseController):
                             productos_a_actualizar.add(receta['producto_id'])
 
             productos_actualizados = []
-            
+
             # 2. Iterar sobre el CONJUNTO único de productos afectados y actualizarlos solo una vez.
             for producto_id in productos_a_actualizar:
                 costo_update_result, status = self.actualizar_costo_producto(producto_id)
@@ -206,11 +207,11 @@ class ProductoController(BaseController):
                 {'productos_actualizados': productos_actualizados},
                 f"Costos actualizados para {len(productos_actualizados)} productos."
             )
-            
+
         except Exception as e:
             logger.error(f"Error en actualizar_costo_productos_insumo: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
-        
+
     def actualizar_costo_producto(self, producto_id: int) -> Dict:
         """Actualiza el costo del producto basado en su receta."""
         try:
@@ -218,34 +219,34 @@ class ProductoController(BaseController):
 
             if not (receta_existente.get('success') and receta_existente.get('data')):
                 return self.error_response('El producto no tiene una receta asociada.', 400)
-            
+
             receta_id = receta_existente['data'][0]['id']
 
             costo_result = self.receta_controller.calcular_costo_total_receta(receta_id)
 
             if not costo_result.get('success'):
                 return self.error_response(costo_result.get('error', 'Error al calcular el costo de la receta.'), 500)
-            
+
             producto = self.obtener_producto_por_id(producto_id)
             if not producto:
                 return self.error_response('Producto no encontrado.', 404)
-            
+
             nuevo_costo_base = costo_result['data']['costo_total']
-            
+
             porcentaje_margen = producto.get('porcentaje_extra', 0) / 100
             costo_con_margen = nuevo_costo_base * (1 + porcentaje_margen)
 
             factor_iva = 1.21 if producto.get('iva') else 1.0
-            
+
             nuevo_costo = round(costo_con_margen * factor_iva, 2)
-            
+
             update_result = self.model.update(producto_id, {'precio_unitario': nuevo_costo}, 'id')
 
             if not update_result.get('success'):
                 return self.error_response(update_result.get('error', 'Error al actualizar el costo del producto.'), 500)
-            
+
             return self.success_response(update_result.get('data'), "Costo del producto actualizado con éxito")
-        
+
         except Exception as e:
             logger.error(f"Error en actualizar_costo_producto: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
@@ -349,4 +350,28 @@ class ProductoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error en actualizar_cantidad_maxima_x_pedido: {str(e)}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)
+
+    def actualizar_cantidad_minima_produccion(self, producto_id: int, cantidad_minima: Decimal) -> tuple:
+        """
+        Actualiza la cantidad mínima de producción para un producto específico.
+        """
+        try:
+            if not isinstance(cantidad_minima, Decimal) or cantidad_minima < 0:
+                return self.error_response("La cantidad mínima debe ser un número no negativo.", 400)
+
+            update_data = {'cantidad_minima_produccion': cantidad_minima}
+
+            result = self.model.update(producto_id, update_data, 'id')
+
+            if result.get('success'):
+                producto_actualizado = result.get('data')
+                detalle = f"Se actualizó la cantidad mínima de producción para el producto '{producto_actualizado['nombre']}' a {cantidad_minima}."
+                self.registro_controller.crear_registro(get_current_user(), 'Alertas Productos', 'Configuración', detalle)
+                return self.success_response(result.get('data'), "Cantidad mínima de producción actualizada.", 200)
+            else:
+                return self.error_response(result.get('error', 'Error desconocido al actualizar.'), 500)
+
+        except Exception as e:
+            logger.error(f"Error en actualizar_cantidad_minima_produccion: {str(e)}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)

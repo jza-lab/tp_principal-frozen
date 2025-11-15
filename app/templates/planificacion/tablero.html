@@ -151,7 +151,7 @@
                                 <button class="btn btn-sm btn-outline-primary w-100 btn-open-replan-modal" data-op-id='{{ issue.orden_produccion_id }}'
                                     data-op-codigo='{{ issue.op_codigo }}' data-op-producto='{{ issue.op_producto_nombre | e }}'
                                     data-op-cantidad='{{ issue.op_cantidad }}'
-                                    data-op-linea='{{ issue.datos_snapshot.get("asignaciones_confirmar", {}).get("linea_asignada") | default(issue.op_linea_sugerida, true) }}'
+                                    data-op-linea='{{ issue.sugerencias_jit.sugerencia_linea | default("") }}'
                                     data-op-fecha-inicio='{{ issue.sugerencias_jit.sugerencia_fecha_inicio_jit | default(issue.datos_snapshot.get("fecha_nueva")) | default(issue.datos_snapshot.get("asignaciones_confirmar", {}).get("fecha_inicio")) }}'
                                     data-op-supervisor='' data-op-operario='' {# --- ¡VERIFICA ESTAS LÍNEAS! --- #}
                                     data-sug-t-prod-dias='{{ issue.sugerencias_jit.sugerencia_t_prod_dias | default(0) }}'

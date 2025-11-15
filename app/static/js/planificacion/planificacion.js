@@ -757,7 +757,7 @@ document.addEventListener('click', async function(e) {
                 // Caso 1: Sobrecarga. El servidor rechaza.
                 showFeedbackModal(result.title || 'Sobrecarga Detectada', result.message, 'warning');
             
-            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM')) {
+            } else if (response.status === 200 && (result.success || result.error === 'MULTI_DIA_CONFIRM' || result.error === 'LATE_CONFIRM' || result.error === 'MIN_QUANTITY_CONFIRM')) {
                 // Caso 2: Simulación OK (Simple, Multi-día, o Tarde).
                 // El servidor aprueba la simulación, ahora debemos ejecutar la confirmación.
 

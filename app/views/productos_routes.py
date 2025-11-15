@@ -19,6 +19,7 @@ from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
 import logging
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 

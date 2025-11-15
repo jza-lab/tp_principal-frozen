@@ -732,7 +732,7 @@ class PlanificacionController(BaseController):
             logger.error(f"Error en _ejecutar_replanificacion_simple para OP {op_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    # --- MÉTODO PRINCIPAL MODIFICADO ---
+   # --- MÉTODO PRINCIPAL MODIFICADO ---
     def consolidar_y_aprobar_lote(self, op_ids: List[int], asignaciones: dict, usuario_id: int) -> tuple:
         """
         Orquesta: SIMULA la consolidación, VERIFICA CAPACIDAD MULTI-DÍA,
@@ -740,137 +740,196 @@ class PlanificacionController(BaseController):
         DEVUELVE TUPLA (dict, status_code)
         """
         try:
+            # 1. Obtener los datos de la OP (ya sea una existente o una consolidada nueva)
+            # op_a_planificar_id será el ID de la OP a procesar, o un string de error si falla.
             op_a_planificar_id, op_data = self._obtener_datos_op_a_planificar(op_ids, usuario_id)
 
+            # Si _obtener_datos_op_a_planificar falló, op_a_planificar_id contiene el mensaje de error.
             if not op_data:
-                return self.error_response(op_a_planificar_id, 500) # op_a_planificar_id tiene el msg de error
+                return self.error_response(op_a_planificar_id, 500)
 
             op_estado_actual = op_data.get('estado')
-            estados_permitidos = ['PENDIENTE', 'EN ESPERA', 'LISTA PARA PRODUCIR']
 
-            if op_estado_actual not in estados_permitidos:
-                msg = f"La OP {op_a_planificar_id} en estado '{op_estado_actual}' no puede ser (re)planificada."
-                logger.warning(msg)
-                return self.error_response(msg, 400)
+            # --- INICIO DE LA NUEVA VALIDACIÓN (Manual) ---
+            # (Se coloca DESPUÉS de _obtener_datos_op_a_planificar)
 
-            if isinstance(op_a_planificar_id, list) and len(op_a_planificar_id) > 1 and op_estado_actual != 'PENDIENTE':
-                 msg = "La consolidación solo es posible para OPs en estado PENDIENTE."
-                 logger.warning(msg)
-                 return self.error_response(msg, 400)
+            # Variable para forzar advertencia
+            adv_cantidad_minima = False
+            msg_cantidad_minima = ""
 
-            linea_propuesta = asignaciones.get('linea_asignada')
-            fecha_inicio_propuesta_str = asignaciones.get('fecha_inicio')
-            if not linea_propuesta or not fecha_inicio_propuesta_str:
-                 return self.error_response("Faltan línea o fecha.", 400)
-            try: fecha_inicio_propuesta = date.fromisoformat(fecha_inicio_propuesta_str)
-            except ValueError:
-                 return self.error_response("Formato fecha inválido.", 400)
+            producto_id = op_data.get('producto_id')
+            if producto_id:
+                logger.warning(f"--- [Simulación CHECK 2] Verificando Producto ID: {producto_id} (para OP/Grupo: {op_a_planificar_id}) ---")
 
-            id_a_excluir_en_sim = op_a_planificar_id if isinstance(op_a_planificar_id, int) else None
+                # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
+                # producto_resp.get('success') es incorrecto.
+                # El método devuelve el DATO o None.
+                producto_data = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
 
-            logger.info(f"Verificando capacidad multi-día para OP(s) {op_a_planificar_id} en Línea {linea_propuesta} desde {fecha_inicio_propuesta_str}...")
+                if producto_data: # <-- La comprobación correcta es si producto_data existe
+                # --- ¡¡FIN DE LA CORRECCIÓN!! ---
 
-            carga_adicional_total = float(self._calcular_carga_op(op_data))
+                    # producto_data = producto_resp.get('data', {}) # <-- Ya no es necesario
+                    cantidad_minima = Decimal(producto_data.get('cantidad_minima_produccion', 0))
+                    cantidad_a_planificar = Decimal(op_data.get('cantidad_planificada', 0))
 
-            if carga_adicional_total <= 0:
-                 logger.warning(f"OP(s) {op_a_planificar_id} con carga 0. Saltando verificación CRP.")
-                 dias_necesarios = 1
-                 fecha_fin_estimada = fecha_inicio_propuesta
-                 primer_dia_asignado = fecha_inicio_propuesta
+                    logger.warning(f"[Simulación CHECK 2] Producto: {producto_data.get('nombre', 'N/A')}")
+                    logger.warning(f"[Simulación CHECK 2] Cant. Mínima (DB): {cantidad_minima}")
+                    logger.warning(f"[Simulación CHECK 2] Cant. a Planificar (OP/Grupo): {cantidad_a_planificar}")
+
+                    if cantidad_minima > 0 and cantidad_a_planificar < cantidad_minima:
+                        logger.error(f"[Simulación CHECK 2] ¡VIOLACIÓN DETECTADA! {cantidad_a_planificar} < {cantidad_minima}. Seteando flag adv_cantidad_minima=True.")
+                        adv_cantidad_minima = True
+                        msg_cantidad_minima = (f"<b>Atención: Cantidad Mínima no Cumplida.</b>\n"
+                                             f"La cantidad a planificar ({cantidad_a_planificar} un.) es menor que el mínimo "
+                                             f"rentable de {cantidad_minima} un.\n\n")
+                        logger.warning(f"[Planificación Manual] ADVERTENCIA por cantidad mínima para OP(s) {op_a_planificar_id}.")
+                    else:
+                         logger.warning(f"[Simulación CHECK 2] Chequeo OK. (Mínima: {cantidad_minima}, Planificada: {cantidad_a_planificar})")
+
+                # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
+                else:
+                    logger.error(f"[Simulación CHECK 2] FALLO. No se pudo obtener producto_data para ID: {producto_id}")
+                    # ¡FALLO CRÍTICO! No se pudo cargar el producto. DETENER SIMULACIÓN.
+                    return self.error_response(f"Fallo al verificar cantidad mínima: No se pudo cargar Producto ID {producto_id}", 500)
+                # --- ¡¡FIN DE LA CORRECCIÓN!! ---
+
             else:
-                filtros_ops = {
-                    'estado': ('in', [
-                        'EN ESPERA', 'LISTA PARA PRODUCIR', 'EN_LINEA_1',
-                        'EN_LINEA_2', 'EN_EMPAQUETADO', 'CONTROL_DE_CALIDAD'
-                    ]),
-                }
-                if id_a_excluir_en_sim:
-                    filtros_ops['id'] = ('not.in', [id_a_excluir_en_sim])
+                logger.error(f"[Simulación CHECK 2] FALLO. La OP/Grupo simulado no tiene 'producto_id'.")
+                # ¡FALLO CRÍTICO! No hay producto_id. DETENER SIMULACIÓN.
+                return self.error_response("Fallo al verificar cantidad mínima: La OP/Grupo no tiene producto_id.", 500)
 
-                ops_resp, _ = self.orden_produccion_controller.obtener_ordenes(filtros_ops)
-                ops_actuales = ops_resp.get('data', []) if ops_resp.get('success') else []
-                logger.info(f"[consolidar_lote] Calculando carga actual basada en {len(ops_actuales)} OPs (excluyendo {id_a_excluir_en_sim})...")
-                carga_actual_map = self.calcular_carga_capacidad(ops_actuales)
+            # --- FIN DE LA NUEVA VALIDACIÓN ---
 
-                simulacion_result = self._simular_asignacion_carga(
-                    carga_total_op=carga_adicional_total,
-                    linea_propuesta=linea_propuesta,
-                    fecha_inicio_busqueda=fecha_inicio_propuesta,
-                    op_id_a_excluir=id_a_excluir_en_sim,
-                    carga_actual_map=carga_actual_map
-                )
 
-                if not simulacion_result['success']:
-                    logger.warning(f"SOBRECARGA para OP(s) {op_a_planificar_id}: {simulacion_result['error_data'].get('message')}")
-                    # Devolvemos el diccionario de error y el status 409
-                    return simulacion_result['error_data'], 409
+            # 2. Cargar datos de la asignación
 
-                primer_dia_asignado = simulacion_result['fecha_inicio_real']
-                fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
-                dias_necesarios = simulacion_result['dias_necesarios']
+            # --- ¡¡NUEVO LOG DE PRUEBA!! ---
+            logger.warning(f"[Simulación] Verificando 'asignaciones' recibidas: {asignaciones}")
+            # --- ¡¡FIN NUEVO LOG!! ---
 
-                fecha_meta_str = op_data.get('fecha_meta')
-                va_a_terminar_tarde = False
-                fecha_meta = None
-                if fecha_meta_str:
-                    try:
-                        fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
-                        fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-                        if fecha_fin_estimada > fecha_meta:
-                            va_a_terminar_tarde = True
-                            logger.warning(f"Validación OP {op_a_planificar_id}: Terminará tarde (Fin: {fecha_fin_estimada}, Meta: {fecha_meta})")
-                    except ValueError:
-                         logger.warning(f"OP {op_a_planificar_id} tiene fecha meta inválida: {fecha_meta_str}")
+            fecha_inicio_iso = asignaciones.get('fecha_inicio')
+            linea_asignada = asignaciones.get('linea_asignada')
 
-            asignaciones['fecha_inicio'] = primer_dia_asignado.isoformat()
+            if not fecha_inicio_iso or not linea_asignada:
+                logger.error(f"[Simulación] ¡FALLO 400! 'fecha_inicio' o 'linea_asignada' están faltando en 'asignaciones'.")
+                return self.error_response("Datos de asignación (fecha_inicio, linea_asignada) incompletos.", 400)
 
-            id_para_confirmar = op_a_planificar_id
+            fecha_inicio = date.fromisoformat(fecha_inicio_iso)
 
-            logger.info(f"Verificación CRP OK. OP(s) {op_a_planificar_id} requiere ~{dias_necesarios} día(s).")
-            logger.info(f"Inicio real: {primer_dia_asignado.isoformat()}, Fin aprox: {fecha_fin_estimada.isoformat()}.")
+            # Actualizar los datos de la OP con las asignaciones (sin guardar, solo para simulación)
+            op_data.update(asignaciones)
 
-            if va_a_terminar_tarde:
-                # 1. Si va a terminar tarde
-                # (Devolver 200 OK para que el frontend/auto-planner lo maneje)
+            # 3. Calcular la carga de la OP
+            carga_total_op = self._calcular_carga_op(op_data)
+            if carga_total_op <= 0:
+                return self.error_response(f"La OP {op_a_planificar_id} tiene una carga de 0 minutos. Verifique la receta.", 400)
+
+            # 4. SIMULAR ASIGNACIÓN
+            simulacion_result = self._simular_asignacion_carga(
+                carga_total_op=float(carga_total_op),
+                linea_propuesta=linea_asignada,
+                fecha_inicio_busqueda=fecha_inicio,
+                op_id_a_excluir=op_a_planificar_id,
+                carga_actual_map=None # Forzar a que recalcule el mapa de carga
+            )
+
+            # 5. Analizar el resultado de la simulación
+            if not simulacion_result.get('success'):
+                # Caso 1: SOBRECARGA (No se pudo planificar)
+                # El simulador devuelve el error (SOBRECARGA_CAPACIDAD)
+                logger.warning(f"[Simulación] FALLO para OP {op_a_planificar_id}: {simulacion_result.get('error')}")
+
+                if simulacion_result.get('error_type') == 'SOBRECARGA_CAPACIDAD':
+                    # Devolvemos el mensaje del simulador al frontend
+                    return {
+                        'success': False,
+                        'error': 'SOBRECARGA_CAPACIDAD',
+                        'title': 'Conflicto de Capacidad',
+                        'message': simulacion_result.get('error')
+                    }, 409 # 409 Conflict
+                else:
+                    # Otro error de simulación
+                    return self.error_response(simulacion_result.get('error', 'Error desconocido en la simulación.'), 500)
+
+            # Caso 2: ÉXITO (Se encontró lugar)
+            logger.info(f"[Simulación] ÉXITO para OP {op_a_planificar_id}. Días requeridos: {simulacion_result.get('dias_requeridos', 0)}")
+
+            fecha_fin_estimada = simulacion_result['fecha_fin_estimada']
+            dias_requeridos = simulacion_result.get('dias_requeridos', 1)
+            es_multi_dia = dias_requeridos > 1
+
+            # 6. Verificar si la planificación resulta en un RETRASO (LATE)
+            es_retraso = False
+            fecha_meta_str = op_data.get('fecha_meta')
+            fecha_meta = None
+            if fecha_meta_str:
+                try:
+                    fecha_meta = date.fromisoformat(fecha_meta_str.split('T')[0].split(' ')[0])
+                    if fecha_fin_estimada > fecha_meta:
+                        es_retraso = True
+                except (ValueError, TypeError):
+                    logger.warning(f"Fecha meta inválida '{fecha_meta_str}' para OP {op_a_planificar_id}.")
+                    pass # Si la fecha meta es inválida, no podemos compararla.
+
+            # 7. Construir la respuesta final (JSON) para el modal
+
+            # Preparar los datos que se guardarán si el usuario confirma
+            datos_para_confirmar = {
+                'op_id_confirmar': op_a_planificar_id,
+                'asignaciones_confirmar': asignaciones,
+                'estado_actual': op_estado_actual
+            }
+
+            # --- Añadir nuestra nueva advertencia a los mensajes ---
+            msg_final = f"La OP se planificará desde <b>{fecha_inicio_iso}</b> hasta <b>{fecha_fin_estimada.isoformat()}</b>."
+            if msg_cantidad_minima:
+                msg_final = msg_cantidad_minima + msg_final # Añadir advertencia al inicio
+
+            if es_retraso:
+                msg_final += f"\n\n<b>¡Atención!</b> La fecha de finalización ({fecha_fin_estimada.isoformat()}) es posterior a la Fecha Meta ({fecha_meta.isoformat()})."
+
+            if es_multi_dia and not es_retraso:
+                 msg_final += "\n\nEsta OP requiere múltiples días. ¿Confirma la planificación?"
+
+            # Decidir el tipo de respuesta
+
+            logger.warning(f"[Simulación CHECK 2] Evaluando flags. adv_cantidad_minima={adv_cantidad_minima}, es_retraso={es_retraso}, es_multi_dia={es_multi_dia}")
+
+            if adv_cantidad_minima:
+                # ¡LA VIOLACIÓN DE CANTIDAD MÍNIMA ES LA MÁXIMA PRIORIDAD!
+                tipo_confirmacion = 'MIN_QUANTITY_CONFIRM' # Nuevo tipo de confirmación
+                titulo_confirmacion = '⚠️ Confirmar Cantidad Mínima'
+                logger.error(f"[Simulación CHECK 2] Decisión: MIN_QUANTITY_CONFIRM")
+            elif es_retraso:
+                tipo_confirmacion = 'LATE_CONFIRM'
+                titulo_confirmacion = '⚠️ Confirmar Retraso'
+                logger.warning(f"[Simulación CHECK 2] Decisión: LATE_CONFIRM") # Log de fallback
+            elif es_multi_dia:
+                tipo_confirmacion = 'MULTI_DIA_CONFIRM'
+                titulo_confirmacion = 'Confirmación Multi-Día'
+                logger.warning(f"[Simulación CHECK 2] Decisión: MULTI_DIA_CONFIRM") # Log de fallback
+            else:
+                tipo_confirmacion = None # Es un éxito simple
+                logger.warning(f"[Simulación CHECK 2] Decisión: OK (None)") # Log de fallback
+
+            if tipo_confirmacion:
+                # Devolver un "error" 200 que requiere confirmación
+                logger.info(f"[Simulación] Requiere confirmación '{tipo_confirmacion}' para OP {op_a_planificar_id}.")
                 return {
-                    'success': False,
-                    'error': 'LATE_CONFIRM',
-                    'title': '⚠️ CONFIRMAR RETRASO:', # <-- TÍTULO AÑADIDO
-                    'message': (f"⚠️ ¡Atención! La OP terminará el <b>{fecha_fin_estimada.isoformat()}</b>, "
-                                f"que es <b>después</b> de su Fecha Meta (<b>{fecha_meta_str}</b>).\n\n"
-                                f"¿Desea confirmar esta planificación de todos modos?"),
-                    'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
-                    'fecha_meta': fecha_meta_str,
-                    'op_id_confirmar': id_para_confirmar,
-                    'asignaciones_confirmar': asignaciones,
-                    'estado_actual': op_estado_actual
-                }, 200
-
-            elif dias_necesarios > 1:
-                # 2. Si es multi-día PERO está a tiempo
-                return {
-                    'success': False,
-                    'error': 'MULTI_DIA_CONFIRM',
-                    'title': 'CONFIRMAR LOTE MULTI-DÍA:',
-                    'message': (f"Esta OP requiere aproximadamente {dias_necesarios} días para completarse "
-                                f"(hasta {fecha_fin_estimada.isoformat()}). "
-                                f"¿Desea confirmar la planificación?"),
-                    'dias_necesarios': dias_necesarios,
-                    'fecha_fin_estimada': fecha_fin_estimada.isoformat(),
-                    'op_id_confirmar': id_para_confirmar,
-                    'asignaciones_confirmar': asignaciones,
-                    'estado_actual': op_estado_actual
+                    'success': False, # Éxito de simulación, pero no de guardado
+                    'error': tipo_confirmacion,
+                    'title': titulo_confirmacion,
+                    'message': msg_final,
+                    **datos_para_confirmar
                 }, 200
             else:
-                # 3. Cabe en un día y está a tiempo
-                logger.info(f"OP(s) {op_a_planificar_id} cabe en un día y está a tiempo. Simulación OK.")
+                # Éxito simple, no se requiere confirmación (ej. OP de 1 día, a tiempo, cantidad ok)
+                logger.info(f"[Simulación] Éxito simple (sin confirmación) para OP {op_a_planificar_id}.")
                 return {
-                   'success': True,
-                   'error': None,
-                   'message': "Simulación OK. Lista para aprobación final.",
-                   'op_id_confirmar': id_para_confirmar,
-                   'asignaciones_confirmar': asignaciones,
-                   'estado_actual': op_estado_actual
+                    'success': True,
+                    'message': msg_final,
+                    **datos_para_confirmar
                 }, 200
 
         except Exception as e:
@@ -1712,8 +1771,63 @@ class PlanificacionController(BaseController):
             op_ids = [op['id'] for op in grupo['ordenes']]
             op_codigos = [op['codigo'] for op in grupo['ordenes']]
             producto_nombre = grupo.get('producto_nombre', 'N/A')
-
+            producto_id = grupo.get('producto_id') # <-- Necesitamos el ID
             try:
+
+                # --- INICIO DE LA NUEVA VALIDACIÓN (Auto-Plan) ---
+                if producto_id:
+                    # 1. Obtener datos del producto
+                    logger.info(f"--- [AutoPlan CHECK 1] Verificando Producto ID: {producto_id} ---")
+
+                    # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
+                    # producto_resp.get('success') es incorrecto.
+                    # El método devuelve el DATO o None.
+                    producto_data = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
+
+                    if producto_data: # <-- La comprobación correcta es si producto_data existe
+                    # --- ¡¡FIN DE LA CORRECCIÓN!! ---
+
+                        # producto_data = producto_resp.get('data', {}) # <-- Ya no es necesario
+                        cantidad_minima = Decimal(producto_data.get('cantidad_minima_produccion', 0))
+                        cantidad_total_grupo = Decimal(grupo.get('cantidad_total', 0))
+
+                        logger.info(f"[AutoPlan CHECK 1] Producto: {producto_data.get('nombre', 'N/A')}")
+                        logger.info(f"[AutoPlan CHECK 1] Cant. Mínima (DB): {cantidad_minima}")
+                        logger.info(f"[AutoPlan CHECK 1] Cant. a Planificar (Grupo): {cantidad_total_grupo}")
+
+                        # 2. Comparar
+                        if cantidad_minima > 0 and cantidad_total_grupo < cantidad_minima:
+                            logger.error(f"[AutoPlan CHECK 1] ¡VIOLACIÓN DETECTADA! {cantidad_total_grupo} < {cantidad_minima}. Creando Issue.")
+                            msg = (f"Grupo {producto_nombre} (OPs: {op_codigos}) omitido: "
+                                   f"La cantidad total ({cantidad_total_grupo}) no cumple el mínimo de {cantidad_minima}.")
+
+                            logger.warning(f"[AutoPlan] {msg}")
+                            errores_encontrados.append(msg)
+
+                            # 3. Crear el Issue (la "Alerta")
+                            for op_id_individual in op_ids:
+                                self._crear_o_actualizar_issue(
+                                    op_id_individual,
+                                    'CANTIDAD_MINIMA', # <-- Nuevo tipo de error
+                                    f"La OP no cumple la cantidad mínima de producción ({cantidad_minima}). Consolide manually.",
+                                    {'cantidad_op': float(cantidad_total_grupo), 'cantidad_minima': float(cantidad_minima)}
+                                )
+
+                            continue # <-- 4. Omitir este grupo
+                        else:
+                            logger.info(f"[AutoPlan CHECK 1] Chequeo de cantidad mínima OK para {producto_nombre}.")
+
+                    # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
+                    else:
+                        # ¡FALLO CRÍTICO! No se pudo cargar el producto
+                        logger.error(f"[AutoPlan CHECK 1] ¡FALLO CRÍTICO! No se pudo cargar el Producto ID {producto_id} ({producto_nombre}).")
+                        logger.error(f"[AutoPlan CHECK 1] Omitiendo grupo {op_codigos} por seguridad.")
+                        errores_encontrados.append(f"Grupo {op_codigos} omitido: No se pudo verificar la cantidad mínima (Error al cargar producto {producto_id}).")
+                        continue # <-- ¡MUY IMPORTANTE! NO CONTINUAR SI FALLA LA CARGA
+                    # --- ¡¡FIN DE LA CORRECCIÓN!! ---
+
+                # --- FIN DE LA NUEVA VALIDACIÓN ---
+
                 # ... (Lógica de asignaciones_auto_grupo, sin cambios) ...
                 linea_sugerida_grupo = grupo.get('sugerencia_linea')
                 if not linea_sugerida_grupo:
@@ -1777,12 +1891,14 @@ class PlanificacionController(BaseController):
                     except Exception as e_aprob:
                          errores_encontrados.append(f"Excepción al auto-aprobar GRUPO {op_codigos}: {str(e_aprob)}")
 
-                elif res_planif_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
+                elif res_planif_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD', 'MIN_QUANTITY_CONFIRM']:
                     error_tipo_grupo = res_planif_dict.get('error')
                     # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
                     if error_tipo_grupo == 'LATE_CONFIRM':
                         error_msg_grupo_es = f"el grupo consolidado terminaría TARDE (después de su Fecha Meta)."
-                    else:
+                    elif error_tipo_grupo == 'MIN_QUANTITY_CONFIRM':
+                        error_msg_grupo_es = f"el grupo consolidado NO CUMPLE LA CANTIDAD MÍNIMA de producción."
+                    else: # SOBRECARGA_CAPACIDAD
                         error_msg_grupo_es = f"el grupo consolidado genera SOBRECARGA de capacidad."
                     # --- FIN DE LA CORRECCIÓN DE MENSAJE ---
 
@@ -1872,12 +1988,14 @@ class PlanificacionController(BaseController):
                                     except Exception as e_aprob_ind:
                                         errores_encontrados.append(f"Excepción al auto-aprobar OP {op_codigo_individual} (fallback): {str(e_aprob_ind)}")
 
-                                elif res_ind_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD']:
+                                elif res_ind_dict.get('error') in ['LATE_CONFIRM', 'SOBRECARGA_CAPACIDAD', 'MIN_QUANTITY_CONFIRM']:
                                     # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
                                     error_tipo_ind = res_ind_dict.get('error')
                                     if error_tipo_ind == 'LATE_CONFIRM':
                                         error_msg_ind_es = "terminaría TARDE"
-                                    else:
+                                    elif error_tipo_ind == 'MIN_QUANTITY_CONFIRM':
+                                        error_msg_ind_es = "NO CUMPLE LA CANTIDAD MÍNIMA"
+                                    else: # SOBRECARGA
                                         error_msg_ind_es = "genera SOBRECARGA"
 
                                     msg = f"OP {op_codigo_individual} NO SE PLANIFICÓ (falla individual): {error_msg_ind_es}. Requiere revisión manual."
@@ -1903,7 +2021,9 @@ class PlanificacionController(BaseController):
                         # --- INICIO DE LA CORRECCIÓN DE MENSAJE ---
                         if error_tipo_grupo == 'LATE_CONFIRM':
                             error_msg_es = "terminaría TARDE"
-                        else:
+                        elif error_tipo_grupo == 'MIN_QUANTITY_CONFIRM':
+                            error_msg_es = "NO CUMPLE LA CANTIDAD MÍNIMA"
+                        else: # SOBRECARGA
                             error_msg_es = "genera SOBRECARGA"
                         msg = f"Grupo {producto_nombre} (OP: {op_codigos[0]}) NO SE PLANIFICÓ: {error_msg_es}. Requiere revisión manual."
                         # --- FIN DE LA CORRECCIÓN DE MENSAJE ---
