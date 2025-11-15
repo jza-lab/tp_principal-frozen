@@ -197,8 +197,8 @@
                     </div>
                     <div class="col-md-4 text-center">
                         {% if evento.foto_url %}
-                        <a href="{{ evento.foto_url }}" target="_blank">
-                            <img src="{{ evento.foto_url }}" alt="Foto de control de calidad" class="img-fluid rounded" style="max-height: 150px;">
+                        <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" data-img-url="{{ evento.foto_url }}">
+                            <img src="{{ evento.foto_url }}" alt="Foto de control de calidad" class="img-fluid rounded" style="max-height: 150px; cursor: pointer;">
                         </a>
                         <small class="text-muted d-block mt-1">Clic para ampliar</small>
                         {% else %}
@@ -365,8 +365,8 @@
                             </div>
                             <div class="col-md-4 text-center">
                                 {% if registro.foto_url %}
-                                    <a href="{{ registro.foto_url }}" target="_blank">
-                                        <img src="{{ registro.foto_url }}" alt="Foto de desperdicio" class="img-fluid rounded" style="max-height: 150px;">
+                                    <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" data-img-url="{{ registro.foto_url }}">
+                                        <img src="{{ registro.foto_url }}" alt="Foto de desperdicio" class="img-fluid rounded" style="max-height: 150px; cursor: pointer;">
                                     </a>
                                     <small class="text-muted d-block mt-1">Clic para ampliar</small>
                                 {% else %}
@@ -381,6 +381,21 @@
             </div>
         </div>
     </div>
+</div>
+
+<!-- Modal para mostrar imagen -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="imageModalLabel">Vista Previa de Imagen</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img src="" id="modalImage" class="img-fluid" alt="Imagen">
+      </div>
+    </div>
+  </div>
 </div>
 {% include "admin_riesgos/_modal_crear_alerta.html" %}
 
@@ -442,4 +457,16 @@
 <script src="{{ url_for('static', filename='js/trazabilidadProducto.js') }}?v=1.0"></script>
 
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var imageModal = document.getElementById('imageModal');
+    imageModal.addEventListener('show.bs.modal', function (event) {
+        var triggerElement = event.relatedTarget;
+        var imageUrl = triggerElement.getAttribute('data-img-url');
+        var modalImage = imageModal.querySelector('#modalImage');
+        modalImage.src = imageUrl;
+    });
+});
+</script>
 {% endblock %}
