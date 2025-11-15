@@ -207,7 +207,7 @@
                     <span id="porcentaje-progreso">0%</span>
                 </div>
                 <div class="progress-bar-custom">
-                    <div class="progress-fill-custom" id="progress-bar" style="width: {{ (orden.cantidad_producida or 0) / orden.cantidad_planificada * 100 }}%;">
+                    <div class="progress-fill-custom" id="progress-bar" style="width: {% if orden.cantidad_planificada > 0 %}{{ ((orden.cantidad_producida or 0) / orden.cantidad_planificada) * 100 }}{% else %}0{% endif %}%;">
                         <div class="progress-shine"></div>
                     </div>
                 </div>
