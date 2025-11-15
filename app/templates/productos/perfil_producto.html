@@ -64,12 +64,23 @@
                         </div>
                     </div>
 
-                    <div class="col-md-4">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-percent fs-4 text-muted me-2"></i>
-                            <div>
-                                <label class="form-label-sm fw-bold">Mano de Obra / Ganancia</label>
-                                <p class="form-control-plaintext mb-0">{{ producto.porcentaje_extra or '0' }}%</p>
+                    <div class="row g-4 mt-0">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-person-workspace fs-4 text-muted me-2"></i>
+                                <div>
+                                    <label class="form-label-sm fw-bold">Porcentaje Mano de Obra</label>
+                                    <p class="form-control-plaintext mb-0">{{ producto.porcentaje_mano_obra or '0' }}%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-graph-up-arrow fs-4 text-muted me-2"></i>
+                                <div>
+                                    <label class="form-label-sm fw-bold">Porcentaje Ganancia</label>
+                                    <p class="form-control-plaintext mb-0">{{ producto.porcentaje_ganancia or '0' }}%</p>
+                                </div>
                             </div>
                         </div>
                     </div>

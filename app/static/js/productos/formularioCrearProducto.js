@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const subtotalInput = document.getElementById('subtotal');
     const ivaCheckbox = document.getElementById('iva');
     const totalInput = document.getElementById('total');
-    const porcentajeExtraInput = document.getElementById('porcentaje_extra');
+    const porcentajeManoObraInput = document.getElementById('porcentaje_mano_obra');
+    const porcentajeGananciaInput = document.getElementById('porcentaje_ganancia');
     const formulario = document.getElementById('formulario-producto');
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
 
@@ -138,17 +139,20 @@ document.addEventListener('DOMContentLoaded', function () {
             subtotalTotal += subtotal;
         });
 
-        // Aplicar formato a Subtotal General y Total
+        // Aplicar formato a Subtotal General
         subtotalInput.value = formatearADinero(subtotalTotal);
 
-        const porcentaje = parseFloat(porcentajeExtraInput.value) || 0;
-        let total = subtotalTotal * (1 + ( porcentaje / 100));
+        const porcentajeManoObra = parseFloat(porcentajeManoObraInput.value) || 0;
+        const costoProduccion = subtotalTotal * (1 + (porcentajeManoObra / 100));
+
+        const porcentajeGanancia = parseFloat(porcentajeGananciaInput.value) || 0;
+        let precioSinIva = costoProduccion * (1 + (porcentajeGanancia / 100));
 
         if (ivaCheckbox.checked) {
-            total *= 1.21;
+            precioSinIva *= 1.21;
         }
         
-        totalInput.value = formatearADinero(total);
+        totalInput.value = formatearADinero(precioSinIva);
     }
 
     function updateAvailableInsumos() {
@@ -210,7 +214,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    porcentajeExtraInput.addEventListener('input', calcularTotales);
+    porcentajeManoObraInput.addEventListener('input', calcularTotales);
+    porcentajeGananciaInput.addEventListener('input', calcularTotales);
     ivaCheckbox.addEventListener('change', calcularTotales);
 
     // [FUNCIÓN CLAVE: AÑADIR ITEM SIN TEMPLATE]
@@ -288,7 +293,8 @@ document.addEventListener('DOMContentLoaded', function () {
             // Usamos la unidad_medida con el sufijo (x...) para que el backend sepa si es por unidad o peso.
             unidad_medida: unidadMedidaFinal, 
             descripcion: formData.get('descripcion'),
-            porcentaje_extra: formData.get('porcentaje_extra'),
+            porcentaje_mano_obra: formData.get('porcentaje_mano_obra'),
+            porcentaje_ganancia: formData.get('porcentaje_ganancia'),
             iva: formData.get('iva') === '1',
             precio_unitario: limpiarFormatoDinero(document.getElementById('total').value) || 0,
             unidades_por_paquete: unidadesPorPaquete,

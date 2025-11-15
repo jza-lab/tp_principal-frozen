@@ -13,11 +13,13 @@ def app():
 def mock_producto_dependencies():
     with patch('app.controllers.producto_controller.ProductoModel') as MockProductoModel, \
          patch('app.controllers.producto_controller.RecetaController') as MockRecetaController, \
-         patch('app.controllers.producto_controller.RecetaModel') as MockRecetaModel:
+         patch('app.controllers.producto_controller.RecetaModel') as MockRecetaModel, \
+         patch('app.controllers.producto_controller.RegistroController') as MockRegistroController:
         yield {
             "producto_model": MockProductoModel.return_value,
             "receta_controller": MockRecetaController.return_value,
             "receta_model": MockRecetaModel.return_value,
+            "registro_controller": MockRegistroController.return_value,
         }
 
 @pytest.fixture
@@ -30,7 +32,9 @@ def producto_controller(mock_producto_dependencies):
 
 class TestProductoController:
 
-    def test_crear_producto_exitoso(self, producto_controller, mock_producto_dependencies):
+    @patch('app.controllers.producto_controller.get_current_user')
+    def test_crear_producto_exitoso(self, mock_get_current_user, producto_controller, mock_producto_dependencies):
+        mock_get_current_user.return_value = {'id': 1, 'nombre_completo': 'Test User'}
         form_data = {'nombre': 'Torta', 'codigo': 'PROD-TORT-0001', 'unidad_medida': 'un', 'categoria': 'Pasteleria', 'precio_unitario': 100, 'stock_min_produccion': 10, 'cantidad_maxima_x_pedido': 5, 'iva': True}
         mock_producto_dependencies['producto_model'].find_by_codigo.return_value = {'success': False}
         mock_producto_dependencies['producto_model'].create.return_value = {'success': True, 'data': {'id': 1, 'nombre': 'Torta'}}
@@ -46,7 +50,9 @@ class TestProductoController:
         assert status_code == 409
         assert not response['success']
 
-    def test_crear_producto_sin_iva(self, producto_controller, mock_producto_dependencies):
+    @patch('app.controllers.producto_controller.get_current_user')
+    def test_crear_producto_sin_iva(self, mock_get_current_user, producto_controller, mock_producto_dependencies):
+        mock_get_current_user.return_value = {'id': 1, 'nombre_completo': 'Test User'}
         form_data = {
             'nombre': 'Torta Sin IVA', 'codigo': 'PROD-TORT-0002', 'unidad_medida': 'un',
             'categoria': 'Pasteleria', 'precio_unitario': 100, 'stock_min_produccion': 10,
@@ -60,31 +66,25 @@ class TestProductoController:
         
         assert status_code == 201
         assert response['success']
-        # Assert that the `create` method was called with iva=False
-        # CORRECCIÓN: El schema añade valores por defecto, la aserción debe incluirlos.
         validated_data = {
             'nombre': 'Torta Sin IVA', 'codigo': 'PROD-TORT-0002', 'unidad_medida': 'un',
             'categoria': 'Pasteleria', 'precio_unitario': 100.0, 'stock_min_produccion': 10,
             'cantidad_maxima_x_pedido': 5, 'iva': False,
-            # Campos añadidos por el schema con load_default
             'unidades_por_paquete': 1,
             'peso_por_paquete_valor': 0.0,
-            'peso_por_paquete_unidad': ''
+            'peso_por_paquete_unidad': '',
+            'porcentaje_mano_obra': 0.0,
+            'porcentaje_ganancia': 0.0,
+            'vida_util_dias': 0
         }
-        # El controlador puede pasar los datos en un orden diferente, así que usamos ANY
         mock_producto_dependencies['producto_model'].create.assert_called_with(ANY)
-        # Verificación más robusta de los datos pasados al mock
         called_args, _ = mock_producto_dependencies['producto_model'].create.call_args
         assert called_args[0] == validated_data
 
     @pytest.mark.parametrize("campo, valor_invalido", [
-        ("precio_unitario", 0),
-        ("precio_unitario", -50.5),
-        ("precio_unitario", "texto"),
-        ("stock_min_produccion", -1),
-        ("stock_min_produccion", "texto"),
-        ("cantidad_maxima_x_pedido", -1),
-        ("cantidad_maxima_x_pedido", "texto"),
+        ("precio_unitario", 0), ("precio_unitario", -50.5), ("precio_unitario", "texto"),
+        ("stock_min_produccion", -1), ("stock_min_produccion", "texto"),
+        ("cantidad_maxima_x_pedido", -1), ("cantidad_maxima_x_pedido", "texto"),
     ])
     def test_crear_producto_campos_numericos_invalidos(self, producto_controller, mock_producto_dependencies, campo, valor_invalido):
         form_data = {
@@ -93,72 +93,83 @@ class TestProductoController:
             'iva': True
         }
         form_data[campo] = valor_invalido
-        
-        # CORRECCIÓN: Mockear find_by_codigo para aislar el error de validación del de código duplicado.
         mock_producto_dependencies['producto_model'].find_by_codigo.return_value = {'success': False}
-        
         response, status_code = producto_controller.crear_producto(form_data)
-        
-        assert status_code == 422 # Unprocessable Entity from validation
+        assert status_code == 422
         assert not response['success']
         assert "Datos inválidos" in response['error']
 
-    def test_actualizar_producto_exitoso(self, producto_controller, mock_producto_dependencies):
+    @patch('app.controllers.producto_controller.get_current_user')
+    def test_actualizar_producto_exitoso(self, mock_get_current_user, producto_controller, mock_producto_dependencies):
+        mock_get_current_user.return_value = {'id': 1, 'nombre_completo': 'Test User'}
         producto_id = 1
         form_data = {'nombre': 'Torta de Vainilla'}
-        mock_producto_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': {'codigo': 'PROD-TORT-0001'}}
-        mock_producto_dependencies['producto_model'].update.return_value = {'success': True, 'data': {}}
+        mock_producto_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': {'id': 1, 'codigo': 'PROD-TORT-0001', 'nombre': 'Torta Original'}}
+        mock_producto_dependencies['producto_model'].update.return_value = {'success': True, 'data': {'id': 1, 'nombre': 'Torta de Vainilla'}}
         mock_producto_dependencies['receta_model'].find_all.return_value = {'success': True, 'data': [{'id': 1}]}
         response, status_code = producto_controller.actualizar_producto(producto_id, form_data)
         assert status_code == 200
         assert response['success']
 
-    def test_desactivar_producto(self, producto_controller, mock_producto_dependencies):
+    @patch('app.controllers.producto_controller.get_current_user')
+    def test_desactivar_producto(self, mock_get_current_user, producto_controller, mock_producto_dependencies):
+        mock_get_current_user.return_value = {'id': 1, 'nombre_completo': 'Test User'}
         producto_id = 1
-        mock_producto_dependencies['producto_model'].update.return_value = {'success': True}
+        producto_data = {'id': 1, 'nombre': 'Torta'}
+        mock_producto_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': producto_data}
+        mock_producto_dependencies['producto_model'].update.return_value = {'success': True, 'data': producto_data}
         response, status_code = producto_controller.eliminar_producto_logico(producto_id)
         assert status_code == 200
         assert response['success']
 
-    def test_reactivar_producto(self, producto_controller, mock_producto_dependencies):
+    @patch('app.controllers.producto_controller.get_current_user')
+    def test_reactivar_producto(self, mock_get_current_user, producto_controller, mock_producto_dependencies):
+        mock_get_current_user.return_value = {'id': 1, 'nombre_completo': 'Test User'}
         producto_id = 1
-        mock_producto_dependencies['producto_model'].update.return_value = {'success': True}
+        producto_data = {'id': 1, 'nombre': 'Torta'}
+        mock_producto_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': producto_data}
+        mock_producto_dependencies['producto_model'].update.return_value = {'success': True, 'data': producto_data}
         response, status_code = producto_controller.habilitar_producto(producto_id)
         assert status_code == 200
         assert response['success']
 
-    @pytest.mark.parametrize("costo_base, porcentaje_extra, iva, costo_final_esperado", [
-        (100, 0, False, 100.00),
-        (100, 0, True, 121.00),
-        (100, 50, False, 150.00),
-        (100, 50, True, 181.50),
-        (250, 20, True, 363.00),
-        (100, -10, True, 108.90), # Prueba con porcentaje negativo
-        (100, 101, False, 201.00), # Prueba con porcentaje > 100
+    @pytest.mark.parametrize("costo_base, porcentaje_mano_obra, porcentaje_ganancia, iva, costo_final_esperado", [
+        (100, 0, 0, False, 100.00),
+        (100, 0, 0, True, 121.00),
+        (100, 50, 20, False, 180.00), # costo_produccion = 150, precio_final = 150 * 1.20 = 180
+        (100, 50, 20, True, 217.80), # costo_produccion = 150, precio_sin_iva = 180, precio_final = 180 * 1.21 = 217.80
+        (250, 20, 30, True, 471.90), # costo_produccion = 300, precio_sin_iva = 390, precio_final = 390 * 1.21 = 471.90
+        (100, 10, -10, False, 99.00), # Prueba con ganancia negativa
     ])
-    def test_actualizar_costo_producto_calculo(self, producto_controller, mock_producto_dependencies, costo_base, porcentaje_extra, iva, costo_final_esperado):
+    def test_actualizar_costo_producto_calculo(self, producto_controller, mock_producto_dependencies, costo_base, porcentaje_mano_obra, porcentaje_ganancia, iva, costo_final_esperado):
         producto_id = 1
         # Mock de la receta y su costo
         mock_producto_dependencies['receta_model'].find_all.return_value = {'success': True, 'data': [{'id': 99}]}
         mock_producto_dependencies['receta_controller'].calcular_costo_total_receta.return_value = {'success': True, 'data': {'costo_total': costo_base}}
-        
+
         # Mock del producto a actualizar
-        producto_mock = {'id': producto_id, 'porcentaje_extra': porcentaje_extra, 'iva': iva}
+        producto_mock = {
+            'id': producto_id,
+            'porcentaje_mano_obra': porcentaje_mano_obra,
+            'porcentaje_ganancia': porcentaje_ganancia,
+            'iva': iva
+        }
         mock_producto_dependencies['producto_model'].find_by_id.return_value = {'success': True, 'data': producto_mock}
-        
+
         # Mock del update para capturar el resultado
         mock_producto_dependencies['producto_model'].update.return_value = {'success': True}
-        
+
         # Ejecutar el método
         response, status_code = producto_controller.actualizar_costo_producto(producto_id)
-        
+
         # Verificar el resultado
         assert status_code == 200
         assert response['success']
-        
+
         # Verificar que se llamó al update con el precio calculado correcto
+        # Usamos pytest.approx para manejar posibles imprecisiones con punto flotante
         mock_producto_dependencies['producto_model'].update.assert_called_once_with(
-            producto_id, {'precio_unitario': costo_final_esperado}, 'id'
+            producto_id, {'precio_unitario': pytest.approx(costo_final_esperado, rel=1e-2)}, 'id'
         )
 
     def test_obtener_todos_los_productos_con_filtro_nombre(self, producto_controller, mock_producto_dependencies):

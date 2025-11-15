@@ -58,6 +58,32 @@
             </div>
         </div>
     </div>
+
+    <!-- Tabla de Datos Detallada -->
+    <div class="card mt-4">
+        <div class="card-header">
+            Análisis Detallado de Productos
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover" id="tabla-rentabilidad">
+                    <thead>
+                        <tr>
+                            <th scope="col" data-sort="nombre" style="cursor: pointer;">Producto ⇅</th>
+                            <th scope="col" data-sort="volumen_ventas" style="cursor: pointer;">Volumen Ventas ⇅</th>
+                            <th scope="col" data-sort="facturacion_total" style="cursor: pointer;">Facturación Total ⇅</th>
+                            <th scope="col" data-sort="costo_total" style="cursor: pointer;">Costo Total ⇅</th>
+                            <th scope="col" data-sort="ganancia_bruta" style="cursor: pointer;">Ganancia Bruta ⇅</th>
+                            <th scope="col" data-sort="margen_ganancia" style="cursor: pointer;">Margen (%) ⇅</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabla-rentabilidad-body">
+                        <!-- Las filas se insertarán aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Modal para Detalles del Producto -->
@@ -85,14 +111,65 @@
 document.addEventListener('DOMContentLoaded', function () {
     const ctx = document.getElementById('rentabilidadChart').getContext('2d');
     let rentabilidadChart;
+    let datosRentabilidad = []; // Almacenar los datos globalmente para re-ordenar
+    let sortConfig = { key: 'ganancia_bruta', direction: 'desc' };
 
+    // --- Funciones de formato ---
+    const formatCurrency = (value) => `$${(value || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+
+    // --- Lógica de la Tabla ---
+    function renderizarTabla() {
+        const tbody = document.getElementById('tabla-rentabilidad-body');
+        tbody.innerHTML = ''; // Limpiar tabla
+
+        // Ordenar los datos
+        datosRentabilidad.sort((a, b) => {
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+            if (typeof valA === 'string') {
+                valA = valA.toLowerCase();
+                valB = valB.toLowerCase();
+            }
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        datosRentabilidad.forEach(p => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${p.nombre}</td>
+                <td>${p.volumen_ventas}</td>
+                <td>${formatCurrency(p.facturacion_total)}</td>
+                <td>${formatCurrency(p.costo_total)}</td>
+                <td>${formatCurrency(p.ganancia_bruta)}</td>
+                <td>${p.margen_ganancia}%</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    document.querySelectorAll('#tabla-rentabilidad th').forEach(header => {
+        header.addEventListener('click', () => {
+            const sortKey = header.getAttribute('data-sort');
+            if (sortConfig.key === sortKey) {
+                sortConfig.direction = sortConfig.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortConfig.key = sortKey;
+                sortConfig.direction = 'desc'; // Default a desc para nuevas columnas
+            }
+            renderizarTabla();
+        });
+    });
+
+    // --- Lógica del Gráfico ---
     function renderizarGrafico(data) {
         if (rentabilidadChart) {
             rentabilidadChart.destroy();
         }
 
         const maxFacturacion = Math.max(...data.map(p => p.facturacion_total), 0);
-        const maxRadius = 40; // Radio máximo en píxeles para la burbuja más grande
+        const maxRadius = 40;
 
         rentabilidadChart = new Chart(ctx, {
             type: 'bubble',
@@ -111,16 +188,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        display: false // La leyenda por producto es demasiado larga
-                    },
+                    legend: { display: false },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
+                                if (label) label += ': ';
                                 const dataPoint = context.dataset.data[0];
                                 label += `(${dataPoint.x} unidades, ${dataPoint.y}%)`;
                                 return label;
@@ -129,18 +202,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 },
                 scales: {
-                    x: {
-                        title: {
-                            display: true,
-                            text: 'Volumen de Ventas (unidades)'
-                        }
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                            text: 'Margen de Ganancia (%)'
-                        }
-                    }
+                    x: { title: { display: true, text: 'Volumen de Ventas (unidades)' } },
+                    y: { title: { display: true, text: 'Margen de Ganancia (%)' } }
                 },
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
@@ -154,14 +217,16 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    function cargarDatosGrafico() {
+    function cargarDatos() {
         fetch('/analisis/api/rentabilidad/datos')
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    renderizarGrafico(result.data);
+                    datosRentabilidad = result.data;
+                    renderizarGrafico(datosRentabilidad);
+                    renderizarTabla(); // Cargar la tabla con los datos iniciales
                 } else {
-                    console.error('Error al cargar datos del gráfico:', result.error);
+                    console.error('Error al cargar datos:', result.error);
                 }
             });
     }
@@ -178,12 +243,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (result.success) {
                     const detalles = result.data;
                     let content = `<h4>${detalles.nombre_producto || 'Producto'}</h4>`;
+
+                    // --- Nueva Sección de Desglose de Costos ---
+                    if (detalles.costos) {
+                        content += `
+                            <div class="card bg-light mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title mb-3">Desglose de Costo Unitario</h5>
+                                    <div class="d-flex justify-content-around text-center">
+                                        <div>
+                                            <p class="mb-0 text-muted">Materia Prima</p>
+                                            <p class="h5">${formatCurrency(detalles.costos.costo_materia_prima)}</p>
+                                        </div>
+                                        <div>
+                                            <p class="mb-0 text-muted">Mano de Obra</p>
+                                            <p class="h5">${formatCurrency(detalles.costos.costo_mano_obra)}</p>
+                                        </div>
+                                        <div>
+                                            <p class="mb-0 text-muted">Costo Total</p>
+                                            <p class="h5"><strong>${formatCurrency(detalles.costos.costo_total)}</strong></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
                     
                     content += '<h5>Clientes Principales</h5>';
                     if(detalles.clientes_principales.length > 0) {
                         content += '<ul class="list-group mb-3">';
                         detalles.clientes_principales.forEach(c => {
-                            content += `<li class="list-group-item d-flex justify-content-between align-items-center">${c[0]} <span class="badge bg-primary rounded-pill">$${c[1].facturacion.toFixed(2)}</span></li>`;
+                            content += `<li class="list-group-item d-flex justify-content-between align-items-center">${c[0]} <span class="badge bg-primary rounded-pill">${formatCurrency(c[1].facturacion)}</span></li>`;
                         });
                         content += '</ul>';
                     } else {
@@ -230,7 +320,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btn-actualizar-crecimiento').addEventListener('click', actualizarCrecimiento);
 
     // Carga inicial
-    cargarDatosGrafico();
+    cargarDatos();
     actualizarCrecimiento();
 });
 </script>
