@@ -44,9 +44,16 @@ class ProductoSchema(Schema):
         error_messages={"required": "El precio es obligatorio."}
     )
 
-    porcentaje_extra = fields.Float(
-        required=False)
-    
+    porcentaje_mano_obra = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
+    porcentaje_ganancia = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
     iva = fields.Bool(
         required=True)
     
