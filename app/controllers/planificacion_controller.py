@@ -19,9 +19,30 @@ from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
 from app.models.issue_planificacion_model import IssuePlanificacionModel
 import holidays
-
+import requests
+import threading
 
 logger = logging.getLogger(__name__)
+
+def enviar_webhook_async(url: str, data: dict):
+    """
+    Envía un webhook en un hilo separado (Thread) para no bloquear
+    la respuesta de la aplicación web principal.
+    """
+    def thread_target():
+        try:
+            # Usamos un timeout corto. Si n8n no responde en 3 segundos,
+            # no nos importa, la app debe continuar.
+            requests.post(url, json=data, timeout=3)
+            logger.info(f"Webhook de n8n enviado exitosamente para OP {data.get('op_codigo')}")
+        except requests.exceptions.RequestException as e:
+            # Si n8n está caído o la URL es incorrecta, solo lo logueamos.
+            # NUNCA debe detener la ejecución de Flask.
+            logger.error(f"Error al enviar webhook de n8n (no bloqueante): {e}")
+
+    # Iniciar el hilo
+    thread = threading.Thread(target=thread_target)
+    thread.start()
 
 class PlanificacionController(BaseController):
     def __init__(self):
@@ -2396,7 +2417,7 @@ class PlanificacionController(BaseController):
         try:
             # 1. Buscar issue existente PENDIENTE
             existing_issue_resp = self.issue_planificacion_model.find_all(
-                filters={'orden_produccion_id': op_id}, # <-- ¡CORREGIDO!
+                filters={'orden_produccion_id': op_id},
                 limit=1
             )
 
@@ -2420,7 +2441,36 @@ class PlanificacionController(BaseController):
                 result = self.issue_planificacion_model.create(issue_data)
 
             if result.get('success'):
-                return result.get('data') # <-- ¡Devolver el objeto!
+
+                # --- ¡¡INICIO DE LA IMPLEMENTACIÓN DE n8n!! ---
+                try:
+                    # 1. Obtener la URL de PRODUCCIÓN de n8n
+                    # ¡Cámbiala por la URL que te dio n8n en el Paso A.5!
+                    N8N_WEBHOOK_URL = "https://n8n-kthy.onrender.com/webhook/d84c5362-14ef-45ac-a8bf-14e0d21ffc37"
+
+                    # 2. Preparar los datos que el webhook espera
+                    # (Necesitamos los datos de la OP que no están en el 'issue')
+                    op_data_resp = self.orden_produccion_controller.obtener_orden_por_id(op_id)
+
+                    op_data = {}
+                    if op_data_resp.get('success'):
+                         op_data = op_data_resp.get('data', {})
+
+                    payload = {
+                        "op_codigo": op_data.get('codigo', f"ID {op_id}"),
+                        "producto_nombre": op_data.get('producto_nombre', 'N/A'),
+                        "mensaje": mensaje,
+                        "tipo_error": tipo_error
+                    }
+
+                    # 3. Llamar al helper en un hilo (no bloqueante)
+                    enviar_webhook_async(N8N_WEBHOOK_URL, payload)
+
+                except Exception as e_webhook:
+                    logger.error(f"Error al iniciar el hilo del webhook de n8n: {e_webhook}")
+                # --- ¡¡FIN DE LA IMPLEMENTACIÓN DE n8n!! ---
+
+                return result.get('data')
             else:
                 logger.error(f"Error al guardar issue: {result.get('error')}")
                 return None
