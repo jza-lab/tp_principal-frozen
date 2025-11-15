@@ -89,20 +89,22 @@ def api_crear_despacho():
     if not vehiculo_id or not pedido_ids:
         return {'success': False, 'error': 'Faltan datos requeridos (vehiculo_id, pedido_ids)'}, 400
 
-    status_code, response_data = despacho_controller.crear_despacho_y_actualizar_pedidos(
+    response_data, status_code = despacho_controller.crear_despacho_y_actualizar_pedidos(
         vehiculo_id,
         pedido_ids,
         observaciones
     )
 
-    if status_code < 300 and isinstance(response_data, dict) and response_data.get('success'):
-        flash(f"Despacho #{response_data['data']['despacho_id']} creado exitosamente.", 'success')
-        # Redirigir a la misma página de gestión, pero a la pestaña de historial.
-        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial') # type: ignore
-        return {'success': True, 'data': response_data['data'], 'redirect_url': redirect_url}, status_code
+    status_code_int = int(status_code)
+
+    if status_code_int < 300 and response_data.get('success'):
+        flash(f"Despacho #{response_data.get('data', {}).get('despacho_id', '')} creado exitosamente.", 'success')
+        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial')
+        response_data['redirect_url'] = redirect_url
+        return jsonify(response_data), status_code_int
     else:
-        error_message = response_data if isinstance(response_data, str) else response_data.get('error', 'Error interno al crear el despacho')
-        return {'success': False, 'error': error_message}, status_code
+        error_message = response_data.get('error', 'Error interno al crear el despacho')
+        return jsonify({'success': False, 'error': error_message}), status_code_int
 
 @despacho_bp.route('/hoja-de-ruta/<int:despacho_id>')
 @permission_required('consultar_despachos')

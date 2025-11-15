@@ -999,7 +999,9 @@ class PedidoController(BaseController):
 
             if cambio_estado_result.get('success'):
                 logger.info(f"Pedido {pedido_id} cambiado a estado 'EN_TRANSITO' con éxito.")
-                detalle = f"El pedido de venta {pedido_actual.get('codigo_ov')} fue despachado."
+                # FIX: Usar el ID del pedido como fallback si codigo_ov no está disponible.
+                identificador_pedido = pedido_actual.get('codigo_ov') or f'ID {pedido_id}'
+                detalle = f"El pedido de venta {identificador_pedido} fue despachado."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Despacho', detalle)
                 return self.success_response(message="Pedido despachado con éxito.")
             else:
