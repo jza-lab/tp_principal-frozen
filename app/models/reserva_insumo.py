@@ -71,3 +71,19 @@ class ReservaInsumoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error calculando consumo promedio diario para el insumo {insumo_id}: {str(e)}")
             return {'success': False, 'error': str(e), 'consumo_promedio_diario': 0}
+
+    def get_by_orden_produccion_id(self, orden_produccion_id: int) -> Dict:
+        """
+        Obtiene todas las reservas de insumos para una orden de producción específica.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select('*').eq('orden_produccion_id', orden_produccion_id)
+            result = query.execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+        except Exception as e:
+            logger.error(f"Error al obtener reservas por ID de orden de producción {orden_produccion_id}: {str(e)}")
+            return {'success': False, 'error': str(e), 'data': []}
