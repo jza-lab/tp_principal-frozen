@@ -101,6 +101,7 @@ CANONICAL_PERMISSION_MAP = {
     'ver_alertas': ['SUPERVISOR', 'IT', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'configurar_alertas': ['SUPERVISOR', 'IT', 'GERENTE'],
     'gestionar_reclamos': ['ADMIN', 'VENDEDOR', 'GERENTE'],
+    'gestionar_consultas': ['ADMIN', 'VENDEDOR', 'GERENTE'],
     'crear_reclamo_proveedor': ['SUPERVISOR', 'GERENTE', 'SUPERVISOR_CALIDAD'],
     'consultar_alertas_riesgo': ['ADMIN','GERENTE', 'SUPERVISOR', 'VENDEDOR'],
     

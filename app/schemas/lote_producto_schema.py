@@ -23,6 +23,11 @@ class LoteProductoSchema(Schema):
     estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA', 'RECHAZADO']))
     motivo_cuarentena = fields.Str(allow_none=True, validate=validate.Length(max=255))
     cantidad_en_cuarentena = fields.Float(allow_none=True, validate=validate.Range(min=0))
+    cantidad_desperdiciada = fields.Float(
+        allow_none=True,
+        validate=validate.Range(min=0),
+        dump_default=0
+    )
     ubicacion_fisica = fields.Str(allow_none=True, validate=validate.Length(max=100))
     orden_produccion_id = fields.Int(allow_none=True)
     pedido_id = fields.Int(allow_none=True)

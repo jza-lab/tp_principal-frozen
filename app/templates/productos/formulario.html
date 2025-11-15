@@ -71,6 +71,16 @@ Agregar nuevo producto al catálogo
                         </div>
 
                         <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="number" class="form-control" name="vida_util_dias" id="vida_util_dias"
+                                    value="{{ producto.vida_util_dias if producto else '0' }}" required min="0" placeholder="Vida útil (días)">
+                                <label for="vida_util_dias">
+                                    <i class="bi bi-heart-pulse me-1"></i>Vida útil (días)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
                             <div class="form-floating mb-3">
                                 <select class="form-select" name="unidad_medida" id="unidad_medida" required>
                                     <option value="">Seleccionar unidad...</option>
@@ -165,8 +175,9 @@ Agregar nuevo producto al catálogo
                     <div class="card my-4">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">Ítems de la receta del producto</h5>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="addItemBtn">Añadir
-                                Ítem</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#insumoSearchModal">
+                                <i class="bi bi-plus-circle me-1"></i>Añadir Ítem
+                            </button>
                         </div>
                         <div class="card-body">
                             <div id="itemsContainer">
@@ -365,4 +376,28 @@ Agregar nuevo producto al catálogo
 </script>
 
 <script src="{{ url_for('static', filename='js/productos/formularioCrearProducto.js') }}"></script>
+
+<!-- Modal de Búsqueda de Insumos -->
+<div class="modal fade" id="insumoSearchModal" tabindex="-1" aria-labelledby="insumoSearchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="insumoSearchModalLabel">Añadir Insumo a la Receta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="insumo-search-filter" class="form-control" placeholder="Buscar insumo...">
+                </div>
+                <select id="insumo-select" class="form-select" size="10">
+                    <!-- Las opciones se poblarán dinámicamente -->
+                </select>
+                <div class="form-text">
+                    Haz doble clic sobre un insumo para añadirlo a la receta.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

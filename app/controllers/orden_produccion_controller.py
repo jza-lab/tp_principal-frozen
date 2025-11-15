@@ -179,74 +179,64 @@ class OrdenProduccionController(BaseController):
 
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
-        Valida datos y crea una orden.
-        MODIFICADO: Espera 'fecha_meta' en lugar de 'fecha_planificada' desde el formulario.
+        Valida datos y crea una o varias órdenes de producción.
         """
-        from app.models.receta import RecetaModel # Mover importación local si es necesario
+        from app.models.receta import RecetaModel
         receta_model = RecetaModel()
 
         try:
-            # --- FIX: Convertir a mutable para poder modificarlo ---
-            form_data = form_data.copy()
-            # ----------------------------------------------------
+            productos = form_data.get('productos')
+            if not productos:
+                return {'success': False, 'error': 'No se han seleccionado productos para crear las órdenes.'}
 
-            # Limpiar supervisor si viene vacío
-            if 'supervisor_responsable_id' in form_data and not form_data['supervisor_responsable_id']:
-                form_data.pop('supervisor_responsable_id')
+            ordenes_creadas = []
+            errores = []
 
-            producto_id = form_data.get('producto_id')
-            if not producto_id:
-                return {'success': False, 'error': 'El campo producto_id es requerido.'}
+            for producto_data in productos:
+                producto_id = producto_data.get('id')
+                cantidad = producto_data.get('cantidad')
 
-            # Renombrar 'cantidad' a 'cantidad_planificada' para el schema/modelo
-            if 'cantidad' in form_data:
-                form_data['cantidad_planificada'] = form_data.pop('cantidad')
+                if not producto_id or not cantidad:
+                    errores.append(f"Producto inválido o cantidad faltante: {producto_data}")
+                    continue
 
-            # --- AJUSTE PARA FECHA META ---
-            # Si 'fecha_meta' viene del formulario, usarla.
-            # No establecer 'fecha_planificada' por defecto en este flujo.
-            if 'fecha_meta' not in form_data or not form_data.get('fecha_meta'):
-                 # Podrías poner una fecha meta por defecto si lo deseas, o marcarla como requerida en el form
-                 # return {'success': False, 'error': 'La Fecha Meta es requerida.'}
-                 # Por ahora, si no viene, seguirá sin fecha meta (depende de tu schema/DB)
-                 pass # Opcional: añadir lógica si la fecha meta es obligatoria
+                datos_op = {
+                    'producto_id': int(producto_id),
+                    'cantidad_planificada': float(cantidad),
+                    'fecha_meta': form_data.get('fecha_meta'),
+                    'observaciones': form_data.get('observaciones'),
+                    'estado': 'PENDIENTE'
+                }
 
-            # Eliminar fecha_planificada si existe en los datos del form (no debería con el cambio HTML)
-            form_data.pop('fecha_planificada', None)
-            # -----------------------------
-
-            # Buscar receta si no se provee (sin cambios)
-            if not form_data.get('receta_id'):
                 receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
                 if not receta_result.get('success') or not receta_result.get('data'):
-                    return {'success': False, 'error': f'No se encontró una receta activa para el producto ID: {producto_id}.'}
-                receta = receta_result['data'][0]
-                form_data['receta_id'] = receta['id']
+                    errores.append(f'No se encontró una receta activa para el producto ID: {producto_id}.')
+                    continue
+                
+                datos_op['receta_id'] = receta_result['data'][0]['id']
 
-            # Estado por defecto PENDIENTE (sin cambios)
-            if 'estado' not in form_data or not form_data['estado']:
-                form_data['estado'] = 'PENDIENTE'
+                try:
+                    validated_data = self.schema.load(datos_op)
+                    validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+                    validated_data['usuario_creador_id'] = usuario_id
 
-            # --- FIX: Eliminar csrf_token antes de validar ---
-            form_data.pop('csrf_token', None)
-            # -----------------------------------------------
+                    result = self.model.create(validated_data)
+                    if result.get('success'):
+                        op = result.get('data')
+                        ordenes_creadas.append(op)
+                        detalle = f"Se creó la orden de producción {op.get('codigo')}."
+                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
+                    else:
+                        errores.append(f"Error al crear OP para producto {producto_id}: {result.get('error')}")
 
-            # Validar con el Schema (Asegúrate que tu schema acepte 'fecha_meta')
-            validated_data = self.schema.load(form_data)
-            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
-            validated_data['usuario_creador_id'] = usuario_id
+                except ValidationError as e:
+                    errores.append(f"Datos inválidos para producto {producto_id}: {e.messages}")
 
-            # Crear en la base de datos
-            result = self.model.create(validated_data)
-            if result.get('success'):
-                op = result.get('data')
-                detalle = f"Se creó la orden de producción {op.get('codigo')}."
-                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
-            return result
+            if errores:
+                return {'success': False, 'error': '; '.join(errores), 'data': {'creadas': ordenes_creadas}}
+            
+            return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
 
-        except ValidationError as e:
-            logger.error(f"Error de validación al crear orden: {e.messages}")
-            return {'success': False, 'error': f"Datos inválidos: {e.messages}"}
         except Exception as e:
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
             return {'success': False, 'error': f'Error interno: {str(e)}'}

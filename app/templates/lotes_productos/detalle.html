@@ -26,6 +26,9 @@
         <p class="text-muted mb-0">Lote N°: <code class="text-muted">{{ lote.numero_lote or 'N/A' }}</code></p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#registrarDesperdicioModal">
+            <i class="bi bi-trash-fill me-1"></i> Registrar Desperdicio
+        </button>
         <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="lote_producto"
             data-id-entidad="{{ lote.id_lote }}" data-nombre-entidad="Lote {{ lote.numero_lote }}">
             <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
@@ -75,6 +78,14 @@
             data-bs-target="#trazabilidad-content" type="button" role="tab" aria-controls="trazabilidad-content"
             aria-selected="false">
             <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="desperdicio-tab" data-bs-toggle="tab"
+            data-bs-target="#desperdicio-content" type="button" role="tab" aria-controls="desperdicio-content"
+            aria-selected="false">
+            <i class="bi bi-trash-fill me-1"></i>Historial de Desperdicios
+            <span class="badge rounded-pill bg-warning text-dark ms-1">{{ lote.historial_desperdicios | length }}</span>
         </button>
     </li>
 </ul>
@@ -130,6 +141,15 @@
                             <div>
                                 <div class="small text-muted">Cantidad Disponible (Actual)</div>
                                 <div class="fw-bold h5 mb-0">{{ lote.cantidad_actual | round(2) }} unidades</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center border-start border-3 border-warning ps-3">
+                            <i class="bi bi-trash fs-4 text-warning me-3"></i>
+                            <div>
+                                <div class="small text-muted">Cantidad Desperdiciada</div>
+                                <div class="fw-bold h5 mb-0">{{ lote.cantidad_desperdiciada | default(0) | round(2) }} unidades</div>
                             </div>
                         </div>
                     </div>
@@ -324,8 +344,93 @@
         </div>
 
     </div>
+    <div class="tab-pane fade" id="desperdicio-content" role="tabpanel" aria-labelledby="desperdicio-tab">
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Registros de Desperdicio</h5>
+            </div>
+            <div class="card-body">
+                {% if lote.historial_desperdicios %}
+                    {% for registro in lote.historial_desperdicios %}
+                        <div class="row mb-4 pb-3 border-bottom">
+                            <div class="col-md-8">
+                                <p class="mb-1"><strong>Fecha:</strong> {{ registro.created_at.strftime('%Y-%m-%d %H:%M') if registro.created_at else 'N/A' }}</p>
+                                <p class="mb-1"><strong>Cantidad:</strong> <span class="fw-bold text-danger">{{ registro.cantidad | round(2) }} unidades</span></p>
+                                <p class="mb-1"><strong>Motivo:</strong> {{ registro.motivo.motivo or 'No especificado' }}</p>
+                                <p class="mb-1"><strong>Detalle:</strong> {{ registro.detalle or 'No especificado' }}</p>
+                                <p class="mb-1"><strong>Usuario:</strong> {{ registro.usuario.nombre or 'N/A' }}</p>
+                                {% if registro.comentarios %}
+                                    <p class="mb-1"><strong>Comentarios:</strong> {{ registro.comentarios }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4 text-center">
+                                {% if registro.foto_url %}
+                                    <a href="{{ registro.foto_url }}" target="_blank">
+                                        <img src="{{ registro.foto_url }}" alt="Foto de desperdicio" class="img-fluid rounded" style="max-height: 150px;">
+                                    </a>
+                                    <small class="text-muted d-block mt-1">Clic para ampliar</small>
+                                {% else %}
+                                    <div class="text-muted fst-italic mt-3">Sin foto adjunta</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-muted">Este lote no tiene registros de desperdicio.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </div>
 {% include "admin_riesgos/_modal_crear_alerta.html" %}
+
+<!-- Modal para Registrar Desperdicio -->
+<div class="modal fade" id="registrarDesperdicioModal" tabindex="-1" aria-labelledby="registrarDesperdicioModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="registrarDesperdicioModalLabel">Registrar Desperdicio</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('registro_desperdicio_lote_producto.registrar_desperdicio', lote_id=lote.id_lote) }}" method="POST" enctype="multipart/form-data">
+                {{ csrf_form.csrf_token }}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="cantidad" class="form-label">Cantidad a Desperdiciar</label>
+                        <input type="number" name="cantidad" id="cantidad_desperdicio" class="form-control" required step="any" min="0.01" max="{{ lote.cantidad_actual }}">
+                        <div class="form-text">Disponible: <span id="disponible_actual">{{ lote.cantidad_actual | round(2) }}</span> unidades.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivo_id" class="form-label">Motivo</label>
+                        <select name="motivo_id" id="motivo_id" class="form-select" required>
+                            <option value="" disabled selected>-- Seleccione un motivo --</option>
+                            {% for motivo in lote.motivos_desperdicio %}
+                                <option value="{{ motivo.id }}">{{ motivo.motivo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="detalle" class="form-label">Detalle <span class="text-danger">*</span></label>
+                        <input type="text" name="detalle" id="detalle" class="form-control" required>
+                        <small class="form-text text-muted">Ej: "Mal sellado", "Contaminación cruzada", etc.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="comentarios" class="form-label">Comentarios</label>
+                        <textarea name="comentarios" class="form-control"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="foto" class="form-label">Foto</label>
+                        <input type="file" name="foto" class="form-control" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

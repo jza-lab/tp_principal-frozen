@@ -59,14 +59,20 @@ window.calculateOrderTotals = function () {
 
         if (productSelect && quantityInput) {
             const productId = productSelect.value;
-            const quantity = parseFloat(quantityInput.value) || 0;
+            const quantity = parseInt(quantityInput.value, 10) || 0;
             
             const selectedOption = productSelect.options[productSelect.selectedIndex];
             let price = 0;
             let unit = '--';
-            
-            if (selectedOption && selectedOption.value) { // Asegurarse de que no sea la opción "Seleccione..."
+
+            if (priceDisplay && priceDisplay.value) {
+                const cleanedPrice = priceDisplay.value.replace(/[$\s.]/g, '').replace(',', '.');
+                price = parseFloat(cleanedPrice) || 0;
+            } else if (selectedOption && selectedOption.value) {
                 price = parseFloat(selectedOption.getAttribute('data-precio')) || window.PRODUCT_PRICES[productId] || 0;
+            }
+
+            if (selectedOption && selectedOption.value) {
                 unit = selectedOption.getAttribute('data-unidad') || window.PRODUCT_UNITS[productId] || '--';
             }
             const itemSubtotal = price * quantity;

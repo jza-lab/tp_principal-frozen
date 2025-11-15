@@ -3,8 +3,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_wtf import FlaskForm
 from app.controllers.lote_producto_controller import LoteProductoController
-from app.controllers.producto_controller import ProductoController # Para el formulario
+from app.controllers.producto_controller import ProductoController
 from app.utils.decorators import permission_required
+from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
 import logging
 from datetime import date
 from flask import jsonify
@@ -37,7 +38,13 @@ def detalle_lote(id_lote):
         flash(response.get('error'), 'error')
         return redirect(url_for('lote_producto.listar_lotes'))
 
-    return render_template('lotes_productos/detalle.html', lote=response.get('data'))
+    motivo_model = MotivoDesperdicioLoteModel()
+    motivos_res = motivo_model.get_all()
+    motivos = motivos_res.get('data', [])
+    
+    csrf_form = FlaskForm()
+
+    return render_template('lotes_productos/detalle.html', lote=response.get('data'), motivos=motivos, csrf_form=csrf_form)
 
 
 @lote_producto_bp.route('/nuevo', methods=['GET', 'POST'])
@@ -189,11 +196,14 @@ def descargar_plantilla_lotes():
         return redirect(url_for('lote_producto.cargar_lotes_excel'))
 
 @lote_producto_bp.route('/<int:id_lote>/cuarentena', methods=['POST'])
-# @jwt_required()
-# @permission_required(accion='gestionar_cuarentena_lotes')
+@jwt_required()
+@permission_required(accion='gestionar_cuarentena_lotes')
 def poner_en_cuarentena(id_lote):
-    controller = LoteProductoController() # <-- AÑADIDO AQUÍ
+    controller = LoteProductoController()
     motivo = request.form.get('motivo_cuarentena')
+    resultado_inspeccion = request.form.get('resultado_inspeccion')
+    foto_file = request.files.get('foto_url')
+    usuario_id = get_jwt_identity()
 
     try:
         cantidad = float(request.form.get('cantidad_cuarentena'))
@@ -201,7 +211,7 @@ def poner_en_cuarentena(id_lote):
         flash('La cantidad debe ser un número válido.', 'danger')
         return redirect(url_for('lote_producto.listar_lotes'))
 
-    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad)
+    response, status_code = controller.poner_lote_en_cuarentena(id_lote, motivo, cantidad, usuario_id, resultado_inspeccion, foto_file)
 
     if response.get('success'):
         flash(response.get('message', 'Lote en cuarentena.'), 'success')
@@ -260,15 +270,17 @@ def editar_lote(id_lote):
 
 @lote_producto_bp.route('/<int:lote_id>/marcar-no-apto', methods=['POST'])
 @jwt_required()
-@permission_required(accion='crear_control_de_calidad_por_lote') # Or a more specific permission
+@permission_required(accion='crear_control_de_calidad_por_lote')
 def marcar_no_apto(lote_id):
     """
     Marca un lote de producto como 'NO APTO'.
     """
     controller = LoteProductoController()
     usuario_id = get_jwt_identity()
+    motivo = request.form.get('motivo', 'Marcado como no apto desde el inventario.') # Un default por si acaso
+    resultado_inspeccion = request.form.get('resultado_inspeccion')
     
-    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id, motivo, resultado_inspeccion)
 
     if response.get('success'):
         flash(response.get('message', 'Lote marcado como No Apto.'), 'success')

@@ -405,7 +405,7 @@
             <div class="card shadow-sm mt-4 mb-2">
                 <div class="card-header d-flex justify-content-between align-items-center bg-light">
                     <h5 class="mb-0">Productos del Pedido</h5>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="add-item-btn" {% if pedido and
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#productSearchModal" {% if pedido and
                         pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                         <i class="bi bi-plus-circle me-1"></i>Añadir Producto
                     </button>
@@ -442,10 +442,9 @@
                                     class="item-row {% if pedido and not pedido.estado=='PENDIENTE' %}table-light text-muted{% endif %}">
                                     <td>
                                         <input type="hidden" name="items-{{ loop.index0 }}-id" value="{{ item.id if item.id else '' }}">
-                                        <input type="text" class="form-control form-control-sm product-search-input mb-1" placeholder="Buscar producto...">
                                         <select class="form-select form-select-sm producto-selector"
                                             name="items-{{ loop.index0 }}-producto_id" required {% if pedido and
-                                            pedido.estado !='PENDIENTE' %}disabled{% endif %} size="5">
+                                            pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <option value="">Seleccione...</option>
                                             {% for producto in productos %}
                                             <option value="{{ producto.id }}"
@@ -461,10 +460,10 @@
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <input type="number" class="form-control item-quantity"
-                                                style="min-width: 8ch;" oninput="limitarDigitos(this, 7)"
+                                                style="min-width: 8ch;" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                                                 name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" max="5000"
-                                                min="{{ min_value }}" step="{{ step_value }}"
-                                                value="{{ item.get('cantidad', 0) }}" required {% if pedido and
+                                                min="0" step="1"
+                                                value="{{ item.get('cantidad', 0) | int }}" required {% if pedido and
                                                 pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <span class="input-group-text unidad-display">
                                                 {{ unidad_medida if current_product else '--' }}
@@ -567,8 +566,7 @@
     <tr class="item-row">
         <td>
             <input type="hidden" name="items-__prefix__-id" value="">
-            <input type="text" class="form-control form-control-sm product-search-input mb-1" placeholder="Buscar producto...">
-            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required size="5">
+            <select class="form-select form-select-sm producto-selector" name="items-__prefix__-producto_id" required>
                 <option value="" selected data-id="">Seleccione un producto...</option>
                 {% for producto in productos %}
                 <option value="{{ producto.id }}" data-id="{{ producto.id }}"
@@ -580,8 +578,8 @@
         </td>
         <td>
             <div class="input-group input-group-sm">
-                <input type="number" min="0.01" max="5000" step="0.01" class="form-control item-quantity"
-                    style="min-width: 8ch;" oninput="limitarDigitos(this, 7)" name="items-__prefix__-cantidad"
+                <input type="number" min="0" max="5000" step="1" value="0" class="form-control item-quantity"
+                    style="min-width: 8ch;" oninput="this.value = this.value.replace(/[^0-9]/g, '')" name="items-__prefix__-cantidad"
                     placeholder="Ej: 10" required>
                 <span class="input-group-text unidad-display">--</span>
             </div>
@@ -663,12 +661,13 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <script src="{{ url_for('static', filename='js/gestionPanelLateral.js') }}"></script>
-
 <script src="{{ url_for('static', filename='js/orden_venta/gestionClientes.js') }}"></script>
-
 <script src="{{ url_for('static', filename='js/orden_venta/gestionCalculos.js') }}"></script>
-
 <script src="{{ url_for('static', filename='js/orden_venta/formularioVenta.js') }}"></script>
+<script>
+    const productos = {{ productos|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/orden_venta/formularioVentaModal.js') }}"></script>
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -702,21 +701,29 @@ document.addEventListener('DOMContentLoaded', function() {
         // Estado inicial al cargar la página
         toggleDireccionEntrega(checkbox.checked);
     });
-
-    // Lógica para filtrar los selects de productos
-    document.addEventListener('input', function(e) {
-        if (e.target && e.target.classList.contains('product-search-input')) {
-            const searchInput = e.target;
-            const itemRow = searchInput.closest('.item-row');
-            const productSelect = itemRow.querySelector('.producto-selector');
-            const options = Array.from(productSelect.options);
-            const query = searchInput.value.toLowerCase();
-
-            options.forEach(option => {
-                const shouldShow = option.value === "" || option.textContent.toLowerCase().includes(query);
-                option.style.display = shouldShow ? '' : 'none';
-            });
-        }
-    });
 </script>
+
+<!-- Modal de Búsqueda de Productos -->
+<div class="modal fade" id="productSearchModal" tabindex="-1" aria-labelledby="productSearchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productSearchModalLabel">Añadir Producto al Pedido</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="product-search-filter" class="form-control" placeholder="Buscar producto...">
+                </div>
+                <select id="product-select" class="form-select" size="10">
+                    <!-- Las opciones se poblarán dinámicamente -->
+                </select>
+                <div class="form-text">
+                    Haz doble clic sobre un producto para añadirlo al pedido.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock extra_js %}

@@ -35,29 +35,33 @@
                 <form id="ordenProduccionForm" method="POST" action="{{ url_for('orden_produccion.crear') }}">
                     {{ csrf_form.csrf_token }}
                     <div class="row g-3">
-                        <div class="col-md-6">
-                            <label for="product-search" class="form-label">Buscar Producto <span class="text-danger">*</span></label>
-                            <div class="input-group mb-2">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="product-search" class="form-control" placeholder="Escriba para filtrar productos...">
-                            </div>
-                            <select class="form-select" id="producto_id" name="producto_id" required size="5">
-                                <option value="">Seleccione un producto...</option>
-                                {% for producto in productos %}
-                                <option value="{{ producto.id }}" {% if orden and orden.producto_id==producto.id %}selected{% endif %}>
-                                    {{ producto.nombre }} ({{ format_product_units(producto) }})
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="col-md-6">
-                            <label for="cantidad" class="form-label">Cantidad <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <span class="input-group-text"><i class="bi bi-hash"></i></span>
-                                <input type="number" step="0.1" min="1" max="5000" class="form-control" id="cantidad" name="cantidad"
-                                    value="{{ orden.cantidad if orden else '' }}" required min="1">
-                                <span class="input-group-text">unidades</span>
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Productos a Fabricar</h6>
+                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#productSearchModal">
+                                        <i class="bi bi-plus-circle me-1"></i>Añadir Producto
+                                    </button>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>Producto</th>
+                                                    <th style="width: 25%;">Cantidad</th>
+                                                    <th style="width: 10%;" class="text-center">Acción</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="items-container">
+                                                <!-- Las filas de productos se añadirán aquí dinámicamente -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="no-items-msg" class="text-center text-muted p-3">
+                                        Añada uno o más productos para crear las órdenes de producción.
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -91,7 +95,6 @@
                                 orden.</small>
                         </div>
                     </div>
-
                     <div class="d-flex justify-content-end gap-2 mt-4">
                         <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-secondary">
                             Cancelar
@@ -150,28 +153,51 @@
 
 {% block extra_js %}
 <script>
-
+    const productos = {{ productos|tojson }};
     const LISTA_URL = "{{ url_for('orden_produccion.listar') }}";
     const CREAR_URL = "{{ url_for('orden_produccion.crear') }}";
-
 </script>
-<script src="{{ url_for('static', filename='js/ordenes_produccion/formularioOrdenProduccion.js') }}"></script>
-<script src="{{ url_for('static', filename='js/ordenes_produccion/orden_produccion_form.js') }}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const searchInput = document.getElementById('product-search');
-    const productSelect = document.getElementById('producto_id');
-    const options = Array.from(productSelect.options);
+<script src="{{ url_for('static', filename='js/ordenes_produccion/formularioOrdenProduccionModal.js') }}"></script>
 
-    searchInput.addEventListener('input', function () {
-        const query = searchInput.value.toLowerCase();
-        
-        // Muestra u oculta las opciones del select
-        options.forEach(option => {
-            const shouldShow = option.value === "" || option.textContent.toLowerCase().includes(query);
-            option.style.display = shouldShow ? '' : 'none';
-        });
-    });
-});
-</script>
+<!-- Modal de Búsqueda de Productos -->
+<div class="modal fade" id="productSearchModal" tabindex="-1" aria-labelledby="productSearchModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productSearchModalLabel">Añadir Producto para Producción</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="product-search-filter" class="form-control" placeholder="Buscar producto...">
+                </div>
+                <select id="product-select" class="form-select" size="10">
+                    <!-- Las opciones se poblarán dinámicamente -->
+                </select>
+                <div class="form-text">
+                    Haz doble clic sobre un producto para añadirlo.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<template id="item-template">
+    <tr class="item-row">
+        <td>
+            <input type="hidden" name="productos[__prefix__][id]" class="product-id">
+            <span class="product-name"></span>
+        </td>
+        <td>
+            <div class="input-group input-group-sm">
+                <input type="number" step="1" min="1" value="0" max="5000" class="form-control cantidad" name="productos[__prefix__][cantidad]" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
+                <span class="input-group-text unidad-display"></span>
+            </div>
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="Eliminar"><i class="bi bi-trash"></i></button>
+        </td>
+    </tr>
+</template>
 {% endblock extra_js %}
