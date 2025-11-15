@@ -66,3 +66,39 @@ class ControlCalidadProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error crítico creando registro de control de calidad de producto: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_all_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Obtiene todos los registros de control de calidad de productos dentro de un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("*")
+            query = query.gte('fecha_inspeccion', fecha_inicio.isoformat())
+            query = query.lte('fecha_inspeccion', fecha_fin.isoformat())
+            result = query.execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener registros de control de calidad de productos por rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def count_by_decision_in_date_range(self, decision: str, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta los registros de control de calidad de productos por decisión en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("id", count='exact')
+            query = query.eq('decision_final', decision)
+            query = query.gte('fecha_inspeccion', fecha_inicio.isoformat())
+            query = query.lte('fecha_inspeccion', fecha_fin.isoformat())
+            result = query.execute()
+            
+            return {'success': True, 'count': result.count}
+
+        except Exception as e:
+            logger.error(f"Error contando registros de control de calidad de productos por decisión: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}

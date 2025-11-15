@@ -546,3 +546,22 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error en get_all_for_planificacion: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_all_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Obtiene todas las órdenes de producción dentro de un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("*")
+            query = query.gte('fecha_planificada', fecha_inicio.isoformat())
+            query = query.lte('fecha_planificada', fecha_fin.isoformat())
+            result = query.execute()
+
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener órdenes de producción por rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

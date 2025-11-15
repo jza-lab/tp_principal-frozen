@@ -1,6 +1,7 @@
 # app/models/registro_desperdicio_lote_producto_model.py
 from app.models.base_model import BaseModel
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -27,4 +28,21 @@ class RegistroDesperdicioLoteProductoModel(BaseModel):
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error buscando registros de desperdicio por lote: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def get_all_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime):
+        """Obtiene todos los registros de desperdicio dentro de un rango de fechas."""
+        try:
+            query = self._get_query_builder().select("*")
+            query = query.gte('created_at', fecha_inicio.isoformat())
+            query = query.lte('created_at', fecha_fin.isoformat())
+            result = query.execute()
+            
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error buscando registros de desperdicio por rango de fecha: {str(e)}")
             return {'success': False, 'error': str(e)}
