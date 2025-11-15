@@ -327,6 +327,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 const modal = bootstrap.Modal.getInstance(document.getElementById('modalControlCalidadOp'));
                 modal.hide();
 
+                // Recargar la página para reflejar todos los cambios de estado y datos.
+                window.location.reload();
+
                 const card = document.querySelector(`.kanban-card[data-op-id="${opId}"]`);
                 if (card) {
                     const cantidadProducida = parseFloat(document.getElementById('op-cantidad-producida').innerText);
