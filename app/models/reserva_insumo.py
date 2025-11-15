@@ -11,6 +11,39 @@ class ReservaInsumoModel(BaseModel):
     def get_table_name(self) -> str:
         return 'reservas_insumos'
 
+    def get_all_with_details(self) -> Dict:
+        """
+        Obtiene todas las reservas de insumos con detalles del insumo, lote y orden de producción.
+        """
+        try:
+            # Consulta mejorada para ser más explícita con los nombres de las tablas.
+            result = self.db.table(self.get_table_name()).select(
+                '*, '
+                'orden_produccion:ordenes_produccion(id, codigo), '
+                'lote_inventario:insumos_inventario(id_lote, numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+            ).order('created_at', desc=True).execute()
+
+            flat_data = []
+            for item in result.data:
+                if item.get('orden_produccion'):
+                    item['orden_produccion_codigo'] = item['orden_produccion'].get('codigo')
+                    item['orden_produccion_id'] = item['orden_produccion'].get('id')
+
+                if item.get('lote_inventario'):
+                    item['lote_inventario_codigo'] = item['lote_inventario'].get('numero_lote_proveedor')
+                    if item['lote_inventario'].get('insumo'):
+                        item['insumo_nombre'] = item['lote_inventario']['insumo'].get('nombre')
+
+                # Limpiar datos anidados para una respuesta plana
+                item.pop('orden_produccion', None)
+                item.pop('lote_inventario', None)
+                flat_data.append(item)
+
+            return {'success': True, 'data': flat_data}
+        except Exception as e:
+            logger.error(f"Error obteniendo detalles de reservas de insumos: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+        
     def get_consumo_total_valorizado_en_periodo(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
         """
         Calcula el valor total de los insumos consumidos en un rango de fechas.
@@ -77,7 +110,11 @@ class ReservaInsumoModel(BaseModel):
         Obtiene todas las reservas de insumos para una orden de producción específica.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('*').eq('orden_produccion_id', orden_produccion_id)
+            # Consulta enriquecida para incluir detalles del lote y del insumo.
+            query = self.db.table(self.get_table_name()).select(
+                '*, '
+                'lote_inventario:insumos_inventario(id_lote, numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+            ).eq('orden_produccion_id', orden_produccion_id)
             result = query.execute()
 
             if result.data:

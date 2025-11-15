@@ -281,7 +281,7 @@ class DespachoController(BaseController):
             return self.error_response(errores_despacho[0], 500)
         # --- FIN NUEVO MANEJO DE ERRORES ---
 
-        return {'success': True, 'data': {'despacho_id': despacho_id}}
+        return self.success_response(data={'despacho_id': despacho_id}, status_code=201)
 
     def generar_hoja_de_ruta_pdf(self, despacho_id):
         """
