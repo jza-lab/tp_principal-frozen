@@ -1235,6 +1235,49 @@ class OrdenProduccionController(BaseController):
     # endregion
 
     # region Helpers de Aprobación
+    def _gestionar_desperdicio_sin_stock(self, orden_original: Dict, cantidad_desperdicio: Decimal, usuario_id: int) -> Dict:
+        """
+        Crea una OP secundaria para cubrir el desperdicio cuando no hay stock,
+        y genera la OC necesaria.
+        """
+        try:
+            # 1. Preparar datos para la nueva OP
+            datos_nueva_op = {
+                'producto_id': orden_original['producto_id'],
+                'cantidad_planificada': cantidad_desperdicio,
+                'receta_id': orden_original['receta_id'],
+                'prioridad': 'ALTA',
+                'observaciones': f"OP de reposición por desperdicio en la OP: {orden_original.get('codigo', orden_original['id'])}.",
+                'estado': 'PENDIENTE',
+                'pedido_id': orden_original.get('pedido_id') # Heredar el pedido de venta
+            }
+
+            # 2. Crear la nueva OP
+            resultado_creacion_op = self.crear_orden(datos_nueva_op, usuario_id)
+            if not resultado_creacion_op.get('success'):
+                error_msg = f"Fallo al crear la OP de reposición: {resultado_creacion_op.get('error')}"
+                logger.error(error_msg)
+                return {'success': False, 'error': error_msg}
+
+            nueva_op = resultado_creacion_op['data']
+            logger.info(f"Creada OP de reposición {nueva_op.get('codigo')} por desperdicio en OP {orden_original.get('codigo')}.")
+
+            # 3. Aprobar la nueva OP para generar la OC automáticamente
+            # La lógica de 'aprobar_orden' ya maneja la creación de OC cuando no hay stock.
+            resultado_aprobacion, _ = self.aprobar_orden(nueva_op['id'], usuario_id)
+
+            if not resultado_aprobacion.get('success') or not resultado_aprobacion.get('data', {}).get('oc_generada'):
+                error_msg = f"La OP de reposición {nueva_op.get('codigo')} fue creada, pero falló la generación de la OC automática: {resultado_aprobacion.get('error', 'Error desconocido')}"
+                logger.error(error_msg)
+                # No devolvemos error fatal, ya que la OP de reposición ya existe y se puede gestionar manualmente.
+                return {'success': True, 'warning': error_msg, 'data': nueva_op}
+
+            logger.info(f"OC generada automáticamente para la OP de reposición {nueva_op.get('codigo')}.")
+            return {'success': True, 'message': f"Se creó la OP de reposición {nueva_op.get('codigo')} y su OC correspondiente.", 'data': nueva_op}
+
+        except Exception as e:
+            logger.error(f"Error crítico en _gestionar_desperdicio_sin_stock para OP {orden_original['id']}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def _validar_estado_para_aprobacion(self, orden_id: int) -> tuple:
         """Obtiene una OP y valida que su estado sea 'PENDIENTE'."""
@@ -1532,8 +1575,31 @@ class OrdenProduccionController(BaseController):
             if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
                 return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
 
-            # 4. Registrar desperdicio si existe
+            # 4. NUEVA LÓGICA: Gestionar consumo de stock por desperdicio
+            mensaje_adicional = ""
             if cantidad_desperdicio > 0:
+                # Intentar consumir el stock para el desperdicio
+                consumo_result = self.inventario_controller.consumir_stock_por_cantidad_producto(
+                    receta_id=orden_actual['receta_id'],
+                    cantidad_producto=float(cantidad_desperdicio),
+                    op_id_referencia=orden_id,
+                    motivo='DESPERDICIO'
+                )
+
+                # Si no hay stock, activar el plan de contingencia
+                if not consumo_result.get('success'):
+                    logger.warning(f"No hay stock para cubrir desperdicio en OP {orden_id}. "
+                                   f"Error: {consumo_result.get('error')}. Iniciando reposición.")
+                    
+                    gestion_result = self._gestionar_desperdicio_sin_stock(orden_actual, cantidad_desperdicio, usuario_id)
+
+                    if gestion_result.get('success'):
+                        mensaje_adicional = gestion_result.get('message', 'Se creó una OP de reposición.')
+                    else:
+                        # Error crítico: no se pudo reponer. Devolvemos el error al usuario.
+                        return self.error_response(f"No hay stock para el desperdicio y falló la creación de la OP de reposición: {gestion_result.get('error')}", 500)
+                
+                # Registrar el desperdicio (se registra siempre, con o sin stock)
                 desperdicio_model = RegistroDesperdicioModel()
                 desperdicio_data = {
                     'orden_produccion_id': orden_id,
@@ -1582,7 +1648,11 @@ class OrdenProduccionController(BaseController):
             detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Cantidad Buena: {cantidad_buena}, Desperdicio: {cantidad_desperdicio}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle)
 
-            return self.success_response(message="Avance reportado correctamente.")
+            mensaje_final = "Avance reportado correctamente."
+            if mensaje_adicional:
+                mensaje_final += f" {mensaje_adicional}"
+
+            return self.success_response(message=mensaje_final)
 
         except Exception as e:
             logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
