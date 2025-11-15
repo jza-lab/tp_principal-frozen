@@ -1,10 +1,10 @@
-from flask import Blueprint, render_template, request, flash, redirect, url_for
+from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.configuracion_controller import ConfiguracionController
 from marshmallow import ValidationError
 from app.utils.decorators import permission_required
 from app.controllers.producto_controller import ProductoController
-
+from decimal import Decimal, InvalidOperation
 
 alertas_bp = Blueprint('alertas', __name__, url_prefix='/alertas')
 
@@ -17,7 +17,7 @@ def listar_insumos_alertas():
     # (Esta ruta también podría beneficiarse de la lógica de 'active_tab'
     # si esa página también tiene pestañas)
     active_tab = request.args.get('tab', 'default') # Ejemplo por si lo necesitás
-    
+
     insumo_controller = InsumoController()
     response, _ = insumo_controller.obtener_insumos()
     if not response.get('success'):
@@ -25,7 +25,7 @@ def listar_insumos_alertas():
         insumos = []
     else:
         insumos = response.get('data', [])
-        
+
     return render_template('alertas/insumos.html', insumos=insumos, active_tab=active_tab)
 
 @alertas_bp.route('/insumos/actualizar', methods=['POST'])
@@ -40,7 +40,7 @@ def actualizar_stock_min_max():
     try:
         stock_min = request.form.get('stock_min')
         stock_max = request.form.get('stock_max')
-        
+
         if not insumo_id:
             flash('ID de insumo no proporcionado.', 'error')
             return redirect(url_for('alertas.listar_insumos_alertas'))
@@ -54,7 +54,7 @@ def actualizar_stock_min_max():
         if not update_data:
             flash('No se proporcionaron datos para actualizar.', 'warning')
             return redirect(url_for('alertas.listar_insumos_alertas'))
-            
+
         response, status_code = insumo_controller.actualizar_insumo(insumo_id, update_data)
 
         if status_code == 200:
@@ -92,7 +92,7 @@ def configurar_alertas_lotes():
         try:
             dias = int(dias_vencimiento)
             response, status_code = config_controller.guardar_dias_vencimiento(dias)
-            
+
             if status_code == 200:
                 flash(response.get('message', 'Configuración guardada.'), 'success')
             else:
@@ -100,11 +100,11 @@ def configurar_alertas_lotes():
 
         except (ValueError, TypeError):
             flash('Por favor, ingrese un número válido de días.', 'error')
-        
+
         return redirect(url_for('alertas.configurar_alertas_lotes'))
 
     dias_vencimiento_actual = config_controller.obtener_dias_vencimiento()
-    
+
     return render_template('alertas/lotes.html', dias_vencimiento=dias_vencimiento_actual)
 
 @alertas_bp.route('/productos', methods=['GET'])
@@ -116,7 +116,7 @@ def listar_productos_alertas():
     # *** 1. LEER EL PARÁMETRO 'tab' DE LA URL ***
     # Si no se proporciona, 'stock-min' es el valor por defecto.
     active_tab = request.args.get('tab', 'stock-min')
-    
+
     producto_controller = ProductoController()
     response, _ = producto_controller.obtener_todos_los_productos()
     if not response.get('success'):
@@ -124,7 +124,7 @@ def listar_productos_alertas():
         productos = []
     else:
         productos = response.get('data', [])
-        
+
     # *** 2. PASAR LA VARIABLE 'active_tab' A LA PLANTILLA ***
     return render_template('alertas/productos.html', productos=productos, active_tab=active_tab)
 
@@ -143,7 +143,7 @@ def actualizar_stock_min_producto():
             return redirect(url_for('alertas.listar_productos_alertas'))
 
         stock_min = int(stock_min_str)
-        
+
         producto_controller = ProductoController()
         response, status_code = producto_controller.actualizar_stock_min_produccion(int(producto_id), stock_min)
 
@@ -176,7 +176,7 @@ def actualizar_cantidad_maxima_x_pedido():
             return redirect(url_for('alertas.listar_productos_alertas'))
 
         cantidad_maxima = int(cantidad_maxima_str)
-        
+
         producto_controller = ProductoController()
         response, status_code = producto_controller.actualizar_cantidad_maxima_x_pedido(int(producto_id), cantidad_maxima)
 
@@ -193,3 +193,33 @@ def actualizar_cantidad_maxima_x_pedido():
     # *** 3. REDIRIGIR AVISANDO QUÉ PESTAÑA ESTABA ACTIVA ***
     # (Esta es la pestaña de 'cantidad-max')
     return redirect(url_for('alertas.listar_productos_alertas', tab='cantidad-max'))
+
+@alertas_bp.route('/productos/actualizar-minimo-produccion', methods=['POST'])
+def actualizar_minimo_produccion():
+
+    # 1. Validar la entrada (Try/Except)
+    try:
+        producto_id = request.form.get('id_producto')
+        cantidad_minima = Decimal(request.form.get('cantidad_minima_produccion'))
+    except (InvalidOperation, TypeError):
+        # Error de tipo de dato: Flashear y redirigir
+        flash('Valor de cantidad mínima inválido. Debe ser un número.', 'danger')
+        return redirect(url_for('alertas.listar_productos_alertas', tab='cant-min-prod'))
+
+    # 2. Validar la lógica del negocio
+    if producto_id and cantidad_minima >= 0:
+        producto_controller = ProductoController()
+        resp, status = producto_controller.actualizar_cantidad_minima_produccion(producto_id, cantidad_minima)
+
+        # 3. Flashear el resultado (éxito o error)
+        if status == 200:
+            flash('Cantidad mínima de producción actualizada.', 'success')
+        else:
+            flash(resp.get('error', 'Error al actualizar.'), 'danger')
+    else:
+        # Error de datos (ej. ID faltante o cantidad negativa)
+        flash('Datos inválidos (ID de producto o cantidad negativa).', 'danger')
+
+    # 4. Redirigir siempre a la pestaña correcta
+    # Esta ruta es usada por las otras funciones de POST en tu archivo
+    return redirect(url_for('alertas.listar_productos_alertas', tab='cant-min-prod'))

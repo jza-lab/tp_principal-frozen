@@ -601,11 +601,12 @@ class OrdenProduccionController(BaseController):
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cancelación', detalle)
         return result
 
-    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None) -> tuple:
+    def cambiar_estado_orden(self, orden_id: int, nuevo_estado: str, usuario_id: Optional[int] = None, qc_data: Optional[Dict] = None) -> tuple:
         """
         Cambia el estado de una orden.
         Si es 'COMPLETADA', crea el lote y lo deja 'RESERVADO' si está
         vinculado a un pedido, o 'DISPONIBLE' si es para stock general.
+        Acepta datos de control de calidad (qc_data) para la creación del lote.
         """
         try:
             from flask_jwt_extended import get_jwt_identity
@@ -617,18 +618,20 @@ class OrdenProduccionController(BaseController):
             estado_actual = orden_produccion['estado']
 
             update_data = {}
+            message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}." # Mensaje por defecto
+
             if nuevo_estado == 'COMPLETADA':
                 if not estado_actual or estado_actual.strip() != 'CONTROL_DE_CALIDAD':
                     return self.error_response("La orden debe estar en 'CONTROL DE CALIDAD' para ser completada.", 400)
 
-                # Asignar el aprobador de calidad usando el ID del usuario actual.
                 usuario_id_actual = get_jwt_identity()
                 update_data['aprobador_calidad_id'] = usuario_id_actual
 
-                # Lógica de creación de lote y reservas centralizada
+                # --- PUNTO CLAVE: Pasar qc_data al crear el lote ---
                 lote_result, lote_status = self.lote_producto_controller.crear_lote_y_reservas_desde_op(
                     orden_produccion_data=orden_produccion,
-                    usuario_id=orden_produccion.get('usuario_creador_id', 1)
+                    usuario_id=orden_produccion.get('usuario_creador_id', 1),
+                    qc_data=qc_data
                 )
 
                 if lote_status >= 400:
@@ -636,27 +639,21 @@ class OrdenProduccionController(BaseController):
 
                 message_to_use = f"Orden completada. {lote_result.get('message', '')}"
 
-            # Cambiar el estado de la OP en la base de datos (se ejecuta siempre)
             result = self.model.cambiar_estado(orden_id, nuevo_estado, extra_data=update_data)
             if result.get('success'):
                 op = result.get('data')
                 detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
-                # La lógica del cronómetro se ha movido a otros métodos para evitar la doble detención.
-                # El cronómetro ahora se detiene cuando se reporta el 100% o cuando se pausa.
 
+                # Verificar si el pedido asociado debe cambiar de estado
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
-                # Después de cambiar el estado de la OP, verificamos si el estado del pedido de venta debe cambiar.
                 items_asociados_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
                 if items_asociados_res.get('success') and items_asociados_res.get('data'):
-                    # Usamos un set para no verificar el mismo pedido varias veces si una OP surte varios items del mismo pedido.
                     pedido_ids_a_verificar = {item['pedido_id'] for item in items_asociados_res['data']}
                     for pedido_id in pedido_ids_a_verificar:
                         pedido_controller.actualizar_estado_segun_ops(pedido_id)
 
-                if nuevo_estado != 'COMPLETADA':
-                    message_to_use = f"Estado actualizado a {nuevo_estado.replace('_', ' ')}."
                 return self.success_response(data=result.get('data'), message=message_to_use)
             else:
                 return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)

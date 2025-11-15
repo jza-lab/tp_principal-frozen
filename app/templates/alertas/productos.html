@@ -32,6 +32,12 @@
                 <span class="tab-indicator"></span>
             </button>
         </li>
+        {# --- ¡NUEVA PESTAÑA! --- #}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link-custom {% if active_tab == 'cant-min-prod' %}active{% endif %}" id="pills-cant-min-prod-tab" data-bs-toggle="pill" data-bs-target="#pills-cant-min-prod" type="button" role="tab" aria-controls="pills-cant-min-prod" aria-selected="{% if active_tab == 'cant-min-prod' %}true{% else %}false{% endif %}" tabindex="-1">
+                <i class="fas fa-industry me-1"></i> Cant. Mínima Producción
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
@@ -137,6 +143,216 @@
                 </div>
             </div>
         </div>
+        {# --- ¡NUEVO PANEL DE PESTAÑA! --- #}
+        <div class="tab-pane fade {% if active_tab == 'cant-min-prod' %}show active{% endif %}" id="pills-cant-min-prod" role="tabpanel" aria-labelledby="pills-cant-min-prod-tab">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Configurar Cantidad Mínima de Producción</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Define la cantidad mínima (en unidades de producto) necesaria para justificar el inicio de una OP. El Planificador Automático creará un "Issue" si una OP no cumple este mínimo.</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Producto</th>
+                                    <th>SKU</th>
+                                    <th>Mínimo Producción Actual</th>
+                                    <th style="width: 20%;">Nuevo Mínimo</th>
+                                    <th style="width: 15%;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for producto in productos %}
+                                <tr>
+                                    <td>{{ producto.nombre }}</td>
+                                    <td><code>{{ producto.sku }}</code></td>
+                                    <td><strong>{{ producto.cantidad_minima_produccion | default(0, true) | round(2) }}</strong> <small class="text-muted">{{ producto.unidad_medida }}</small></td>
+                                    
+                                    {# ASUMO que tienes una ruta 'productos.actualizar_minimo_produccion' #}
+                                    <form action="{{ url_for('alertas.actualizar_minimo_produccion') }}" method="POST" class="form-actualizar-minimo-prod">
+                                        {# Asumo que csrf_form viene por contexto o base.html #}
+                                        {% if csrf_form %} 
+                                            {{ csrf_form.csrf_token }}
+                                        {% endif %}
+                                        <input type="hidden" name="id_producto" value="{{ producto.id }}">
+                                        <td>
+                                            <div class="input-group">
+                                                <input type="number" name="cantidad_minima_produccion" class="form-control" placeholder="Ej: 20" min="0" step="0.01" required>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <button type="submit" class="btn btn-primary btn-sm">Actualizar</button>
+                                        </td>
+                                    </form>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No hay productos para mostrar.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // ===================================================================
+    // --- FUNCIONES DE MODAL COPIADAS DE planificacion.js ---
+    // (Necesarias para que el script de 'fetch' funcione)
+    // ===================================================================
+
+    /**
+     * Muestra un modal de Bootstrap reutilizable para feedback o confirmación.
+     */
+    function showFeedbackModal(title, message, type = 'info', confirmCallback = null) {
+        // (Usamos el modal de feedback que ya existe en app_layout.html)
+        const modalElement = document.getElementById('feedbackModal');
+        if (!modalElement) {
+            console.error("Elemento modal 'feedbackModal' no encontrado!");
+            alert(`${type.toUpperCase()}: ${title}\n${message}`); // Fallback
+            return;
+        }
+
+        const modalTitle = modalElement.querySelector('#feedbackModalTitle');
+        const modalBody = modalElement.querySelector('#feedbackModalBody');
+        const modalIcon = modalElement.querySelector('#feedbackModalIcon');
+        const confirmBtn = modalElement.querySelector('#feedbackModalConfirmBtn');
+        const cancelBtn = modalElement.querySelector('#feedbackModalCancelBtn');
+        const modalHeader = modalElement.querySelector('.modal-header');
+
+        modalTitle.textContent = title;
+        modalBody.innerHTML = message.replace(/\n/g, '<br>');
+
+        // Resetear estilos
+        modalHeader.className = 'modal-header';
+        confirmBtn.style.display = 'none';
+        confirmBtn.onclick = null;
+        cancelBtn.textContent = 'Cerrar';
+        cancelBtn.className = 'btn btn-secondary';
+        modalIcon.className = 'bi me-2';
+        cancelBtn.style.display = 'inline-block';
+        cancelBtn.disabled = false;
+
+        switch (type) {
+            case 'success':
+                modalIcon.classList.add('bi-check-circle-fill', 'text-success');
+                modalHeader.classList.add('bg-success-subtle');
+                cancelBtn.className = 'btn btn-success';
+                break;
+            case 'warning':
+                modalIcon.classList.add('bi-exclamation-triangle-fill', 'text-warning');
+                modalHeader.classList.add('bg-warning-subtle');
+                cancelBtn.className = 'btn btn-warning';
+                break;
+            case 'error':
+                modalIcon.classList.add('bi-x-octagon-fill', 'text-danger');
+                modalHeader.classList.add('bg-danger-subtle');
+                cancelBtn.className = 'btn btn-danger';
+                break;
+            case 'confirm':
+                modalIcon.classList.add('bi-question-circle-fill', 'text-primary');
+                confirmBtn.style.display = 'block';
+                cancelBtn.textContent = 'Cancelar';
+                if (confirmCallback && typeof confirmCallback === 'function') {
+                    confirmBtn.onclick = () => {
+                        bootstrap.Modal.getInstance(modalElement).hide(); 
+                        confirmCallback();
+                    };
+                }
+                break;
+            default: // info
+                modalIcon.classList.add('bi-info-circle-fill', 'text-info');
+                modalHeader.classList.add('bg-info-subtle');
+                break;
+        }
+
+        let modalInstance = bootstrap.Modal.getInstance(modalElement);
+        if (!modalInstance) {
+            modalInstance = new bootstrap.Modal(modalElement);
+        }
+        modalInstance.show();
+    }
+
+    /**
+     * Muestra un spinner en un botón y lo deshabilita.
+     */
+    function showLoadingSpinner(button, text = 'Procesando...') {
+        if (!button) return;
+        button.disabled = true;
+        button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${text}`;
+    }
+
+    /**
+     * Oculta el spinner de un botón, lo habilita y restaura su texto.
+     */
+    function hideLoadingSpinner(button, originalText) {
+        if (!button) return;
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+
+    // ===================================================================
+    // --- SCRIPT DE INTERCEPTACIÓN DEL FORMULARIO ---
+    // ===================================================================
+
+    const forms = document.querySelectorAll('form-actualizar-minimo-prod');
+
+    forms.forEach(form => {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault(); 
+
+            const button = form.querySelector('button[type="submit"]');
+            const originalButtonText = button.innerHTML;
+            
+            showLoadingSpinner(button, ''); // Spinner pequeño, sin texto
+
+            try {
+                const response = await fetch(form.action, {
+                    method: form.method,
+                    body: new FormData(form),
+                    headers: {
+                        'X-CSRF-TOKEN': form.querySelector('[name=csrf_token]').value 
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    // Éxito: Mostrar modal de éxito
+                    showFeedbackModal('Éxito', result.message, 'success');
+                    
+                    // Actualizar la celda "Actual" en la tabla
+                    const formData = new FormData(form);
+                    const newAmount = parseFloat(formData.get('cantidad_minima_produccion')).toFixed(2);
+                    const currentAmountCell = form.closest('tr').querySelector('td:nth-child(3) strong');
+                    if (currentAmountCell) {
+                        currentAmountCell.textContent = newAmount;
+                    }
+                    form.querySelector('input[name="cantidad_minima_produccion"]').value = '';
+
+                } else {
+                    // Error: Mostrar modal de error con el mensaje del JSON
+                    showFeedbackModal('Error al Actualizar', result.error || 'No se pudo guardar.', 'error');
+                }
+
+            } catch (error) {
+                // Error de Red
+                console.error('Error de fetch:', error);
+                showFeedbackModal('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+            } finally {
+                // Restaurar el botón
+                hideLoadingSpinner(button, originalButtonText);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
 {% endblock %}

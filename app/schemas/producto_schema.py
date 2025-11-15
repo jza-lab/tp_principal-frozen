@@ -37,19 +37,26 @@ class ProductoSchema(Schema):
         allow_none=True,
         load_default=''
     )
-    
+
     precio_unitario = fields.Float(
         required=True,
         validate=validate.Range(min=0.01, error="El precio debe ser mayor que 0."),
         error_messages={"required": "El precio es obligatorio."}
     )
 
-    porcentaje_extra = fields.Float(
-        required=False)
-    
+    porcentaje_mano_obra = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
+    porcentaje_ganancia = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
+    )
     iva = fields.Bool(
         required=True)
-    
+
     stock_min_produccion = fields.Int(
         required=False,
         allow_none=True,
@@ -61,4 +68,9 @@ class ProductoSchema(Schema):
         allow_none=True,
         load_default=0,
         validate=validate.Range(min=0, error="La vida útil no puede ser negativa.")
+    )
+    cantidad_minima_produccion = fields.Float(
+        required=False,
+        allow_none=True,
+        load_default=0
     )
