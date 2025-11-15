@@ -35,7 +35,7 @@ class RentabilidadController(BaseController):
         for producto in productos_result.get('data', []):
             producto_id = producto['id']
             
-            # 1. Calcular margen de ganancia
+            # 1. Calcular margen de ganancia y costos
             margen_info = self._calcular_margen_ganancia(producto_id)
             
             # 2. Calcular volumen de ventas (total histórico de unidades)
@@ -46,75 +46,101 @@ class RentabilidadController(BaseController):
             if items_result.get('success') and items_result.get('data'):
                 for item in items_result['data']:
                     volumen_ventas += item.get('cantidad', 0)
-                    # Asumimos que el precio está en el producto, para la facturación total
-                    facturacion_total += item.get('cantidad', 0) * producto.get('precio_unitario', 0)
+                    facturacion_total += item.get('cantidad', 0) * (producto.get('precio_unitario', 0) or 0)
+
+            # 3. Ensamblar los datos para la respuesta
+            ganancia_bruta = margen_info['margen_absoluto'] * volumen_ventas
+            costo_total_ventas = margen_info['costos']['costo_total'] * volumen_ventas
 
             datos_matriz.append({
                 'id': producto_id,
                 'nombre': producto.get('nombre'),
                 'volumen_ventas': volumen_ventas,
                 'margen_ganancia': margen_info['margen_porcentual'],
-                'facturacion_total': facturacion_total
+                'ganancia_bruta': round(ganancia_bruta, 2),
+                'facturacion_total': round(facturacion_total, 2),
+                'costo_total': round(costo_total_ventas, 2)
             })
 
         return self.success_response(data=datos_matriz)
 
 
-    def _calcular_costo_producto(self, producto_id: int) -> float:
+    def _calcular_costo_producto(self, producto_id: int) -> Dict:
         """
-        Calcula el costo total de un producto basado en los insumos de su receta.
-        Devuelve el costo total o 0.0 si no se puede calcular.
+        Calcula el costo desglosado de un producto (materia prima, mano de obra, total).
+        Devuelve un diccionario con los costos o un diccionario con ceros si falla.
         """
+        default_cost = {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_total': 0.0}
         try:
+            # Obtener el producto para el 'porcentaje_extra'
+            producto_result = self.producto_model.find_by_id(producto_id)
+            if not producto_result.get('success') or not producto_result.get('data'):
+                return default_cost
+            producto = producto_result['data']
+            porcentaje_mano_obra = (producto.get('porcentaje_mano_obra', 0.0) or 0.0) / 100
+
+            # Calcular costo de materia prima (lógica existente)
+            costo_materia_prima = 0.0
             receta_result = self.receta_model.find_all({'producto_id': producto_id, 'activa': True})
-            if not receta_result.get('success') or not receta_result.get('data'):
-                return 0.0
-            receta = receta_result['data'][0]
-            
-            ingredientes_result = self.receta_model.get_ingredientes(receta['id'])
-            if not ingredientes_result.get('success'):
-                return 0.0
+            if receta_result.get('success') and receta_result.get('data'):
+                receta = receta_result['data'][0]
+                ingredientes_result = self.receta_model.get_ingredientes(receta['id'])
+                if ingredientes_result.get('success'):
+                    for ingrediente in ingredientes_result.get('data', []):
+                        insumo_id = ingrediente.get('id_insumo')
+                        if not insumo_id: continue
 
-            costo_total = 0.0
-            for ingrediente in ingredientes_result.get('data', []):
-                insumo_id = ingrediente.get('id_insumo')
-                if not insumo_id: continue
-
-                insumo_result = self.insumo_model.find_by_id(insumo_id)
-                if insumo_result.get('success') and insumo_result.get('data'):
-                    costo_insumo = insumo_result['data'].get('precio_unitario', 0.0)
-                    cantidad = ingrediente.get('cantidad', 0.0)
-                    costo_total += (costo_insumo or 0.0) * (cantidad or 0.0)
+                        insumo_result = self.insumo_model.find_by_id(insumo_id)
+                        if insumo_result.get('success') and insumo_result.get('data'):
+                            costo_insumo = insumo_result['data'].get('precio_unitario', 0.0)
+                            cantidad = ingrediente.get('cantidad', 0.0)
+                            costo_materia_prima += (costo_insumo or 0.0) * (cantidad or 0.0)
             
-            return costo_total
+            # Calcular costo de mano de obra y total
+            costo_mano_obra = costo_materia_prima * porcentaje_mano_obra
+            costo_total = costo_materia_prima + costo_mano_obra
+            
+            return {
+                'costo_materia_prima': round(costo_materia_prima, 2),
+                'costo_mano_obra': round(costo_mano_obra, 2),
+                'costo_total': round(costo_total, 2)
+            }
         except Exception:
-            return 0.0
+            return default_cost
 
     def _calcular_margen_ganancia(self, producto_id: int) -> Dict:
         """
-        Calcula el margen de ganancia para un único producto.
+        Calcula el margen de ganancia y obtiene el desglose de costos para un único producto.
         """
+        default_margen = {'margen_porcentual': 0.0, 'margen_absoluto': 0.0, 'costos': {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_total': 0.0}}
         try:
             producto_result = self.producto_model.find_by_id(producto_id)
             if not producto_result.get('success') or not producto_result.get('data'):
-                return {'margen_porcentual': 0.0, 'margen_absoluto': 0.0}
+                return default_margen
 
             producto = producto_result['data']
             precio_venta = producto.get('precio_unitario', 0.0) or 0.0
-            costo_producto = self._calcular_costo_producto(producto_id)
+            
+            costos_info = self._calcular_costo_producto(producto_id)
+            costo_total = costos_info['costo_total']
 
             if precio_venta == 0:
-                return {'margen_porcentual': 0.0, 'margen_absoluto': -costo_producto}
+                return {
+                    'margen_porcentual': 0.0, 
+                    'margen_absoluto': -costo_total,
+                    'costos': costos_info
+                }
 
-            margen_absoluto = precio_venta - costo_producto
-            margen_porcentual = (margen_absoluto / precio_venta) * 100
+            margen_absoluto = precio_venta - costo_total
+            margen_porcentual = (margen_absoluto / precio_venta) * 100 if precio_venta > 0 else 0
             
             return {
                 'margen_porcentual': round(margen_porcentual, 2),
-                'margen_absoluto': round(margen_absoluto, 2)
+                'margen_absoluto': round(margen_absoluto, 2),
+                'costos': costos_info
             }
         except Exception:
-            return {'margen_porcentual': 0.0, 'margen_absoluto': 0.0}
+            return default_margen
 
 
     def calcular_crecimiento_ventas(self, periodo: str, metrica: str) -> tuple:
@@ -223,10 +249,14 @@ class RentabilidadController(BaseController):
         clientes_principales = sorted(clientes.items(), key=lambda x: x[1]['facturacion'], reverse=True)
         historial_precios_ordenado = sorted(historial_precios.items(), key=lambda x: x[0])
 
+        # 3. Obtener el desglose de costos
+        costos_info = self._calcular_costo_producto(producto_id)
+
         return self.success_response(data={
             'nombre_producto': producto_nombre,
             'historial_ventas': sorted(historial_ventas, key=lambda x: x['fecha'], reverse=True),
             'historial_precios': historial_precios_ordenado,
-            'clientes_principales': clientes_principales
+            'clientes_principales': clientes_principales,
+            'costos': costos_info
         })
 

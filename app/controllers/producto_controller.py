@@ -230,16 +230,21 @@ class ProductoController(BaseController):
             producto = self.obtener_producto_por_id(producto_id)
             if not producto:
                 return self.error_response('Producto no encontrado.', 404)
+            
+            costo_materia_prima = costo_result['data']['costo_total']
+            
+            # Aplicar costo de mano de obra
+            porcentaje_mano_obra = (producto.get('porcentaje_mano_obra', 0) or 0) / 100
+            costo_produccion = costo_materia_prima * (1 + porcentaje_mano_obra)
+            
+            # Aplicar margen de ganancia
+            porcentaje_ganancia = (producto.get('porcentaje_ganancia', 0) or 0) / 100
+            precio_sin_iva = costo_produccion * (1 + porcentaje_ganancia)
 
-            nuevo_costo_base = costo_result['data']['costo_total']
-
-            porcentaje_margen = producto.get('porcentaje_extra', 0) / 100
-            costo_con_margen = nuevo_costo_base * (1 + porcentaje_margen)
-
+            # Aplicar IVA
             factor_iva = 1.21 if producto.get('iva') else 1.0
-
-            nuevo_costo = round(costo_con_margen * factor_iva, 2)
-
+            nuevo_costo = round(precio_sin_iva * factor_iva, 2)
+            
             update_result = self.model.update(producto_id, {'precio_unitario': nuevo_costo}, 'id')
 
             if not update_result.get('success'):
