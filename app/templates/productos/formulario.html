@@ -228,12 +228,22 @@ Agregar nuevo producto al catálogo
                             <div class="row g-3 justify-content-end align-items-center">
 
                                 <div class="col-6 col-md-3 col-lg-3">
-                                    <label class="form-label">Mano de obra / Ganancia (%)</label>
+                                    <label class="form-label">Porcentaje Mano de Obra (%)</label>
                                     <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-percent"></i></span>
+                                        <span class="input-group-text"><i class="bi bi-person-workspace"></i></span>
                                         <input type="number" step="0.01" min="0" max="100" class="form-control"
-                                            id="porcentaje_extra" name="porcentaje_extra"
-                                            value="{{ producto.porcentaje_extra if producto else '0' }}">
+                                            id="porcentaje_mano_obra" name="porcentaje_mano_obra"
+                                            value="{{ producto.porcentaje_mano_obra if producto else '0' }}">
+                                    </div>
+                                </div>
+                                
+                                <div class="col-6 col-md-3 col-lg-3">
+                                    <label class="form-label">Porcentaje Ganancia (%)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-graph-up-arrow"></i></span>
+                                        <input type="number" step="0.01" min="0" max="100" class="form-control"
+                                            id="porcentaje_ganancia" name="porcentaje_ganancia"
+                                            value="{{ producto.porcentaje_ganancia if producto else '0' }}">
                                     </div>
                                 </div>
 
@@ -291,7 +301,7 @@ Agregar nuevo producto al catálogo
                         <li>Use códigos cortos y descriptivos.</li>
                         <li>Categorice correctamente para facilitar los filtros.</li>
                         <li>Asegúrese de que todos los insumos de la receta estén disponibles en el catálogo.</li>
-                        <li>El *Mano de obra/Ganancia* se aplica sobre el costo total de los insumos.</li>
+                        <li>El <strong>costo de mano de obra</strong> y la <strong>ganancia</strong> se calculan como porcentajes sobre el costo total de los insumos.</li>
                     </ul>
                 </div>
             </div>
