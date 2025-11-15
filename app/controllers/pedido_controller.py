@@ -342,13 +342,20 @@ class PedidoController(BaseController):
                         'cantidad': item['cantidad'],
                         'fecha_planificada': date.today().isoformat(),
                         'prioridad': 'NORMAL',
-                        'fecha_meta': fecha_requerido_pedido
+                        'fecha_meta': fecha_requerido_pedido,
+                        'productos': [{'id': item['producto_id'], 'cantidad': item['cantidad']}]
                     }
-                    resultado_op, _ = op_controller.crear_orden(datos_op, usuario_id)
-
-                    if resultado_op.get('success'):
-                        orden_creada = resultado_op.get('data', {})
-                        ordenes_creadas.append(orden_creada)
+                    
+                    # --- MANEJO ROBUSTO DE LA RESPUESTA ---
+                    # El método puede devolver una tupla (dict, status) o solo un dict
+                    respuesta_op = op_controller.crear_orden(datos_op, usuario_id)
+                    resultado_op = respuesta_op[0] if isinstance(respuesta_op, tuple) else respuesta_op
+                    
+                    if isinstance(resultado_op, dict) and resultado_op.get('success'):
+                        # La respuesta de crear_orden devuelve una lista en 'data'
+                        if resultado_op.get('data'):
+                            orden_creada = resultado_op['data'][0] # Tomamos la primera OP creada de la lista
+                            ordenes_creadas.append(orden_creada)
                         self.model.update_item(item['id'], {'estado': 'EN_PRODUCCION', 'orden_produccion_id': orden_creada.get('id')})
                     else:
                         logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
