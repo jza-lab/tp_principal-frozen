@@ -139,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(data => {
                 if (data.success) {
                     showNotificationModal('Éxito', data.message || 'Órdenes de producción creadas correctamente.', 'success', () => {
-                        window.location.href = data.redirect_url || '/ordenes-produccion/';
+                        window.location.href = data.redirect_url || '/ordenes/';
                     });
                 } else {
                     showNotificationModal('Error', data.error || 'Ocurrió un error al crear las órdenes.', 'error');
