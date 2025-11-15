@@ -72,15 +72,25 @@ class PedidoModel(BaseModel):
              todas_completadas = True
 
 
-        # 3. Añadir estado a cada item y la bandera al pedido
+        # 3. Añadir estado, cantidades parciales y bandera al pedido
         for item in items:
             op_id = item.get('orden_produccion_id')
             if op_id:
-                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO') # Añadir estado al item
+                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO')
             else:
-                item['op_estado'] = None # No aplica
+                item['op_estado'] = None
 
-        pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
+            # Calcular cantidad de lote desde las reservas
+            reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
+            
+            cantidad_lote = 0
+            if reservas_res.data:
+                cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data)
+            
+            item['cantidad_lote'] = cantidad_lote
+            item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
+
+        pedido_data['todas_ops_completadas'] = todas_completadas
 
         # 4. Obtener datos de despacho si existen (CORREGIDO)
         pedido_data['despacho'] = None
