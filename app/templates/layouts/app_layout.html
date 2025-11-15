@@ -127,6 +127,14 @@
                                 href="{{ url_for('lote_producto.listar_lotes') }}"><i class="bi bi-box-seam me-2"></i>
                                 Inventario (Productos)</a></li>
                         {% endif %}
+                        {% if 'consultar_analisis_rentabilidad' is has_permission %}
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'rentabilidad.pagina_rentabilidad' %}active{% endif %}"
+                                href="{{ url_for('rentabilidad.pagina_rentabilidad') }}"><i class="bi bi-graph-up-arrow me-2"></i>
+                                Análisis de Rentabilidad</a></li>
+                        {% endif %}
                     </ul>
                 </li>
                 {% endif %}
@@ -177,6 +185,12 @@
 
                 {% if 'configurar_alertas' is has_permission and not is_operario and current_user and
                 current_user.roles.codigo != 'RRHH' %}
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
+                       href="{{ url_for('reportes.indicadores') }}">
+                        <i class="bi bi-bar-chart-line-fill me-1"></i> Indicadores
+                    </a>
+                </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                         href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown"

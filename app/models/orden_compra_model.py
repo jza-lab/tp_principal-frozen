@@ -401,6 +401,23 @@ class OrdenCompraModel(BaseModel):
             logger.error(f"Error obteniendo egresos: {str(e)}")
             return {'success': False, 'error': str(e)}
 
+    def count_by_estado_in_date_range(self, estado: str, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta las órdenes de compra por estado en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("id", count='exact')
+            query = query.eq('estado', estado)
+            query = query.gte('fecha_emision', fecha_inicio.isoformat())
+            query = query.lte('fecha_emision', fecha_fin.isoformat())
+            result = query.execute()
+            
+            return {'success': True, 'count': result.count}
+
+        except Exception as e:
+            logger.error(f"Error contando órdenes de compra por estado y rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}
+
 @dataclass
 class OrdenCompraItem:
     """

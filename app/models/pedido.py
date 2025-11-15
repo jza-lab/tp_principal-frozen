@@ -2,7 +2,7 @@ from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
 from postgrest.exceptions import APIError
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -72,15 +72,25 @@ class PedidoModel(BaseModel):
              todas_completadas = True
 
 
-        # 3. Añadir estado a cada item y la bandera al pedido
+        # 3. Añadir estado, cantidades parciales y bandera al pedido
         for item in items:
             op_id = item.get('orden_produccion_id')
             if op_id:
-                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO') # Añadir estado al item
+                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO')
             else:
-                item['op_estado'] = None # No aplica
+                item['op_estado'] = None
 
-        pedido_data['todas_ops_completadas'] = todas_completadas # Añadir bandera al pedido
+            # Calcular cantidad de lote desde las reservas
+            reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
+            
+            cantidad_lote = 0
+            if reservas_res.data:
+                cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data)
+            
+            item['cantidad_lote'] = cantidad_lote
+            item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
+
+        pedido_data['todas_ops_completadas'] = todas_completadas
 
         # 4. Obtener datos de despacho si existen (CORREGIDO)
         pedido_data['despacho'] = None
@@ -619,6 +629,57 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error en get_sales_by_product_in_period: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def count_by_estado_in_date_range(self, estado: str, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta los pedidos por estado en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("id", count='exact')
+            query = query.eq('estado', estado)
+            query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
+            query = query.lte('fecha_solicitud', fecha_fin.isoformat())
+            result = query.execute()
+            
+            return {'success': True, 'count': result.count}
+
+        except Exception as e:
+            logger.error(f"Error contando pedidos por estado y rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}
+
+    def count_by_estados_in_date_range(self, estados: List[str], fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta los pedidos por una lista de estados en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("id", count='exact')
+            query = query.in_('estado', estados)
+            query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
+            query = query.lte('fecha_solicitud', fecha_fin.isoformat())
+            result = query.execute()
+            
+            return {'success': True, 'count': result.count}
+        except Exception as e:
+            logger.error(f"Error contando pedidos por estados y rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}
+
+    def get_total_valor_pedidos_completados(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Obtiene la suma del valor total de los pedidos completados en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select('total').eq('estado', 'COMPLETADO').gte('fecha_solicitud', fecha_inicio.isoformat()).lte('fecha_solicitud', fecha_fin.isoformat())
+            result = query.execute()
+
+            if not result.data:
+                return {'success': True, 'total_valor': 0}
+
+            total_valor = sum(item.get('total', 0) for item in result.data if item.get('total') is not None)
+            return {'success': True, 'total_valor': total_valor}
+        except Exception as e:
+            logger.error(f"Error obteniendo el valor total de pedidos completados: {str(e)}")
+            return {'success': False, 'error': str(e), 'total_valor': 0}
+
     def get_reservas_for_item(self, item_id: int) -> List[Dict]:
         """Obtiene las reservas de lotes de producto para un item de pedido específico."""
         try:
