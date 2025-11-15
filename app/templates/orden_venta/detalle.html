@@ -236,9 +236,13 @@
                     <thead class="table-light">
                         <tr>
                             <th>Producto</th>
-                            <th>Cantidad</th>
-                            <th>Estado Item</th> {# Cambiado Título #}
-                            <th>Orden de Producción (Estado)</th> {# Cambiado Título #}
+                            <th>Cantidad Total</th>
+                            {% if pedido['items'] | selectattr('cantidad_lote', '>', 0) | list | length > 0 or pedido['items'] | selectattr('cantidad_produccion', '>', 0) | list | length > 0 %}
+                            <th>Cant. Lote</th>
+                            <th>Cant. a Producir</th>
+                            {% endif %}
+                            <th>Estado Item</th>
+                            <th>Orden de Producción (Estado)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -248,6 +252,22 @@
                                 <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
                             </td>
                             <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
+                            {% if pedido['items'] | selectattr('cantidad_lote', '>', 0) | list | length > 0 or pedido['items'] | selectattr('cantidad_produccion', '>', 0) | list | length > 0 %}
+                            <td>
+                                {% if item.cantidad_lote > 0 %}
+                                    <span class="badge bg-success-soft text-success">{{ item.cantidad_lote }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.cantidad_produccion > 0 %}
+                                    <span class="badge bg-primary-soft text-primary">{{ item.cantidad_produccion }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
                             <td>
                                 {# Badges de estado para items #}
                                 {% set item_estado_config = {

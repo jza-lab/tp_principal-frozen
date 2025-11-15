@@ -1,12 +1,15 @@
 from flask import Blueprint, render_template, jsonify, request
+from datetime import datetime, timedelta
 from app.controllers.reportes_controller import ReportesController
 from app.controllers.reporte_produccion_controller import ReporteProduccionController
 from app.controllers.reporte_stock_controller import ReporteStockController
+from app.controllers.indicadores_controller import IndicadoresController
 
 reportes_bp = Blueprint('reportes', __name__, url_prefix='/reportes')
 controller = ReportesController()
 produccion_controller = ReporteProduccionController()
 stock_controller = ReporteStockController()
+indicadores_controller = IndicadoresController()
 
 @reportes_bp.route('/')
 def dashboard():
@@ -136,3 +139,36 @@ def api_stock_productos_rotacion():
 def api_stock_productos_cobertura():
     data = stock_controller.obtener_cobertura_stock()
     return jsonify(data)
+
+@reportes_bp.route('/indicadores')
+def indicadores():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    
+    kpis_produccion = indicadores_controller.obtener_kpis_produccion(fecha_inicio_str, fecha_fin_str)
+    
+    # Parsear fechas para KPIs de calidad e inventario
+    if fecha_inicio_str:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
+    else:
+        fecha_inicio = datetime.now() - timedelta(days=30)
+
+    if fecha_fin_str:
+        fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
+    else:
+        fecha_fin = datetime.now()
+
+    kpis_calidad = indicadores_controller.obtener_kpis_calidad(fecha_inicio, fecha_fin)
+    kpis_inventario = indicadores_controller.obtener_kpis_inventario(fecha_inicio_str, fecha_fin_str)
+    kpis_comercial = indicadores_controller.obtener_kpis_comercial(fecha_inicio, fecha_fin)
+
+    kpis = {
+        "produccion": kpis_produccion,
+        "calidad": kpis_calidad,
+        "inventario": kpis_inventario,
+        "comercial": kpis_comercial,
+        "fecha_inicio": kpis_produccion['fecha_inicio'],
+        "fecha_fin": kpis_produccion['fecha_fin']
+    }
+    
+    return render_template('indicadores/dashboard.html', kpis=kpis)

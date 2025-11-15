@@ -1,6 +1,9 @@
 from app.models.base_model import BaseModel
 from datetime import datetime
 from typing import Dict
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ReclamoModel(BaseModel):
     """
@@ -122,3 +125,19 @@ class ReclamoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error contando reclamos para cliente {cliente_id}: {e}", exc_info=True)
             return {'success': False, 'error': f'Error de base de datos: {str(e)}', 'count': 0}
+
+    def count_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta los reclamos en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("id", count='exact')
+            query = query.gte('created_at', fecha_inicio.isoformat())
+            query = query.lte('created_at', fecha_fin.isoformat())
+            result = query.execute()
+            
+            return {'success': True, 'count': result.count}
+
+        except Exception as e:
+            logger.error(f"Error contando reclamos por rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}

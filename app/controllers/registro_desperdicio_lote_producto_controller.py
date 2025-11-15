@@ -33,6 +33,9 @@ class RegistroDesperdicioLoteProductoController(BaseController):
 
             foto_url = None
             if file and file.filename:
+                if not self.allowed_file(file.filename):
+                    return self.error_response("Tipo de archivo no permitido. Solo se aceptan imágenes (png, jpg, jpeg, gif).", 400)
+
                 from werkzeug.utils import secure_filename
                 import time
 
@@ -40,9 +43,9 @@ class RegistroDesperdicioLoteProductoController(BaseController):
                 bucket_name = "registro_desperdicio_lote_producto"
                 filename = secure_filename(file.filename)
                 destination_path = f"{lote_id}/{int(time.time())}_{filename}"
-                
+
                 upload_result, status_code = storage_controller.upload_file(file, bucket_name, destination_path)
-                
+
                 if status_code == 200 and upload_result.get('success'):
                     foto_url = upload_result.get('url')
                 else:
@@ -89,3 +92,9 @@ class RegistroDesperdicioLoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error en registrar_desperdicio: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def allowed_file(self, filename: str) -> bool:
+        """Verifica si la extensión del archivo está permitida."""
+        ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+        return '.' in filename and \
+               filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
