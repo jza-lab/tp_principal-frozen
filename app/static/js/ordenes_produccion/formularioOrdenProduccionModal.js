@@ -92,31 +92,28 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             
             let datosValidos = true;
+            let cantidadInvalida = false;
             itemRows.forEach((row, index) => {
                 const id = row.querySelector('.product-id').value;
-                const cantidadInput = row.querySelector('.cantidad'); // <-- CORRECCIÓN DE SELECTOR
-                const cantidad = cantidadInput.value;
+                const cantidadInput = row.querySelector('.cantidad');
+                const cantidad = parseInt(cantidadInput.value, 10);
 
-                if (!cantidad || parseFloat(cantidad) <= 0) {
+                if (isNaN(cantidad) || cantidad <= 0) {
                     cantidadInput.classList.add('is-invalid');
                     datosValidos = false;
+                    cantidadInvalida = true;
                 } else {
                     cantidadInput.classList.remove('is-invalid');
                 }
 
-                // --- CORRECCIÓN DE LA ESTRUCTURA DEL PAYLOAD ---
-                // El backend espera un objeto, no un array. 
-                // Aunque en el controlador lo procesamos como un array,
-                // el envío desde un form tradicional lo mandaría como objeto.
-                // Lo mantenemos como array que es más limpio y ajustamos el controller si hace falta.
                 productosParaEnviar.push({
                     id: id,
                     cantidad: cantidad
                 });
             });
 
-            if (!datosValidos) {
-                 showNotificationModal('Error', 'Por favor, ingrese una cantidad válida (mayor a cero) para todos los productos.', 'error');
+            if (cantidadInvalida) {
+                showNotificationModal('Error', 'Por favor, ingrese una cantidad válida (mayor a cero) para todos los productos.', 'error');
                 return;
             }
 
@@ -130,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function () {
             submitButton.disabled = true;
             submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creando...`;
 
-            fetch(form.action, {
+            fetch(CREAR_URL, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

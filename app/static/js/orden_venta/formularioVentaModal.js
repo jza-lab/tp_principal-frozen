@@ -81,11 +81,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Configurar el input de cantidad (min, step)
         const cantidadInput = newRow.querySelector('.item-quantity');
-        const unidadMedida = selectedOption.dataset.unidad || 'unidades';
-        const isInteger = unidadMedida.startsWith('paquete') || unidadMedida === 'unidades';
-        cantidadInput.step = isInteger ? '1' : '0.01';
-        cantidadInput.min = isInteger ? '1' : '0.01';
-        cantidadInput.value = isInteger ? '1' : '1.00'; // Valor inicial
+        cantidadInput.step = '1';
+        cantidadInput.min = '0';
+        cantidadInput.value = '0'; // Valor inicial
 
         // Calcular el subtotal inicial
         const subtotalDisplay = newRow.querySelector('.subtotal-item');

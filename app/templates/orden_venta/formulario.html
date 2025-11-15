@@ -460,10 +460,10 @@
                                     <td>
                                         <div class="input-group input-group-sm">
                                             <input type="number" class="form-control item-quantity"
-                                                style="min-width: 8ch;" oninput="limitarDigitos(this, 7)"
+                                                style="min-width: 8ch;" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                                                 name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10" max="5000"
-                                                min="{{ min_value }}" step="{{ step_value }}"
-                                                value="{{ item.get('cantidad', 0) }}" required {% if pedido and
+                                                min="0" step="1"
+                                                value="{{ item.get('cantidad', 0) | int }}" required {% if pedido and
                                                 pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                             <span class="input-group-text unidad-display">
                                                 {{ unidad_medida if current_product else '--' }}
@@ -579,7 +579,7 @@
         <td>
             <div class="input-group input-group-sm">
                 <input type="number" min="0" max="5000" step="1" value="0" class="form-control item-quantity"
-                    style="min-width: 8ch;" oninput="limitarDigitos(this, 7)" name="items-__prefix__-cantidad"
+                    style="min-width: 8ch;" oninput="this.value = this.value.replace(/[^0-9]/g, '')" name="items-__prefix__-cantidad"
                     placeholder="Ej: 10" required>
                 <span class="input-group-text unidad-display">--</span>
             </div>

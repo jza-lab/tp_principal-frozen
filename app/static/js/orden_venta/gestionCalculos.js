@@ -59,7 +59,7 @@ window.calculateOrderTotals = function () {
 
         if (productSelect && quantityInput) {
             const productId = productSelect.value;
-            const quantity = parseFloat(quantityInput.value) || 0;
+            const quantity = parseInt(quantityInput.value, 10) || 0;
             
             const selectedOption = productSelect.options[productSelect.selectedIndex];
             let price = 0;

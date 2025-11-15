@@ -191,7 +191,7 @@
         </td>
         <td>
             <div class="input-group input-group-sm">
-                <input type="number" step="1" min="0" value="0" max="5000" class="form-control cantidad" name="productos[__prefix__][cantidad]" required>
+                <input type="number" step="1" min="1" value="0" max="5000" class="form-control cantidad" name="productos[__prefix__][cantidad]" oninput="this.value = this.value.replace(/[^0-9]/g, '')" required>
                 <span class="input-group-text unidad-display"></span>
             </div>
         </td>

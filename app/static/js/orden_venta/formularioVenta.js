@@ -78,6 +78,19 @@ async function handleSubmit(event) {
         return;
     }
 
+    let invalidQuantity = false;
+    itemRows.forEach(row => {
+        const cantidadInput = row.querySelector('input[name*="cantidad"]');
+        if (parseInt(cantidadInput.value, 10) === 0) {
+            invalidQuantity = true;
+        }
+    });
+
+    if (invalidQuantity) {
+        showNotificationModal('Cantidad Inválida', 'No puede haber productos con cantidad 0.', 'error');
+        return;
+    }
+
     const payload = buildPayload();
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
@@ -149,7 +162,7 @@ function buildPayload() {
             payload.items.push({
                 id: idInput?.value ? parseInt(idInput.value) : null,
                 producto_id: parseInt(productoSelect.value),
-                cantidad: parseFloat(cantidadInput.value) || 0,
+                cantidad: parseInt(cantidadInput.value, 10) || 0,
                 precio_unitario: precioUnitario
             });
         }
