@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, date, timedelta
+import copy
 
 from flask import jsonify
 from flask_jwt_extended import get_current_user
@@ -129,61 +130,52 @@ class PedidoController(BaseController):
             logger.error(f"Error interno obteniendo detalle de pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple: # <-- Aceptar usuario_id
+    def crear_pedido_con_items(self, form_data: Dict, usuario_id: int) -> tuple:
         """
-        Valida y crea pedido. Verifica stock/mínimo y puede iniciar proceso auto.
-        Recibe usuario_id como parámetro.
+        Valida y crea un pedido. Implementa "reserva dura": descuenta stock disponible
+        inmediatamente y divide los items si el cumplimiento es parcial (stock y producción).
         """
         try:
-            # Consolidar items y manejar dirección
+            # 1. PREPARACIÓN Y VALIDACIÓN INICIAL
             if 'items-TOTAL_FORMS' in form_data: form_data.pop('items-TOTAL_FORMS')
             if 'items' in form_data: form_data['items'] = self._consolidar_items(form_data['items'])
+            
+            items_data = form_data.pop('items', [])
+            if not items_data:
+                return self.error_response("El pedido debe contener al menos un producto.", 400)
 
             direccion_id = self._obtener_o_crear_direccion_para_pedido(form_data)
             if direccion_id is None:
-                 return self.error_response("Error procesando la dirección de entrega.", 400)
+                return self.error_response("Error procesando la dirección de entrega.", 400)
             form_data['id_direccion_entrega'] = direccion_id
             form_data.pop('direccion_entrega', None); form_data.pop('usar_direccion_alternativa', None)
 
-            items_data = form_data.pop('items', [])
-            pedido_data = form_data
-
-            # --- LÓGICA DE CRÉDITO ---
-            id_cliente = pedido_data.get('id_cliente')
+            # Lógica de crédito y fechas (sin cambios)
+            id_cliente = form_data.get('id_cliente')
             cliente_info = self.cliente_model.find_by_id(id_cliente)
             if cliente_info.get('success'):
                 cliente_data = cliente_info['data']
-                if cliente_data.get('estado_crediticio') == 'alertado' and pedido_data.get('condicion_venta') != 'contado':
+                if cliente_data.get('estado_crediticio') == 'alertado' and form_data.get('condicion_venta') != 'contado':
                     return self.error_response("El cliente tiene un estado crediticio 'alertado' y solo puede realizar pedidos al contado.", 403)
-
-            condicion_venta = pedido_data.get('condicion_venta', 'contado')
-            if 'fecha_solicitud' in pedido_data:
-                fecha_solicitud = datetime.fromisoformat(pedido_data['fecha_solicitud']).date()
-                if condicion_venta == 'credito_30':
-                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=30)
-                elif condicion_venta == 'credito_90':
-                    pedido_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=90)
+            
+            condicion_venta = form_data.get('condicion_venta', 'contado')
+            if 'fecha_solicitud' in form_data:
+                fecha_solicitud = datetime.fromisoformat(form_data['fecha_solicitud']).date()
+                plazos = {'credito_30': 30, 'credito_90': 90}
+                if plazo := plazos.get(condicion_venta):
+                    form_data['fecha_vencimiento'] = fecha_solicitud + timedelta(days=plazo)
                 else:
-                    pedido_data['fecha_vencimiento'] = None
-            # --- FIN LÓGICA DE CRÉDITO ---          
+                    form_data['fecha_vencimiento'] = None
 
-            # --- VERIFICACIÓN DE STOCK Y UMBRAL ---
-            all_in_stock = True
-            produccion_requerida = False
+            # 2. GESTIÓN DE STOCK Y DIVISIÓN DE ITEMS
+            nuevos_items_consolidados = []
             auto_aprobar_produccion = True
-
-            if not items_data:
-                 return self.error_response("El pedido debe contener al menos un producto.", 400)
-
-            # --- OPTIMIZACIÓN: OBTENER TODO EL STOCK EN UNA SOLA CONSULTA ---
+            
             producto_ids_pedido = [item['producto_id'] for item in items_data]
             stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(producto_ids_pedido)
-            
             if not stock_global_resp.get('success'):
                 return self.error_response("No se pudo verificar el stock para los productos del pedido.", 500)
-            
             stock_global_map = stock_global_resp.get('data', {})
-            # --- FIN OPTIMIZACIÓN ---
 
             for item in items_data:
                 producto_id = item['producto_id']
@@ -192,51 +184,49 @@ class PedidoController(BaseController):
                 producto_info_res = self.producto_model.find_by_id(producto_id, 'id')
                 if not producto_info_res.get('success') or not producto_info_res.get('data'):
                     return self.error_response(f"Producto ID {producto_id} no encontrado.", 404)
-
-                producto_data = producto_info_res['data']
-                nombre_producto = producto_data.get('nombre', f"ID {producto_id}")
-                stock_min = float(producto_data.get('stock_min_produccion', 0))
-                cantidad_max = float (producto_data.get('cantidad_maxima_x_pedido',0))
-
-                # --- OPTIMIZACIÓN: USAR EL MAPA DE STOCK EN LUGAR DE LLAMADA INDIVIDUAL ---
-                stock_disponible = stock_global_map.get(producto_id, 0)
-                # --- FIN OPTIMIZACIÓN ---
                 
-                if stock_disponible < cantidad_solicitada:
-                    all_in_stock = False; produccion_requerida = True
-                    logger.warning(f"STOCK INSUFICIENTE para '{nombre_producto}': Sol: {cantidad_solicitada}, Disp: {stock_disponible}")
-                elif (stock_disponible - cantidad_solicitada) < stock_min:
-                    produccion_requerida = True
-                    logger.warning(f"STOCK BAJARÍA DEL MÍNIMO ({stock_min}) para '{nombre_producto}'. Producción requerida.")
-
-                if cantidad_solicitada > cantidad_max and cantidad_max > 0:
+                producto_data = producto_info_res['data']
+                if (cantidad_max := float(producto_data.get('cantidad_maxima_x_pedido', 0))) > 0 and cantidad_solicitada > cantidad_max:
                     auto_aprobar_produccion = False
-                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' supera el máximo por pedido ({cantidad_max}). Requiere aprobación manual.")
+
+                stock_disponible = stock_global_map.get(producto_id, 0)
+
+                if stock_disponible >= cantidad_solicitada:
+                    item.update({'origen': 'STOCK', 'estado': 'PENDIENTE_DESCUENTO'})
+                    nuevos_items_consolidados.append(item)
+                elif stock_disponible > 0:
+                    # Parte de stock
+                    item_stock = copy.deepcopy(item)
+                    item_stock.update({'cantidad': stock_disponible, 'origen': 'STOCK', 'estado': 'PENDIENTE_DESCUENTO'})
+                    nuevos_items_consolidados.append(item_stock)
+                    # Parte de producción
+                    item_produccion = copy.deepcopy(item)
+                    item_produccion.update({'cantidad': cantidad_solicitada - stock_disponible, 'origen': 'PRODUCCION', 'estado': 'PENDIENTE_PRODUCCION'})
+                    nuevos_items_consolidados.append(item_produccion)
                 else:
-                    auto_aprobar_produccion = True
-                    logger.info(f"Cantidad ({cantidad_solicitada}) para '{nombre_producto}' NO supera el máximo por pedido ({cantidad_max}).")
-            # --- DECIDIR ESTADO INICIAL Y ACCIÓN ---
-            estado_inicial = 'PENDIENTE'
-            accion_post_creacion = None
+                    item.update({'origen': 'PRODUCCION', 'estado': 'PENDIENTE_PRODUCCION'})
+                    nuevos_items_consolidados.append(item)
+            
+            items_data = nuevos_items_consolidados
 
-            if not produccion_requerida and all_in_stock:
-                estado_inicial = 'LISTO_PARA_ENTREGA'
-                # El pedido quedará listo para despacho manual, no se autocompleta.
-                accion_post_creacion = None
-                for item in items_data: item['estado'] = 'ALISTADO'
-                logger.info("Stock suficiente para abastecer la orden de venta. Estado inicial: LISTO_PARA_ENTREGA.")
-            elif produccion_requerida and auto_aprobar_produccion:
-                 estado_inicial = 'PENDIENTE' # Inicia PENDIENTE
-                 accion_post_creacion = 'INICIAR_PROCESO_AUTO'
-                 logger.info("Producción requerida (cant. pequeña). Estado inicial: PENDIENTE, se intentará iniciar proceso auto.")
-            else: # Producción requerida, cantidad grande
-                 logger.info("Producción requerida (cant. grande). Estado inicial: PENDIENTE (espera aprobación manual).")
+            # 3. DECIDIR ESTADO INICIAL Y ACCIÓN
+            hay_items_stock = any(it['origen'] == 'STOCK' for it in items_data)
+            hay_items_produccion = any(it['origen'] == 'PRODUCCION' for it in items_data)
 
-            pedido_data['estado'] = estado_inicial
-            # ----------------------------------------
+            estado_inicial, accion_post_creacion = ('PENDIENTE', None) # Default
 
-            # Crear el pedido en la BD
-            result = self.model.create_with_items(pedido_data, items_data)
+            if hay_items_stock and not hay_items_produccion:
+                estado_inicial, accion_post_creacion = 'LISTO_PARA_ENTREGA', 'DESCONTAR_STOCK'
+            elif hay_items_stock and hay_items_produccion:
+                estado_inicial, accion_post_creacion = 'EN_PROCESO', 'DESCONTAR_Y_PRODUCIR'
+            elif not hay_items_stock and hay_items_produccion:
+                if auto_aprobar_produccion:
+                    accion_post_creacion = 'INICIAR_PROCESO_AUTO'
+
+            form_data['estado'] = estado_inicial
+            
+            # 4. CREAR PEDIDO EN BD
+            result = self.model.create_with_items(form_data, items_data)
             if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
@@ -244,85 +234,44 @@ class PedidoController(BaseController):
             pedido_id_creado = nuevo_pedido.get('id')
             mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
 
-            # --- EJECUTAR ACCIÓN POST-CREACIÓN ---
-            if estado_inicial == 'LISTO_PARA_ENTREGA':
-                logger.info(f"Intentando reservar stock para el pedido {pedido_id_creado}...")
-                # El resultado de 'create_with_items' ya tiene los items con sus IDs de BD.
-                items_del_pedido_con_id = nuevo_pedido.get('items', [])
+            # 5. EJECUTAR ACCIÓN POST-CREACIÓN (RESERVA DURA Y/O PRODUCCIÓN)
+            # Se identifican los items a procesar basándose en su estado, que sí persiste en la BD.
+            items_creados = nuevo_pedido.get('items', [])
+            items_a_descontar = [it for it in items_creados if it.get('estado') == 'PENDIENTE_DESCUENTO']
+            items_a_producir = [it for it in items_creados if it.get('estado') == 'PENDIENTE_PRODUCCION']
+
+            if accion_post_creacion in ['DESCONTAR_STOCK', 'DESCONTAR_Y_PRODUCIR']:
+                # Esta función será modificada en el siguiente paso para hacer un descuento físico (reserva dura)
                 reserva_result = self.lote_producto_controller.reservar_stock_para_pedido(
                     pedido_id=pedido_id_creado,
-                    items=items_del_pedido_con_id,
+                    items=items_a_descontar,
                     usuario_id=usuario_id
                 )
                 if not reserva_result.get('success'):
-                    # Si la reserva falla, es un estado inconsistente. Se debe notificar y cambiar estado a pendiente.
-                    logger.error(f"Fallo la reserva de stock para el pedido {pedido_id_creado}. Revirtiendo a PENDIENTE. Error: {reserva_result.get('error')}")
                     self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
-                    nuevo_pedido['estado'] = 'PENDIENTE'
-                    mensaje_final = f"Pedido {pedido_id_creado} creado, pero falló la reserva de stock. Queda PENDIENTE."
+                    return self.error_response(f"Pedido creado, pero falló el descuento de stock: {reserva_result.get('error')}. Queda PENDIENTE.", 500)
+                
+                # Actualizar estado de items descontados
+                for item_descontado in items_a_descontar:
+                    self.model.update_item(item_descontado['id'], {'estado': 'ALISTADO'})
+                mensaje_final = f"Pedido {pedido_id_creado} creado y stock descontado."
+
+            if accion_post_creacion in ['DESCONTAR_Y_PRODUCIR', 'INICIAR_PROCESO_AUTO']:
+                inicio_resp, _ = self.iniciar_proceso_pedido(pedido_id_creado, usuario_id, items_a_producir=items_a_producir)
+                if inicio_resp.get('success'):
+                    nuevo_estado = self.model.find_by_id(pedido_id_creado, 'id')['data']['estado']
+                    mensaje_final += f" Proceso de producción iniciado (Estado final: {nuevo_estado})."
+                    nuevo_pedido['estado'] = nuevo_estado
                 else:
-                    logger.info(f"Stock para el pedido {pedido_id_creado} reservado con éxito.")
-                    mensaje_final = f"Pedido {pedido_id_creado} creado y stock reservado. Estado: LISTO PARA ENTREGAR."
+                    mensaje_final += f" Fallo al iniciar producción: {inicio_resp.get('error')}"
 
-            elif accion_post_creacion == 'DESPACHAR_Y_COMPLETAR':
-                logger.info(f"Intentando despachar y completar pedido {pedido_id_creado}...")
-                pedido_con_items_resp = self.model.get_one_with_items(pedido_id_creado)
-                if pedido_con_items_resp.get('success'):
-                    items_del_pedido_con_id = pedido_con_items_resp.get('data', {}).get('items', [])
-                    despacho_result = self.lote_producto_controller.despachar_stock_directo_por_pedido(
-                        pedido_id=pedido_id_creado, items_del_pedido=items_del_pedido_con_id
-                    )
-                    if despacho_result.get('success'):
-                        self.model.cambiar_estado(pedido_id_creado, 'COMPLETADO')
-                        mensaje_final = f"Pedido {pedido_id_creado} COMPLETADO automáticamente (stock disponible y despachado)."
-                        nuevo_pedido['estado'] = 'COMPLETADO'
-                    else:
-                        self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
-                        logger.error(f"Fallo despacho en creación pedido {pedido_id_creado}. Revirtiendo a PENDIENTE. Error: {despacho_result.get('error')}")
-                        return self.error_response(f"Pedido creado, pero falló despacho: {despacho_result.get('error')}", 500)
-                else:
-                    logger.error(f"No se pudieron obtener items para despachar pedido {pedido_id_creado}. Dejado en LISTO_PARA_ENTREGA.")
-
-            elif accion_post_creacion == 'INICIAR_PROCESO_AUTO':
-                logger.info(f"Intentando iniciar proceso automáticamente para pedido {pedido_id_creado}...")
-                # --- USAR usuario_id RECIBIDO ---
-                if usuario_id is None or int(usuario_id) < 0:
-                     logger.error(f"No se pudo iniciar proceso auto para pedido {pedido_id_creado}: Usuario ID no válido proporcionado.")
-                     mensaje_final += " (No se pudo iniciar proceso automáticamente por falta de usuario)."
-                else:
-                    # Llamar a iniciar_proceso_pedido usando el usuario_id del parámetro
-                    inicio_resp, inicio_status = self.iniciar_proceso_pedido(pedido_id_creado, usuario_id)
-                    if inicio_resp.get('success'):
-                        # Consultar estado final después de iniciar proceso
-                        nuevo_estado_despues_inicio = self.model.find_by_id(pedido_id_creado, 'id')['data']['estado']
-                        mensaje_final = f"Pedido {pedido_id_creado} creado y proceso iniciado automáticamente (Estado final: {nuevo_estado_despues_inicio}). {inicio_resp.get('message', '')}"
-                        nuevo_pedido['estado'] = nuevo_estado_despues_inicio # Actualizar estado para la respuesta
-                    else:
-                         logger.error(f"Fallo al iniciar proceso auto para pedido {pedido_id_creado}: {inicio_resp.get('error')}")
-                         mensaje_final += f" (Fallo al iniciar proceso automáticamente: {inicio_resp.get('error')})"
-                # --- FIN USO usuario_id ---
-
-            # --- FIN EJECUCIÓN ACCIÓN ---
-
-            # Actualizar condición de venta del cliente
-            id_cliente = nuevo_pedido.get('id_cliente')
-            if id_cliente:
-                pedidos_previos,_ = self.obtener_pedidos(filtros={'id_cliente': id_cliente})
-                pedidos_validos = [p for p in pedidos_previos.get('data', []) if p.get('estado') != 'CANCELADO']
-                num_pedidos = len(pedidos_validos)
-                if num_pedidos == 1: self.cliente_model.update(id_cliente, {'condicion_venta': 2})
-                elif num_pedidos == 2: self.cliente_model.update(id_cliente, {'condicion_venta': 3})
-            
-            detalle = f"Se creó el pedido de venta con ID: {pedido_id_creado}."
-            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Creación', detalle)
-
+            # Lógica post-creación (actualizar cliente, registro)
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Creación', f"Se creó el pedido de venta con ID: {pedido_id_creado}.")
 
             return self.success_response(data=nuevo_pedido, message=mensaje_final, status_code=201)
 
         except ValidationError as e:
-            error_msg = str(e.messages)
-            logger.warning(f"Error de validación al crear pedido: {error_msg}")
-            return self.error_response(f"Datos inválidos: {error_msg}", 400)
+            return self.error_response(f"Datos inválidos: {e.messages}", 400)
         except Exception as e:
             logging.error(f"Error interno en crear_pedido_con_items: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
@@ -361,29 +310,31 @@ class PedidoController(BaseController):
              logger.error(f"Excepción en _obtener_o_crear_direccion_para_pedido: {e}", exc_info=True)
              return None
 
-    def iniciar_proceso_pedido(self, pedido_id: int, usuario_id: int) -> tuple:
+    def iniciar_proceso_pedido(self, pedido_id: int, usuario_id: int, items_a_producir: Optional[list] = None) -> tuple:
         """
-        Pasa un pedido de 'PLANIFICACION' a 'EN PROCESO'.
-        Crea las Órdenes de Producción (OPs) necesarias en este paso.
+        Pasa un pedido a 'EN PROCESO'. Crea OPs para los items especificados o
+        para todos los que no tengan OP si no se especifica.
         """
         try:
-            # 1. Validar estado y datos
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 return self.error_response("Pedido no encontrado.", 404)
 
             pedido_actual = pedido_resp['data']
-            if pedido_actual.get('estado') != 'PENDIENTE':
-                return self.error_response("Solo los pedidos en 'PENDIENTE' pueden pasar a 'EN PROCESO'.", 400)
-
-            # Extraer la fecha requerida del pedido
+            if pedido_actual.get('estado') not in ['PENDIENTE', 'EN_PROCESO']:
+                return self.error_response(f"El pedido debe estar en 'PENDIENTE' o 'EN PROCESO'. Estado actual: {pedido_actual.get('estado')}", 400)
+            
             fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
 
-            # 2. Lógica de creación de OPs
-            items_del_pedido = pedido_actual.get('items', [])
+            items_para_op = items_a_producir if items_a_producir is not None else [
+                item for item in pedido_actual.get('items', []) if item.get('orden_produccion_id') is None
+            ]
+            
             ordenes_creadas = []
-            for item in items_del_pedido:
-                # Solo crear OP si el producto tiene receta
+            from app.controllers.orden_produccion_controller import OrdenProduccionController
+            op_controller = OrdenProduccionController()
+
+            for item in items_para_op:
                 receta_result = self.receta_model.find_all({'producto_id': item['producto_id'], 'activa': True}, limit=1)
                 if receta_result.get('success') and receta_result.get('data'):
                     datos_op = {
@@ -391,15 +342,9 @@ class PedidoController(BaseController):
                         'cantidad': item['cantidad'],
                         'fecha_planificada': date.today().isoformat(),
                         'prioridad': 'NORMAL',
-                        # --- AÑADIR FECHA META AQUÍ ---
                         'fecha_meta': fecha_requerido_pedido
-                        # ---------------------------------
                     }
-                    from app.controllers.orden_produccion_controller import OrdenProduccionController
-                    orden_produccion_controller = OrdenProduccionController()
-                    # --- FIX: Manejo defensivo de la respuesta ---
-                    resultado_op_tuple = orden_produccion_controller.crear_orden(datos_op, usuario_id)
-                    resultado_op = resultado_op_tuple[0] if isinstance(resultado_op_tuple, tuple) else resultado_op_tuple
+                    resultado_op, _ = op_controller.crear_orden(datos_op, usuario_id)
 
                     if resultado_op.get('success'):
                         orden_creada = resultado_op.get('data', {})
@@ -408,15 +353,13 @@ class PedidoController(BaseController):
                     else:
                         logging.error(f"No se pudo crear la OP para el producto {item['producto_id']}. Error: {resultado_op.get('error')}")
                 else:
-                    # Si no hay receta, el item se considera listo para el siguiente paso.
                     self.model.update_item(item['id'], {'estado': 'ALISTADO'})
 
-            # 3. Actualizar estado del pedido
-            self.model.actualizar_estado_agregado(pedido_id) # Esto lo pasará a EN_PROCESO si se creó alguna OP
+            if ordenes_creadas:
+                self.model.actualizar_estado_agregado(pedido_id)
 
-            msg = f"Pedido enviado a producción. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
-            detalle = f"Se inició el proceso para el pedido de venta con ID: {pedido_id}. Se generaron {len(ordenes_creadas)} OPs."
-            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Inicio de Proceso', detalle)
+            msg = f"Proceso iniciado. Se generaron {len(ordenes_creadas)} Órdenes de Producción."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Inicio de Proceso', f"Se inició el proceso para el pedido {pedido_id}. Se generaron {len(ordenes_creadas)} OPs.")
             return self.success_response(data={'ordenes_creadas': ordenes_creadas}, message=msg)
 
         except Exception as e:

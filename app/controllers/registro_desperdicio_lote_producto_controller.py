@@ -34,7 +34,7 @@ class RegistroDesperdicioLoteProductoController(BaseController):
             foto_url = None
             if file and file.filename:
                 storage_controller = StorageController()
-                folder = f"desperdicios_lote/{lote_id}"
+                folder = f"{lote_id}"
                 upload_result = storage_controller.upload_file(file, folder)
                 if upload_result['success']:
                     foto_url = upload_result['url']
