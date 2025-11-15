@@ -168,7 +168,7 @@ class PedidoController(BaseController):
                     form_data['fecha_vencimiento'] = None
 
             # 2. GESTIÓN DE STOCK Y DIVISIÓN DE ITEMS
-            nuevos_items_consolidados = []
+            items_para_crear = []
             auto_aprobar_produccion = True
             
             producto_ids_pedido = [item['producto_id'] for item in items_data]
@@ -192,28 +192,24 @@ class PedidoController(BaseController):
                 stock_disponible = stock_global_map.get(producto_id, 0)
 
                 if stock_disponible >= cantidad_solicitada:
-                    item.update({'origen': 'STOCK', 'estado': 'PENDIENTE_DESCUENTO'})
-                    nuevos_items_consolidados.append(item)
+                    item.update({'estado': 'PENDIENTE_DESCUENTO'})
+                    items_para_crear.append(item)
                 elif stock_disponible > 0:
-                    # Parte de stock
-                    item_stock = copy.deepcopy(item)
-                    item_stock.update({'cantidad': stock_disponible, 'origen': 'STOCK', 'estado': 'PENDIENTE_DESCUENTO'})
-                    nuevos_items_consolidados.append(item_stock)
-                    # Parte de producción
-                    item_produccion = copy.deepcopy(item)
-                    item_produccion.update({'cantidad': cantidad_solicitada - stock_disponible, 'origen': 'PRODUCCION', 'estado': 'PENDIENTE_PRODUCCION'})
-                    nuevos_items_consolidados.append(item_produccion)
+                    item.update({
+                        'estado': 'PARCIAL',
+                        '_cantidad_stock': int(stock_disponible),
+                        '_cantidad_produccion': int(cantidad_solicitada - stock_disponible)
+                    })
+                    items_para_crear.append(item)
                 else:
-                    item.update({'origen': 'PRODUCCION', 'estado': 'PENDIENTE_PRODUCCION'})
-                    nuevos_items_consolidados.append(item)
+                    item.update({'estado': 'PENDIENTE_PRODUCCION'})
+                    items_para_crear.append(item)
             
-            items_data = nuevos_items_consolidados
-
             # 3. DECIDIR ESTADO INICIAL Y ACCIÓN
-            hay_items_stock = any(it['origen'] == 'STOCK' for it in items_data)
-            hay_items_produccion = any(it['origen'] == 'PRODUCCION' for it in items_data)
+            hay_items_stock = any(it['estado'] in ['PENDIENTE_DESCUENTO', 'PARCIAL'] for it in items_para_crear)
+            hay_items_produccion = any(it['estado'] in ['PENDIENTE_PRODUCCION', 'PARCIAL'] for it in items_para_crear)
 
-            estado_inicial, accion_post_creacion = ('PENDIENTE', None) # Default
+            estado_inicial, accion_post_creacion = ('PENDIENTE', None)
 
             if hay_items_stock and not hay_items_produccion:
                 estado_inicial, accion_post_creacion = 'LISTO_PARA_ENTREGA', 'DESCONTAR_STOCK'
@@ -226,7 +222,7 @@ class PedidoController(BaseController):
             form_data['estado'] = estado_inicial
             
             # 4. CREAR PEDIDO EN BD
-            result = self.model.create_with_items(form_data, items_data)
+            result = self.model.create_with_items(form_data, items_para_crear)
             if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
 
@@ -235,28 +231,37 @@ class PedidoController(BaseController):
             mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
 
             # 5. EJECUTAR ACCIÓN POST-CREACIÓN (RESERVA DURA Y/O PRODUCCIÓN)
-            # Se identifican los items a procesar basándose en su estado, que sí persiste en la BD.
             items_creados = nuevo_pedido.get('items', [])
-            items_a_descontar = [it for it in items_creados if it.get('estado') == 'PENDIENTE_DESCUENTO']
-            items_a_producir = [it for it in items_creados if it.get('estado') == 'PENDIENTE_PRODUCCION']
+            items_originales_map = {int(item['producto_id']): item for item in items_para_crear}
+            
+            items_a_descontar = []
+            items_a_producir = []
+            
+            for item_creado in items_creados:
+                estado = item_creado.get('estado')
+                producto_id = int(item_creado.get('producto_id'))
+                item_original = items_originales_map.get(producto_id)
 
-            if accion_post_creacion in ['DESCONTAR_STOCK', 'DESCONTAR_Y_PRODUCIR']:
-                # Esta función será modificada en el siguiente paso para hacer un descuento físico (reserva dura)
-                reserva_result = self.lote_producto_controller.reservar_stock_para_pedido(
-                    pedido_id=pedido_id_creado,
-                    items=items_a_descontar,
-                    usuario_id=usuario_id
-                )
+                if estado == 'PENDIENTE_DESCUENTO':
+                    items_a_descontar.append(item_creado)
+                elif estado == 'PENDIENTE_PRODUCCION':
+                    items_a_producir.append(item_creado)
+                elif estado == 'PARCIAL' and item_original:
+                    items_a_descontar.append({'id': item_creado['id'], 'producto_id': producto_id, 'cantidad': item_original['_cantidad_stock']})
+                    items_a_producir.append({'id': item_creado['id'], 'producto_id': producto_id, 'cantidad': item_original['_cantidad_produccion']})
+
+            if accion_post_creacion in ['DESCONTAR_STOCK', 'DESCONTAR_Y_PRODUCIR'] and items_a_descontar:
+                reserva_result = self.lote_producto_controller.reservar_stock_para_pedido(pedido_id_creado, items_a_descontar, usuario_id)
                 if not reserva_result.get('success'):
                     self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
                     return self.error_response(f"Pedido creado, pero falló el descuento de stock: {reserva_result.get('error')}. Queda PENDIENTE.", 500)
                 
-                # Actualizar estado de items descontados
-                for item_descontado in items_a_descontar:
-                    self.model.update_item(item_descontado['id'], {'estado': 'ALISTADO'})
+                ids_completos = [i['id'] for i in items_a_descontar if i['id'] not in [p['id'] for p in items_a_producir]]
+                for item_id in ids_completos:
+                    self.model.update_item(item_id, {'estado': 'ALISTADO'})
                 mensaje_final = f"Pedido {pedido_id_creado} creado y stock descontado."
 
-            if accion_post_creacion in ['DESCONTAR_Y_PRODUCIR', 'INICIAR_PROCESO_AUTO']:
+            if accion_post_creacion in ['DESCONTAR_Y_PRODUCIR', 'INICIAR_PROCESO_AUTO'] and items_a_producir:
                 inicio_resp, _ = self.iniciar_proceso_pedido(pedido_id_creado, usuario_id, items_a_producir=items_a_producir)
                 if inicio_resp.get('success'):
                     nuevo_estado = self.model.find_by_id(pedido_id_creado, 'id')['data']['estado']
