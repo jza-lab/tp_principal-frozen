@@ -180,14 +180,31 @@ class OrdenProduccionController(BaseController):
     def crear_orden(self, form_data: Dict, usuario_id: int) -> Dict:
         """
         Valida datos y crea una o varias órdenes de producción.
+        --- CORREGIDO ---
+        Ahora maneja tanto una lista de 'productos' (desde el form)
+        como una llamada directa con 'producto_id' (desde consolidación).
         """
         from app.models.receta import RecetaModel
         receta_model = RecetaModel()
 
         try:
             productos = form_data.get('productos')
+
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
             if not productos:
-                return {'success': False, 'error': 'No se han seleccionado productos para crear las órdenes.'}
+                # Si no se pasó una lista 'productos', asumimos que es una
+                # llamada interna (como la consolidación) que pasa los datos
+                # en el nivel superior de form_data.
+                if form_data.get('producto_id') and form_data.get('cantidad_planificada'):
+                    # Construir la lista 'productos' manualmente
+                    productos = [{
+                        'id': form_data.get('producto_id'),
+                        'cantidad': form_data.get('cantidad_planificada')
+                    }]
+                else:
+                    # Si no, ahora sí es un error.
+                    return {'success': False, 'error': 'No se han seleccionado productos para crear las órdenes.'}
+            # --- FIN DE LA CORRECCIÓN! ---
 
             ordenes_creadas = []
             errores = []
@@ -208,12 +225,16 @@ class OrdenProduccionController(BaseController):
                     'estado': 'PENDIENTE'
                 }
 
-                receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
-                if not receta_result.get('success') or not receta_result.get('data'):
-                    errores.append(f'No se encontró una receta activa para el producto ID: {producto_id}.')
-                    continue
-                
-                datos_op['receta_id'] = receta_result['data'][0]['id']
+                # --- ¡CAMBIO! Añadir receta_id si ya viene (de consolidación) ---
+                if form_data.get('receta_id'):
+                    datos_op['receta_id'] = form_data.get('receta_id')
+                else:
+                    # Si no, buscarla (flujo original del form)
+                    receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
+                    if not receta_result.get('success') or not receta_result.get('data'):
+                        errores.append(f'No se encontró una receta activa para el producto ID: {producto_id}.')
+                        continue
+                    datos_op['receta_id'] = receta_result['data'][0]['id']
 
                 try:
                     validated_data = self.schema.load(datos_op)
@@ -225,7 +246,12 @@ class OrdenProduccionController(BaseController):
                         op = result.get('data')
                         ordenes_creadas.append(op)
                         detalle = f"Se creó la orden de producción {op.get('codigo')}."
-                        self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Creación', detalle)
+                        # Evitar error si el current_user no está disponible en un thread
+                        try:
+                            user = get_current_user()
+                            self.registro_controller.crear_registro(user, 'Ordenes de produccion', 'Creación', detalle)
+                        except Exception:
+                            logger.warning(f"No se pudo registrar en log (sin contexto de usuario): {detalle}")
                     else:
                         errores.append(f"Error al crear OP para producto {producto_id}: {result.get('error')}")
 
@@ -234,8 +260,13 @@ class OrdenProduccionController(BaseController):
 
             if errores:
                 return {'success': False, 'error': '; '.join(errores), 'data': {'creadas': ordenes_creadas}}
-            
-            return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
+
+            # --- ¡CAMBIO! Devolver solo la OP (si es consolidación) o la lista ---
+            if len(ordenes_creadas) == 1 and not form_data.get('productos'):
+                # Si era una llamada de consolidación, devolver solo el objeto OP
+                return {'success': True, 'data': ordenes_creadas[0], 'message': 'Orden de producción consolidada creada.'}
+            else:
+                return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
 
         except Exception as e:
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
@@ -296,7 +327,7 @@ class OrdenProduccionController(BaseController):
             # 3. Si no hay faltantes, proceder a reservar y cambiar estado
             if not insumos_faltantes:
                 logger.info(f"Stock completo encontrado para OP {orden_produccion_id}. Procediendo a reservar...")
-                
+
                 usuario_creador_id = orden.get('usuario_creador_id')
                 if not usuario_creador_id:
                     error_msg = f"La OP {orden_produccion_id} no tiene un usuario creador. No se puede reservar el stock."
@@ -309,7 +340,7 @@ class OrdenProduccionController(BaseController):
                     error_msg = f"Stock disponible para OP {orden_produccion_id}, pero la reserva falló: {reserva_result.get('error')}"
                     logger.error(error_msg)
                     return {'success': False, 'error': error_msg}
-                
+
                 # Cambiar el estado
                 nuevo_estado = 'LISTA PARA PRODUCIR'
                 cambio_estado_result = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
@@ -356,33 +387,33 @@ class OrdenProduccionController(BaseController):
             try:
                 orden_id = orden['id']
                 logger.debug(f"Iniciando verificación para OP {orden_id} (Código: {orden.get('codigo')})...")
-                
+
                 # --- INICIO DE LA NUEVA LÓGICA DE VERIFICACIÓN DE OC ---
                 logger.debug(f"Verificando estado de OCs vinculadas para OP {orden_id}...")
-                
+
                 # 1. Encontrar todas las OCs "Padre" vinculadas a esta OP
                 ocs_vinculadas_res = self.orden_compra_controller.model.find_all(
                     filters={'orden_produccion_id': orden_id}
                 )
-                
+
                 # Si la OP tiene OCs vinculadas, debemos chequearlas
                 if ocs_vinculadas_res.get('success') and ocs_vinculadas_res.get('data'):
                     ocs_padre = ocs_vinculadas_res.get('data')
                     todas_ocs_completas = True
-                    
+
                     for oc_padre in ocs_padre:
                         oc_padre_id = oc_padre.get('id')
-                        
+
                         # 2. Buscar si esta OC Padre tiene una Hija
                         oc_hija_res = self.orden_compra_controller.model.find_all(
                             filters={'complementa_a_orden_id': oc_padre_id},
                             limit=1
                         )
-                        
+
                         oc_hija = None
                         if oc_hija_res.get('success') and oc_hija_res.get('data'):
                             oc_hija = oc_hija_res.get('data')[0]
-                            
+
                         # 3. Determinar qué estado verificar
                         if oc_hija:
                             # Si hay hija, el estado de la hija es el que importa
@@ -396,18 +427,18 @@ class OrdenProduccionController(BaseController):
                                 logger.info(f"OP {orden_id} en espera. OC Padre {oc_padre_id} ({oc_padre.get('estado')}) (sin hija) aún no está 'RECEPCION COMPLETA'.")
                                 todas_ocs_completas = False
                                 break # Salir del bucle for oc_padre
-                    
+
                     # 4. Si alguna OC (la Hija si existe, o la Padre si no) no está completa, saltar esta OP
                     if not todas_ocs_completas:
                         continue # Pasar a la siguiente OP en 'EN ESPERA'
-                        
+
                 else:
                     # No se encontraron OCs vinculadas. En este caso, la OP depende solo del stock.
                     logger.debug(f"OP {orden_id} no tiene OCs vinculadas, depende solo de stock.")
-                
+
                 logger.info(f"Verificación de OCs superada para OP {orden_id}. Procediendo a verificar stock.")
                 # --- FIN DE LA NUEVA LÓGICA DE VERIFICACIÓN DE OC ---
-                
+
 
                 # 3. Verificar si hay stock disponible (dry run)
                 verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
@@ -421,7 +452,7 @@ class OrdenProduccionController(BaseController):
                 # 4. Si no hay faltantes, proceder a reservar y cambiar estado
                 if not insumos_faltantes:
                     logger.info(f"Stock completo encontrado para OP {orden_id}. Procediendo a reservar y actualizar estado.")
-                    
+
                     usuario_creador_id = orden.get('usuario_creador_id')
                     if not usuario_creador_id:
                         logger.error(f"La OP {orden_id} no tiene un usuario creador. No se puede reservar el stock. Saltando.")
@@ -434,7 +465,7 @@ class OrdenProduccionController(BaseController):
                         logger.error(f"Stock disponible para OP {orden_id}, pero la reserva falló: {reserva_result.get('error')}")
                         errores.append(f"OP {orden_id}: Fallo en reserva - {reserva_result.get('error')}")
                         continue
-                    
+
                     # 6. Cambiar el estado de la orden
                     nuevo_estado = 'LISTA PARA PRODUCIR'
                     cambio_estado_result = self.model.cambiar_estado(orden_id, nuevo_estado)
@@ -452,12 +483,12 @@ class OrdenProduccionController(BaseController):
             except Exception as e:
                 logger.error(f"Error inesperado procesando la OP {orden.get('id')} en la verificación proactiva: {e}", exc_info=True)
                 errores.append(f"OP {orden.get('id')}: Error - {str(e)}")
-        
+
         # 7. Preparar el resumen final
         summary_message = f"Verificación completada. {ordenes_actualizadas_count} órdenes actualizadas."
         if errores:
             summary_message += f" Se encontraron {len(errores)} errores: {'; '.join(errores)}"
-        
+
         logger.info(summary_message)
         return {'success': True, 'message': summary_message, 'data': {'actualizadas': ordenes_actualizadas_count, 'errores': len(errores)}}
 
@@ -1136,7 +1167,7 @@ class OrdenProduccionController(BaseController):
             # --- NUEVO: OBTENER TRASPASO PENDIENTE ---
             traspaso_pendiente_result = self.traspaso_turno_model.find_latest_pending_by_op_id(orden_id)
             traspaso_pendiente = traspaso_pendiente_result.get('data') if traspaso_pendiente_result.get('success') else None
-            
+
             # --- NUEVO: OBTENER UNIDAD DE MEDIDA Y TURNO ACTUAL ---
             producto_id = orden_data.get('producto_id')
             producto_data = self.producto_controller.obtener_producto_por_id(producto_id).get('data', {})
@@ -1284,7 +1315,7 @@ class OrdenProduccionController(BaseController):
         """Gestiona el caso donde hay stock disponible, reservando y actualizando el estado."""
         orden_id = orden_produccion['id']
         logger.info(f"Stock disponible para OP {orden_id}. Reservando insumos...")
-        
+
         # --- INICIO DE LA MODIFICACIÓN ---
         # Llamar al método del InventarioController para que cree los registros de reserva.
         reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden_produccion, usuario_id)
@@ -1504,7 +1535,7 @@ class OrdenProduccionController(BaseController):
             if not orden_actual_res.get('success'):
                 return self.error_response("Orden de producción no encontrada.", 404)
             orden_actual = orden_actual_res.get('data', {})
-            
+
             # 2. Nueva validación de desperdicio contra la cantidad restante
             cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))

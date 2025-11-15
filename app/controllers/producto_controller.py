@@ -227,9 +227,16 @@ class ProductoController(BaseController):
             if not costo_result.get('success'):
                 return self.error_response(costo_result.get('error', 'Error al calcular el costo de la receta.'), 500)
 
-            producto = self.obtener_producto_por_id(producto_id)
-            if not producto:
+            # --- ¡INICIO DE LA CORRECCIÓN! ---
+            # self.obtener_producto_por_id ahora devuelve la respuesta estándar
+            producto_resp = self.obtener_producto_por_id(producto_id)
+            if not producto_resp.get('success'):
                 return self.error_response('Producto no encontrado.', 404)
+
+            producto = producto_resp.get('data') # <-- Desempaquetar aquí
+            if not producto:
+                 return self.error_response('No se encontraron datos del producto.', 404)
+            # --- FIN DE LA CORRECCIÓN! ---
 
             nuevo_costo_base = costo_result['data']['costo_total']
 
@@ -251,10 +258,16 @@ class ProductoController(BaseController):
             logger.error(f"Error en actualizar_costo_producto: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
-    def obtener_producto_por_id(self, producto_id: int) -> Optional[Dict]:
-        """Obtiene un producto por su ID."""
+    def obtener_producto_por_id(self, producto_id: int) -> Dict:
+        """
+        Obtiene un producto por su ID.
+        Devuelve el diccionario de respuesta completo (success, data/error).
+        """
         result = self.model.find_by_id(producto_id, 'id')
-        return result.get('data')
+
+        # 'result' ya es {'success': True, 'data': ...} o {'success': False, 'error': ...}
+        # Simplemente lo devolvemos
+        return result
 
     def obtener_todos_los_productos(self, filtros: Optional[Dict] = None) -> List[Dict]:
         """Obtiene una lista de todos los productos."""

@@ -762,19 +762,18 @@ class PlanificacionController(BaseController):
                 logger.warning(f"--- [Simulación CHECK 2] Verificando Producto ID: {producto_id} (para OP/Grupo: {op_a_planificar_id}) ---")
 
                 # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
-                # producto_resp.get('success') es incorrecto.
-                # El método devuelve el DATO o None.
-                producto_data = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
+                # producto_controller ahora devuelve {'success': True, 'data': {...}}
+                producto_resp = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
 
-                if producto_data: # <-- La comprobación correcta es si producto_data existe
+                if producto_resp.get('success'):
+                    producto_data = producto_resp.get('data', {}) # <-- Desempaquetar los datos
                 # --- ¡¡FIN DE LA CORRECCIÓN!! ---
 
-                    # producto_data = producto_resp.get('data', {}) # <-- Ya no es necesario
                     cantidad_minima = Decimal(producto_data.get('cantidad_minima_produccion', 0))
                     cantidad_a_planificar = Decimal(op_data.get('cantidad_planificada', 0))
 
-                    logger.warning(f"[Simulación CHECK 2] Producto: {producto_data.get('nombre', 'N/A')}")
-                    logger.warning(f"[Simulación CHECK 2] Cant. Mínima (DB): {cantidad_minima}")
+                    logger.warning(f"[Simulación CHECK 2] Producto: {producto_data.get('nombre', 'N/A')}") # <-- Ahora funcionará
+                    logger.warning(f"[Simulación CHECK 2] Cant. Mínima (DB): {cantidad_minima}") # <-- Ahora funcionará
                     logger.warning(f"[Simulación CHECK 2] Cant. a Planificar (OP/Grupo): {cantidad_a_planificar}")
 
                     if cantidad_minima > 0 and cantidad_a_planificar < cantidad_minima:
@@ -789,9 +788,10 @@ class PlanificacionController(BaseController):
 
                 # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
                 else:
-                    logger.error(f"[Simulación CHECK 2] FALLO. No se pudo obtener producto_data para ID: {producto_id}")
+                    error_msg = producto_resp.get('error', f'No se pudo cargar Producto ID {producto_id}') # <-- Leer el error
+                    logger.error(f"[Simulación CHECK 2] FALLO. No se pudo obtener producto_resp. Error: {error_msg}")
                     # ¡FALLO CRÍTICO! No se pudo cargar el producto. DETENER SIMULACIÓN.
-                    return self.error_response(f"Fallo al verificar cantidad mínima: No se pudo cargar Producto ID {producto_id}", 500)
+                    return self.error_response(f"Fallo al verificar cantidad mínima: {error_msg}", 500)
                 # --- ¡¡FIN DE LA CORRECCIÓN!! ---
 
             else:
@@ -804,9 +804,7 @@ class PlanificacionController(BaseController):
 
             # 2. Cargar datos de la asignación
 
-            # --- ¡¡NUEVO LOG DE PRUEBA!! ---
             logger.warning(f"[Simulación] Verificando 'asignaciones' recibidas: {asignaciones}")
-            # --- ¡¡FIN NUEVO LOG!! ---
 
             fecha_inicio_iso = asignaciones.get('fecha_inicio')
             linea_asignada = asignaciones.get('linea_asignada')
@@ -1780,19 +1778,18 @@ class PlanificacionController(BaseController):
                     logger.info(f"--- [AutoPlan CHECK 1] Verificando Producto ID: {producto_id} ---")
 
                     # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
-                    # producto_resp.get('success') es incorrecto.
-                    # El método devuelve el DATO o None.
-                    producto_data = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
+                    # producto_controller ahora devuelve {'success': True, 'data': {...}}
+                    producto_resp = self.orden_produccion_controller.producto_controller.obtener_producto_por_id(producto_id)
 
-                    if producto_data: # <-- La comprobación correcta es si producto_data existe
+                    if producto_resp.get('success'):
+                        producto_data = producto_resp.get('data', {}) # <-- Desempaquetar los datos
                     # --- ¡¡FIN DE LA CORRECCIÓN!! ---
 
-                        # producto_data = producto_resp.get('data', {}) # <-- Ya no es necesario
                         cantidad_minima = Decimal(producto_data.get('cantidad_minima_produccion', 0))
                         cantidad_total_grupo = Decimal(grupo.get('cantidad_total', 0))
 
-                        logger.info(f"[AutoPlan CHECK 1] Producto: {producto_data.get('nombre', 'N/A')}")
-                        logger.info(f"[AutoPlan CHECK 1] Cant. Mínima (DB): {cantidad_minima}")
+                        logger.info(f"[AutoPlan CHECK 1] Producto: {producto_data.get('nombre', 'N/A')}") # <-- Ahora funcionará
+                        logger.info(f"[AutoPlan CHECK 1] Cant. Mínima (DB): {cantidad_minima}") # <-- Ahora funcionará
                         logger.info(f"[AutoPlan CHECK 1] Cant. a Planificar (Grupo): {cantidad_total_grupo}")
 
                         # 2. Comparar
@@ -1809,7 +1806,7 @@ class PlanificacionController(BaseController):
                                 self._crear_o_actualizar_issue(
                                     op_id_individual,
                                     'CANTIDAD_MINIMA', # <-- Nuevo tipo de error
-                                    f"La OP no cumple la cantidad mínima de producción ({cantidad_minima}). Consolide manually.",
+                                    f"La OP no cumple la cantidad mínima de producción ({cantidad_minima}). Consolide manualmente.",
                                     {'cantidad_op': float(cantidad_total_grupo), 'cantidad_minima': float(cantidad_minima)}
                                 )
 
@@ -1820,7 +1817,8 @@ class PlanificacionController(BaseController):
                     # --- ¡¡INICIO DE LA CORRECCIÓN!! ---
                     else:
                         # ¡FALLO CRÍTICO! No se pudo cargar el producto
-                        logger.error(f"[AutoPlan CHECK 1] ¡FALLO CRÍTICO! No se pudo cargar el Producto ID {producto_id} ({producto_nombre}).")
+                        error_msg = producto_resp.get('error', 'Error desconocido al cargar producto') # <-- Leer el error
+                        logger.error(f"[AutoPlan CHECK 1] ¡FALLO CRÍTICO! No se pudo cargar el Producto ID {producto_id} ({producto_nombre}). Error: {error_msg}")
                         logger.error(f"[AutoPlan CHECK 1] Omitiendo grupo {op_codigos} por seguridad.")
                         errores_encontrados.append(f"Grupo {op_codigos} omitido: No se pudo verificar la cantidad mínima (Error al cargar producto {producto_id}).")
                         continue # <-- ¡MUY IMPORTANTE! NO CONTINUAR SI FALLA LA CARGA
