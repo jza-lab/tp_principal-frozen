@@ -127,6 +127,14 @@
                                 href="{{ url_for('lote_producto.listar_lotes') }}"><i class="bi bi-box-seam me-2"></i>
                                 Inventario (Productos)</a></li>
                         {% endif %}
+                        {% if 'consultar_analisis_rentabilidad' is has_permission %}
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
+                        <li><a class="dropdown-item {% if request.endpoint == 'rentabilidad.pagina_rentabilidad' %}active{% endif %}"
+                                href="{{ url_for('rentabilidad.pagina_rentabilidad') }}"><i class="bi bi-graph-up-arrow me-2"></i>
+                                Análisis de Rentabilidad</a></li>
+                        {% endif %}
                     </ul>
                 </li>
                 {% endif %}

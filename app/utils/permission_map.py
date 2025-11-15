@@ -48,6 +48,7 @@ CANONICAL_PERMISSION_MAP = {
     'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['SUPERVISOR', 'GERENTE'],
+    'consultar_analisis_rentabilidad': ['GERENTE', 'VENDEDOR', 'SUPERVISOR'],
 
     # Módulo: Producción
     'crear_orden_de_produccion': ['SUPERVISOR'],
