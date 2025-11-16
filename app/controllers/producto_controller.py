@@ -11,6 +11,7 @@ from app.schemas.producto_schema import ProductoSchema
 from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from decimal import Decimal, InvalidOperation
+from app.models.operacion_receta_model import OperacionRecetaModel
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ProductoController(BaseController):
         self.receta_controller = RecetaController()
         self.receta_model = RecetaModel()
         self.registro_controller = RegistroController()
+        self.operacion_receta_model = OperacionRecetaModel()
 
     def _abrev(self, texto, length=4):
         """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
@@ -74,13 +76,19 @@ class ProductoController(BaseController):
     def crear_producto(self, data: Dict) -> Dict:
         """Valida y crea un nuevo producto, su receta y los ingredientes asociados."""
         try:
-            # Generar código si no se proporciona
             if not data.get('codigo'):
                 data['codigo'] = self._generar_codigo_producto(data.get('nombre', ''))
 
             receta_items = data.pop('receta_items', [])
+            linea_compatible_str = data.pop('linea_compatible', '2')
+
+            # --- ¡INICIO DE LA MODIFICACIÓN! (Leer pasos) ---
+            pasos_receta_data = data.pop('pasos_receta', [])
+            # --- FIN DE LA MODIFICACIÓN ---
+
             validated_data = self.schema.load(data)
 
+            # ... (código de crear producto) ...
             if self.model.find_by_codigo(validated_data['codigo']).get('data'):
                 return self.error_response('El código del producto ya está en uso.', 409)
 
@@ -90,14 +98,14 @@ class ProductoController(BaseController):
 
             producto_creado = result_producto['data']
             producto_id = producto_creado['id']
-
+            # ... (código de crear receta) ...
             receta_data = {
                 'nombre': f"Receta para {producto_creado['nombre']}",
                 'version': '1.0',
-                'producto_id': producto_id
+                'producto_id': producto_id,
+                'linea_compatible': linea_compatible_str
             }
             result_receta = self.receta_model.create(receta_data)
-
             if not result_receta.get('success'):
                 self.model.delete(producto_id, 'id') # Rollback manual
                 return self.error_response(result_receta.get('error', 'Error al crear la receta para el producto.'), 500)
@@ -105,6 +113,35 @@ class ProductoController(BaseController):
             receta_creada = result_receta['data']
             receta_id = receta_creada['id']
 
+            # --- ¡INICIO DE LA MODIFICACIÓN! (Guardar pasos) ---
+            try:
+                pasos_a_insertar = []
+                # Si por alguna razón no vinieron los pasos, usamos los placeholders
+                if not pasos_receta_data:
+                    logger.warning(f"No se recibieron 'pasos_receta' desde el formulario. Usando defaults.")
+                    pasos_a_insertar = [
+                        {'receta_id': receta_id, 'nombre_operacion': 'Preparacion Previa', 'secuencia': 1, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
+                        {'receta_id': receta_id, 'nombre_operacion': 'Coccion', 'secuencia': 2, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
+                        {'receta_id': receta_id, 'nombre_operacion': 'Refrigeracion', 'secuencia': 3, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
+                        {'receta_id': receta_id, 'nombre_operacion': 'Empaquetado', 'secuencia': 4, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1}
+                    ]
+                else:
+                    # Preparamos los datos recibidos del formulario JS
+                    for paso in pasos_receta_data:
+                        paso['receta_id'] = receta_id # Añadimos el ID de la receta
+                        pasos_a_insertar.append(paso)
+
+                # Insertar los pasos
+                insert_result = self.operacion_receta_model.db.table('operacionesreceta').insert(pasos_a_insertar).execute()
+
+                if not insert_result.data or len(insert_result.data) != len(pasos_a_insertar):
+                     logger.warning(f"No se pudieron insertar todos los pasos para la receta {receta_id}")
+
+            except Exception as e_steps:
+                logger.error(f"Error al insertar pasos para receta {receta_id}: {e_steps}")
+            # --- FIN DE LA MODIFICACIÓN ---
+
+            # ... (resto de la función: gestión de ingredientes, registro, etc.) ...
             if receta_items:
                 gestion_result = self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
                 if not gestion_result.get('success'):
