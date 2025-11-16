@@ -239,21 +239,29 @@
                             </div>
                             {% endif %}
 
-                            {% if orden.estado == 'EN ESPERA' and orden.orden_compra_id %}
+                            {% if orden.estado == 'EN ESPERA' and orden.ocs_asociadas %}
                             <div class="col-12 mt-3">
-                                <div class="alert alert-warning mb-0 d-flex justify-content-between align-items-center">
-                                    <span> {# Texto a la izquierda #}
-                                        <i class="bi bi-hourglass-split me-2"></i> Esta orden está <strong>EN
-                                            ESPERA</strong> de
-                                        insumos. Se generó automáticamente una Orden de Compra.
-                                    </span>
-                                    {# Botón/Enlace a la derecha #}
-                                    <a href="{{ url_for('orden_compra.detalle', id=orden.orden_compra_id) }}"
-                                        class="btn btn-sm btn-outline-dark ms-3"> {# Cambiado a botón para
-                                        destacar #}
-                                        Ver OC-{{ orden.orden_compra_id }} <i
-                                            class="bi bi-box-arrow-up-right small"></i>
-                                    </a>
+                                <div class="alert alert-warning mb-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <i class="bi bi-hourglass-split me-2"></i>
+                                            Esta orden está <strong>EN ESPERA</strong> de insumos. Se generaron las siguientes Órdenes de Compra:
+                                        </span>
+                                    </div>
+                                    <hr>
+                                    <ul class="list-unstyled mb-0">
+                                        {% for oc in orden.ocs_asociadas %}
+                                        <li class="d-flex justify-content-between align-items-center mb-1">
+                                            <span>
+                                                <i class="bi bi-file-earmark-text me-2"></i>
+                                                {{ oc.codigo_oc }} - <span class="badge bg-secondary">{{ oc.estado.replace('_', ' ') | title }}</span>
+                                            </span>
+                                            <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}" class="btn btn-sm btn-outline-dark">
+                                                Ver {{ oc.codigo_oc }} <i class="bi bi-box-arrow-up-right small"></i>
+                                            </a>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
                                 </div>
                             </div>
                             {% endif %}

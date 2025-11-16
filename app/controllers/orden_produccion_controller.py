@@ -157,18 +157,37 @@ class OrdenProduccionController(BaseController):
 
     def obtener_orden_por_id(self, orden_id: int) -> Optional[Dict]:
         """
-        Obtiene el detalle de una orden de producción específica.
+        Obtiene el detalle de una orden de producción específica, incluyendo
+        todas sus órdenes de compra asociadas.
         """
         try:
+            # 1. Obtener los datos base de la OP
             result = self.model.get_one_enriched(orden_id)
-            if isinstance(result, dict):
+            if not result.get('success'):
                 return result
-            error_msg = f"Error interno al obtener la OP {orden_id}. El modelo devolvió: {str(result)}"
-            logger.error(error_msg)
-            return {'success': False, 'error': error_msg}
+            
+            orden_data = result.get('data')
+            if not orden_data:
+                return self.error_response(f"No se encontraron datos para la OP {orden_id}.", 404)
+
+            # 2. Obtener todas las órdenes de compra asociadas
+            ocs_asociadas_res, _ = self.orden_compra_controller.get_all_ordenes(
+                filtros={'orden_produccion_id': orden_id}
+            )
+            
+            ocs_asociadas = []
+            if ocs_asociadas_res.get('success'):
+                ocs_asociadas = ocs_asociadas_res.get('data', [])
+
+            # 3. Adjuntar las OCs a los datos de la OP
+            orden_data['ocs_asociadas'] = ocs_asociadas
+            result['data'] = orden_data
+
+            return result
+
         except Exception as e:
             logger.error(f"Excepción en obtener_orden_por_id para OP {orden_id}: {e}", exc_info=True)
-            return {'success': False, 'error': f"Excepción al procesar la solicitud para la OP {orden_id}."}
+            return self.error_response(f"Excepción al procesar la solicitud para la OP {orden_id}.", 500)
 
 
     def obtener_desglose_origen(self, orden_id: int) -> Dict:

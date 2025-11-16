@@ -3,6 +3,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from app.controllers.base_controller import BaseController
+from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.orden_produccion_controller import OrdenProduccionController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.insumo_controller import InsumoController
@@ -28,6 +29,7 @@ class ProduccionKanbanController(BaseController):
         self.reserva_insumo_model = ReservaInsumoModel()
         self.lote_producto_controller = LoteProductoController()
         self.control_calidad_producto_controller = ControlCalidadProductoController()
+        self.orden_compra_controller = OrdenCompraController()
 
     def obtener_datos_para_tablero(self, usuario_id: int, usuario_rol: str) -> tuple:
         """
@@ -54,6 +56,7 @@ class ProduccionKanbanController(BaseController):
             # 3. Realizar consultas masivas
             desperdicios_map = self._obtener_desperdicios_masivo(op_ids)
             recetas_map, insumos_necesarios_map = self._obtener_recetas_e_ingredientes_masivo(receta_ids)
+            ocs_asociadas_map = self._obtener_ocs_asociadas_masivo(op_ids)
             
             # Recopilar todos los IDs de insumos únicos de todas las recetas necesarias.
             todos_los_insumo_ids = set()
@@ -79,6 +82,7 @@ class ProduccionKanbanController(BaseController):
                 # Datos de materiales
                 receta_actual = recetas_map.get(receta_id)
                 insumos_receta = insumos_necesarios_map.get(receta_id, {})
+                ocs_de_la_op = ocs_asociadas_map.get(op_id, [])
                 
                 # LÓGICA DE MATERIALES:
                 # - Para 'EN ESPERA', verificamos el stock actual para ver si ya se podría pasar a 'Lista'.
@@ -89,7 +93,9 @@ class ProduccionKanbanController(BaseController):
                     reservas_result = self.reserva_insumo_model.get_by_orden_produccion_id(op_id)
                     orden['materiales_disponibles'] = reservas_result.get('success') and bool(reservas_result.get('data'))
                 elif estado_actual_normalizado == 'EN_ESPERA':
-                    orden['materiales_disponibles'] = self._verificar_materiales_disponibles(orden, insumos_receta, stock_map)
+                    orden['materiales_disponibles'] = self._verificar_materiales_disponibles(
+                        orden, insumos_receta, stock_map, ocs_de_la_op
+                    )
                 else:
                     orden['materiales_disponibles'] = True # No es relevante para otros estados
                 
@@ -181,6 +187,21 @@ class ProduccionKanbanController(BaseController):
             return self.error_response(f"Error interno: {str(e)}", 500)
 
     # --- BULK DATA FETCHING HELPERS ---
+
+    def _obtener_ocs_asociadas_masivo(self, op_ids: list) -> dict:
+        """Obtiene todas las OCs asociadas a una lista de OPs."""
+        response, _ = self.orden_compra_controller.get_all_ordenes(
+            filtros={'orden_produccion_id': ('in', op_ids)}
+        )
+        if not response.get('success'):
+            return {}
+        
+        ocs_map = defaultdict(list)
+        for oc in response.get('data', []):
+            op_id = oc.get('orden_produccion_id')
+            if op_id:
+                ocs_map[op_id].append(oc)
+        return ocs_map
 
     def _obtener_desperdicios_masivo(self, op_ids: list) -> dict:
         response = self.desperdicio_model.find_all(filters={'orden_produccion_id': op_ids})
@@ -304,11 +325,22 @@ class ProduccionKanbanController(BaseController):
         except (ValueError, TypeError):
             return "0min"
 
-    def _verificar_materiales_disponibles(self, orden: dict, insumos_receta: dict, stock_map: dict) -> bool:
-        """Verifica la disponibilidad de materiales usando datos precargados."""
+    def _verificar_materiales_disponibles(self, orden: dict, insumos_receta: dict, stock_map: dict, ocs_asociadas: list) -> bool:
+        """
+        Verifica la disponibilidad de materiales.
+        1. Si hay OCs asociadas, la disponibilidad depende de que TODAS estén 'RECEPCION_COMPLETA'.
+        2. Si no hay OCs, verifica el stock actual contra la receta.
+        """
+        # Caso 1: La OP tiene órdenes de compra asociadas.
+        if ocs_asociadas:
+            # Todos los materiales están disponibles si y solo si TODAS las OCs están completas.
+            todas_completas = all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in ocs_asociadas)
+            return todas_completas
+
+        # Caso 2: No hay OCs. La disponibilidad depende del stock actual.
         cantidad_planificada = float(orden.get('cantidad_planificada', 0))
         if not insumos_receta:
-            return True # Si no hay ingredientes, los materiales están "disponibles".
+            return True  # Si no hay ingredientes, los materiales están "disponibles".
 
         for insumo_id, cantidad_necesaria_por_unidad in insumos_receta.items():
             cantidad_total_necesaria = cantidad_necesaria_por_unidad * cantidad_planificada
@@ -316,6 +348,7 @@ class ProduccionKanbanController(BaseController):
             
             if stock_actual < cantidad_total_necesaria:
                 return False
+        
         return True
 
     def _calcular_ritmo_actual(self, orden):
