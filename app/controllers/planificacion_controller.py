@@ -19,9 +19,30 @@ from flask import jsonify # <-- Añadir (o usar desde tu BaseController si ya lo
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel # (Debes crear este modelo simple)
 from app.models.issue_planificacion_model import IssuePlanificacionModel
 import holidays
-
+import requests
+import threading
 
 logger = logging.getLogger(__name__)
+
+def enviar_webhook_async(url: str, data: dict):
+    """
+    Envía un webhook en un hilo separado (Thread) para no bloquear
+    la respuesta de la aplicación web principal.
+    """
+    def thread_target():
+        try:
+            # Usamos un timeout corto. Si n8n no responde en 3 segundos,
+            # no nos importa, la app debe continuar.
+            requests.post(url, json=data, timeout=3)
+            logger.info(f"Webhook de n8n enviado exitosamente para OP {data.get('op_codigo')}")
+        except requests.exceptions.RequestException as e:
+            # Si n8n está caído o la URL es incorrecta, solo lo logueamos.
+            # NUNCA debe detener la ejecución de Flask.
+            logger.error(f"Error al enviar webhook de n8n (no bloqueante): {e}")
+
+    # Iniciar el hilo
+    thread = threading.Thread(target=thread_target)
+    thread.start()
 
 class PlanificacionController(BaseController):
     def __init__(self):
@@ -82,19 +103,21 @@ class PlanificacionController(BaseController):
             if receta:
                 linea_compatible_str = receta.get('linea_compatible', '2')
                 sugerencias['linea_compatible'] = linea_compatible_str
-                linea_compatible_list = linea_compatible_str.split(',')
-                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
-                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
-                UMBRAL_CANTIDAD_LINEA_1 = 50
-                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
-                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-                if puede_l1 and puede_l2:
-                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
-                elif puede_l1: linea_sug = 1
-                elif puede_l2: linea_sug = 2
+
+                # --- ¡INICIO DE LA CORRECCIÓN DEL BUG N/D! ---
+                # Forzamos la sugerencia a ser la línea compatible definida,
+                # ya que la lógica de tiempos (tiempo_l1/l2) es obsoleta.
+                try:
+                    linea_sug = int(linea_compatible_str)
+                except (ValueError, TypeError):
+                    linea_sug = 2 # Default a 2 si es inválido
+
                 sugerencias['sugerencia_linea'] = linea_sug
+                # --- FIN DE LA CORRECCIÓN ---
+
+                # 3. Obtener Capacidad Real (¡Desde mapa!)
                 if linea_sug:
-                    ct_data = centros_map.get(linea_sug)
+                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
                     if ct_data:
                         cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
                         eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
@@ -102,6 +125,8 @@ class PlanificacionController(BaseController):
                         cap_neta_calculada = cap_std * eficiencia * utilizacion
                         if cap_neta_calculada > 0:
                             capacidad_neta_linea_sugerida = cap_neta_calculada
+
+            # 4. Calcular T_Prod (Días)
             if carga_total_minutos > 0:
                 sugerencias['sugerencia_t_prod_dias'] = math.ceil(
                     carga_total_minutos / capacidad_neta_linea_sugerida
@@ -519,17 +544,16 @@ class PlanificacionController(BaseController):
                 receta = receta_res['data']
                 linea_compatible_str = receta.get('linea_compatible', '2')
                 sugerencias['linea_compatible'] = linea_compatible_str
-                linea_compatible_list = linea_compatible_str.split(',')
-                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
-                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
-                UMBRAL_CANTIDAD_LINEA_1 = 50
-                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
-                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-                if puede_l1 and puede_l2:
-                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
-                elif puede_l1: linea_sug = 1
-                elif puede_l2: linea_sug = 2
+
+                # --- ¡INICIO DE LA CORRECCIÓN DEL BUG N/D! ---
+                try:
+                    linea_sug = int(linea_compatible_str)
+                except (ValueError, TypeError):
+                    linea_sug = 2 # Default a 2
+
                 sugerencias['sugerencia_linea'] = linea_sug
+                # --- FIN DE LA CORRECCIÓN ---
+
                 if linea_sug:
                     ct_resp = self.centro_trabajo_model.find_by_id(linea_sug, 'id')
                     if ct_resp.get('success'):
@@ -540,6 +564,7 @@ class PlanificacionController(BaseController):
                         cap_neta_calculada = cap_std * eficiencia * utilizacion
                         if cap_neta_calculada > 0:
                             capacidad_neta_linea_sugerida = cap_neta_calculada
+
             if carga_total_minutos > 0:
                 sugerencias['sugerencia_t_prod_dias'] = math.ceil(
                     carga_total_minutos / capacidad_neta_linea_sugerida
@@ -2396,7 +2421,7 @@ class PlanificacionController(BaseController):
         try:
             # 1. Buscar issue existente PENDIENTE
             existing_issue_resp = self.issue_planificacion_model.find_all(
-                filters={'orden_produccion_id': op_id}, # <-- ¡CORREGIDO!
+                filters={'orden_produccion_id': op_id},
                 limit=1
             )
 
@@ -2420,7 +2445,48 @@ class PlanificacionController(BaseController):
                 result = self.issue_planificacion_model.create(issue_data)
 
             if result.get('success'):
-                return result.get('data') # <-- ¡Devolver el objeto!
+
+                # --- ¡¡INICIO DE LA IMPLEMENTACIÓN DE n8n (MEJORADA)!! ---
+                try:
+                    # 1. URL de PRODUCCIÓN de n8n (la que ya tienes)
+                    N8N_WEBHOOK_URL = "https://n8n-kthy.onrender.com/webhook/d84c5362-14ef-45ac-a8bf-14e0d21ffc37"
+
+                    # 2. URL BASE DE TU APLICACIÓN (¡CÁMBIA ESTO!)
+                    # Esta es la URL a la que el supervisor irá al hacer clic.
+                    BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
+
+                    # 3. Preparar los datos que el webhook espera
+                    op_data_resp = self.orden_produccion_controller.obtener_orden_por_id(op_id)
+
+                    op_data = {}
+                    if op_data_resp.get('success'):
+                         op_data = op_data_resp.get('data', {})
+
+                    # Limpiar la fecha meta para que sea legible
+                    fecha_meta_limpia = "N/A"
+                    if op_data.get('fecha_meta'):
+                        fecha_meta_limpia = op_data['fecha_meta'].split('T')[0]
+
+                    # 4. Crear el payload MEJORADO
+                    payload = {
+                        "op_id": op_id,
+                        "op_codigo": op_data.get('codigo', f"ID {op_id}"),
+                        "producto_nombre": op_data.get('producto_nombre', 'N/A'),
+                        "cantidad": op_data.get('cantidad_planificada', 'N/A'),
+                        "fecha_meta": fecha_meta_limpia,
+                        "mensaje": mensaje,
+                        "tipo_error": tipo_error,
+                        "link_url": f"{BASE_APP_URL}/planificacion/" # Enlace directo al tablero
+                    }
+
+                    # 5. Llamar al helper en un hilo (no bloqueante)
+                    enviar_webhook_async(N8N_WEBHOOK_URL, payload)
+
+                except Exception as e_webhook:
+                    logger.error(f"Error al iniciar el hilo del webhook de n8n: {e_webhook}")
+                # --- ¡¡FIN DE LA IMPLEMENTACIÓN DE n8n!! ---
+
+                return result.get('data')
             else:
                 logger.error(f"Error al guardar issue: {result.get('error')}")
                 return None
@@ -2439,125 +2505,125 @@ class PlanificacionController(BaseController):
             logger.error(f"Error al resolver/eliminar issue para OP {op_id}: {e}", exc_info=True)
 
 
-    def _calcular_sugerencias_para_op_optimizado(self, op: Dict, mapas_precargados: Dict) -> Dict:
-        """
-        Versión optimizada que NO consulta la DB.
-        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP
-        usando los mapas de datos precargados.
-        """
-        sugerencias = {
-            'sugerencia_t_prod_dias': 0, 'sugerencia_t_proc_dias': 0,
-            'sugerencia_linea': None, 'sugerencia_stock_ok': False,
-            'sugerencia_fecha_inicio_jit': date.today().isoformat(), 'linea_compatible': None
-        }
-        op_id_log = op.get('id', 'N/A')
-
-        try:
-            receta_id = op.get('receta_id')
-            cantidad = Decimal(op.get('cantidad_planificada', 0))
-
-            if not receta_id or cantidad <= 0:
-                return sugerencias # Devuelve default si no hay datos
-
-            # Mapas de datos
-            operaciones_map = mapas_precargados.get('operaciones', {})
-            recetas_map = mapas_precargados.get('recetas', {})
-            centros_map = mapas_precargados.get('centros_trabajo', {})
-            ingredientes_map = mapas_precargados.get('ingredientes', {})
-            stock_map = mapas_precargados.get('stock', {})
-            insumos_map = mapas_precargados.get('insumos', {})
-
-            # 1. Calcular Carga Total (¡Usando helper optimizado!)
-            operaciones_receta = operaciones_map.get(receta_id, [])
-            carga_total_minutos = self._calcular_carga_op_precargada(op, operaciones_receta)
-
-            # 2. Calcular Línea Sugerida y Capacidad Neta (¡Desde mapas!)
-            linea_sug = None
-            capacidad_neta_linea_sugerida = Decimal(480.0) # Fallback
-            receta = recetas_map.get(receta_id)
-
-            if receta:
-                linea_compatible_str = receta.get('linea_compatible', '2')
-                sugerencias['linea_compatible'] = linea_compatible_str
-                # ... (lógica de decisión de línea_sug, igual que antes) ...
-                linea_compatible_list = linea_compatible_str.split(',')
-                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
-                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
-                UMBRAL_CANTIDAD_LINEA_1 = 50
-                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
-                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
-                if puede_l1 and puede_l2:
-                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
-                elif puede_l1: linea_sug = 1
-                elif puede_l2: linea_sug = 2
-                sugerencias['sugerencia_linea'] = linea_sug
-
-                # 3. Obtener Capacidad Real (¡Desde mapa!)
-                if linea_sug:
-                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
-                    if ct_data:
-                        cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
-                        eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
-                        utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
-                        cap_neta_calculada = cap_std * eficiencia * utilizacion
-                        if cap_neta_calculada > 0:
-                            capacidad_neta_linea_sugerida = cap_neta_calculada
-
-            # 4. Calcular T_Prod (Días)
-            if carga_total_minutos > 0:
-                sugerencias['sugerencia_t_prod_dias'] = math.ceil(
-                    carga_total_minutos / capacidad_neta_linea_sugerida
-                )
-
-            # 5. Verificar Stock (T_Proc) (¡Desde mapas!)
-            ingredientes_receta = ingredientes_map.get(receta_id, [])
-            stock_ok_agg = True
-            tiempos_entrega_agg = []
-
-            if ingredientes_receta:
-                for ingrediente in ingredientes_receta:
-                    insumo_id = ingrediente['id_insumo']
-                    cantidad_ingrediente = Decimal(ingrediente.get('cantidad', 0))
-                    cant_necesaria_total = cantidad_ingrediente * cantidad
-
-                    stock_disp = stock_map.get(insumo_id, Decimal(0)) # <-- ¡CAMBIO!
-
-                    if stock_disp < cant_necesaria_total:
-                        stock_ok_agg = False
-                        # Obtener tiempo de entrega (¡Desde mapa!)
-                        insumo_data = insumos_map.get(insumo_id) # <-- ¡CAMBIO!
-                        if insumo_data:
-                            tiempos_entrega_agg.append(insumo_data.get('tiempo_entrega_dias', 0))
-            else:
-                stock_ok_agg = False
-
-            sugerencias['sugerencia_stock_ok'] = stock_ok_agg
-            if not stock_ok_agg:
-                sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
-
-            # 6. Calcular JIT (igual que antes, solo usa variables locales)
-            # ... (lógica JIT sin cambios) ...
-            today = date.today()
-            t_prod_dias = sugerencias['sugerencia_t_prod_dias']
-            t_proc_dias = sugerencias['sugerencia_t_proc_dias']
-            op_fecha_meta_str = op.get('fecha_meta')
-            if not op_fecha_meta_str:
-                op_fecha_meta_str = op.get('fecha_inicio_planificada')
-                if not op_fecha_meta_str:
-                    op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
-            fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
-            fecha_meta = date.fromisoformat(fecha_meta_solo_str)
-            fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
-            fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
-            fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
-            fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
-            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
-
-        except Exception as e_jit:
-            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA (Optimizado): {e_jit}", exc_info=True)
-            sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
-
-        return sugerencias
+##    def _calcular_sugerencias_para_op_optimizado(self, op: Dict, mapas_precargados: Dict) -> Dict:
+##        """
+##        Versión optimizada que NO consulta la DB.
+##        Calcula T_Prod, T_Proc, Línea Sug, y JIT para una ÚNICA OP
+##        usando los mapas de datos precargados.
+##        """
+##        sugerencias = {
+##            'sugerencia_t_prod_dias': 0, 'sugerencia_t_proc_dias': 0,
+##            'sugerencia_linea': None, 'sugerencia_stock_ok': False,
+##            'sugerencia_fecha_inicio_jit': date.today().isoformat(), 'linea_compatible': None
+##        }
+##        op_id_log = op.get('id', 'N/A')
+##
+##        try:
+##            receta_id = op.get('receta_id')
+##            cantidad = Decimal(op.get('cantidad_planificada', 0))
+##
+##            if not receta_id or cantidad <= 0:
+##                return sugerencias # Devuelve default si no hay datos
+##
+##            # Mapas de datos
+##            operaciones_map = mapas_precargados.get('operaciones', {})
+##            recetas_map = mapas_precargados.get('recetas', {})
+##            centros_map = mapas_precargados.get('centros_trabajo', {})
+##            ingredientes_map = mapas_precargados.get('ingredientes', {})
+##            stock_map = mapas_precargados.get('stock', {})
+##            insumos_map = mapas_precargados.get('insumos', {})
+##
+##            # 1. Calcular Carga Total (¡Usando helper optimizado!)
+##            operaciones_receta = operaciones_map.get(receta_id, [])
+##            carga_total_minutos = self._calcular_carga_op_precargada(op, operaciones_receta)
+##
+##            # 2. Calcular Línea Sugerida y Capacidad Neta (¡Desde mapas!)
+##            linea_sug = None
+##            capacidad_neta_linea_sugerida = Decimal(480.0) # Fallback
+##            receta = recetas_map.get(receta_id)
+##
+##            if receta:
+##                linea_compatible_str = receta.get('linea_compatible', '2')
+##                sugerencias['linea_compatible'] = linea_compatible_str
+##                # ... (lógica de decisión de línea_sug, igual que antes) ...
+##                linea_compatible_list = linea_compatible_str.split(',')
+##                tiempo_l1 = receta.get('tiempo_prod_unidad_linea1', 0)
+##                tiempo_l2 = receta.get('tiempo_prod_unidad_linea2', 0)
+##                UMBRAL_CANTIDAD_LINEA_1 = 50
+##                puede_l1 = '1' in linea_compatible_list and tiempo_l1 > 0
+##                puede_l2 = '2' in linea_compatible_list and tiempo_l2 > 0
+##                if puede_l1 and puede_l2:
+##                    linea_sug = 1 if cantidad >= UMBRAL_CANTIDAD_LINEA_1 else 2
+##                elif puede_l1: linea_sug = 1
+##                elif puede_l2: linea_sug = 2
+##                sugerencias['sugerencia_linea'] = linea_sug
+##
+##                # 3. Obtener Capacidad Real (¡Desde mapa!)
+##                if linea_sug:
+##                    ct_data = centros_map.get(linea_sug) # <-- ¡CAMBIO!
+##                    if ct_data:
+##                        cap_std = Decimal(ct_data.get('tiempo_disponible_std_dia', 480))
+##                        eficiencia = Decimal(ct_data.get('eficiencia', 1.0))
+##                        utilizacion = Decimal(ct_data.get('utilizacion', 1.0))
+##                        cap_neta_calculada = cap_std * eficiencia * utilizacion
+##                        if cap_neta_calculada > 0:
+##                            capacidad_neta_linea_sugerida = cap_neta_calculada
+##
+##            # 4. Calcular T_Prod (Días)
+##            if carga_total_minutos > 0:
+##                sugerencias['sugerencia_t_prod_dias'] = math.ceil(
+##                    carga_total_minutos / capacidad_neta_linea_sugerida
+##                )
+##
+##            # 5. Verificar Stock (T_Proc) (¡Desde mapas!)
+##            ingredientes_receta = ingredientes_map.get(receta_id, [])
+##            stock_ok_agg = True
+##            tiempos_entrega_agg = []
+##
+##            if ingredientes_receta:
+##                for ingrediente in ingredientes_receta:
+##                    insumo_id = ingrediente['id_insumo']
+##                    cantidad_ingrediente = Decimal(ingrediente.get('cantidad', 0))
+##                    cant_necesaria_total = cantidad_ingrediente * cantidad
+##
+##                    stock_disp = stock_map.get(insumo_id, Decimal(0)) # <-- ¡CAMBIO!
+##
+##                    if stock_disp < cant_necesaria_total:
+##                        stock_ok_agg = False
+##                        # Obtener tiempo de entrega (¡Desde mapa!)
+##                        insumo_data = insumos_map.get(insumo_id) # <-- ¡CAMBIO!
+##                        if insumo_data:
+##                            tiempos_entrega_agg.append(insumo_data.get('tiempo_entrega_dias', 0))
+##            else:
+##                stock_ok_agg = False
+##
+##            sugerencias['sugerencia_stock_ok'] = stock_ok_agg
+##            if not stock_ok_agg:
+##                sugerencias['sugerencia_t_proc_dias'] = max(tiempos_entrega_agg) if tiempos_entrega_agg else 0
+##
+##            # 6. Calcular JIT (igual que antes, solo usa variables locales)
+##            # ... (lógica JIT sin cambios) ...
+##            today = date.today()
+##            t_prod_dias = sugerencias['sugerencia_t_prod_dias']
+##            t_proc_dias = sugerencias['sugerencia_t_proc_dias']
+##            op_fecha_meta_str = op.get('fecha_meta')
+##            if not op_fecha_meta_str:
+##                op_fecha_meta_str = op.get('fecha_inicio_planificada')
+##                if not op_fecha_meta_str:
+##                    op_fecha_meta_str = (today + timedelta(days=7)).isoformat()
+##            fecha_meta_solo_str = op_fecha_meta_str.split('T')[0].split(' ')[0]
+##            fecha_meta = date.fromisoformat(fecha_meta_solo_str)
+##            fecha_inicio_ideal = fecha_meta - timedelta(days=t_prod_dias)
+##            fecha_disponibilidad_material = today + timedelta(days=t_proc_dias)
+##            fecha_inicio_base = max(fecha_inicio_ideal, fecha_disponibilidad_material)
+##            fecha_inicio_sugerida_jit = max(fecha_inicio_base, today)
+##            sugerencias['sugerencia_fecha_inicio_jit'] = fecha_inicio_sugerida_jit.isoformat()
+##
+##        except Exception as e_jit:
+##            logger.error(f"[JIT MODAL {op_id_log}] EXCEPCIÓN INESPERADA (Optimizado): {e_jit}", exc_info=True)
+##            sugerencias['sugerencia_fecha_inicio_jit'] = date.today().isoformat()
+##
+##        return sugerencias
 
     def _verificar_y_replanificar_ops_por_fecha(self, fecha: date, usuario_id: int):
         """

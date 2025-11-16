@@ -4,6 +4,25 @@
 
 {% block title %}{{ form_title }} - Sistema Frozen{% endblock %}
 
+{% block extra_css %}
+    <style>
+        /* 1. Hacemos que la columna de ayuda se estire verticalmente
+           para igualar a su hermana (la columna del formulario).
+        */
+        #columna-ayuda {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 2. Hacemos que la tarjeta de ayuda (el .card) crezca
+           para llenar todo el espacio vertical disponible en su columna.
+        */
+        #columna-ayuda .card {
+            flex-grow: 1;
+        }
+    </style>
+{% endblock %}
+
 {% block page_title %}{{ form_title }}{% endblock %}
 {% block page_subtitle %}
 {% if is_edit %}
@@ -77,6 +96,27 @@ Agregar nuevo producto al catálogo
                                 <label for="vida_util_dias">
                                     <i class="bi bi-heart-pulse me-1"></i>Vida útil (días)
                                 </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label">Compatibilidad de Línea <span class="text-danger">*</span></label>
+                            <div class="d-flex gap-3 pt-2">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="linea_compatible" id="linea_1_compatible" value="1">
+                                    <label class="form-check-label" for="linea_1_compatible">
+                                        Línea 1 (Moderna)
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="linea_compatible" id="linea_2_compatible" value="2" checked>
+                                    <label class="form-check-label" for="linea_2_compatible">
+                                        Línea 2 (Clásica)
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                Define en qué línea se puede fabricar esta receta.
                             </div>
                         </div>
 
@@ -223,6 +263,91 @@ Agregar nuevo producto al catálogo
                             </div>
                         </div>
                     </div>
+
+                    <div class="card my-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Pasos de Producción (Tiempos Estimados)</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text small text-muted">
+                                Define los tiempos estándar para los pasos de producción. Podrás editar o añadir más pasos detallados más tarde en el módulo de Recetas.
+                            </p>
+                            
+                            <div class="row g-3 align-items-center mb-2 border-bottom pb-2">
+                                <div class="col-md-3"><label class="form-label fw-bold">1. Preparación Previa</label></div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text" title="Tiempo de Preparación">Prep.</span>
+                                        <input type="number" class="form-control" id="step_prep_1" value="1" min="0" step="1">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text" title="Tiempo de Ejecución por Unidad">Ejec.</span>
+                                        <input type="number" class="form-control" id="step_ejec_1" value="0.1" min="0" step="0.01">
+                                        <span class="input-group-text">min/u</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 align-items-center mb-2 border-bottom pb-2">
+                                <div class="col-md-3"><label class="form-label fw-bold">2. Cocción</label></div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Prep.</span>
+                                        <input type="number" class="form-control" id="step_prep_2" value="1" min="0" step="1">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Ejec.</span>
+                                        <input type="number" class="form-control" id="step_ejec_2" value="0.1" min="0" step="0.01">
+                                        <span class="input-group-text">min/u</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 align-items-center mb-2 border-bottom pb-2">
+                                <div class="col-md-3"><label class="form-label fw-bold">3. Refrigeración</label></div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Prep.</span>
+                                        <input type="number" class="form-control" id="step_prep_3" value="1" min="0" step="1">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Ejec.</span>
+                                        <input type="number" class="form-control" id="step_ejec_3" value="0.1" min="0" step="0.01">
+                                        <span class="input-group-text">min/u</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 align-items-center">
+                                <div class="col-md-3"><label class="form-label fw-bold">4. Empaquetado</label></div>
+                                <div class="col-md-4">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Prep.</span>
+                                        <input type="number" class="form-control" id="step_prep_4" value="1" min="0" step="1">
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-5">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Ejec.</span>
+                                        <input type="number" class="form-control" id="step_ejec_4" value="0.1" min="0" step="0.01">
+                                        <span class="input-group-text">min/u</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card mb-4">
+
                     <div class="card mb-4">
                         <div class="card-body">
                             <div class="row g-3 justify-content-end align-items-center">
@@ -289,7 +414,7 @@ Agregar nuevo producto al catálogo
         </div>
     </div>
 
-    <div class="col-lg-4 col-xl-3">
+    <div class="col-lg-4 col-xl-3" id="columna-ayuda">
         <div class="card">
             <div class="card-header">
                 <h6 class="mb-0"><i class="bi bi-info-circle me-1"></i> Ayuda</h6>
