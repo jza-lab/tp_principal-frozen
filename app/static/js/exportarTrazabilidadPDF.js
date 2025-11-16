@@ -232,6 +232,49 @@ function formatValue(value, format) {
 /**
  * Obtiene la información visual para una barra de estado.
  */
+function getOriginSubtitle(traceData, entityType, entityId) {
+    if (!traceData || !traceData.diagrama || !traceData.diagrama.edges) return null;
+
+    const nodeId = `${entityType}_${entityId}`;
+    const edges = traceData.diagrama.edges;
+    const nodes = traceData.diagrama.nodes;
+
+    // Buscar la arista que apunta a este nodo
+    const incomingEdge = edges.find(edge => edge.to === nodeId);
+
+    if (!incomingEdge) {
+        // Para Órdenes de Compra y entidades sin origen, es un "Origen primario"
+        if (entityType === 'orden_compra') {
+            return 'Origen: Primario';
+        }
+        return null; // No tiene origen visible en el grafo
+    }
+
+    const originNodeId = incomingEdge.from;
+    const originNode = nodes.find(node => node.id === originNodeId);
+
+    if (!originNode) return null; // No se encontró el nodo de origen
+
+    const originType = originNode.group;
+    const originData = originNode.data;
+    
+    if (originType === 'ingreso_manual') {
+        return 'Origen: Ingreso Manual';
+    }
+
+    if (originType === 'orden_compra' && originData) {
+        const proveedor = originData.proveedores ? originData.proveedores.nombre : 'N/A';
+        return `Origen: ${originNode.label} (${proveedor})`;
+    }
+    
+    // Para otros tipos de origen, solo mostramos la etiqueta del nodo
+    if (originNode.label) {
+        return `Origen: ${originNode.label}`;
+    }
+
+    return null;
+}
+
 function getStatusInfo(status) {
     if (!status) return { class: 'pending', width: '0%', label: 'N/A' };
     
@@ -400,7 +443,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         PDF_GLOBALS.Y_CURSOR += 6;
     }
 
-    function drawEntityCard(type, data) {
+    function drawEntityCard(type, data, traceData) {
         if (!data || Object.keys(data).length === 0) {
             checkPageBreak(10);
             doc.setFont('Helvetica', 'italic');
@@ -413,9 +456,16 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
 
         const fields = ENTITY_FIELDS_MAP[type] || [];
         const entityCode = data.codigo || data.numero_lote || data.id || '';
+        const entityIdForSubtitle = data.id_lote || data.id;
+        const originSubtitle = getOriginSubtitle(traceData, type, entityIdForSubtitle);
         
         let tempY = 0;
         tempY += 10;
+
+        // Añadir espacio extra si hay subtítulo
+        if (originSubtitle) {
+            tempY += 6;
+        }
         
         const statusField = fields.find(f => f.isStatus);
         if (statusField && statusField.value(data)) {
@@ -439,6 +489,16 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
         doc.text(`${formatEntityType(type)}: ${entityCode}`, PDF_GLOBALS.MARGIN + 5, startY + 8);
         PDF_GLOBALS.Y_CURSOR = startY + 12;
+        
+        // --- INICIO: DIBUJAR EL SUBTÍTULO DE ORIGEN ---
+        if (originSubtitle) {
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+            doc.text(originSubtitle, PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR);
+            PDF_GLOBALS.Y_CURSOR += 6;
+        }
+        // --- FIN: DIBUJAR EL SUBTÍTULO DE ORIGEN ---
 
         if (statusField) {
             const statusValue = statusField.value(data);
@@ -524,7 +584,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
     // Entidad Principal
     drawSectionTitle('Información de Entidad Principal');
     drawDescriptionText(SECTION_DESCRIPTIONS.main);
-    drawEntityCard(entityType, mainEntityData);
+    drawEntityCard(entityType, mainEntityData, traceData);
     
     // Diagrama
     drawSectionTitle('Diagrama de Trazabilidad');
@@ -586,7 +646,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
             
             for (const item of itemsOfType) {
                 const nodeData = findNodeData(traceData, item.tipo, item.id);
-                drawEntityCard(item.tipo, nodeData);
+                drawEntityCard(item.tipo, nodeData, traceData);
             }
         }
     }
