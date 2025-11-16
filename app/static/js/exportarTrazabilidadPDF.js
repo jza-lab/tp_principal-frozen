@@ -1,0 +1,577 @@
+// /static/js/exportarTrazabilidadPDF.js
+
+document.addEventListener('DOMContentLoaded', () => {
+    const exportButton = document.getElementById('export-trazabilidad-pdf');
+    if (!exportButton) return;
+
+    exportButton.addEventListener('click', async () => {
+        const originalButtonText = exportButton.innerHTML;
+        exportButton.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Generando PDF...`;
+        exportButton.disabled = true;
+
+        try {
+            const entityType = window.ENTITY_TYPE;
+            const entityId = window.ENTITY_ID;
+            if (!entityType || !entityId) throw new Error("Tipo/ID de entidad no definidos.");
+
+            // 1. Fetch data and diagram image
+            const [companyInfo, traceData, diagramImage] = await Promise.all([
+                fetch('/api/trazabilidad/company_info').then(res => res.json()),
+                fetchTraceData(entityType, entityId),
+                captureDiagramImage() // ¡Función actualizada!
+            ]);
+
+            // 2. Generate the PDF manually
+            await generatePdfManually(companyInfo, traceData, diagramImage, entityType, entityId);
+
+        } catch (error) {
+            console.error('Error al generar el PDF de trazabilidad:', error);
+            alert('Ocurrió un error al generar el PDF: ' + error.message);
+        } finally {
+            // 3. Cleanup
+            exportButton.innerHTML = originalButtonText;
+            exportButton.disabled = false;
+        }
+    });
+});
+
+// --- DATA FETCHING FUNCTIONS ---
+
+/**
+ * ¡FUNCIÓN CORREGIDA Y MEJORADA!
+ * Ahora activa la pestaña del diagrama antes de capturarlo y restaura la pestaña original.
+ */
+async function captureDiagramImage() {
+    console.log("Iniciando captura de diagrama...");
+
+    // IDs de los elementos de las pestañas de Bootstrap
+    const trazabilidadTabLink = document.getElementById('nav-trazabilidad-tab');
+    const trazabilidadTabPane = document.getElementById('nav-trazabilidad');
+    
+    // El 'div' que contiene el gráfico (puede ser vis.js o sankey)
+    let elementToCapture = document.getElementById('vis_trazabilidad');
+    if (!elementToCapture || elementToCapture.offsetParent === null) {
+         elementToCapture = document.getElementById('sankey_chart_trazabilidad');
+    }
+
+    if (!trazabilidadTabLink || !trazabilidadTabPane || !elementToCapture) {
+        console.warn('No se encontraron los elementos necesarios (tab, pane, or container) para capturar el diagrama.');
+        console.warn('Buscando IDs:', 'nav-trazabilidad-tab', 'nav-trazabilidad', 'vis_trazabilidad');
+        return null;
+    }
+
+    // 1. Guardar el estado actual
+    const originalActiveTabLink = document.querySelector('.nav-tabs .nav-link.active');
+    const originalActiveTabPane = document.querySelector('.tab-content .tab-pane.active');
+    const wasTrazabilidadActive = trazabilidadTabLink.classList.contains('active');
+
+    // 2. Activar la pestaña de Trazabilidad (si no lo está)
+    if (!wasTrazabilidadActive) {
+        console.log("Activando pestaña de Trazabilidad para la captura...");
+        // Ocultar el panel antiguo
+        if (originalActiveTabPane) {
+            originalActiveTabPane.classList.remove('active', 'show');
+        }
+        // Quitar 'active' del link antiguo
+         if (originalActiveTabLink) {
+            originalActiveTabLink.classList.remove('active');
+            originalActiveTabLink.setAttribute('aria-selected', 'false');
+        }
+        
+        // Mostrar el panel nuevo
+        trazabilidadTabPane.classList.add('active', 'show');
+        // Poner 'active' en el link nuevo
+        trazabilidadTabLink.classList.add('active');
+        trazabilidadTabLink.setAttribute('aria-selected', 'true');
+    }
+
+    // 3. Esperar a que el gráfico se re-dibuje en el contenedor ahora visible
+    await new Promise(resolve => setTimeout(resolve, 750)); // 750ms para asegurar el renderizado
+
+    // 4. Capturar
+    let diagramCanvas = null;
+    try {
+        if (elementToCapture.offsetHeight === 0) {
+             console.warn("La pestaña de Trazabilidad se activó, pero el contenedor del diagrama sigue sin altura.");
+        }
+        console.log("Realizando captura con html2canvas...");
+        diagramCanvas = await html2canvas(elementToCapture, { 
+            scale: 2, // Para tu pregunta: esto lo hace de alta resolución
+            useCORS: true, 
+            logging: false,
+            backgroundColor: '#FFFFFF'
+        });
+    } catch (error) {
+        console.error('Error al capturar el diagrama con html2canvas:', error);
+        return null; // Retorna null si la captura falla
+    } finally {
+        // 5. Restaurar el estado original (¡MUY IMPORTANTE!)
+        if (!wasTrazabilidadActive) {
+            console.log("Restaurando pestaña original...");
+            // Ocultar el panel de trazabilidad
+            trazabilidadTabPane.classList.remove('active', 'show');
+            // Quitar 'active' del link de trazabilidad
+            trazabilidadTabLink.classList.remove('active');
+            trazabilidadTabLink.setAttribute('aria-selected', 'false');
+
+            // Restaurar el panel antiguo
+            if (originalActiveTabPane) {
+                originalActiveTabPane.classList.add('active', 'show');
+            }
+            // Restaurar el link antiguo
+            if (originalActiveTabLink) {
+                originalActiveTabLink.classList.add('active');
+                originalActiveTabLink.setAttribute('aria-selected', 'true');
+            }
+        }
+    }
+    
+    // 6. Retornar la imagen
+    if (!diagramCanvas) {
+        console.error("html2canvas no produjo un canvas.");
+        return null;
+    }
+    return diagramCanvas.toDataURL('image/png', 1.0);
+}
+
+
+/**
+ * Obtiene los datos de trazabilidad completos desde la API.
+ */
+async function fetchTraceData(entityType, entityId) {
+    const response = await fetch(`/api/trazabilidad/${entityType}/${entityId}?nivel=completo`);
+    if (!response.ok) throw new Error(`Error en API: ${response.statusText}`);
+    const result = await response.json();
+    if (!result.success) throw new Error(`El API devolvió un error: ${result.error}`);
+    return {
+        resumen: result.data.resumen || { origen: [], destino: [] },
+        diagrama: result.data.diagrama || { nodes: [], edges: [] },
+        ...result.data
+    };
+}
+
+
+// --- DATA HELPER FUNCTIONS (Usadas por el generador manual) ---
+
+/**
+ * Busca los datos de un nodo específico.
+ */
+function findNodeData(traceData, entityType, entityId) {
+    if (!traceData || !traceData.diagrama || !traceData.diagrama.nodes) return {};
+    const nodeId = `${entityType}_${entityId}`;
+    const node = traceData.diagrama.nodes.find(n => n.id === nodeId);
+    if (!node && traceData.data && traceData.data.id == entityId && traceData.data.tipo == entityType) {
+        return traceData.data;
+    }
+    return node ? node.data : {};
+}
+
+/**
+ * Formatea un string de tipo_entidad a "Tipo Entidad".
+ */
+function formatEntityType(type) {
+    if (!type) return '';
+    return (type.charAt(0).toUpperCase() + type.slice(1)).replace(/_/g, ' ');
+}
+
+/**
+ * Formatea un valor (moneda, fecha, etc.)
+ */
+function formatValue(value, format) {
+    if (value === null || typeof value === 'undefined' || value === '') {
+        return 'N/A';
+    }
+    try {
+        switch (format) {
+            case 'currency':
+                const number = parseFloat(value);
+                if (isNaN(number)) return value;
+                return `$${number.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+            case 'date':
+                const date = new Date(value);
+                if (isNaN(date.getTime())) {
+                    return value.split('T')[0];
+                }
+                return new Date(date.getTime() + date.getTimezoneOffset() * 60000)
+                       .toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            case 'html':
+                if (value.includes('<li>')) {
+                    return value.match(/<li>(.*?)<\/li>/g)
+                                .map(li => '• ' + li.replace(/<\/?li>/g, '').trim())
+                                .join('\n');
+                }
+                return value.replace(/<[^>]+>/g, '');
+            default:
+                return value.toString();
+        }
+    } catch (e) {
+        return value.toString();
+    }
+}
+
+/**
+ * Obtiene la información visual para una barra de estado.
+ */
+function getStatusInfo(status) {
+    if (!status) return { class: 'pending', width: '0%', label: 'N/A' };
+    
+    const statusMap = {
+        'aprobada': { class: 'completed', width: '100%', color: '#28a745' },
+        'aprobado': { class: 'completed', width: '100%', color: '#28a745' },
+        'completa': { class: 'completed', width: '100%', color: '#28a745' },
+        'completada': { class: 'completed', width: '100%', color: '#28a745' },
+        'finalizada': { class: 'completed', width: '100%', color: '#28a745' },
+        'recibida': { class: 'completed', width: '100%', color: '#28a745' },
+        'entregado': { class: 'completed', width: '100%', color: '#28a745' },
+        'en stock': { class: 'completed', width: '100%', color: '#28a745' },
+        'disponible': { class: 'completed', width: '100%', color: '#28a745' },
+        'despachado': { class: 'completed', width: '100%', color: '#28a745' },
+        'pendiente': { class: 'pending', width: '25%', color: '#ffc107' },
+        'planificada': { class: 'pending', width: '20%', color: '#ffc107' },
+        'en cuarentena': { class: 'pending', width: '30%', color: '#ffc107' },
+        'en curso': { class: 'in_progress', width: '60%', color: '#17a2b8' },
+        'en preparación': { class: 'in_progress', width: '50%', color: '#17a2b8' },
+        'recibida parcialmente': { class: 'in_progress', width: '75%', color: '#17a2b8' },
+        'cancelada': { class: 'cancelled', width: '100%', color: '#dc3545' },
+        'rechazado': { class: 'cancelled', width: '100%', color: '#dc3545' },
+        'vencido': { class: 'cancelled', width: '100%', color: '#dc3545' }
+    };
+
+    const normalizedStatus = status.toLowerCase().trim();
+    const info = statusMap[normalizedStatus] || { class: 'pending', width: '10%', color: '#6c757d' };
+    
+    return { ...info, label: formatEntityType(status) };
+}
+
+// --- DESCRIPCIONES DE SECCIONES ---
+const SECTION_DESCRIPTIONS = {
+    'main': 'Detalles de la entidad principal que está siendo auditada en este informe.',
+    'diagram': 'Visualización gráfica de las relaciones de trazabilidad, mostrando el flujo de entidades de origen a destino.',
+    'origen': 'Entidades que preceden a la entidad principal. Muestra de dónde provienen los materiales o qué acciones se tomaron antes.',
+    'destino': 'Entidades que suceden a la entidad principal. Muestra a dónde fue el producto o qué acciones se tomaron después.'
+};
+
+const CATEGORY_DESCRIPTIONS = {
+    'orden_compra': 'Registros de órdenes de compra utilizadas para adquirir insumos de proveedores.',
+    'lote_insumo': 'Lotes de materiales o insumos específicos que fueron utilizados o consumidos.',
+    'orden_produccion': 'Órdenes de producción que consumieron insumos o generaron productos.',
+    'lote_producto': 'Lotes de producto terminado generados o relacionados con esta traza.',
+    'pedido': 'Pedidos de clientes que han sido total o parcialmente despachados con las entidades de esta traza.'
+};
+
+// --- MAPA DE CAMPOS DE ENTIDAD ---
+const ENTITY_FIELDS_MAP = {
+    'orden_compra': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Proveedor', value: data => data.proveedores?.nombre }, { label: 'CUIT', value: data => data.proveedores?.cuit }, { label: 'Fecha Creación', value: data => data.fecha_creacion, format: 'date' }, { label: 'Monto Total', value: data => data.monto_total, format: 'currency' } ],
+    'lote_insumo': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Insumo', value: data => data.insumos_catalogo?.nombre }, { label: 'Código Insumo', value: data => data.insumos_catalogo?.codigo }, { label: 'Lote Prov.', value: data => data.numero_lote_proveedor }, { label: 'Cantidad', value: data => `${data.cantidad_inicial || ''} ${data.unidad_medida || ''}`.trim() }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
+    'orden_produccion': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Cantidad Planif.', value: data => data.cantidad_planificada }, { label: 'Fecha Meta', value: data => data.fecha_meta, format: 'date' } ],
+    'lote_producto': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Nro. Lote', value: data => data.numero_lote }, { label: 'Cantidad', value: data => data.cantidad_inicial }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
+    'pedido': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Cliente', value: data => data.clientes?.nombre || data.clientes?.razon_social }, { label: 'CUIT Cliente', value: data => data.clientes?.cuit }, { label: 'Fecha Entrega', value: data => data.fecha_entrega, format: 'date' }, { label: 'Monto Total', value: data => data.monto_total, format: 'currency' }, { label: 'Items', value: data => data.items?.map(i => `<li>${i.cantidad} x ${i.productos?.nombre || 'N/A'}</li>`).join('') || 'No hay items.', format: 'html'} ]
+};
+
+
+/**
+ * Función principal para generar el PDF manualmente.
+ */
+async function generatePdfManually(companyInfo, traceData, diagramImage, entityType, entityId) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    const PDF_GLOBALS = {
+        companyInfo: companyInfo,
+        currentPage: 1,
+        totalPages: 1,
+        Y_CURSOR: 0,
+        PAGE_W: doc.internal.pageSize.getWidth(),
+        PAGE_H: doc.internal.pageSize.getHeight(),
+        MARGIN: 15,
+        CONTENT_W: doc.internal.pageSize.getWidth() - 30,
+        COLOR_PRIMARY: '#0056b3',
+        COLOR_TEXT: '#212529',
+        COLOR_MUTED: '#555',
+        COLOR_BORDER: '#ccc'
+    };
+
+    // --- HELPER FUNCTIONS ---
+
+    function addHeader() {
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
+        doc.text(companyInfo.nombre || 'Mi Empresa', PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 5);
+
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+        doc.text(companyInfo.domicilio || '', PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 11);
+        doc.text(`CUIT: ${companyInfo.cuit || ''}`, PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 15);
+        
+        const dateText = `Generado: ${new Date().toLocaleDateString('es-ES')}`;
+        doc.text(dateText, PDF_GLOBALS.PAGE_W - PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 5, { align: 'right' });
+
+        doc.setDrawColor(PDF_GLOBALS.COLOR_BORDER);
+        doc.line(PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 22, PDF_GLOBALS.PAGE_W - PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 22);
+        PDF_GLOBALS.Y_CURSOR = PDF_GLOBALS.MARGIN + 30;
+    }
+
+    function addFooter() {
+        const totalPages = PDF_GLOBALS.totalPages;
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(
+                `Página ${i} de ${totalPages}`,
+                PDF_GLOBALS.PAGE_W / 2,
+                PDF_GLOBALS.PAGE_H - 10,
+                { align: 'center' }
+            );
+            doc.text(
+                'Documento Confidencial',
+                PDF_GLOBALS.MARGIN,
+                PDF_GLOBALS.PAGE_H - 10
+            );
+        }
+    }
+
+    function checkPageBreak(requiredHeight) {
+        if (PDF_GLOBALS.Y_CURSOR + requiredHeight > PDF_GLOBALS.PAGE_H - PDF_GLOBALS.MARGIN) {
+            doc.addPage();
+            PDF_GLOBALS.currentPage++;
+            PDF_GLOBALS.totalPages++;
+            addHeader();
+            return true;
+        }
+        return false;
+    }
+    
+    function drawSectionTitle(title) {
+        if (PDF_GLOBALS.Y_CURSOR > PDF_GLOBALS.MARGIN + 30) {
+             PDF_GLOBALS.Y_CURSOR += 5;
+        }
+        checkPageBreak(15);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(16);
+        doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
+        doc.text(title, PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
+        PDF_GLOBALS.Y_CURSOR += 8;
+    }
+    
+    function drawDescriptionText(text) {
+        if (!text) return;
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+        
+        const splitText = doc.splitTextToSize(text, PDF_GLOBALS.CONTENT_W);
+        checkPageBreak((splitText.length * 5) + 6);
+        
+        doc.text(splitText, PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
+        PDF_GLOBALS.Y_CURSOR += (splitText.length * 5) + 6;
+    }
+
+    function drawCategorySubtitle(title) {
+        checkPageBreak(12);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(PDF_GLOBALS.COLOR_TEXT);
+        doc.text(title, PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
+        doc.setDrawColor(PDF_GLOBALS.COLOR_BORDER);
+        doc.line(PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR + 2, PDF_GLOBALS.PAGE_W - PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR + 2);
+        PDF_GLOBALS.Y_CURSOR += 6;
+    }
+
+    function drawEntityCard(type, data) {
+        if (!data || Object.keys(data).length === 0) {
+            checkPageBreak(10);
+            doc.setFont('Helvetica', 'italic');
+            doc.setFontSize(10);
+            doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+            doc.text("Datos no disponibles para esta entidad.", PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR);
+            PDF_GLOBALS.Y_CURSOR += 10;
+            return;
+        }
+
+        const fields = ENTITY_FIELDS_MAP[type] || [];
+        const entityCode = data.codigo || data.numero_lote || data.id || '';
+        
+        let tempY = 0;
+        tempY += 10;
+        
+        const statusField = fields.find(f => f.isStatus);
+        if (statusField && statusField.value(data)) {
+            tempY += 15;
+        }
+        
+        fields.forEach(field => {
+            if (field.isStatus) return;
+            const value = formatValue(field.value(data), field.format);
+            const splitValue = doc.splitTextToSize(value, PDF_GLOBALS.CONTENT_W - 65);
+            tempY += (splitValue.length * 5) + 3;
+        });
+        const cardContentHeight = tempY + 5;
+        
+        checkPageBreak(cardContentHeight);
+        
+        const startY = PDF_GLOBALS.Y_CURSOR;
+        
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
+        doc.text(`${formatEntityType(type)}: ${entityCode}`, PDF_GLOBALS.MARGIN + 5, startY + 8);
+        PDF_GLOBALS.Y_CURSOR = startY + 12;
+
+        if (statusField) {
+            const statusValue = statusField.value(data);
+            if (statusValue) {
+                const statusInfo = getStatusInfo(statusValue);
+                doc.setFont('Helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+                doc.text(`Estado: ${statusInfo.label}`, PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 2);
+
+                doc.setFillColor('#e9ecef');
+                doc.rect(PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 5, PDF_GLOBALS.CONTENT_W - 10, 4, 'F');
+                const barWidth = (parseFloat(statusInfo.width) / 100) * (PDF_GLOBALS.CONTENT_W - 10);
+                doc.setFillColor(statusInfo.color);
+                doc.rect(PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 5, barWidth, 4, 'F');
+                PDF_GLOBALS.Y_CURSOR += 15;
+            }
+        }
+
+        doc.setFontSize(10);
+        fields.forEach(field => {
+            if (field.isStatus) return;
+            
+            const label = field.label + ':';
+            const value = formatValue(field.value(data), field.format);
+            const splitValue = doc.splitTextToSize(value, PDF_GLOBALS.CONTENT_W - 65);
+            
+            checkPageBreak((splitValue.length * 5) + 3);
+
+            doc.setFont('Helvetica', 'bold');
+            doc.setTextColor(PDF_GLOBALS.COLOR_TEXT);
+            doc.text(label, PDF_GLOBALS.MARGIN + 60, PDF_GLOBALS.Y_CURSOR, { align: 'right' });
+
+            doc.setFont('Helvetica', 'normal');
+            doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+            doc.text(splitValue, PDF_GLOBALS.MARGIN + 65, PDF_GLOBALS.Y_CURSOR);
+            
+            PDF_GLOBALS.Y_CURSOR += (splitValue.length * 5) + 3;
+        });
+
+        const cardHeight = PDF_GLOBALS.Y_CURSOR - startY;
+        doc.setDrawColor(PDF_GLOBALS.COLOR_BORDER);
+        doc.roundedRect(PDF_GLOBALS.MARGIN, startY, PDF_GLOBALS.CONTENT_W, cardHeight + 4, 3, 3, 'S');
+        
+        PDF_GLOBALS.Y_CURSOR += 10;
+    }
+
+    // --- 3. INICIAR LA CONSTRUCCIÓN DEL PDF ---
+
+    addHeader();
+
+    // Título del Reporte
+    const mainEntityData = findNodeData(traceData, entityType, entityId);
+    const entityCode = mainEntityData?.codigo || mainEntityData?.numero_lote || entityId;
+    const reportTitle = `Informe de Trazabilidad`;
+    checkPageBreak(20);
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(PDF_GLOBALS.COLOR_TEXT);
+    doc.text(reportTitle, PDF_GLOBALS.PAGE_W / 2, PDF_GLOBALS.Y_CURSOR, { align: 'center' });
+    PDF_GLOBALS.Y_CURSOR += 8;
+    doc.setFontSize(12);
+    doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+    doc.text(`${formatEntityType(entityType)}: ${entityCode}`, PDF_GLOBALS.PAGE_W / 2, PDF_GLOBALS.Y_CURSOR, { align: 'center' });
+    PDF_GLOBALS.Y_CURSOR += 15;
+
+    // Resumen Ejecutivo
+    checkPageBreak(30);
+    doc.setFillColor('#f4f7fa');
+    doc.setDrawColor(PDF_GLOBALS.COLOR_BORDER);
+    doc.roundedRect(PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR, PDF_GLOBALS.CONTENT_W, 25, 3, 3, 'FD');
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
+    doc.text('Resumen Ejecutivo', PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 8);
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(PDF_GLOBALS.COLOR_TEXT);
+    doc.text(`Entidad Principal: ${entityCode} (ID: ${entityId})`, PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 15);
+    doc.text(`Entidades de Origen: ${traceData.resumen.origen.length} | Entidades de Destino: ${traceData.resumen.destino.length}`, PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR + 20);
+    PDF_GLOBALS.Y_CURSOR += 35;
+
+    // Entidad Principal
+    drawSectionTitle('Información de Entidad Principal');
+    drawDescriptionText(SECTION_DESCRIPTIONS.main);
+    drawEntityCard(entityType, mainEntityData);
+    
+    // Diagrama
+    drawSectionTitle('Diagrama de Trazabilidad');
+    drawDescriptionText(SECTION_DESCRIPTIONS.diagram);
+    if (diagramImage) {
+        const imgProps = doc.getImageProperties(diagramImage);
+        // Para tu pregunta "en grande": calculamos la altura para que ocupe todo el ancho
+        const imgHeight = (PDF_GLOBALS.CONTENT_W * imgProps.height) / imgProps.width;
+        checkPageBreak(imgHeight + 10);
+        doc.addImage(diagramImage, 'PNG', PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR, PDF_GLOBALS.CONTENT_W, imgHeight);
+        PDF_GLOBALS.Y_CURSOR += imgHeight + 10;
+    } else {
+        checkPageBreak(10);
+        doc.setFont('Helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+        doc.text('Diagrama visual no disponible. (No se pudo capturar)', PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
+        PDF_GLOBALS.Y_CURSOR += 10;
+    }
+
+    // Secciones de Origen y Destino
+    const sections = [
+        { key: 'origen', title: 'Entidades de Origen (Hacia Atrás)', items: traceData.resumen.origen },
+        { key: 'destino', title: 'Entidades de Destino (Hacia Adelante)', items: traceData.resumen.destino }
+    ];
+
+    const typeOrder = ['orden_compra', 'lote_insumo', 'orden_produccion', 'lote_producto', 'pedido'];
+
+    for (const section of sections) {
+        drawSectionTitle(section.title);
+        drawDescriptionText(SECTION_DESCRIPTIONS[section.key]);
+        
+        if (!section.items || section.items.length === 0) {
+            checkPageBreak(10);
+            doc.setFont('Helvetica', 'italic');
+            doc.setFontSize(10);
+            doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
+            doc.text('No se encontraron entidades para esta sección.', PDF_GLOBALS.MARGIN + 5, PDF_GLOBALS.Y_CURSOR);
+            PDF_GLOBALS.Y_CURSOR += 10;
+            continue;
+        }
+
+        const groupedItems = section.items.reduce((acc, item) => {
+            (acc[item.tipo] = acc[item.tipo] || []).push(item);
+            return acc;
+        }, {});
+        
+        const sortedTypes = Object.keys(groupedItems).sort((a, b) => {
+            let indexA = typeOrder.indexOf(a);
+            let indexB = typeOrder.indexOf(b);
+            return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
+        });
+
+        for (const type of sortedTypes) {
+            const itemsOfType = groupedItems[type];
+            let label = formatEntityType(type) + (itemsOfType.length > 1 ? 's' : '');
+            drawCategorySubtitle(label);
+            drawDescriptionText(CATEGORY_DESCRIPTIONS[type]);
+            
+            for (const item of itemsOfType) {
+                const nodeData = findNodeData(traceData, item.tipo, item.id);
+                drawEntityCard(item.tipo, nodeData);
+            }
+        }
+    }
+
+    // --- 4. FINALIZAR Y GUARDAR ---
+    addFooter();
+    doc.save(`Informe_Trazabilidad_${entityType}_${entityId}_${new Date().toISOString().split('T')[0]}.pdf`);
+}
