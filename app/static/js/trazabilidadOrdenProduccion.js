@@ -152,25 +152,28 @@ document.addEventListener('DOMContentLoaded', function () {
      * @param {object} diagrama - El objeto de diagrama con 'nodes' y 'edges'.
      */
     function renderizarDiagrama(diagrama) {
-        if (!diagrama || !diagrama.nodes || !diagrama.nodes.length) {
-            visContainer.innerHTML = '<div class="alert alert-info">No hay datos de diagrama para mostrar.</div>';
-            // Actualizar texto del acordeón
-            accordionButton.textContent = 'No hay diagrama disponible';
-            accordionButton.classList.add('disabled');
-            return;
-        }
-        
-        // Habilitar y resetear el botón del acordeón
-        accordionButton.textContent = 'Ver Diagrama de Red';
-        accordionButton.classList.remove('disabled');
+        const accordionCollapse = document.getElementById('collapseDiagrama');
+        let isNetworkInitialized = false;
 
-        const nodes = new vis.DataSet(diagrama.nodes);
-        const edges = new vis.DataSet(diagrama.edges);
-        
-        if (network) {
-            network.setData({ nodes, edges });
-        } else {
+        const initializeNetwork = () => {
+            if (isNetworkInitialized || !diagrama || !diagrama.nodes || !diagrama.nodes.length) {
+                if (!diagrama || !diagrama.nodes || !diagrama.nodes.length) {
+                    visContainer.innerHTML = '<div class="alert alert-info">No hay datos de diagrama para mostrar.</div>';
+                    accordionButton.textContent = 'No hay diagrama disponible';
+                    accordionButton.classList.add('disabled');
+                }
+                return;
+            }
+
+            accordionButton.textContent = 'Ver Diagrama de Red Completo';
+            accordionButton.classList.remove('disabled');
+
+            const nodes = new vis.DataSet(diagrama.nodes);
+            const edges = new vis.DataSet(diagrama.edges);
+            
             network = new vis.Network(visContainer, { nodes, edges }, visOptions);
+            window.visNetwork = network; 
+
             network.on("click", function (params) {
                 if (params.nodes.length > 0) {
                     const node = nodes.get(params.nodes[0]);
@@ -179,6 +182,18 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 }
             });
+
+            network.once('afterDrawing', function() {
+                network.fit();
+            });
+
+            isNetworkInitialized = true;
+        };
+
+        if (accordionCollapse) {
+            accordionCollapse.addEventListener('shown.bs.collapse', initializeNetwork, { once: true });
+        } else {
+            initializeNetwork();
         }
     }
 

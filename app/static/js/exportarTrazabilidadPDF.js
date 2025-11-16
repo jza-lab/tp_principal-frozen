@@ -37,101 +37,121 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // --- DATA FETCHING FUNCTIONS ---
 
-/**
- * ¡FUNCIÓN CORREGIDA Y MEJORADA!
- * Ahora activa la pestaña del diagrama antes de capturarlo y restaura la pestaña original.
- */
 async function captureDiagramImage() {
     console.log("Iniciando captura de diagrama...");
 
-    // IDs de los elementos de las pestañas de Bootstrap
-    const trazabilidadTabLink = document.getElementById('nav-trazabilidad-tab');
-    const trazabilidadTabPane = document.getElementById('nav-trazabilidad');
-    
-    // El 'div' que contiene el gráfico (puede ser vis.js o sankey)
-    let elementToCapture = document.getElementById('vis_trazabilidad');
-    if (!elementToCapture || elementToCapture.offsetParent === null) {
-         elementToCapture = document.getElementById('sankey_chart_trazabilidad');
-    }
-
-    if (!trazabilidadTabLink || !trazabilidadTabPane || !elementToCapture) {
-        console.warn('No se encontraron los elementos necesarios (tab, pane, or container) para capturar el diagrama.');
-        console.warn('Buscando IDs:', 'nav-trazabilidad-tab', 'nav-trazabilidad', 'vis_trazabilidad');
+    const elementToCapture = document.getElementById('vis_trazabilidad') || document.getElementById('sankey_chart_trazabilidad');
+    if (!elementToCapture) {
+        console.error("Error crítico: No se encontró el contenedor del diagrama.");
         return null;
     }
 
-    // 1. Guardar el estado actual
-    const originalActiveTabLink = document.querySelector('.nav-tabs .nav-link.active');
-    const originalActiveTabPane = document.querySelector('.tab-content .tab-pane.active');
-    const wasTrazabilidadActive = trazabilidadTabLink.classList.contains('active');
+    const accordionCollapse = elementToCapture.closest('.accordion-collapse');
+    const tabPane = elementToCapture.closest('.tab-pane');
 
-    // 2. Activar la pestaña de Trazabilidad (si no lo está)
-    if (!wasTrazabilidadActive) {
-        console.log("Activando pestaña de Trazabilidad para la captura...");
-        // Ocultar el panel antiguo
-        if (originalActiveTabPane) {
-            originalActiveTabPane.classList.remove('active', 'show');
+    const wasTabActive = tabPane ? tabPane.classList.contains('active') : true;
+    const wasAccordionShown = accordionCollapse ? accordionCollapse.classList.contains('show') : true;
+    const originalActiveTabLink = wasTabActive ? null : document.querySelector('.nav-tabs .nav-link.active, .nav-tabs-custom .nav-link-custom.active');
+    
+    // Guardar la vista original (zoom y posición) para restaurarla después
+    const originalView = window.visNetwork ? { 
+        scale: window.visNetwork.getScale(), 
+        position: window.visNetwork.getViewPosition() 
+    } : null;
+
+    try {
+        if (!wasTabActive && tabPane) {
+            const tabId = tabPane.id;
+            const tabLink = document.querySelector(`[data-bs-toggle="tab"][data-bs-target="#${tabId}"]`);
+            if (tabLink) {
+                console.log("Activando pestaña de Trazabilidad...");
+                new bootstrap.Tab(tabLink).show();
+                await new Promise(r => setTimeout(r, 300));
+            }
         }
-        // Quitar 'active' del link antiguo
-         if (originalActiveTabLink) {
-            originalActiveTabLink.classList.remove('active');
-            originalActiveTabLink.setAttribute('aria-selected', 'false');
+
+        if (!wasAccordionShown && accordionCollapse) {
+            console.log("Expandiendo acordeón del diagrama...");
+            const collapse = new bootstrap.Collapse(accordionCollapse, { toggle: false });
+            collapse.show();
+            await new Promise(resolve => {
+                const handler = () => { accordionCollapse.removeEventListener('shown.bs.collapse', handler); resolve(); };
+                accordionCollapse.addEventListener('shown.bs.collapse', handler);
+                setTimeout(resolve, 500);
+            });
         }
         
-        // Mostrar el panel nuevo
-        trazabilidadTabPane.classList.add('active', 'show');
-        // Poner 'active' en el link nuevo
-        trazabilidadTabLink.classList.add('active');
-        trazabilidadTabLink.setAttribute('aria-selected', 'true');
-    }
+        elementToCapture.scrollIntoView({ behavior: 'instant', block: 'start' });
 
-    // 3. Esperar a que el gráfico se re-dibuje en el contenedor ahora visible
-    await new Promise(resolve => setTimeout(resolve, 750)); // 750ms para asegurar el renderizado
+        if (window.visNetwork) {
+            console.log("Ajustando zoom del diagrama para la captura...");
+            const nodeIds = window.visNetwork.body.data.nodes.getIds();
 
-    // 4. Capturar
-    let diagramCanvas = null;
-    try {
-        if (elementToCapture.offsetHeight === 0) {
-             console.warn("La pestaña de Trazabilidad se activó, pero el contenedor del diagrama sigue sin altura.");
+            // ¡COMIENZO DE LA CORRECCIÓN!
+            // Solo ajustar el zoom si hay nodos para evitar errores.
+            if (nodeIds && nodeIds.length > 0) {
+                window.visNetwork.fit({
+                    nodes: nodeIds,
+                    animation: false
+                });
+
+                const boundingBox = window.visNetwork.getBoundingBox(nodeIds);
+
+                // Comprobar que el boundingBox existe y tiene dimensiones válidas para evitar división por cero
+                if (boundingBox && (boundingBox.right - boundingBox.left) > 0 && (boundingBox.bottom - boundingBox.top) > 0) {
+                    const newScale = Math.min(
+                        elementToCapture.clientWidth / (boundingBox.right - boundingBox.left),
+                        elementToCapture.clientHeight / (boundingBox.bottom - boundingBox.top)
+                    ) * 0.95; // 95% para un pequeño margen
+
+                    window.visNetwork.moveTo({
+                        scale: newScale,
+                        animation: false
+                    });
+                }
+                // Si no hay bounding box o las dimensiones son cero, no hacemos nada extra,
+                // el 'fit' anterior ya habrá centrado la vista.
+
+                await new Promise(r => setTimeout(r, 500)); // Espera para el redibujado final
+            } else {
+                 console.log("Diagrama vacío, no se requiere ajuste de zoom.");
+            }
+            // ¡FIN DE LA CORRECCIÓN!
         }
+
         console.log("Realizando captura con html2canvas...");
-        diagramCanvas = await html2canvas(elementToCapture, { 
-            scale: 2, // Para tu pregunta: esto lo hace de alta resolución
-            useCORS: true, 
+        const canvas = await html2canvas(elementToCapture, {
+            scale: 3, // Aumentar la escala para mayor nitidez
+            useCORS: true,
             logging: false,
-            backgroundColor: '#FFFFFF'
+            backgroundColor: '#FFFFFF',
         });
-    } catch (error) {
-        console.error('Error al capturar el diagrama con html2canvas:', error);
-        return null; // Retorna null si la captura falla
-    } finally {
-        // 5. Restaurar el estado original (¡MUY IMPORTANTE!)
-        if (!wasTrazabilidadActive) {
-            console.log("Restaurando pestaña original...");
-            // Ocultar el panel de trazabilidad
-            trazabilidadTabPane.classList.remove('active', 'show');
-            // Quitar 'active' del link de trazabilidad
-            trazabilidadTabLink.classList.remove('active');
-            trazabilidadTabLink.setAttribute('aria-selected', 'false');
+        
+        return canvas.toDataURL('image/png', 1.0);
 
-            // Restaurar el panel antiguo
-            if (originalActiveTabPane) {
-                originalActiveTabPane.classList.add('active', 'show');
-            }
-            // Restaurar el link antiguo
-            if (originalActiveTabLink) {
-                originalActiveTabLink.classList.add('active');
-                originalActiveTabLink.setAttribute('aria-selected', 'true');
-            }
+    } catch (error) {
+        console.error('Error al capturar el diagrama:', error);
+        return null;
+    } finally {
+        // Restaurar la vista original del diagrama
+        if (window.visNetwork && originalView) {
+            console.log("Restaurando vista original del diagrama.");
+            window.visNetwork.moveTo({
+                scale: originalView.scale,
+                position: originalView.position,
+                animation: false
+            });
+        }
+        
+        if (!wasAccordionShown && accordionCollapse) {
+            console.log("Restaurando acordeón a estado colapsado.");
+            new bootstrap.Collapse(accordionCollapse, { toggle: false }).hide();
+        }
+        if (!wasTabActive && originalActiveTabLink) {
+            console.log("Restaurando pestaña original.");
+            new bootstrap.Tab(originalActiveTabLink).show();
         }
     }
-    
-    // 6. Retornar la imagen
-    if (!diagramCanvas) {
-        console.error("html2canvas no produjo un canvas.");
-        return null;
-    }
-    return diagramCanvas.toDataURL('image/png', 1.0);
 }
 
 

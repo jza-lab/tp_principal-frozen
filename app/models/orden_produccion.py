@@ -344,6 +344,11 @@ class OrdenProduccionModel(BaseModel):
                     item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
                 else:
                     item['aprobador_calidad_nombre'] = None
+                
+                # --- OBTENER ORDENES DE COMPRA ASOCIADAS ---
+                ocs_res = self.db.table('ordenes_compra').select('id, codigo_oc, estado').eq('orden_produccion_id', orden_id).execute()
+                item['ordenes_compra_asociadas'] = ocs_res.data if ocs_res.data else []
+                # --- FIN ---
 
                 return {'success': True, 'data': item}
             else:
