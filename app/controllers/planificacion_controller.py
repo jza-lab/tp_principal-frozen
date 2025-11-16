@@ -2442,28 +2442,40 @@ class PlanificacionController(BaseController):
 
             if result.get('success'):
 
-                # --- ¡¡INICIO DE LA IMPLEMENTACIÓN DE n8n!! ---
+                # --- ¡¡INICIO DE LA IMPLEMENTACIÓN DE n8n (MEJORADA)!! ---
                 try:
-                    # 1. Obtener la URL de PRODUCCIÓN de n8n
-                    # ¡Cámbiala por la URL que te dio n8n en el Paso A.5!
+                    # 1. URL de PRODUCCIÓN de n8n (la que ya tienes)
                     N8N_WEBHOOK_URL = "https://n8n-kthy.onrender.com/webhook/d84c5362-14ef-45ac-a8bf-14e0d21ffc37"
 
-                    # 2. Preparar los datos que el webhook espera
-                    # (Necesitamos los datos de la OP que no están en el 'issue')
+                    # 2. URL BASE DE TU APLICACIÓN (¡CÁMBIA ESTO!)
+                    # Esta es la URL a la que el supervisor irá al hacer clic.
+                    BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
+
+                    # 3. Preparar los datos que el webhook espera
                     op_data_resp = self.orden_produccion_controller.obtener_orden_por_id(op_id)
 
                     op_data = {}
                     if op_data_resp.get('success'):
                          op_data = op_data_resp.get('data', {})
 
+                    # Limpiar la fecha meta para que sea legible
+                    fecha_meta_limpia = "N/A"
+                    if op_data.get('fecha_meta'):
+                        fecha_meta_limpia = op_data['fecha_meta'].split('T')[0]
+
+                    # 4. Crear el payload MEJORADO
                     payload = {
+                        "op_id": op_id,
                         "op_codigo": op_data.get('codigo', f"ID {op_id}"),
                         "producto_nombre": op_data.get('producto_nombre', 'N/A'),
+                        "cantidad": op_data.get('cantidad_planificada', 'N/A'),
+                        "fecha_meta": fecha_meta_limpia,
                         "mensaje": mensaje,
-                        "tipo_error": tipo_error
+                        "tipo_error": tipo_error,
+                        "link_url": f"{BASE_APP_URL}/planificacion/" # Enlace directo al tablero
                     }
 
-                    # 3. Llamar al helper en un hilo (no bloqueante)
+                    # 5. Llamar al helper en un hilo (no bloqueante)
                     enviar_webhook_async(N8N_WEBHOOK_URL, payload)
 
                 except Exception as e_webhook:
