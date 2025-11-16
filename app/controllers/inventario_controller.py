@@ -223,6 +223,80 @@ class InventarioController(BaseController):
             logger.error(f"Error crítico al liberar stock para OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
+    def consumir_stock_por_cantidad_producto(self, receta_id: int, cantidad_producto: float, op_id_referencia: int, motivo: str) -> dict:
+        """
+        Calcula los insumos necesarios para una cantidad de producto y los consume del inventario.
+        Esta función realiza una verificación (dry run) primero y solo consume si todos los
+        materiales están disponibles.
+        """
+        receta_model = RecetaModel()
+        try:
+            # 1. Obtener ingredientes y calcular necesidades
+            ingredientes_result = receta_model.get_ingredientes(receta_id)
+            if not ingredientes_result.get('success'):
+                return {'success': False, 'error': "No se pudieron obtener los ingredientes de la receta."}
+
+            ingredientes = ingredientes_result.get('data', [])
+            if not ingredientes:
+                return {'success': True, 'message': 'La receta no tiene ingredientes, no se consume stock.'}
+
+            # 2. Verificación (Dry Run)
+            insumos_a_consumir = []
+            for ingrediente in ingredientes:
+                insumo_id = ingrediente['id_insumo']
+                cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_producto
+                if cantidad_necesaria <= 0:
+                    continue
+
+                lotes_disponibles = self._obtener_lotes_con_disponibilidad(insumo_id)
+                stock_total_disponible = sum(lote['disponibilidad'] for lote in lotes_disponibles)
+
+                if stock_total_disponible < cantidad_necesaria:
+                    return {
+                        'success': False,
+                        'error': f"Stock insuficiente para {ingrediente.get('nombre_insumo', 'N/A')}. "
+                                 f"Necesario: {cantidad_necesaria:.2f}, Disponible: {stock_total_disponible:.2f}"
+                    }
+                insumos_a_consumir.append({
+                    'insumo_id': insumo_id,
+                    'cantidad_necesaria': cantidad_necesaria,
+                    'lotes_disponibles': lotes_disponibles
+                })
+
+            # 3. Consumo (Ejecución)
+            insumos_afectados = set()
+            for insumo in insumos_a_consumir:
+                cantidad_restante_a_consumir = insumo['cantidad_necesaria']
+                insumos_afectados.add(insumo['insumo_id'])
+
+                for lote in insumo['lotes_disponibles']:
+                    if cantidad_restante_a_consumir <= 0:
+                        break
+
+                    cantidad_a_consumir_de_lote = min(lote['disponibilidad'], cantidad_restante_a_consumir)
+
+                    if cantidad_a_consumir_de_lote > 0:
+                        cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
+                        nueva_cantidad_lote = cantidad_actual_lote - cantidad_a_consumir_de_lote
+
+                        update_data = {'cantidad_actual': nueva_cantidad_lote}
+                        if nueva_cantidad_lote <= 0:
+                            update_data['estado'] = 'agotado'
+                        
+                        self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+                        cantidad_restante_a_consumir -= cantidad_a_consumir_de_lote
+
+            # 4. Actualizar stock general
+            for insumo_id in insumos_afectados:
+                self.insumo_controller.actualizar_stock_insumo(insumo_id)
+
+            logger.info(f"Consumo adicional de stock para OP {op_id_referencia} ({motivo}) completado.")
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error crítico al consumir stock por cantidad para OP {op_id_referencia}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
 
     def _obtener_lotes_con_disponibilidad(self, insumo_id: int) -> List[Dict]:
         """

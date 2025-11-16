@@ -57,7 +57,10 @@ class InsumoModel(BaseModel):
             # Aplicar cualquier otro filtro remanente (e.g., 'activo')
             for key, value in filters_copy.items():
                 if value is not None:
-                    query = query.eq(key, value)
+                    if isinstance(value, list):
+                        query = query.in_(key, value)
+                    else:
+                        query = query.eq(key, value)
 
             query = query.order(order_by)
 

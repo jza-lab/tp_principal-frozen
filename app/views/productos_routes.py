@@ -136,7 +136,12 @@ def actualizar_producto(id_producto):
             )
             return jsonify(response), status
 
-        producto = producto_controller.obtener_producto_por_id(id_producto)
+        response_producto = producto_controller.obtener_producto_por_id(id_producto)
+        if not response_producto.get('success'):
+            flash(response_producto.get('error', 'Producto no encontrado.'), 'error')
+            return redirect(url_for('productos.obtener_productos'))
+
+        producto = response_producto.get('data')
         if not producto:
             flash("Producto no encontrado.", "error")
             return redirect(url_for('productos.obtener_productos'))

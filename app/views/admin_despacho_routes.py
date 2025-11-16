@@ -95,13 +95,16 @@ def api_crear_despacho():
         observaciones
     )
 
-    if response_data.get('success'):
-        flash(f"Despacho #{response_data['data']['despacho_id']} creado exitosamente.", 'success')
-        # Redirigir a la misma página de gestión, pero a la pestaña de historial.
-        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial') # type: ignore
-        return {'success': True, 'data': response_data['data'], 'redirect_url': redirect_url}, status_code
+    status_code_int = int(status_code)
+
+    if status_code_int < 300 and response_data.get('success'):
+        flash(f"Despacho #{response_data.get('data', {}).get('despacho_id', '')} creado exitosamente.", 'success')
+        redirect_url = url_for('despacho.gestion_despachos_vista', tab='historial')
+        response_data['redirect_url'] = redirect_url
+        return jsonify(response_data), status_code_int
     else:
-        return {'success': False, 'error': response_data.get('error', 'Error interno al crear el despacho')}, status_code
+        error_message = response_data.get('error', 'Error interno al crear el despacho')
+        return jsonify({'success': False, 'error': error_message}), status_code_int
 
 @despacho_bp.route('/hoja-de-ruta/<int:despacho_id>')
 @permission_required('consultar_despachos')
