@@ -1664,11 +1664,14 @@ class OrdenProduccionController(BaseController):
             # 3. Registrar avance (siempre se hace)
             update_data = {'cantidad_producida': cantidad_producida_actual + cantidad_buena}
             if cantidad_desperdicio > 0:
+                # Se crea un nuevo registro en la tabla mes_kanban.registros_desperdicio
+                # para mantener un historial de los desperdicios generados en esta OP.
                 desperdicio_model.create({
                     'orden_produccion_id': orden_id,
                     'motivo_desperdicio_id': int(motivo_desperdicio_id),
                     'cantidad': cantidad_desperdicio,
-                    'usuario_id': usuario_id
+                    'usuario_id': usuario_id,
+                    'fecha_registro': datetime.now().isoformat()
                 })
 
             # 4. Verificar si la OP se ha completado en este reporte

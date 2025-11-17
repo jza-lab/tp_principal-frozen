@@ -54,6 +54,11 @@
             <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="desperdicios-tab" data-bs-toggle="tab" data-bs-target="#desperdicios-content" type="button" role="tab" aria-controls="desperdicios-content" aria-selected="false">
+            <i class="bi bi-trash me-1"></i>Historial de Desperdicios
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content" id="loteDetailTabContent">
@@ -433,6 +438,43 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="desperdicios-content" role="tabpanel" aria-labelledby="desperdicios-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Registros de Desperdicio</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if historial_desperdicios %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha y Hora</th>
+                                <th>Cantidad</th>
+                                <th>Motivo</th>
+                                <th>Registrado por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for desperdicio in historial_desperdicios %}
+                            <tr>
+                                <td>{{ desperdicio.fecha_registreo | format_datetime if desperdicio.fecha_registreo else 'N/A' }}</td>
+                                <td>{{ desperdicio.cantidad }}</td>
+                                <td>{{ desperdicio.motivo_desperdicio.descripcion if desperdicio.motivo_desperdicio else 'No especificado' }}</td>
+                                <td>{{ desperdicio.usuario.nombre if desperdicio.usuario else 'N/A' }} {{ desperdicio.usuario.apellido if desperdicio.usuario else '' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center p-4">
+                    <p class="mb-0 text-muted">No se han registrado desperdicios para esta orden de producción.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

@@ -19,6 +19,7 @@ from app.controllers.receta_controller import RecetaController
 from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.planificacion_controller import PlanificacionController
+from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
 from datetime import date, datetime, timedelta
@@ -237,6 +238,13 @@ def detalle(id):
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
     lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
 
+    # --- OBTENER HISTORIAL DE DESPERDICIOS ---
+    desperdicio_model = RegistroDesperdicioModel()
+    # Se asume la existencia de un método `find_all_enriched` para obtener datos relacionados
+    desperdicios_result = desperdicio_model.find_all_enriched(filters={'orden_produccion_id': id}, order_by='fecha_registreo.desc')
+    historial_desperdicios = desperdicios_result.get("data", [])
+    # --- FIN OBTENER HISTORIAL ---
+
     # No es necesario cargar la trazabilidad aquí, el frontend lo hace por API.
     # Se pasa un diccionario vacío para evitar errores en la plantilla.
     trazabilidad_resumen = {}
@@ -248,7 +256,8 @@ def detalle(id):
         desglose_origen=desglose_origen,
         pedidos_asociados=pedidos_asociados,
         lotes_insumos_reservados=lotes_insumos_reservados,
-        trazabilidad_resumen=trazabilidad_resumen
+        trazabilidad_resumen=trazabilidad_resumen,
+        historial_desperdicios=historial_desperdicios
     )
 
 
