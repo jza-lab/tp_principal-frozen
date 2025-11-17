@@ -57,7 +57,8 @@
                                        name="stock_min" 
                                        class="form-control" 
                                        value="{{ insumo.stock_min | default(0) }}" 
-                                       form="form-insumo-{{ insumo.id_insumo }}">
+                                       form="form-insumo-{{ insumo.id_insumo }}"
+                                       max="1000000000">
                             </td>
                             
                             <td>
@@ -65,7 +66,8 @@
                                        name="stock_max" 
                                        class="form-control" 
                                        value="{{ insumo.stock_max | default(0) }}"
-                                       form="form-insumo-{{ insumo.id_insumo }}">
+                                       form="form-insumo-{{ insumo.id_insumo }}"
+                                       max="1000000000">
                             </td>
                             
                             <td>

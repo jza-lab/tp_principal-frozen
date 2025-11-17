@@ -47,9 +47,18 @@ def actualizar_stock_min_max():
 
         update_data = {}
         if stock_min is not None and stock_min.strip() != '':
-            update_data['stock_min'] = int(stock_min)
+            valor_stock_min = int(stock_min)
+            if valor_stock_min > 1000000000:
+                flash('El stock mínimo no puede ser mayor a 1,000,000,000.', 'error')
+                return redirect(url_for('alertas.listar_insumos_alertas'))
+            update_data['stock_min'] = valor_stock_min
+
         if stock_max is not None and stock_max.strip() != '':
-            update_data['stock_max'] = int(stock_max)
+            valor_stock_max = int(stock_max)
+            if valor_stock_max > 1000000000:
+                flash('El stock máximo no puede ser mayor a 1,000,000,000.', 'error')
+                return redirect(url_for('alertas.listar_insumos_alertas'))
+            update_data['stock_max'] = valor_stock_max
 
         if not update_data:
             flash('No se proporcionaron datos para actualizar.', 'warning')
