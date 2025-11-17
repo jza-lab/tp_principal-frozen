@@ -1,7 +1,6 @@
 from app.models.base_model import BaseModel
 from typing import Dict, Any, List, Optional
 import logging
-import uuid
 from postgrest.exceptions import APIError
 from datetime import date, timedelta, datetime
 
@@ -141,8 +140,8 @@ class PedidoModel(BaseModel):
                 pedido_data.setdefault('condicion_venta', 'contado')
                 pedido_data.setdefault('pago', 'pendiente')
 
-            # Asegurarse de que el token de seguimiento exista
-            pedido_data['token_seguimiento'] = str(uuid.uuid4())
+            # Eliminar la clave 'token_seguimiento' si existe, para evitar errores de BD.
+            pedido_data.pop('token_seguimiento', None)
 
             # 1. Crear el pedido principal
             pedido_result = self.create(pedido_data)
@@ -237,27 +236,6 @@ class PedidoModel(BaseModel):
                 return {'success': False, 'error': 'Pedido no encontrado.'}
         except Exception as e:
             logger.error(f"Error al obtener el pedido {pedido_id} con items: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    def obtener_por_token(self, token: str) -> Dict:
-        """
-        Obtiene un pedido completo (con items, cliente, etc.) usando el token de seguimiento.
-        """
-        try:
-            # Reutiliza la misma consulta completa que get_one_with_items
-            result = self.db.table(self.get_table_name()).select(
-                '*, '
-                'cliente:clientes(email, nombre, cuit), '
-                'items:pedido_items!pedido_items_pedido_id_fkey(*, producto_nombre:productos(nombre, precio_unitario, unidad_medida)), '
-                'direccion:id_direccion_entrega(*)'
-            ).eq('token_seguimiento', token).single().execute()
-
-            if result.data:
-                return {'success': True, 'data': result.data}
-            else:
-                return {'success': False, 'error': 'Pedido no encontrado.'}
-        except Exception as e:
-            logger.error(f"Error al obtener el pedido por token {token}: {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def update_with_items(self, pedido_id: int, pedido_data: Dict, items_data: List[Dict]) -> Dict:
