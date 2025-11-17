@@ -368,6 +368,7 @@
                                                 <input type="text" class="form-control form-control-sm mb-1 producto-search" 
                                                        placeholder="Buscar producto..." 
                                                        value="{{ current_product.nombre if current_product else '' }}"
+                                                       readonly
                                                        {% if pedido and pedido.estado != 'PENDIENTE' %}disabled{% endif %}>
                                                 
                                                 <!-- Select oculto que se sincronizará -->
@@ -447,7 +448,7 @@
                             <tr class="item-row">
                                 <td>
                                     <input type="hidden" name="items-__prefix__-id" value="">
-                                    <input type="text" class="form-control form-control-sm mb-1 producto-search" placeholder="Buscar producto...">
+                                    <input type="text" class="form-control form-control-sm mb-1 producto-search" placeholder="Buscar producto..." readonly>
                                     <select class="form-select form-select-sm producto-selector" 
                                             name="items-__prefix__-producto_id" 
                                             required 

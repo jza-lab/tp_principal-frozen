@@ -95,9 +95,24 @@ window.calculateOrderTotals = function () {
     }
     
     const ivaRowEl = document.getElementById('iva-row');
+    const resumenFleteEl = document.getElementById('resumen-flete');
     // Para el formulario de cliente (con resumen detallado)
     if (resumenSubtotalEl && resumenIvaEl && resumenTotalEl) {
-        let costoFlete = 0; // Por ahora, flete es 0. Se puede extender en el futuro.
+        let costoFlete = 0;
+        if (subtotalNeto > 0 && subtotalNeto <= 50000) {
+            costoFlete = 5000;
+        } else if (subtotalNeto >= 50001 && subtotalNeto <= 100000) {
+            costoFlete = 10000;
+        } else if (subtotalNeto >= 100001 && subtotalNeto <= 200000) {
+            costoFlete = 15000;
+        } else if (subtotalNeto > 200000) {
+            costoFlete = 20000;
+        }
+
+        if(resumenFleteEl) {
+            resumenFleteEl.textContent = formatToARS(costoFlete);
+        }
+
         let montoIva = 0;
 
         const tipoFactura = document.getElementById('tipo_factura');
@@ -112,7 +127,7 @@ window.calculateOrderTotals = function () {
             ivaRowEl.style.display = 'none';
         }
         
-        const totalFinalConIvaYFlete = subtotalNeto + costoFlete;
+        const totalFinalConIvaYFlete = subtotalNeto + montoIva + costoFlete;
         
         resumenSubtotalEl.textContent = formatToARS(subtotalNeto);
         resumenIvaEl.textContent = formatToARS(montoIva);
