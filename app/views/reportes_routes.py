@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, redirect, render_template, jsonify, request, url_for
 from datetime import datetime, timedelta
 from app.controllers.reportes_controller import ReportesController
 from app.controllers.reporte_produccion_controller import ReporteProduccionController
@@ -142,33 +142,90 @@ def api_stock_productos_cobertura():
 
 @reportes_bp.route('/indicadores')
 def indicadores():
+    return render_template('indicadores/dashboard.html')
+
+@reportes_bp.route('/api/indicadores/<categoria>')
+def api_indicadores_por_categoria(categoria):
+    """
+    Endpoint genérico de la API para obtener los datos de una categoría de indicador específica.
+    """
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+
+    # Mapeo de categorías a las nuevas funciones del controlador
+    mapa_funciones = {
+        'produccion': indicadores_controller.obtener_datos_produccion,
+        'calidad': indicadores_controller.obtener_datos_calidad,
+        'comercial': indicadores_controller.obtener_datos_comercial,
+        'financiera': indicadores_controller.obtener_datos_financieros,
+        'inventario': indicadores_controller.obtener_datos_inventario
+    }
+
+    if categoria not in mapa_funciones:
+        return jsonify({"error": "Categoría no válida"}), 404
+
+    # Llama a la función correspondiente y devuelve los datos
+    funcion_controlador = mapa_funciones[categoria]
+    datos = funcion_controlador(fecha_inicio, fecha_fin)
+    return jsonify(datos)
+
+@reportes_bp.route('/api/ventas/facturacion')
+def api_ventas_facturacion():
     fecha_inicio_str = request.args.get('fecha_inicio')
     fecha_fin_str = request.args.get('fecha_fin')
-    
-    kpis_produccion = indicadores_controller.obtener_kpis_produccion(fecha_inicio_str, fecha_fin_str)
-    
-    # Parsear fechas para KPIs de calidad e inventario
-    if fecha_inicio_str:
-        fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
-    else:
-        fecha_inicio = datetime.now() - timedelta(days=30)
+    periodo = request.args.get('periodo', 'mensual')
+    data = indicadores_controller.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str, periodo)
+    return jsonify(data)
 
-    if fecha_fin_str:
-        fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
-    else:
-        fecha_fin = datetime.now()
+@reportes_bp.route('/api/finanzas/costo_vs_ganancia')
+def api_finanzas_costo_vs_ganancia():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    periodo = request.args.get('periodo', 'mensual')
+    data = indicadores_controller.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str, periodo)
+    return jsonify(data)
 
-    kpis_calidad = indicadores_controller.obtener_kpis_calidad(fecha_inicio, fecha_fin)
-    kpis_inventario = indicadores_controller.obtener_kpis_inventario(fecha_inicio_str, fecha_fin_str)
-    kpis_comercial = indicadores_controller.obtener_kpis_comercial(fecha_inicio, fecha_fin)
+@reportes_bp.route('/api/finanzas/descomposicion_costos')
+def api_finanzas_descomposicion_costos():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    data = indicadores_controller.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str)
+    return jsonify(data)
 
-    kpis = {
-        "produccion": kpis_produccion,
-        "calidad": kpis_calidad,
-        "inventario": kpis_inventario,
-        "comercial": kpis_comercial,
-        "fecha_inicio": kpis_produccion['fecha_inicio'],
-        "fecha_fin": kpis_produccion['fecha_fin']
-    }
+# --- API Endpoints for Clientes Reports ---
+@reportes_bp.route('/api/clientes/top_clientes')
+def api_clientes_top_clientes():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    top_n = request.args.get('top_n', 5, type=int)
+    criterio = request.args.get('criterio', 'valor')
+    data = indicadores_controller.obtener_top_clientes(fecha_inicio_str, fecha_fin_str, top_n, criterio)
+    return jsonify(data)
+
+# --- API Endpoints for Produccion Reports ---
+@reportes_bp.route('/api/produccion/causas_desperdicio')
+def api_produccion_causas_desperdicio():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    data = indicadores_controller.obtener_causas_desperdicio(fecha_inicio_str, fecha_fin_str)
+    return jsonify(data)
+
+# --- API Endpoints for Inventario Reports ---
+@reportes_bp.route('/api/inventario/antiguedad_stock')
+def api_inventario_antiguedad_stock():
+    tipo = request.args.get('tipo', 'insumo')
+    data = indicadores_controller.obtener_antiguedad_stock(tipo)
+    return jsonify(data)
+
+@reportes_bp.route('/configuracion', methods=['GET', 'POST'])
+def configuracion():
+    if request.method == 'POST':
+        # Lógica para guardar la configuración
+        meta_flujo_caja = request.form.get('meta_flujo_caja')
+        controller.guardar_meta_flujo_caja(meta_flujo_caja)
+        # Podríamos añadir un flash message aquí
+        return redirect(url_for('reportes.configuracion'))
     
-    return render_template('indicadores/dashboard.html', kpis=kpis)
+    # Lógica para mostrar la página de configuración
+    config = controller.obtener_configuracion_metas()
+    return render_template('reportes/configuracion.html', config=config)

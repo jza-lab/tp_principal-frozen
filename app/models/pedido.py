@@ -574,7 +574,7 @@ class PedidoModel(BaseModel):
 
     def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin):
         try:
-            result = self.db.table(self.get_table_name()).select('fecha_solicitud, total').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
+            result = self.db.table(self.get_table_name()).select('fecha_solicitud, total:precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error obteniendo ingresos: {str(e)}")
@@ -668,13 +668,13 @@ class PedidoModel(BaseModel):
         Obtiene la suma del valor total de los pedidos completados en un rango de fechas.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('total').eq('estado', 'COMPLETADO').gte('fecha_solicitud', fecha_inicio.isoformat()).lte('fecha_solicitud', fecha_fin.isoformat())
+            query = self.db.table(self.get_table_name()).select('precio_orden').eq('estado', 'COMPLETADO').gte('fecha_solicitud', fecha_inicio.isoformat()).lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
 
             if not result.data:
                 return {'success': True, 'total_valor': 0}
 
-            total_valor = sum(item.get('total', 0) for item in result.data if item.get('total') is not None)
+            total_valor = sum(item.get('precio_orden', 0) for item in result.data if item.get('precio_orden') is not None)
             return {'success': True, 'total_valor': total_valor}
         except Exception as e:
             logger.error(f"Error obteniendo el valor total de pedidos completados: {str(e)}")

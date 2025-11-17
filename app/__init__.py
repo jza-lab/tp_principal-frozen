@@ -248,7 +248,7 @@ def create_app() -> Flask:
 
     @app.context_processor
     def inject_globals():
-        return dict(timedelta=timedelta)
+        return dict(timedelta=timedelta, datetime=datetime)
 
     @app.context_processor
     def inject_csrf_form():

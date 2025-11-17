@@ -69,3 +69,35 @@ class ReportesController:
         data_actual = [item.get('stock_actual', 0) for item in data]
         data_minimo = [item.get('stock_min', 0) for item in data]
         return {"labels": labels, "data_actual": data_actual, "data_minimo": data_minimo}
+
+    def guardar_meta_flujo_caja(self, meta):
+        import json
+        try:
+            with open('config_metas.json', 'w') as f:
+                json.dump({'meta_flujo_caja': meta}, f)
+        except IOError:
+            # Manejar error de escritura
+            pass
+
+    def obtener_configuracion_metas(self):
+        import json
+        try:
+            with open('config_metas.json', 'r') as f:
+                config = json.load(f)
+        except (IOError, json.JSONDecodeError):
+            config = {'meta_flujo_caja': 0}
+
+        # Calcular meta sugerida
+        hoy = datetime.now()
+        hace_3_meses = hoy - timedelta(days=90)
+        ingresos_res = self.pedido_model.get_ingresos_en_periodo(hace_3_meses.isoformat(), hoy.isoformat())
+        
+        total_ingresos = 0
+        if ingresos_res.get('success'):
+            total_ingresos = sum(float(i.get('total', 0)) for i in ingresos_res.get('data', []))
+        
+        # Promedio mensual
+        meta_sugerida = (total_ingresos / 3) if total_ingresos > 0 else 50000 # Un fallback por si no hay datos
+        
+        config['meta_sugerida'] = round(meta_sugerida, 2)
+        return config

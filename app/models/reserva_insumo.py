@@ -90,7 +90,7 @@ class ReservaInsumoModel(BaseModel):
             lote_ids = [lote['id_lote'] for lote in lotes_res.data]
 
             # 2. Obtener las reservas consumidas de esos lotes
-            query = self.db.table(self.get_table_name()).select('cantidad_reservada').eq('estado', 'CONSUMIDO').in_('lote_insumo_id', lote_ids).gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat())
+            query = self.db.table(self.get_table_name()).select('cantidad_reservada').eq('estado', 'CONSUMIDO').in_('lote_inventario_id', lote_ids).gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat())
             
             consumo_res = query.execute()
 
