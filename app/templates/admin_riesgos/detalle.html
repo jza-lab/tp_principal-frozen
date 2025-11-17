@@ -159,8 +159,8 @@
                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto" data-alerta-id="{{ alerta.id }}"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto" data-alerta-id="{{ alerta.id }}"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
@@ -273,8 +273,8 @@
                                                  {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto" data-alerta-id="{{ alerta.id }}"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto" data-alerta-id="{{ alerta.id }}"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
@@ -773,16 +773,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const loteId = this.dataset.loteId;
             const tipoLote = this.dataset.tipoLote;
             const resolucion = this.dataset.resolucion;
+            const alertaId = this.dataset.alertaId;
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             const actionContainer = this.closest('.border-start-lg'); // Buscar el contenedor padre (nuestra nueva columna)
 
-            fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote_desde_alerta') }}", {
+            fetch("{{ url_for('api_riesgos.resolver_cuarentena_lote_api') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify({ lote_id: loteId, tipo_lote: tipoLote, resolucion: resolucion })
+                body: JSON.stringify({ lote_id: loteId, tipo_lote: tipoLote, resolucion: resolucion, alerta_id: alertaId })
             })
             .then(response => response.json())
             .then(data => {
@@ -993,4 +994,40 @@ document.addEventListener('DOMContentLoaded', function () {
         // === FIN: SCRIPT PARA BOTONES DE COLAPSO ===
     });
 </script>
+
+<!-- Botón y Modal para Finalizar Análisis -->
+{% if alerta.estado == 'Resuelta' %}
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1030;">
+    <button class="btn btn-primary btn-lg shadow" data-bs-toggle="modal" data-bs-target="#finalizarAnalisisModal">
+        <i class="bi bi-flag-fill me-2"></i> Finalizar Análisis
+    </button>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="finalizarAnalisisModal" tabindex="-1" aria-labelledby="finalizarAnalisisModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="finalizarAnalisisModalLabel">Finalizar Análisis de Alerta {{ alerta.codigo }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form action="{{ url_for('admin_riesgo.finalizar_analisis_alerta_route', alerta_id=alerta.id) }}" method="POST">
+        <div class="modal-body">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <p>La alerta ha sido resuelta. Por favor, añada una conclusión final para cerrar el análisis por completo.</p>
+            <div class="mb-3">
+              <label for="conclusion_final" class="form-label">Conclusión Final</label>
+              <textarea class="form-control" id="conclusion_final" name="conclusion_final" rows="4" required>{{ alerta.conclusion_sugerida or '' }}</textarea>
+              <small class="form-text text-muted">Se sugiere una conclusión basada en las resoluciones aplicadas, pero puede modificarla.</small>
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Conclusión y Finalizar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

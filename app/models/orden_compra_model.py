@@ -395,7 +395,7 @@ class OrdenCompraModel(BaseModel):
         
     def get_egresos_en_periodo(self, fecha_inicio, fecha_fin):
         try:
-            result = self.db.table(self.get_table_name()).select('fecha_emision, total').gte('fecha_emision', fecha_inicio).lte('fecha_emision', fecha_fin).eq('estado', 'RECIBIDA_COMPLETA').execute()
+            result = self.db.table(self.get_table_name()).select('fecha_emision, total').gte('fecha_emision', fecha_inicio).lte('fecha_emision', fecha_fin).eq('estado', 'Cerrada').execute()
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error obteniendo egresos: {str(e)}")

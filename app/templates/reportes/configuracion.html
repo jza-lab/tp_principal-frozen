@@ -1,0 +1,31 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block app_content %}
+<div class="container-fluid">
+    <h1 class="mb-4">Configuración de Metas</h1>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Metas Financieras</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('reportes.configuracion') }}">
+                        <div class="mb-3">
+                            <label for="meta_flujo_caja" class="form-label">Meta de Flujo de Caja Mensual ($)</label>
+                            <input type="number" step="0.01" class="form-control" id="meta_flujo_caja" name="meta_flujo_caja" value="{{ config.meta_flujo_caja or '' }}" required>
+                            <div class="form-text">
+                                Establece el objetivo de ingresos mensuales. 
+                                <br>
+                                <strong>Meta sugerida basada en los últimos 3 meses:</strong> ${{ config.meta_sugerida }}
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

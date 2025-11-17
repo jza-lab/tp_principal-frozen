@@ -203,3 +203,41 @@ def finalizar_analisis(alerta_id):
     resultado, status_code = controller.finalizar_analisis_alerta(alerta_id, conclusion, usuario_id)
     
     return jsonify(resultado), status_code
+
+# --- API Endpoints for Risks ---
+api_riesgos_bp = Blueprint('api_riesgos', __name__, url_prefix='/api/riesgos')
+
+@api_riesgos_bp.route('/resolver_cuarentena_lote', methods=['POST'])
+@jwt_required(locations=["cookies"])
+@permission_required('riesgos_resolver')
+def resolver_cuarentena_lote_api():
+    """
+    Endpoint de API para resolver el estado de cuarentena de un lote (insumo o producto)
+    desde la pantalla de detalle de una alerta de riesgo.
+    """
+    controller = RiesgoController()
+    datos = request.get_json()
+    usuario_id = get_jwt_identity()
+    
+    resultado, status_code = controller.resolver_cuarentena_lote_desde_alerta(datos, usuario_id)
+    
+    return jsonify(resultado), status_code
+
+@api_riesgos_bp.route('/previsualizar', methods=['POST'])
+@jwt_required(locations=["cookies"])
+@permission_required('riesgos_crear')
+def previsualizar_riesgo_api():
+    """
+    Endpoint de API para obtener una previsualización de las entidades que
+    serían afectadas por una nueva alerta de riesgo.
+    """
+    controller = RiesgoController()
+    data = request.get_json()
+    tipo_entidad = data.get('tipo_entidad')
+    id_entidad = data.get('id_entidad')
+
+    if not tipo_entidad or not id_entidad:
+        return jsonify(success=False, error="Se requieren 'tipo_entidad' y 'id_entidad'."), 400
+
+    resultado, status_code = controller.previsualizar_riesgo(tipo_entidad, id_entidad)
+    return jsonify(resultado), status_code

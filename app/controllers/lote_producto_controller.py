@@ -941,9 +941,10 @@ class LoteProductoController(BaseController):
             logger.error(f"Error al generar la plantilla de lotes: {str(e)}", exc_info=True)
             return None
 
-    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str, foto_file) -> tuple:
+    def poner_lote_en_cuarentena(self, lote_id: int, motivo: str, cantidad: float, usuario_id: Optional[int] = None) -> tuple:
         """
-        Mueve una cantidad específica de un lote DISPONIBLE al estado CUARENTENA y crea un registro de control de calidad.
+        Mueve una cantidad específica de un lote al estado CUARENTENA.
+        Si la cantidad > disponible, mueve todo lo disponible.
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
@@ -951,23 +952,20 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            cantidad_actual_disponible = lote.get('cantidad_actual') or 0
-            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
+            cantidad_actual_disponible = lote.get('cantidad_actual', 0)
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena', 0)
 
             if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
                 msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
                 return self.error_response(msg, 400)
-
-            if not motivo:
-                return self.error_response("Se requiere un motivo para la cuarentena.", 400)
-
-            if cantidad <= 0:
-                 return self.error_response("La cantidad debe ser un número positivo.", 400)
-
+            
             cantidad_a_mover = cantidad
             if cantidad_a_mover > cantidad_actual_disponible:
                 logger.warning(f"La cantidad de cuarentena solicitada ({cantidad}) excede el disponible ({cantidad_actual_disponible}). Se pondrá en cuarentena todo el disponible.")
                 cantidad_a_mover = cantidad_actual_disponible
+
+            if cantidad_a_mover <= 0:
+                return self.success_response(message="No hay cantidad disponible para mover a cuarentena.")
 
             nueva_cantidad_disponible = cantidad_actual_disponible - cantidad_a_mover
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
@@ -978,36 +976,24 @@ class LoteProductoController(BaseController):
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible
             }
-
+            if nueva_cantidad_disponible <= 0 and nueva_cantidad_cuarentena > 0:
+                 update_data['estado'] = 'CUARENTENA' # Si solo queda en cuarentena
+            elif nueva_cantidad_disponible <= 0 and nueva_cantidad_cuarentena <= 0:
+                 update_data['estado'] = 'AGOTADO' # Si no queda nada
+            
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
 
-            foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
-            cc_data = {
-                'lote_producto_id': lote_id,
-                'usuario_supervisor_id': usuario_id,
-                'decision_final': 'CUARENTENA',
-                'comentarios': motivo,
-                'resultado_inspeccion': resultado_inspeccion,
-                'foto_url': foto_url,
-                'cantidad_inspeccionada': cantidad
-            }
-            cc_res, _ = self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
-            if not cc_res.get('success'):
-                 logger.error(f"Falló la creación del registro de C.C. para el lote {lote_id}: {cc_res.get('error')}")
-
             return self.success_response(message="Cantidad puesta en cuarentena con éxito.")
-
         except Exception as e:
-            logger.error(f"Error en poner_lote_en_cuarentena: {e}", exc_info=True)
+            logger.error(f"Error en poner_lote_en_cuarentena (producto): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
-    # --- MÉTODO MODIFICADO PARA ACEPTAR CANTIDAD ---
-    def liberar_lote_de_cuarentena(self, lote_id: int, cantidad_a_liberar: float) -> tuple:
+    def liberar_lote_de_cuarentena(self, lote_id: int, cantidad_a_liberar: float, nuevo_estado_si_apto: str = 'DISPONIBLE') -> tuple:
         """
-        Mueve una cantidad específica de CUARENTENA de vuelta a DISPONIBLE.
-        Si la cantidad en cuarentena llega a 0, el estado vuelve a DISPONIBLE.
+        Mueve una cantidad específica de CUARENTENA de vuelta al estado especificado (usualmente DISPONIBLE o RESERVADO).
+        Si la cantidad en cuarentena llega a 0, el estado del lote principal se actualiza.
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
@@ -1015,63 +1001,47 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            cantidad_actual_disponible = lote.get('cantidad_actual') or 0
-            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
+            cantidad_actual_disponible = lote.get('cantidad_actual', 0)
+            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena', 0)
 
-            # Validaciones
             if lote.get('estado') != 'CUARENTENA':
                 return self.error_response(f"El lote no está en cuarentena.", 400)
-
-            if cantidad_a_liberar <= 0:
-                 return self.error_response("La cantidad a liberar debe ser un número positivo.", 400)
-
             if cantidad_a_liberar > cantidad_actual_cuarentena:
                 msg = f"No puede liberar {cantidad_a_liberar} unidades. Solo hay {cantidad_actual_cuarentena} en cuarentena."
                 return self.error_response(msg, 400)
 
-            # Lógica de resta y suma
             nueva_cantidad_cuarentena = cantidad_actual_cuarentena - cantidad_a_liberar
-            nueva_cantidad_disponible = cantidad_actual_disponible + cantidad_a_liberar
+            
+            update_data = {'cantidad_en_cuarentena': nueva_cantidad_cuarentena}
+            
+            # Si se especifica un estado "apto", se asume que la cantidad liberada va a 'cantidad_actual'
+            if nuevo_estado_si_apto == 'DISPONIBLE':
+                update_data['cantidad_actual'] = cantidad_actual_disponible + cantidad_a_liberar
+            # Aquí podrías añadir lógica para otros estados si fuera necesario, e.g., 'RESERVADO'
 
-            # Decidir el nuevo estado
-            nuevo_estado = 'CUARENTENA'
-            nuevo_motivo = lote.get('motivo_cuarentena')
+            # Decidir el nuevo estado general del lote
+            if nueva_cantidad_cuarentena == 0 and lote.get('cantidad_actual', 0) == 0:
+                 update_data['estado'] = nuevo_estado_si_apto
+                 update_data['motivo_cuarentena'] = None
+            elif nueva_cantidad_cuarentena > 0:
+                 update_data['estado'] = 'CUARENTENA'
+            else: # nueva_cantidad_cuarentena == 0 and cantidad_actual > 0
+                update_data['estado'] = 'DISPONIBLE'
+                update_data['motivo_cuarentena'] = None
 
-            if nueva_cantidad_cuarentena == 0:
-                nuevo_estado = 'DISPONIBLE'
-                nuevo_motivo = None # Limpiar motivo
-
-            update_data = {
-                'estado': nuevo_estado,
-                'motivo_cuarentena': nuevo_motivo,
-                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
-                'cantidad_actual': nueva_cantidad_disponible
-            }
 
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            usuario_id = get_jwt_identity()
-            # Disparar la verificación de cierre de alertas
+            
             try:
+                usuario_id = get_jwt_identity()
                 alerta_model = AlertaRiesgoModel()
-                afectaciones = alerta_model.db.table('alerta_riesgo_afectados').select('alerta_id').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).eq('estado', 'pendiente').execute().data
-                if afectaciones:
-                    alerta_ids = {a['alerta_id'] for a in afectaciones}
-                    for alerta_id in alerta_ids:
-                       alerta_model.actualizar_estado_afectados(
-                            alerta_id,
-                            [lote_id],
-                            'aprobado_calidad',
-                            'lote_producto',
-                            usuario_id
-                        )
-                        
+                alerta_model.verificar_y_cerrar_alerta_por_resolucion('lote_producto', lote_id, usuario_id)
             except Exception as e_alert:
                 logger.error(f"Error al verificar alertas tras liberar lote de producto {lote_id}: {e_alert}", exc_info=True)
             
             return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
-
         except Exception as e:
             logger.error(f"Error en liberar_lote_de_cuarentena: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
@@ -1273,7 +1243,7 @@ class LoteProductoController(BaseController):
     
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int, motivo: str, resultado_inspeccion: str) -> tuple:
         """
-        Marca un lote de producto como 'NO_APTO' y anula su stock.
+        Marca un lote de producto como 'RETIRADO' y anula su stock.
         También crea un registro de control de calidad para la trazabilidad.
         """
         try:
@@ -1282,7 +1252,7 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             update_data = {
-                'estado': 'NO_APTO',
+                'estado': 'RETIRADO',
                 'cantidad_actual': 0,
                 'cantidad_en_cuarentena': 0,
                 'motivo_cuarentena': motivo
@@ -1294,7 +1264,7 @@ class LoteProductoController(BaseController):
             cc_data = {
                 'lote_producto_id': lote_id,
                 'usuario_supervisor_id': usuario_id,
-                'decision_final': 'NO_APTO',
+                'decision_final': 'RETIRADO',
                 'comentarios': motivo,
                 'resultado_inspeccion': resultado_inspeccion,
             }

@@ -8,15 +8,15 @@
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Filtrar por Fecha</h5>
-            <form method="GET" action="{{ url_for('reportes.indicadores') }}">
+            <form id="filter-form">
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
                         <label for="fecha_inicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ kpis.fecha_inicio }}">
+                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-5">
                         <label for="fecha_fin" class="form-label">Fecha de Fin</label>
-                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ kpis.fecha_fin }}">
+                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ datetime.now().strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100">Filtrar</button>
@@ -28,20 +28,24 @@
 
     <ul class="nav nav-tabs" id="kpiTab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true">Producción</button>
+            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true" data-category="produccion">Producción</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false">Calidad</button>
+            <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false" data-category="comercial">Comercial</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false">Inventario</button>
+            <button class="nav-link" id="financiera-tab" data-bs-toggle="tab" data-bs-target="#financiera" type="button" role="tab" aria-controls="financiera" aria-selected="false" data-category="financiera">Financiera</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false">Comercial</button>
+            <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false" data-category="calidad">Calidad</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false" data-category="inventario">Inventario</button>
         </li>
     </ul>
 
     <div class="tab-content" id="kpiTabContent">
+        <!-- Contenedor para Producción -->
         <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
             <div class="row mt-4">
                 <!-- OEE -->
@@ -191,62 +195,55 @@
                             {% endif %}
                         </div>
                     </div>
+            <div class="loading-placeholder text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
+                <p class="mt-2">Cargando datos de Producción...</p>
             </div>
         </div>
+        <!-- Contenedor para Comercial -->
         <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
-            <div class="row mt-4">
-                <!-- Tasa de Cumplimiento de Pedidos -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Tasa de Cumplimiento de Pedidos (a tiempo)</h5>
-                            {% if kpis.comercial.cumplimiento_pedidos %}
-                                <p class="card-text display-4">{{ "%.2f"|format(kpis.comercial.cumplimiento_pedidos.valor) }}%</p>
-                                <p class="card-text"><small class="text-muted">Porcentaje de pedidos entregados a tiempo en el período.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Pedidos Completados a Tiempo
-                                        <span class="badge bg-primary rounded-pill">{{ kpis.comercial.cumplimiento_pedidos.completados }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Total de Pedidos Finalizados
-                                        <span class="badge bg-secondary rounded-pill">{{ kpis.comercial.cumplimiento_pedidos.total }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
+             <div class="loading-placeholder text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
-
-                <!-- Valor Promedio de Pedido -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Valor Promedio de Pedido</h5>
-                            {% if kpis.comercial.valor_promedio_pedido %}
-                                <p class="card-text display-4">${{ "%.2f"|format(kpis.comercial.valor_promedio_pedido.valor) }}</p>
-                                <p class="card-text"><small class="text-muted">Valor monetario promedio de los pedidos completados en el período.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Valor Total de Ventas
-                                        <span class="badge bg-success rounded-pill">${{ "%.2f"|format(kpis.comercial.valor_promedio_pedido.total_valor) }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Número de Pedidos
-                                        <span class="badge bg-info rounded-pill">{{ kpis.comercial.valor_promedio_pedido.num_pedidos }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
+                <p class="mt-2">Cargando datos Comerciales...</p>
+            </div>
+        </div>
+        <!-- Contenedor para Financiera -->
+        <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
+             <div class="loading-placeholder text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
                 </div>
+                <p class="mt-2">Cargando datos Financieros...</p>
+            </div>
+        </div>
+        <!-- Contenedor para Calidad -->
+        <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
+             <div class="loading-placeholder text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2">Cargando datos de Calidad...</p>
+            </div>
+        </div>
+        <!-- Contenedor para Inventario -->
+        <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
+             <div class="loading-placeholder text-center p-5">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Cargando...</span>
+                </div>
+                <p class="mt-2">Cargando datos de Inventario...</p>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+<!-- Un solo archivo JS para manejar toda la lógica -->
+<script src="{{ url_for('static', filename='js/indicadores/indicadores_dashboard.js') }}"></script>
 {% endblock %}
