@@ -1,0 +1,32 @@
+<!-- Modal para Finalizar Análisis -->
+<div class="modal fade" id="modalFinalizarAnalisis" tabindex="-1" aria-labelledby="modalFinalizarAnalisisLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalFinalizarAnalisisLabel">Finalizar Análisis de Alerta</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="formFinalizarAnalisis" action="{{ url_for('admin_riesgo.finalizar_analisis', alerta_id=alerta.id) }}" method="POST">
+                <div class="modal-body">
+                    {{ csrf_form.csrf_token }}
+                    <p>Todos los ítems afectados han sido resueltos. Por favor, escriba una conclusión final para cerrar el análisis de esta alerta.</p>
+                    
+                    <div class="mb-3">
+                        <label for="conclusion_final" class="form-label">Conclusión Final</label>
+                        <textarea class="form-control" id="conclusion_final" name="conclusion_final" rows="4" required></textarea>
+                        <div class="form-text">
+                            Sugerencias: "Falso positivo", "Mercancía recuperada", "Pérdida parcial por contaminación cruzada".
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="btnConfirmarFinalizarAnalisis">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Confirmar y Finalizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

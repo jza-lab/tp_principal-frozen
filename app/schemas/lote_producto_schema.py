@@ -20,7 +20,7 @@ class LoteProductoSchema(Schema):
         validate=validate.Range(min=0, max=99999999.99, error="El costo debe ser un número no negativo y no exceder 99,999,999.99."),
         allow_none=True
     )
-    estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA', 'RECHAZADO']))
+    estado = fields.Str(validate=validate.OneOf(['DISPONIBLE', 'RESERVADO', 'AGOTADO', 'VENCIDO', 'RETIRADO', 'CUARENTENA', 'RECHAZADO', 'DEVOLUCION_PENDIENTE']))
     motivo_cuarentena = fields.Str(allow_none=True, validate=validate.Length(max=255))
     cantidad_en_cuarentena = fields.Float(allow_none=True, validate=validate.Range(min=0))
     cantidad_desperdiciada = fields.Float(

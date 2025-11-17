@@ -776,7 +776,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
             const actionContainer = this.closest('.border-start-lg'); // Buscar el contenedor padre (nuestra nueva columna)
 
-            fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote') }}", {
+            fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote_desde_alerta') }}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

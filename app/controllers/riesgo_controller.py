@@ -75,12 +75,23 @@ class RiesgoController(BaseController):
                 nueva_alerta = nueva_alerta[0]
                 
             if afectados:
-                self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados)
-                # Procesar efectos secundarios después de crear la alerta
-                self._procesar_efectos_secundarios_alerta(nueva_alerta, afectados, f"Alerta {nueva_alerta['codigo']}", usuario_id)
+                # --- NUEVA LÓGICA ---
+                # 1. Obtener estados actuales ANTES de cualquier cambio
+                estados_previos = self._obtener_estados_actuales(afectados)
+                
+                # 2. Asociar afectados guardando su estado previo
+                self.alerta_riesgo_model.asociar_afectados(nueva_alerta['id'], afectados, estados_previos)
+
+                # 3. Procesar efectos secundarios (cambio de estados)
+                self._procesar_efectos_secundarios_alerta(
+                    nueva_alerta, 
+                    afectados, 
+                    estados_previos,
+                    f"Alerta {nueva_alerta['codigo']}", 
+                    usuario_id
+                )
             
             self._enviar_notificaciones_alerta(nueva_alerta)
-
 
             return {"success": True, "data": nueva_alerta}, 201
 
@@ -90,63 +101,105 @@ class RiesgoController(BaseController):
             logger.error(f"Error al crear alerta de riesgo: {e}", exc_info=True)
             return {"success": False, "error": f"Error interno: {str(e)}"}, 500
 
-    def _procesar_efectos_secundarios_alerta(self, alerta, afectados, motivo_log, usuario_id):
-        from app.controllers.inventario_controller import InventarioController
-        from app.controllers.lote_producto_controller import LoteProductoController
-        from app.controllers.orden_produccion_controller import OrdenProduccionController
+    def _obtener_estados_actuales(self, afectados: list) -> dict:
+        """
+        Obtiene el estado actual de una lista de entidades afectadas.
+        """
+        estados = {}
         from app.models.inventario import InventarioModel
-        from app.models.reserva_insumo import ReservaInsumoModel
+        from app.models.lote_producto import LoteProductoModel
+        from app.models.orden_produccion import OrdenProduccionModel
+        from app.models.pedido import PedidoModel
 
-        inventario_model= InventarioModel()
-        inventario_controller = InventarioController()
-        lote_producto_controller = LoteProductoController()
-        op_controller = OrdenProduccionController()
-        reserva_insumo_model = ReservaInsumoModel()
-        
-        logger.info(f"Procesando efectos para {len(afectados)} afectados. Motivo: {motivo_log}")
+        inventario_model = InventarioModel()
+        lote_producto_model = LoteProductoModel()
+        op_model = OrdenProduccionModel()
+        pedido_model = PedidoModel()
 
         for afectado in afectados:
             tipo = afectado['tipo_entidad']
             entidad_id = afectado['id_entidad']
-            logger.info(f"Procesando: tipo={tipo}, id={entidad_id}")
+            estado_actual = 'Desconocido'
+            
+            res = None
+            try:
+                if tipo == 'lote_insumo':
+                    res = inventario_model.find_by_id(entidad_id, id_field='id_lote')
+                    if res.get('success') and res.get('data'):
+                        estado_actual = res['data'].get('estado', 'Desconocido')
+                elif tipo == 'lote_producto':
+                    res = lote_producto_model.find_by_id(entidad_id, id_field='id_lote')
+                    if res.get('success') and res.get('data'):
+                        estado_actual = res['data'].get('estado', 'Desconocido')
+                elif tipo == 'orden_produccion':
+                    res = op_model.find_by_id(int(entidad_id))
+                    if res.get('success') and res.get('data'):
+                        estado_actual = res['data'].get('estado', 'Desconocido')
+                elif tipo == 'pedido':
+                    res = pedido_model.find_by_id(int(entidad_id))
+                    if res.get('success') and res.get('data'):
+                        estado_actual = res['data'].get('estado', 'Desconocido')
+            except Exception as e:
+                logger.error(f"No se pudo obtener el estado para {tipo}:{entidad_id}. Error: {e}")
+            
+            estados[(tipo, str(entidad_id))] = estado_actual
+            
+        return estados
+
+    def _procesar_efectos_secundarios_alerta(self, alerta, afectados, estados_previos, motivo_log, usuario_id):
+        from app.controllers.inventario_controller import InventarioController
+        from app.controllers.lote_producto_controller import LoteProductoController
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+        from app.controllers.pedido_controller import PedidoController
+
+        inventario_controller = InventarioController()
+        lote_producto_controller = LoteProductoController()
+        op_controller = OrdenProduccionController()
+        pedido_controller = PedidoController()
+        
+        logger.info(f"Procesando efectos secundarios para alerta {alerta['codigo']} sobre {len(afectados)} entidades.")
+
+        # Estados que deben ser afectados por una alerta
+        ESTADOS_LOTE_INSUMO_AFECTADOS = ['disponible', 'agotado', 'reservado', 'vencido']
+        ESTADOS_LOTE_PRODUCTO_AFECTADOS = ['disponible', 'reservado', 'agotado', 'vencido']
+        ESTADOS_OP_AFECTADOS = ['en proceso', 'completada', 'lista para producir', 'en linea 1', 'en linea 2', 'en empaquetado', 'en control de calidad']
+        ESTADOS_PEDIDO_AFECTADOS = ['en proceso', 'listo para entrega', 'en transito']
+
+        for afectado in afectados:
+            tipo = afectado['tipo_entidad']
+            entidad_id = afectado['id_entidad']
+            entidad_key = (tipo, str(entidad_id))
+            estado_actual = estados_previos.get(entidad_key, 'Desconocido').lower()
+
+            logger.info(f"Procesando: tipo={tipo}, id={entidad_id}, estado_actual='{estado_actual}'")
 
             # 1. Marcar todas las entidades como 'en_alerta'
             self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
 
-            # 2. Poner lotes en cuarentena y marcar OPs relacionadas en alerta
-            if tipo == 'lote_insumo':
-                # Marcar OPs asociadas en alerta (pausa simulada)
-                reservas = reserva_insumo_model.find_all({'lote_inventario_id': entidad_id}).get('data', [])
-                for reserva in reservas:
-                    op_id = reserva.get('orden_produccion_id')
-                    if op_id:
-                        op_res = op_controller.model.find_by_id(op_id, 'id')
-                        if op_res.get('success') and op_res.get('data'):
-                            orden_produccion = op_res['data']
-                            if orden_produccion.get('estado') not in ['COMPLETADA', 'EN CONTROL DE CALIDAD', 'FINALIZADA', 'CANCELADA']:
-                                logger.info(f"Lote de insumo {entidad_id} en alerta afecta a la OP {op_id}. Marcando OP en alerta.")
-                                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad('orden_produccion', op_id, True)
-
-                # Poner el lote de insumo en cuarentena
-                lote_info_res = inventario_model.find_by_id(entidad_id, id_field='id_lote')
-                if lote_info_res.get('success') and lote_info_res.get('data'):
-                    lote_info = lote_info_res.get('data')
-                    if lote_info.get('cantidad_disponible', 0) <= 0:
-                        logger.info(f"Lote de insumo {entidad_id} está agotado. Marcando como resuelto.")
-                        self.alerta_riesgo_model.actualizar_estado_afectados(
-                            alerta['id'], 
-                            [entidad_id], 
-                            'agotado', 
-                            'lote_insumo', 
-                            usuario_id
-                        )
-                    else:
+            # 2. Aplicar cambios de estado según las reglas
+            try:
+                if tipo == 'lote_insumo':
+                    if any(estado_valido in estado_actual for estado_valido in ESTADOS_LOTE_INSUMO_AFECTADOS):
                         inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
-                else:
-                     inventario_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id)
+                        logger.info(f"Lote de insumo {entidad_id} puesto en CUARENTENA.")
 
-            elif tipo == 'lote_producto':
-                lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
+                elif tipo == 'lote_producto':
+                    if any(estado_valido in estado_actual for estado_valido in ESTADOS_LOTE_PRODUCTO_AFECTADOS):
+                        lote_producto_controller.poner_lote_en_cuarentena(entidad_id, motivo_log, 999999)
+                        logger.info(f"Lote de producto {entidad_id} puesto en CUARENTENA.")
+                
+                elif tipo == 'orden_produccion':
+                    if any(estado_valido in estado_actual for estado_valido in ESTADOS_OP_AFECTADOS):
+                        op_controller.cambiar_estado_orden_simple(int(entidad_id), 'EN ESPERA')
+                        logger.info(f"Orden de Producción {entidad_id} puesta EN ESPERA.")
+
+                elif tipo == 'pedido':
+                    if any(estado_valido in estado_actual for estado_valido in ESTADOS_PEDIDO_AFECTADOS):
+                        pedido_controller.cambiar_estado_pedido(int(entidad_id), 'EN REVISION')
+                        logger.info(f"Pedido {entidad_id} puesto EN REVISION.")
+
+            except Exception as e:
+                logger.error(f"Fallo al procesar efecto secundario para {tipo}:{entidad_id}. Error: {e}", exc_info=True)
 
 
         
@@ -707,7 +760,7 @@ class RiesgoController(BaseController):
                 return {"success": False, "error": f"La alerta ya está en estado '{alerta['estado']}'."}, 400
 
             # Cambiar el estado principal de la alerta
-            self.alerta_riesgo_model.update(alerta['id'], {'estado': 'Resuelta'})
+            self.alerta_riesgo_model.update(alerta['id'], {'estado': 'ANALISIS FINALIZADO', 'conclusion_final': 'Resolución manual aplicada por el administrador.'})
             
             # Marcar todos los afectados como resueltos si aún están pendientes
             self.alerta_riesgo_model.db.table('alerta_riesgo_afectados').update({
@@ -734,33 +787,113 @@ class RiesgoController(BaseController):
             return {"success": False, "error": "Error interno del servidor."}, 500
     
     
-    def resolver_cuarentena_lote(self, datos, usuario_id):
+    def resolver_cuarentena_lote_desde_alerta(self, datos, usuario_id):
         lote_id = datos.get('lote_id')
-        tipo_lote = datos.get('tipo_lote') # 'lote_insumo' o 'lote_producto'
-        resolucion = datos.get('resolucion') # 'apto' o 'no_apto'
+        tipo_lote = datos.get('tipo_lote')
+        resolucion = datos.get('resolucion')
+        alerta_id = datos.get('alerta_id')
 
-        if not all([lote_id, tipo_lote, resolucion]):
-            return {"success": False, "error": "Faltan parámetros requeridos."}, 400
-        
+        if not all([lote_id, tipo_lote, resolucion, alerta_id]):
+            return {"success": False, "error": "Faltan parámetros requeridos (lote_id, tipo_lote, resolucion, alerta_id)."}, 400
+
         try:
             if tipo_lote == 'lote_insumo':
-                from app.controllers.inventario_controller import InventarioController
-                controller = InventarioController()
                 if resolucion == 'apto':
-                    resultado, status_code = controller.marcar_lote_como_apto(lote_id, usuario_id)
-                else:
-                    resultado, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+                    return self._resolver_lote_insumo_apto(alerta_id, lote_id, usuario_id)
+                else: # no_apto
+                    return self._resolver_lote_insumo_no_apto(alerta_id, lote_id, usuario_id)
             elif tipo_lote == 'lote_producto':
-                from app.controllers.lote_producto_controller import LoteProductoController
-                controller = LoteProductoController()
                 if resolucion == 'apto':
-                    resultado, status_code = controller.marcar_lote_como_apto(lote_id, usuario_id)
-                else:
-                    resultado, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+                    return self._resolver_lote_producto_apto(alerta_id, lote_id, usuario_id)
+                else: # no_apto
+                    return self._resolver_lote_producto_no_apto(alerta_id, lote_id, usuario_id)
             else:
                 return {"success": False, "error": "Tipo de lote no válido."}, 400
-            
-            return resultado, status_code
+
         except Exception as e:
-            logger.error(f"Error en resolver_cuarentena_lote: {e}", exc_info=True)
+            logger.error(f"Error en resolver_cuarentena_lote_desde_alerta: {e}", exc_info=True)
             return {"success": False, "error": "Error interno del servidor."}, 500
+
+    def _resolver_lote_insumo_apto(self, alerta_id, lote_insumo_id, usuario_id):
+        from app.controllers.inventario_controller import InventarioController
+        inventario_controller = InventarioController()
+        
+        # 1. Liberar el lote de insumo de cuarentena
+        inventario_controller.liberar_lote_de_cuarentena(lote_insumo_id, 999999) # Asumimos liberar todo
+        
+        # 2. Marcar el lote de insumo como resuelto en la alerta
+        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_insumo_id], 'apto', 'lote_insumo', usuario_id)
+
+        # 3. Lógica de cascada: Verificar si las OPs y Lotes de producto relacionados ya pueden ser liberados
+        # Esta lógica es compleja y se podría encapsular en el modelo.
+        
+        return {"success": True, "message": "Lote de insumo marcado como Apto. Se revisarán las entidades dependientes."}, 200
+
+    def _resolver_lote_insumo_no_apto(self, alerta_id, lote_insumo_id, usuario_id):
+        from app.controllers.inventario_controller import InventarioController
+        from app.models.orden_produccion import OrdenProduccionModel
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+
+        inventario_controller = InventarioController()
+        op_model = OrdenProduccionModel()
+        op_controller = OrdenProduccionController()
+
+        # 1. Marcar el lote de insumo como retirado
+        inventario_controller.marcar_lote_como_no_apto(lote_insumo_id, usuario_id)
+        
+        # 2. Marcar el lote de insumo como resuelto en la alerta
+        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_insumo_id], 'no_apto_retirado', 'lote_insumo', usuario_id)
+
+        # 3. Identificar OPs y Lotes de Producto afectados por este insumo
+        afectados_por_insumo = self.trazabilidad_model.obtener_afectados_para_alerta('lote_insumo', lote_insumo_id)
+        
+        for afectado in afectados_por_insumo:
+            if afectado['tipo_entidad'] == 'orden_produccion':
+                op_id = afectado['id_entidad']
+                # Poner OP en pendiente para replanificar
+                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+                # Marcarla como resuelta en la alerta
+                self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [op_id], 'replanificar_por_insumo_no_apto', 'orden_produccion', usuario_id)
+
+            if afectado['tipo_entidad'] == 'lote_producto':
+                # Marcar lote de producto como retirado y resolverlo
+                self._resolver_lote_producto_no_apto(alerta_id, afectado['id_entidad'], usuario_id, "Insumo no apto")
+        
+        return {"success": True, "message": "Lote de insumo marcado como No Apto y entidades dependientes actualizadas."}, 200
+
+    def _resolver_lote_producto_apto(self, alerta_id, lote_producto_id, usuario_id):
+        from app.controllers.lote_producto_controller import LoteProductoController
+        lote_producto_controller = LoteProductoController()
+        
+        lote_producto_controller.liberar_lote_de_cuarentena(lote_producto_id, 999999)
+        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_producto_id], 'apto', 'lote_producto', usuario_id)
+        
+        return {"success": True, "message": "Lote de producto marcado como Apto."}, 200
+
+    def _resolver_lote_producto_no_apto(self, alerta_id, lote_producto_id, usuario_id, motivo_adicional=""):
+        from app.controllers.lote_producto_controller import LoteProductoController
+        from app.models.pedido import PedidoModel
+        
+        lote_producto_controller = LoteProductoController()
+        pedido_model = PedidoModel()
+        
+        motivo_final = f"Lote no apto según alerta. {motivo_adicional}".strip()
+
+        # 1. Marcar el lote como NO_APTO (esto anula su stock)
+        lote_producto_controller.marcar_lote_como_no_apto(lote_producto_id, usuario_id, motivo_final, "Inspección por Alerta")
+        
+        # 2. Marcar como resuelto en la alerta
+        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_producto_id], 'no_apto_retirado', 'lote_producto', usuario_id)
+        
+        # 3. Gestionar pedidos afectados
+        pedidos_afectados_res = pedido_model.find_pedidos_by_lote_producto(lote_producto_id)
+        if pedidos_afectados_res.get('success') and pedidos_afectados_res.get('data'):
+            for pedido in pedidos_afectados_res['data']:
+                estado_pedido = pedido.get('estado', '').lower()
+                if estado_pedido in ['en transito', 'recibido', 'completado']:
+                    # Cambiar estado del lote a "Devolución pendiente"
+                    self.model.update(lote_producto_id, {'estado': 'DEVOLUCION_PENDIENTE'}, 'id_lote')
+                    # Cambiar estado del pedido a "En tránsito" para la devolución
+                    pedido_model.cambiar_estado(pedido['id'], 'EN_TRANSITO')
+        
+        return {"success": True, "message": "Lote de producto marcado como No Apto y pedidos afectados actualizados."}, 200

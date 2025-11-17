@@ -102,15 +102,20 @@ class AlertaRiesgoModel(BaseModel):
 
         return detalles
 
-    def asociar_afectados(self, alerta_id, afectados):
+    def asociar_afectados(self, alerta_id, afectados, estados_previos):
         if not afectados:
             return None # No hacer nada si no hay afectados
-        records = [{
-            'alerta_id': alerta_id, 
-            'tipo_entidad': a['tipo_entidad'], 
-            'id_entidad': str(a['id_entidad']),
-            'estado': 'pendiente'  # Añadir estado inicial por defecto
-        } for a in afectados]
+        records = []
+        for a in afectados:
+            entidad_key = (a['tipo_entidad'], str(a['id_entidad']))
+            estado_previo = estados_previos.get(entidad_key, 'Desconocido')
+            records.append({
+                'alerta_id': alerta_id,
+                'tipo_entidad': a['tipo_entidad'],
+                'id_entidad': str(a['id_entidad']),
+                'estado': 'pendiente',
+                'estado_previo': estado_previo
+            })
         return self.db.table('alerta_riesgo_afectados').insert(records).execute()
     
     def actualizar_estado_afectados(self, alerta_id, entidad_ids, resolucion, tipo_entidad, id_usuario_resolucion, documento_id=None):

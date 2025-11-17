@@ -176,14 +176,30 @@ def resolver_alerta_riesgo_manualmente(codigo_alerta):
         
     return redirect(url_for('admin_riesgo.detalle_alerta_riesgo', codigo_alerta=codigo_alerta))
 
-@admin_riesgo_bp.route('/api/lote/resolver-cuarentena', methods=['POST'])
+@admin_riesgo_bp.route('/api/resolver-cuarentena', methods=['POST'])
 @jwt_required()
 @permission_required(accion='gestionar_reclamos')
-def resolver_cuarentena_lote():
+def resolver_cuarentena_lote_desde_alerta():
     datos = request.json
     usuario_id = get_jwt_identity()
     
     controller = RiesgoController()
-    resultado, status_code = controller.resolver_cuarentena_lote(datos, usuario_id)
+    resultado, status_code = controller.resolver_cuarentena_lote_desde_alerta(datos, usuario_id)
+    
+    return jsonify(resultado), status_code
+
+@admin_riesgo_bp.route('/api/<int:alerta_id>/finalizar-analisis', methods=['POST'])
+@jwt_required()
+@permission_required(accion='gestionar_reclamos')
+def finalizar_analisis(alerta_id):
+    datos = request.json
+    conclusion = datos.get('conclusion')
+    usuario_id = get_jwt_identity()
+
+    if not conclusion:
+        return jsonify(success=False, error="La conclusión es obligatoria."), 400
+        
+    controller = RiesgoController()
+    resultado, status_code = controller.finalizar_analisis_alerta(alerta_id, conclusion, usuario_id)
     
     return jsonify(resultado), status_code
