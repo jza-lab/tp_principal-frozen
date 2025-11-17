@@ -202,7 +202,19 @@ def editar_lote(id_lote):
     if request.method == 'POST':
         try:
             datos_formulario = request.form.to_dict()
-            datos_formulario.pop('csrf_token', None)  # Se elimina el token antes de validar
+            datos_formulario.pop('csrf_token', None)
+
+            # Validación manual de Backend para el precio
+            if datos_formulario.get('precio_unitario'):
+                try:
+                    precio = float(datos_formulario['precio_unitario'])
+                    if not (0 <= precio <= 999999999.99):
+                        flash('El precio unitario excede el límite permitido (máx 999,999,999.99).', 'danger')
+                        return redirect(url_for('inventario_view.editar_lote', id_lote=id_lote))
+                except (ValueError, TypeError):
+                    flash('El precio unitario debe ser un número válido.', 'danger')
+                    return redirect(url_for('inventario_view.editar_lote', id_lote=id_lote))
+
             # Llama al método del controlador que ya existía
             response, status_code = controller.actualizar_lote_parcial(id_lote, datos_formulario)
 

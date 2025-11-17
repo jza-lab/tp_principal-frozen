@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.remove();
                 reindexarFilas();
                 window.calculateOrderTotals();
+                if (window.updateProformaButtonState) {
+                    window.updateProformaButtonState();
+                }
             }
         }
     });

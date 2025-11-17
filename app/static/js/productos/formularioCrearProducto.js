@@ -48,6 +48,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function agregarItemAReceta(insumo) {
+        // --- INICIO DE MODIFICACIÓN: VERIFICAR SI EL ÍTEM YA EXISTE ---
+        let itemExistente = false;
+        const insumoIdAAgregar = insumo.id;
+
+        itemsContainer.querySelectorAll('.item-row').forEach(row => {
+            const selector = row.querySelector('.insumo-selector');
+            // El valor del selector es el ID del insumo
+            const insumoIdActual = selector.value;
+
+            if (insumoIdActual === insumoIdAAgregar) {
+                const cantidadInput = row.querySelector('.cantidad');
+                const cantidadActual = parseFloat(cantidadInput.value) || 0;
+                // Por defecto, al hacer doble clic, sumamos 1
+                cantidadInput.value = cantidadActual + 1;
+                itemExistente = true;
+            }
+        });
+
+        // Si el ítem ya existía, solo recalculamos y terminamos la función
+        if (itemExistente) {
+            calcularTotales();
+            return; 
+        }
+        // --- FIN DE MODIFICACIÓN ---
+
         const row = document.createElement('div');
         row.className = 'row g-3 align-items-end item-row mb-2';
 

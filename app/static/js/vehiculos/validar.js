@@ -53,8 +53,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return false;
             }
             const numberValue = parseFloat(value);
-            if (isNaN(numberValue) || numberValue < 250 || numberValue > 1500) {
-                showError(inputElement, 'Debe ser un valor entre 250 y 1500.');
+            if (isNaN(numberValue) || numberValue < 100 || numberValue > 500) {
+                showError(inputElement, 'Debe ser un valor entre 100 y 500.');
                 return false;
             }
             showSuccess(inputElement);

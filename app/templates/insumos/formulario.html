@@ -141,7 +141,7 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="stock_min" class="form-label">Stock Mínimo</label>
+                            <label for="stock_min" class="form-label">Stock Mínimo <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-dash-circle"></i></span>
                                 <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_min"
@@ -151,7 +151,7 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="stock_max" class="form-label">Stock Máximo</label>
+                            <label for="stock_max" class="form-label">Stock Máximo <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-plus-circle"></i></span>
                                 <input type="number" step="1" min="0" max="5000" class="form-control" name="stock_max"
@@ -161,7 +161,7 @@ Agregar nuevo insumo al catálogo
                         </div>
 
                         <div class="col-md-6">
-                            <label for="precio_unitario" class="form-label">Precio Unitario</label>
+                            <label for="precio_unitario" class="form-label">Precio Unitario <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-currency-dollar"></i></span>
                                 <input type="number" step="0.01" class="form-control" name="precio_unitario"
@@ -176,7 +176,7 @@ Agregar nuevo insumo al catálogo
                                     required min="1" max="10000" value="{{ insumo.vida_util_dias if insumo else '' }}"
                                     placeholder="Días de Vida Útil">
                                 <label for="dias_vida_util">
-                                    <i class="bi bi-calendar-date me-1"></i>Días de Vida Útil
+                                    <i class="bi bi-calendar-date me-1"></i>Días de Vida Útil <span class="text-danger">*</span>
                                 </label>
                             </div>
                             <div class="form-text">Duración promedio antes del vencimiento</div>

@@ -35,7 +35,7 @@ class InsumosInventarioSchema(Schema):
     )
     precio_unitario = fields.Decimal(
         as_string=True,
-        validate=validate.Range(min=0),
+        validate=validate.Range(min=0, max=999999999.99, error="El precio está fuera del rango permitido."),
         allow_none=True
     )
     costo_total = fields.Decimal(as_string=True, dump_only=True)

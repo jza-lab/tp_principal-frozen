@@ -24,10 +24,32 @@
         <h1 class="mb-4">Búsqueda Global</h1>
         <form action="{{ url_for('main_routes.global_search_results') }}" method="GET">
             <div class="input-group">
-                <input type="search" name="q" class="form-control search-input" placeholder="Buscar producto, cliente, pedido, orden de compra o producción..." aria-label="Search">
+                <input type="search" id="main-search-input" name="q" class="form-control search-input" placeholder="Buscar producto, cliente, pedido, orden de compra o producción..." aria-label="Search">
                 <button class="btn btn-primary search-button" type="submit">Buscar</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('main-search-input');
+    if (searchInput) {
+        const placeholders = [
+            "Buscar producto por su nombre...",
+            "Buscar cliente por su nombre...",
+            "Buscar pedido por su ID...",
+            "Buscar insumo por su nombre...",
+            "Buscar proveedor por su nombre...",
+            "Buscar orden de compra por su código OC-XZY...",
+            "Buscar orden de producción por su código OP-XZY..."
+        ];
+        let currentIndex = 0;
+        setInterval(() => {
+            currentIndex = (currentIndex + 1) % placeholders.length;
+            searchInput.placeholder = placeholders[currentIndex];
+        }, 3000);
+    }
+});
+</script>
 {% endblock %}

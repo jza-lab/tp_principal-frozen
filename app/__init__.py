@@ -192,10 +192,10 @@ def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
 def _formato_moneda_filter(value):
     """Filtro Jinja para formatear un número como moneda."""
     if value is None:
-        return "$ 0.00"
+        return "0,00"
     try:
-        # Formatea con separador de miles y dos decimales
-        return f" {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Formatea con separador de miles y dos decimales, sin el signo de pesos.
+        return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
         return value
 
