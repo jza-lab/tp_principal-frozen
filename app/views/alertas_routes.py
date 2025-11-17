@@ -145,6 +145,19 @@ def actualizar_stock_min_producto():
         stock_min = int(stock_min_str)
 
         producto_controller = ProductoController()
+        producto_info = producto_controller.obtener_producto_por_id(int(producto_id))
+
+        if not producto_info.get('success'):
+            flash('Producto no encontrado.', 'error')
+            return redirect(url_for('alertas.listar_productos_alertas', tab='stock-min'))
+
+        producto = producto_info.get('data')
+        cantidad_maxima = producto.get('cantidad_maxima_x_pedido')
+
+        if cantidad_maxima is not None and stock_min > cantidad_maxima:
+            flash('El stock mínimo no puede ser mayor que la cantidad máxima por pedido.', 'error')
+            return redirect(url_for('alertas.listar_productos_alertas', tab='stock-min'))
+
         response, status_code = producto_controller.actualizar_stock_min_produccion(int(producto_id), stock_min)
 
         if status_code == 200:
@@ -176,6 +189,10 @@ def actualizar_cantidad_maxima_x_pedido():
             return redirect(url_for('alertas.listar_productos_alertas'))
 
         cantidad_maxima = int(cantidad_maxima_str)
+
+        if cantidad_maxima > 1000000000:
+            flash('La cantidad máxima no puede ser mayor a 1,000,000,000.', 'error')
+            return redirect(url_for('alertas.listar_productos_alertas', tab='cantidad-max'))
 
         producto_controller = ProductoController()
         response, status_code = producto_controller.actualizar_cantidad_maxima_x_pedido(int(producto_id), cantidad_maxima)
