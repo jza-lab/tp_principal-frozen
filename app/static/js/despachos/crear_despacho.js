@@ -9,6 +9,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let vehicleData = null;
     let selectedPedidos = new Map();
 
+    // --- Función de ayuda para imprimir HTML ---
+    function printHtmlContent(htmlContent) {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        iframe.contentDocument.write(htmlContent);
+        iframe.contentDocument.close();
+        iframe.contentWindow.print();
+        document.body.removeChild(iframe);
+    }
+
     // --- Búsqueda de Vehículo ---
     searchBtn.addEventListener('click', buscarVehiculo);
     patenteInput.addEventListener('keypress', function(e) {
@@ -21,7 +32,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const patente = patenteInput.value.trim().toUpperCase();
         if (!patente) return;
 
-        // Limpiar estado de validación previo
         patenteInput.classList.remove('is-invalid');
         patenteErrorDiv.textContent = '';
 
@@ -30,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const result = await response.json();
 
             if (result.success && result.data) {
-                vehicleData = result.data; // La API devuelve un solo objeto
+                vehicleData = result.data;
                 document.getElementById('vehicle-patente').textContent = `Patente: ${vehicleData.patente}`;
                 document.getElementById('vehicle-conductor').textContent = `${vehicleData.nombre_conductor} (DNI: ${vehicleData.dni_conductor})`;
                 document.getElementById('vehicle-capacidad').textContent = `${vehicleData.capacidad_kg} kg`;
@@ -79,7 +89,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('selected-count').textContent = selectedPedidos.size;
         document.getElementById('total-weight').textContent = totalWeight.toFixed(2);
 
-        // Actualizar barra de capacidad
         const capacityBar = document.getElementById('capacity-bar');
         if (vehicleData && vehicleData.capacidad_kg > 0) {
             const percentage = Math.min((totalWeight / vehicleData.capacidad_kg) * 100, 100);
@@ -94,7 +103,6 @@ document.addEventListener('DOMContentLoaded', function () {
             capacityBar.style.width = '0%';
         }
 
-        // Habilitar/deshabilitar botón de confirmar
         confirmBtn.disabled = !(vehicleData && selectedPedidos.size > 0);
     }
 
@@ -117,17 +125,13 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch('/admin/despachos/api/crear', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // Asumimos que el token CSRF es manejado globalmente
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
             const result = await response.json();
 
             if (result.success) {
-                // Ocultar el formulario y mostrar el resultado
-                document.querySelector('.col-lg-8').style.display = 'none'; // Oculta la columna de pedidos
+                document.querySelector('.col-lg-8').style.display = 'none';
                 
                 const successDiv = document.getElementById('success-result');
                 const despachoId = result.data.despacho_id;
@@ -137,9 +141,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         Despacho #${despachoId} creado exitosamente.
                     </div>
                     <div class="d-grid gap-2">
-                        <a href="/admin/despachos/hoja-de-ruta/${despachoId}" target="_blank" class="btn btn-success">
+                        <button id="btn-descargar-hoja-ruta" data-despacho-id="${despachoId}" class="btn btn-success">
                             <i class="fas fa-print me-1"></i> Ver/Imprimir Hoja de Ruta
-                        </a>
+                        </button>
                         <a href="${result.redirect_url}" class="btn btn-secondary">
                             <i class="fas fa-arrow-left me-1"></i> Volver al Listado
                         </a>
@@ -147,7 +151,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 `;
                 successDiv.style.display = 'block';
 
-                // Deshabilitar el botón de confirmar y cambiar el texto a "Completado"
+                document.getElementById('btn-descargar-hoja-ruta').addEventListener('click', async function() {
+                    this.disabled = true;
+                    this.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Cargando...';
+                    try {
+                        const despachoId = this.dataset.despachoId;
+                        const response = await fetch(`/admin/despachos/hoja-de-ruta/${despachoId}`);
+                        const result = await response.json();
+                        if (result.success) {
+                            printHtmlContent(result.html);
+                        } else {
+                            alert('Error: ' + result.error);
+                        }
+                    } catch (error) {
+                        alert('Error de red al generar la hoja de ruta.');
+                    } finally {
+                        this.disabled = false;
+                        this.innerHTML = '<i class="fas fa-print me-1"></i> Ver/Imprimir Hoja de Ruta';
+                    }
+                });
+
                 confirmBtn.innerHTML = '<i class="fas fa-check-circle me-1"></i> Completado';
                 confirmBtn.classList.remove('btn-primary');
                 confirmBtn.classList.add('btn-outline-secondary');

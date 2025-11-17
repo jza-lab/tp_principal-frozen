@@ -12,11 +12,28 @@ from datetime import datetime, date, timedelta
 import logging
 import time
 import math
+import requests  # <-- AÑADIR
+import threading # <-- AÑADIR
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from app.controllers.orden_produccion_controller import OrdenProduccionController
+
+def enviar_webhook_async(url: str, data: dict):
+    """
+    Envía un webhook en un hilo separado (Thread) para no bloquear
+    la respuesta de la aplicación web principal.
+    """
+    def thread_target():
+        try:
+            requests.post(url, json=data, timeout=3)
+            logger.info(f"Webhook de n8n enviado exitosamente (OC Alerta): {data.get('oc_codigo')}")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error al enviar webhook de n8n (OC Alerta): {e}")
+
+    thread = threading.Thread(target=thread_target)
+    thread.start()
 
 class OrdenCompraController:
     def __init__(self):
@@ -103,7 +120,7 @@ class OrdenCompraController:
             subtotal = sum(float(item.get('cantidad_solicitada', 0)) * float(item.get('precio_unitario', 0)) for item in items_data)
             iva = subtotal * 0.21
             total = subtotal + iva
-            
+
             orden_data['subtotal'] = round(subtotal, 2)
             orden_data['iva'] = round(iva, 2)
             orden_data['total'] = round(total, 2)
@@ -129,7 +146,7 @@ class OrdenCompraController:
         from collections import defaultdict
         from app.controllers.insumo_controller import InsumoController
         insumo_controller = InsumoController()
-        
+
         try:
             if hasattr(form_data, 'getlist'):
                 insumo_ids = form_data.getlist('insumo_id[]')
@@ -137,49 +154,49 @@ class OrdenCompraController:
             else:
                 insumo_ids = form_data.get('insumo_id[]', [])
                 cantidades = form_data.get('cantidad_solicitada[]', [])
-            
+
             if not insumo_ids:
                 raise ValueError("No se proporcionaron insumos para la orden.")
-                
+
             items_procesados = []
             for i in range(len(insumo_ids)):
                 insumo_id = insumo_ids[i]
                 cantidad = float(cantidades[i] or 0)
-                
+
                 if not insumo_id or cantidad <= 0:
                     continue
-                    
+
                 insumo_data_res, _ = insumo_controller.obtener_insumo_por_id(insumo_id)
                 if not insumo_data_res.get('success'):
                     raise ValueError(f"El insumo con ID {insumo_id} no fue encontrado.")
-                
+
                 insumo_data = insumo_data_res['data']
                 proveedor_id = insumo_data.get('id_proveedor')
                 precio_unitario = float(insumo_data.get('precio_unitario', 0))
-                
+
                 if not proveedor_id:
                     raise ValueError(f"El insumo '{insumo_data.get('nombre')}' no tiene un proveedor asociado.")
-                    
+
                 items_procesados.append({
                     'insumo_id': insumo_id,
                     'cantidad_solicitada': cantidad,
                     'precio_unitario': precio_unitario,
                     'proveedor_id': proveedor_id
                 })
-            
+
             items_por_proveedor = defaultdict(list)
             for item in items_procesados:
                 items_por_proveedor[item['proveedor_id']].append(item)
-            
+
             if not items_procesados:
                 return {'success': False, 'error': 'La orden de compra debe tener al menos un item.'}
-                
+
             if not items_por_proveedor:
                  return {'success': False, 'error': 'No se procesaron items válidos para crear órdenes.'}
 
             resultados_creacion = []
             ordenes_creadas_count = 0
-            
+
             for proveedor_id, items_del_proveedor in items_por_proveedor.items():
                 codigo_oc = f"OC-{datetime.now().strftime('%Y%m%d-%H%M%S%f')}"
                 time.sleep(0.01)
@@ -188,7 +205,7 @@ class OrdenCompraController:
                 incluir_iva = form_data.get('incluir_iva', 'true').lower() in ['true', 'on', '1']
                 iva = subtotal * 0.21 if incluir_iva else 0.0
                 total = subtotal + iva
-                
+
                 orden_data = {
                     'codigo_oc': codigo_oc,
                     'proveedor_id': proveedor_id,
@@ -199,14 +216,14 @@ class OrdenCompraController:
                     'iva': round(iva, 2),
                     'total': round(total, 2)
                 }
-                
+
                 items_para_crear = [{k: v for k, v in item.items() if k != 'proveedor_id'} for item in items_del_proveedor]
 
                 resultado = self.crear_orden(orden_data, items_para_crear, usuario_id)
                 resultados_creacion.append(resultado)
                 if resultado.get('success'):
                     ordenes_creadas_count += 1
-            
+
             if ordenes_creadas_count > 0:
                 codigos_ocs = [res['data']['codigo_oc'] for res in resultados_creacion if res.get('success')]
                 detalle = f"Se crearon {ordenes_creadas_count} órdenes de compra desde el formulario: {', '.join(codigos_ocs)}."
@@ -220,7 +237,7 @@ class OrdenCompraController:
                 }
             elif ordenes_creadas_count > 0:
                  return {
-                    'success': True, 
+                    'success': True,
                     'message': f'Se crearon {ordenes_creadas_count} de {len(items_por_proveedor)} órdenes de compra. Algunas fallaron.',
                     'data': resultados_creacion
                 }
@@ -271,7 +288,7 @@ class OrdenCompraController:
                 # Verificar si existe un reclamo para esta orden
                 reclamo_response, _ = self.reclamo_proveedor_controller.get_reclamo_por_orden(orden_id)
                 orden_data['reclamo_existente'] = reclamo_response.get('success', False) and reclamo_response.get('data') is not None
-                
+
                 subtotal_original = 0.0
                 if 'items' in orden_data and orden_data['items']:
                     for item in orden_data['items']:
@@ -281,10 +298,10 @@ class OrdenCompraController:
                             subtotal_original += cantidad_solicitada * precio_unitario
                         except (ValueError, TypeError):
                             continue
-                
+
                 iva_original = subtotal_original * 0.21
                 total_original = subtotal_original + iva_original
-                
+
                 orden_data['subtotal_original'] = round(subtotal_original, 2)
                 orden_data['iva_original'] = round(iva_original, 2)
                 orden_data['total_original'] = round(total_original, 2)
@@ -299,7 +316,7 @@ class OrdenCompraController:
     def _get_resumen_recepcion(self, orden_data):
         from app.models.control_calidad_insumo import ControlCalidadInsumoModel
         control_calidad_model = ControlCalidadInsumoModel()
-        
+
         items_resumen = []
         documento_ingreso = f"{orden_data.get('codigo_oc')}"
 
@@ -312,7 +329,7 @@ class OrdenCompraController:
             filters={'orden_compra_id': orden_data.get('id')}
         )
         qc_asociados = qc_asociados_res.get('data', []) if qc_asociados_res.get('success') else []
-        
+
         lotes_por_insumo = {}
         for lote in lotes_asociados:
             insumo_id = lote.get('id_insumo')
@@ -325,13 +342,13 @@ class OrdenCompraController:
         for item in orden_data.get('items', []):
             insumo_id = item.get('insumo_id')
             lotes_del_item = lotes_por_insumo.get(insumo_id, [])
-            
+
             cantidad_aprobada = sum(float(l.get('cantidad_actual', 0)) for l in lotes_del_item)
             cantidad_cuarentena = sum(float(l.get('cantidad_en_cuarentena', 0)) for l in lotes_del_item)
-            
+
             total_recibido = float(item.get('cantidad_recibida', 0))
             cantidad_rechazada = total_recibido - (cantidad_aprobada + cantidad_cuarentena)
-            
+
             detalles_qc = []
             for lote in lotes_del_item:
                 qc = qc_por_lote.get(lote.get('id_lote'))
@@ -350,18 +367,18 @@ class OrdenCompraController:
                 'cantidad_rechazada': round(max(0, cantidad_rechazada), 2),
                 'detalles_qc': detalles_qc
             })
-            
+
         return items_resumen
 
     def _get_detalles_problemas_por_item(self, orden_data):
         from app.models.control_calidad_insumo import ControlCalidadInsumoModel
         control_calidad_model = ControlCalidadInsumoModel()
-        
+
         problemas_por_item = {}
-        
+
         qc_asociados_res = control_calidad_model.find_all(filters={'orden_compra_id': orden_data.get('id')})
         qc_asociados = qc_asociados_res.get('data', []) if qc_asociados_res.get('success') else []
-        
+
         lotes_asociados_res = self.inventario_controller.inventario_model.find_all(
             filters={'documento_ingreso': ('ilike', f"{orden_data.get('codigo_oc')}")}
         )
@@ -378,14 +395,14 @@ class OrdenCompraController:
         for item in orden_data.get('items', []):
             insumo_id = item.get('insumo_id')
             problemas_por_item[insumo_id] = None
-            
+
             # Prioridad 1: Fallo de Calidad
             lotes_del_item = lotes_por_insumo_id.get(insumo_id, [])
             for lote in lotes_del_item:
                 qc = qc_por_lote_id.get(lote.get('id_lote'))
                 if qc and qc.get('resultado_inspeccion'):
                     problemas_por_item[insumo_id] = qc.get('resultado_inspeccion')
-                    break 
+                    break
             if problemas_por_item[insumo_id]:
                 continue
 
@@ -421,7 +438,7 @@ class OrdenCompraController:
                 filters['prioridad'] = request.args.get('prioridad')
             if 'rango_fecha' not in filters and request.args.get('rango_fecha'):
                 filters['rango_fecha'] = request.args.get('rango_fecha')
-            
+
             if 'filtro' not in filters and request.args.get('filtro') == 'mis_ordenes':
                 current_user_id = get_current_user().id
                 if current_user_id:
@@ -544,7 +561,7 @@ class OrdenCompraController:
                 orden_actual_res, status_code = self.get_orden(orden_id)
                 if not orden_actual_res.get('success'):
                     return orden_actual_res, status_code
-                
+
                 orden_data = orden_actual_res.get('data', {})
                 if orden_data.get('estado') != 'EN_TRANSITO':
                     error_msg = f"La orden solo puede pasar a recepción desde 'EN TRANSITO'. Estado actual: {orden_data.get('estado')}"
@@ -573,7 +590,7 @@ class OrdenCompraController:
             orden_actual_res, _ = self.get_orden(orden_id)
             if not orden_actual_res.get('success'):
                 return orden_actual_res
-            
+
             orden_data = orden_actual_res['data']
             if orden_data.get('estado') != 'EN_TRANSITO':
                 return {'success': False, 'error': f"La orden solo puede pasar a recepción desde el estado 'EN TRANSITO'. Estado actual: {orden_data.get('estado')}"}
@@ -600,7 +617,7 @@ class OrdenCompraController:
 
             orden_data = orden_actual_result['data']
             observaciones_actuales = orden_data.get('observaciones', '')
-            
+
             claims = get_jwt()
             rol_usuario = claims.get('roles', [])[0] if claims.get('roles') else None
             if rol_usuario == 'SUPERVISOR_CALIDAD':
@@ -638,15 +655,15 @@ class OrdenCompraController:
 
     def _manejar_escenario_fallido(self, orden_data, motivo, descripcion, orden_produccion_controller: "OrdenProduccionController"):
         # El reclamo automático ahora se llama ANTES de esta función
-        
+
         if orden_data.get('orden_produccion_id'):
             orden_produccion_controller.cambiar_estado_orden_simple(orden_data['orden_produccion_id'], 'EN ESPERA')
         self.model.update(orden_data['id'], {'estado': 'RECEPCION_INCOMPLETA'})
-        
+
         # Devolvemos un 'partial' success para que la ruta muestre un flash 'warning'
         return {
-            'success': True, 
-            'partial': True, 
+            'success': True,
+            'partial': True,
             'message': f'{motivo}: {descripcion}. Se generó un reclamo y la OP asociada está en espera.'
         }
 
@@ -656,15 +673,15 @@ class OrdenCompraController:
         errores = []
         for item_info in items_recibidos:
             item_data = item_info['data']
-            
+
             # Extraer todas las cantidades del diccionario
             cantidad_total = item_info['cantidad_total_recibida']
             cantidad_aprobada = item_info['cantidad_aprobada']
             cantidad_cuarentena = item_info['cantidad_cuarentena']
-            
+
             # --- Extraer datos de QC ---
             qc_data = item_info.get('qc_data') # <-- NUEVO
-            
+
             # Si no se recibió nada (aprobado o cuarentena), no crear lote
             if cantidad_aprobada <= 0 and cantidad_cuarentena <= 0:
                 continue
@@ -674,11 +691,11 @@ class OrdenCompraController:
                 estado_lote = 'reservado'
             else:
                 estado_lote = 'disponible'
-            
+
             # Si SÓLO hay en cuarentena (y nada aprobado), el lote nace en cuarentena
             if cantidad_aprobada <= 0 and cantidad_cuarentena > 0:
                 estado_lote = 'cuarentena'
-            
+
             lote_data = {
                 'id_insumo': item_data['insumo_id'],
                 'id_proveedor': orden_data.get('proveedor_id'),
@@ -708,13 +725,13 @@ class OrdenCompraController:
                         except (ValueError, TypeError):
                             logger.warning(f"El valor de 'vida_util_dias' ({vida_util_raw}) para el insumo {insumo_id_para_lote} no es un entero válido.")
             # --- FIN: CALCULAR FECHA DE VENCIMIENTO ---
-            
+
             try:
                 lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
-                
+
                 if lote_result.get('success'):
                     lotes_creados_count += 1
-                    
+
                     # --- INICIO LÓGICA DE QC (PROBLEMA 2) ---
                     if qc_data:
                         # ¡Ahora tenemos el ID del lote!
@@ -723,29 +740,29 @@ class OrdenCompraController:
                             # Completar los datos de QC con el ID del lote
                             qc_data['lote_insumo_id'] = nuevo_lote_id
                             qc_data['orden_compra_id'] = orden_data.get('id')
-                            
+
                             # Guardar el registro de QC
                             self.control_calidad_insumo_model.create_registro(qc_data)
                             logger.info(f"Registro de QC creado para Lote {nuevo_lote_id} (OC {orden_data.get('id')}).")
                         else:
                             logger.error(f"Se creó el lote pero no se pudo obtener su ID. No se guardó el registro de QC.")
                     # --- FIN LÓGICA DE QC ---
-                    
+
                 else:
                     errores.append(f"Insumo {item_data['insumo_id']}: {lote_result.get('error')}")
             except Exception as e_lote:
                 errores.append(f"Insumo {item_data['insumo_id']}: {str(e_lote)}")
-        
+
         return lotes_creados_count, errores
     # --- FIN DE LA MODIFICACIÓN ---
 
     def procesar_recepcion(self, orden_id, form_data, files_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
-        
+
         # --- MODIFICACIÓN: Instanciar el modelo de QC ---
         from app.models.control_calidad_insumo import ControlCalidadInsumoModel
         self.control_calidad_insumo_model = ControlCalidadInsumoModel()
         # --- FIN MODIFICACIÓN ---
-        
+
         try:
             orden_actual_res, status = self.get_orden(orden_id)
             if not orden_actual_res.get('success'):
@@ -770,7 +787,7 @@ class OrdenCompraController:
                 for i, item_id_str in enumerate(item_ids):
                     cantidad_recibida = float(cantidades_recibidas_form[i])
                     self.model.item_model.update(int(item_id_str), {'cantidad_recibida': cantidad_recibida})
-                
+
                 self.model.update(orden_id, {'paso_recepcion': 1})
                 return {'success': True, 'message': 'Paso 1: Cantidades verificadas correctamente. Proceda al control de calidad.'}
 
@@ -786,19 +803,19 @@ class OrdenCompraController:
                 cantidades_rechazadas_form = form_data.getlist('cantidad_rechazada[]')
                 resultado_inspeccion_form = form_data.getlist('resultado_inspeccion[]')
                 comentarios_form = form_data.getlist('comentarios[]')
-                
-                if not (len(item_ids) == len(cantidades_aprobadas_form) == len(cantidades_cuarentena_form) == 
+
+                if not (len(item_ids) == len(cantidades_aprobadas_form) == len(cantidades_cuarentena_form) ==
                         len(cantidades_rechazadas_form) == len(resultado_inspeccion_form) == len(comentarios_form)):
                     logger.error(f"Error de formulario en recepción OC {orden_id}: Descalce de listas en Paso 2...")
                     return {'success': False, 'error': 'Error en el formulario: descalce en las listas de control de calidad...'}
 
                 items_result, _ = self.get_orden(orden_id)
                 items_actualizados = items_result.get('data', {}).get('items', [])
-                
+
                 # 1. Verificamos la discrepancia de cantidad (Solicitado vs Recibido)
                 hay_discrepancia_cantidad = False
                 descripcion_discrepancia = "Discrepancia en cantidades recibidas:\n"
-                
+
                 for item in items_actualizados:
                     solicitada = float(item.get('cantidad_solicitada', 0))
                     recibida = float(item.get('cantidad_recibida', 0))
@@ -809,28 +826,28 @@ class OrdenCompraController:
                 # 2. Verificamos el fallo de calidad (Recibido vs Aprobado)
                 hay_fallo_calidad = False
                 descripcion_fallo_calidad = "Fallo en control de calidad:\n"
-                
+
                 # --- MODIFICACIÓN: Renombrado ---
                 items_para_crear_lote = []
-                
+
                 items_originales_map = {str(item['id']): item for item in items_actualizados}
 
                 for i, item_id_str in enumerate(item_ids):
                     item_original = items_originales_map.get(item_id_str)
                     if not item_original: continue
-                    
+
                     item_id = int(item_id_str)
                     cantidad_aprobada = float(cantidades_aprobadas_form[i])
                     cantidad_cuarentena = float(cantidades_cuarentena_form[i])
                     cantidad_rechazada = float(cantidades_rechazadas_form[i])
                     total_recibido_item = float(item_original.get('cantidad_recibida', 0))
-                    
+
                     # --- MODIFICACIÓN: Recolectar datos de QC ---
                     qc_data_for_lote = None
-                    
+
                     if cantidad_rechazada > 0 or cantidad_cuarentena > 0:
                         hay_fallo_calidad = True
-                        
+
                         motivo = resultado_inspeccion_form[i]
                         comentarios = comentarios_form[i]
                         decision = "RECHAZADO" if cantidad_rechazada > 0 else "EN CUARENTENA"
@@ -839,10 +856,10 @@ class OrdenCompraController:
                         desc_fallo = (f"- Insumo ID {item_original['insumo_id']}: {cantidad_afectada} {decision}. "
                                       f"Motivo: {motivo}. Comentarios: {comentarios}\n")
                         descripcion_fallo_calidad += desc_fallo
-                        
+
                         # (La lógica de la foto es compleja, la omitimos por ahora)
                         foto_url = None
-                        
+
                         qc_data_for_lote = {
                             'usuario_supervisor_id': usuario_id,
                             'decision_final': decision,
@@ -866,7 +883,7 @@ class OrdenCompraController:
                 lotes_creados, errores_lote = self._crear_lotes_para_items_recibidos(
                     items_para_crear_lote, orden_actual, usuario_id
                 )
-                
+
                 # 4. Decidimos el resultado final
                 if errores_lote:
                     error_str = ", ".join(errores_lote)
@@ -875,25 +892,79 @@ class OrdenCompraController:
                 if hay_fallo_calidad:
                     # ESCENARIO FALLIDO (CALIDAD)
                     self._crear_reclamo_automatico(orden_actual, "Fallo en Control de Calidad", descripcion_fallo_calidad)
+
+                    # --- ¡¡INICIO DE LA NUEVA ALERTA n8n (POR CALIDAD)!! ---
+                    try:
+                        # 1. Reutilizamos el mismo webhook de alerta de OC
+                        N8N_OC_ALERTA_URL = "https://n8n-kthy.onrender.com/webhook/alerta-oc-hija" # <-- ¡Verifica esta URL!
+
+                        # 2. URL BASE DE TU APLICACIÓN
+                        BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
+
+                        # 3. Preparar el payload (usando la descripción del FALLO DE CALIDAD)
+                        payload = {
+                            "oc_id": orden_id,
+                            "oc_codigo": orden_actual.get('codigo_oc', f"ID {orden_id}"),
+                            "proveedor_nombre": orden_actual.get('proveedor_nombre', 'N/A'),
+                            # ¡Usamos la descripción del fallo de calidad!
+                            "descripcion": descripcion_fallo_calidad.strip(),
+                            "link_url": f"{BASE_APP_URL}/compras/detalle/{orden_id}"
+                        }
+
+                        # 4. Enviar
+                        # (Asegúrate de tener la función 'enviar_webhook_async' al inicio de este archivo)
+                        enviar_webhook_async(N8N_OC_ALERTA_URL, payload)
+
+                    except Exception as e_webhook:
+                        logger.error(f"Error al iniciar el hilo del webhook de n8n (Fallo Calidad): {e_webhook}")
+                    # --- ¡¡FIN DE LA ALERTA n8n!! ---
+
+                    # 4. Continuamos con el flujo de error original
                     return self._manejar_escenario_fallido(orden_actual, "Fallo en Control de Calidad", descripcion_fallo_calidad, orden_produccion_controller)
-                
+
                 if hay_discrepancia_cantidad:
                     # ESCENARIO FALLIDO (CANTIDAD)
                     self._crear_reclamo_automatico(orden_actual, "Cantidad incorrecta", descripcion_discrepancia)
+
                     if orden_actual.get('orden_produccion_id'):
                         orden_produccion_controller.cambiar_estado_orden_simple(orden_actual['orden_produccion_id'], 'EN ESPERA')
+
                     self.model.update(orden_id, {'estado': 'RECEPCION_INCOMPLETA'})
+
+                    # --- ¡¡INICIO DE LA NUEVA ALERTA n8n!! ---
+                    try:
+                        # 1. URL del Webhook (la que ya tienes)
+                        N8N_OC_ALERTA_URL = "https://n8n-kthy.onrender.com/webhook/alerta-oc-hija" # <-- ¡Verifica esta URL!
+
+                        # 2. URL BASE DE TU APLICACIÓN (la que mencionaste)
+                        BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
+
+                        # 3. Preparar el payload MEJORADO
+                        payload = {
+                            "oc_id": orden_id, # <-- ID para construir el enlace
+                            "oc_codigo": orden_actual.get('codigo_oc', f"ID {orden_id}"),
+                            "proveedor_nombre": orden_actual.get('proveedor_nombre', 'N/A'),
+                            "descripcion": descripcion_discrepancia.strip(),
+                            "link_url": f"{BASE_APP_URL}/compras/detalle/{orden_id}" # <-- ¡El enlace directo!
+                        }
+
+                        # 4. Enviar
+                        enviar_webhook_async(N8N_OC_ALERTA_URL, payload)
+
+                    except Exception as e_webhook:
+                        logger.error(f"Error al iniciar el hilo del webhook de n8n (OC Hija): {e_webhook}")
+                    # --- ¡¡FIN DE LA ALERTA n8n!! ---
 
                     return {
                         'success': True,
-                        'partial': True, 
+                        'partial': True,
                         'message': f'Recepción Parcial Completada. Se crearon {lotes_creados} lotes. Se generó un reclamo por items faltantes.'
                     }
 
                 # 5. Escenario Exitoso (Todo OK)
                 else:
                     update_result = self.model.update(orden_id, {'estado': 'RECEPCION_COMPLETA'})
-                    
+
                     if update_result.get('success'):
                         # --- INICIO DE LA NUEVA LÓGICA ---
                         id_op_vinculada = orden_actual.get('orden_produccion_id')
@@ -902,7 +973,7 @@ class OrdenCompraController:
                             todas_ocs_res = self.model.get_all({'orden_produccion_id': id_op_vinculada})
                             if todas_ocs_res.get('success'):
                                 todas_ocs = todas_ocs_res.get('data', [])
-                                
+
                                 # Sobrescribir el estado de la OC actual en la lista, ya que puede no estar actualizado
                                 for oc in todas_ocs:
                                     if oc['id'] == orden_id:
@@ -922,12 +993,12 @@ class OrdenCompraController:
                             logger.info(f"La OC {orden_actual.get('codigo_oc')} es manual. Verificando todas las OPs en espera de insumos.")
                             orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
                         # --- FIN DE LA NUEVA LÓGICA ---
-                        
-                        id_padre = orden_actual.get('complementa_a_orden_id') 
+
+                        id_padre = orden_actual.get('complementa_a_orden_id')
                         if id_padre:
                             logger.info(f"La OC Hija {orden_actual.get('codigo_oc')} se completó. Cerrando OC Padre ID: {id_padre}.")
                             padre_update_result = self.model.update(id_padre, {'estado': 'RECEPCION_COMPLETA'})
-                            
+
                             if padre_update_result.get('success'):
                                 oc_padre_data = padre_update_result.get('data', {})
                                 detalle = (f"La OC Padre {oc_padre_data.get('codigo_oc')} se marcó como 'RECEPCION_COMPLETA' "
@@ -953,7 +1024,7 @@ class OrdenCompraController:
             if not orden_padre_res.get('success'):
                 return {'success': False, 'error': 'No se encontró la orden de compra original.'}
             orden_padre = orden_padre_res.get('data')
-            
+
             codigo_oc_padre = orden_padre.get('codigo_oc')
             if not codigo_oc_padre:
                 return {'success': False, 'error': 'La orden padre no tiene un código de OC para trazar los lotes.'}
@@ -961,12 +1032,12 @@ class OrdenCompraController:
             documento_ingreso = f"OC-{codigo_oc_padre}"
 
             items_faltantes = []
-            
+
             lotes_creados_res = self.inventario_controller.inventario_model.find_all(
                 filters={'documento_ingreso': documento_ingreso}
             )
             lotes_creados = lotes_creados_res.get('data', []) if lotes_creados_res.get('success') else []
-            
+
             lotes_por_insumo = {}
             for lote in lotes_creados:
                 insumo_id = lote.get('id_insumo')
@@ -977,17 +1048,17 @@ class OrdenCompraController:
             for item in orden_padre.get('items', []):
                 item_insumo_id = item.get('insumo_id')
                 solicitado = float(item.get('cantidad_solicitada', 0))
-                
+
                 # --- LÓGICA CORREGIDA PARA OC HIJA ---
                 # Calcular el total que SÍ fue aprobado O puesto en cuarentena
                 lotes_del_item = lotes_por_insumo.get(item_insumo_id, [])
-                
+
                 # Sumamos solo lo que fue aprobado (cantidad_actual del lote)
                 total_ingresado = sum(
                     float(lote.get('cantidad_actual', 0))
                     for lote in lotes_del_item
                 )
-                
+
                 cantidad_a_reordenar = solicitado - total_ingresado
                 # --- FIN LÓGICA CORREGIDA ---
 
@@ -997,10 +1068,10 @@ class OrdenCompraController:
                         'cantidad_faltante': cantidad_a_reordenar,
                         'precio_unitario': float(item.get('precio_unitario', 0))
                     })
-            
+
             if not items_faltantes:
                 return {'success': False, 'error': 'No se encontraron discrepancias (faltantes o rechazados) para crear una nueva orden.'}
-            
+
             return self._crear_orden_complementaria(orden_padre, items_faltantes, usuario_id)
 
         except Exception as e:

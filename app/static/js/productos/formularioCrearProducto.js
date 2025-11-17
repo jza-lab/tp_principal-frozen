@@ -48,6 +48,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function agregarItemAReceta(insumo) {
+        // --- INICIO DE MODIFICACIÓN: VERIFICAR SI EL ÍTEM YA EXISTE ---
+        let itemExistente = false;
+        const insumoIdAAgregar = insumo.id;
+
+        itemsContainer.querySelectorAll('.item-row').forEach(row => {
+            const selector = row.querySelector('.insumo-selector');
+            // El valor del selector es el ID del insumo
+            const insumoIdActual = selector.value;
+
+            if (insumoIdActual === insumoIdAAgregar) {
+                const cantidadInput = row.querySelector('.cantidad');
+                const cantidadActual = parseFloat(cantidadInput.value) || 0;
+                // Por defecto, al hacer doble clic, sumamos 1
+                cantidadInput.value = cantidadActual + 1;
+                itemExistente = true;
+            }
+        });
+
+        // Si el ítem ya existía, solo recalculamos y terminamos la función
+        if (itemExistente) {
+            calcularTotales();
+            return; 
+        }
+        // --- FIN DE MODIFICACIÓN ---
+
         const row = document.createElement('div');
         row.className = 'row g-3 align-items-end item-row mb-2';
 
@@ -250,7 +275,7 @@ document.addEventListener('DOMContentLoaded', function () {
     calcularTotales();
     updateAvailableInsumos();
 
- const form = document.getElementById('formulario-producto');
+    const form = document.getElementById('formulario-producto');
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -262,35 +287,65 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const formData = new FormData(form);
 
-        const unidadMedida = formData.get('unidad_medida');
+        // --- ¡INICIO DE LA MODIFICACIÓN 1! (Compatibilidad de Línea) ---
+        // 1. Encontrar el radio button seleccionado (o usar '2' como default)
+        const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked').value || '2';
+        // --- ¡FIN DE LA MODIFICACIÓN 1! ---
 
+
+        // --- ¡INICIO DE LA MODIFICACIÓN 2! (Leer Pasos de Receta) ---
+        const pasosReceta = [
+            {
+                nombre_operacion: 'Preparacion Previa',
+                secuencia: 1,
+                tiempo_preparacion: parseFloat(document.getElementById('step_prep_1').value) || 0,
+                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_1').value) || 0
+            },
+            {
+                nombre_operacion: 'Coccion',
+                secuencia: 2,
+                tiempo_preparacion: parseFloat(document.getElementById('step_prep_2').value) || 0,
+                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_2').value) || 0
+            },
+            {
+                nombre_operacion: 'Refrigeracion',
+                secuencia: 3,
+                tiempo_preparacion: parseFloat(document.getElementById('step_prep_3').value) || 0,
+                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_3').value) || 0
+            },
+            {
+                nombre_operacion: 'Empaquetado',
+                secuencia: 4,
+                tiempo_preparacion: parseFloat(document.getElementById('step_prep_4').value) || 0,
+                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_4').value) || 0
+            }
+        ];
+        // --- FIN DE LA MODIFICACIÓN 2 ---
+
+        // ... (código existente para leer 'unidadMedida', 'unidadesPorPaquete', etc.) ...
+        const unidadMedida = formData.get('unidad_medida');
         let unidadesPorPaquete = 1;
         let pesoPorPaqueteValor = 0;
         let pesoPorPaqueteUnidad = 'kg';
-        
         let unidadMedidaFinal = unidadMedida;
 
         if ( unidadMedida === 'paquete') {
             const tipoPaquete = document.getElementById('tipo_paquete').value;
-
             if (tipoPaquete === 'unidades') {
                 unidadesPorPaquete = parseInt(document.getElementById('unidades_por_paquete').value) || 1;
-                // Formato de unidad para la BD: 'paquete(x12u)'
                 unidadMedidaFinal = `paquete(x${unidadesPorPaquete}u)`; 
-
             } else if (tipoPaquete === 'peso_volumen') {
                 pesoPorPaqueteValor = parseFloat(document.getElementById('peso_por_paquete_valor').value) || 0.01;
                 pesoPorPaqueteUnidad = document.getElementById('peso_por_paquete_unidad').value || 'kg';
-                // Formato de unidad para la BD: 'paquete(x1.5kg)'
                 unidadMedidaFinal = `paquete(x${pesoPorPaqueteValor}${pesoPorPaqueteUnidad})`; 
             }
         }
+        // --- (Fin del código existente) ---
 
         const productoData = {
             codigo: formData.get('codigo'),
             nombre: formData.get('nombre'),
             categoria: formData.get('categoria'),
-            // Usamos la unidad_medida con el sufijo (x...) para que el backend sepa si es por unidad o peso.
             unidad_medida: unidadMedidaFinal, 
             descripcion: formData.get('descripcion'),
             porcentaje_mano_obra: formData.get('porcentaje_mano_obra'),
@@ -300,17 +355,22 @@ document.addEventListener('DOMContentLoaded', function () {
             unidades_por_paquete: unidadesPorPaquete,
             peso_por_paquete_valor: pesoPorPaqueteValor,
             peso_por_paquete_unidad: pesoPorPaqueteUnidad,
+            vida_util_dias: formData.get('vida_util_dias'),
+            linea_compatible: lineaCompatibleStr, 
+            pasos_receta: pasosReceta, // <-- ¡AÑADIDO!
             receta_items: []
         };
 
         const itemRows = itemsContainer.querySelectorAll('.item-row');
 
         if (itemRows.length === 0) {
+            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
             showNotificationModal('No se ha asignado una receta al producto', 'Por favor, ingrese al menos un ingrediente para crear el producto.', 'warning');
             return;
         }
 
         itemRows.forEach(row => {
+            // ... (código existente para leer los items de la receta) ...
             const selector = row.querySelector('.insumo-selector');
             const selectedOption = selector.options[selector.selectedIndex];
             const insumoId = selector.value;
@@ -326,6 +386,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         if (productoData.receta_items.length === 0) {
+            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
             showNotificationModal('Receta Vacía', 'Debe especificar el insumo y la cantidad para cada ítem de la receta.', 'error');
             return;
         }
@@ -342,26 +403,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const result = await response.json();
 
+            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
             if (response.ok && result.success) {
                 let mensaje;
                 if (isEditBoolean) {
                     mensaje = 'Se ha modificado el producto correctamente.'
-                }
-                else {
+                } else {
                     mensaje = 'Se creó el producto exitosamente.'
                 }
-                showNotificationModal(result.message || 'Operación exitosa', mensaje);
+                showNotificationModal(result.message || 'Operación exitosa', mensaje, 'success');
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
                 let errorMessage = 'Ocurrió un error.';
                 if (result && result.error) {
                     errorMessage = typeof result.error === 'object' ? Object.values(result.error).flat().join('\n') : result.error;
                 }
-                showNotificationModal(errorMessage, 'error');
+                showNotificationModal('Error al guardar', errorMessage, 'error');
             }
         } catch (error) {
             console.error('Error en el fetch:', error);
-            showNotificationModal('No se pudo conectar con el servidor.', 'Por favor, intente nuevamente más tarde o contacte a administración.');
+            showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
         }
+        // --- ¡FIN DE LA CORRECCIÓN MODAL! ---
     });
+
 });

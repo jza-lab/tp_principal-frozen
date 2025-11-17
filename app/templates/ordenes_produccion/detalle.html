@@ -239,45 +239,29 @@
                             </div>
                             {% endif %}
 
-                            {% if orden.estado != 'EN ESPERA' %}
-                            <div class="col-12 mt-3 pt-3 border-top">
-                                <h6 class="text-muted mb-2"><i class="bi bi-cart-check me-1"></i>Órdenes de Compra Asociadas</h6>
-                                {% if orden.ordenes_compra_asociadas %}
-                                    <ul class="list-group list-group-flush">
-                                        {% for oc in orden.ordenes_compra_asociadas %}
-                                        <li class="list-group-item d-flex justify-content-between align-items-center px-0 py-1">
-                                            <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}">{{ oc.codigo_oc }}</a>
-                                            <span class="badge bg-secondary-soft text-secondary">{{ oc.estado.replace('_', ' ') }}</span>
+                            {% if orden.estado == 'EN ESPERA' and orden.ocs_asociadas %}
+                            <div class="col-12 mt-3">
+                                <div class="alert alert-warning mb-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <i class="bi bi-hourglass-split me-2"></i>
+                                            Esta orden está <strong>EN ESPERA</strong> de insumos. Se generaron las siguientes Órdenes de Compra:
+                                        </span>
+                                    </div>
+                                    <hr>
+                                    <ul class="list-unstyled mb-0">
+                                        {% for oc in orden.ocs_asociadas %}
+                                        <li class="d-flex justify-content-between align-items-center mb-1">
+                                            <span>
+                                                <i class="bi bi-file-earmark-text me-2"></i>
+                                                {{ oc.codigo_oc }} - <span class="badge bg-secondary">{{ oc.estado.replace('_', ' ') | title }}</span>
+                                            </span>
+                                            <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}" class="btn btn-sm btn-outline-dark">
+                                                Ver {{ oc.codigo_oc }} <i class="bi bi-box-arrow-up-right small"></i>
+                                            </a>
                                         </li>
                                         {% endfor %}
                                     </ul>
-                                {% else %}
-                                    <p class="text-muted mb-0">No generó ordenes de compra</p>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-
-                            {% if orden.estado == 'EN ESPERA' %}
-                            <div class="col-12 mt-3 pt-3 border-top">
-                                <div class="alert alert-warning mb-0">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="bi bi-hourglass-split me-2"></i>
-                                        <h6 class="alert-heading mb-0">Orden en Espera</h6>
-                                    </div>
-                                    <p class="mb-2">Esta orden está esperando la recepción de insumos de las siguientes órdenes de compra:</p>
-                                    
-                                    {% if orden.ordenes_compra_asociadas %}
-                                        <ul class="list-group">
-                                            {% for oc in orden.ordenes_compra_asociadas %}
-                                            <li class="list-group-item list-group-item-warning d-flex justify-content-between align-items-center py-1 px-2">
-                                                <a href="{{ url_for('orden_compra.detalle', id=oc.id) }}" class="fw-bold text-dark">{{ oc.codigo_oc }}</a>
-                                                <span class="badge bg-dark-soft text-dark">{{ oc.estado.replace('_', ' ') }}</span>
-                                            </li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <p class="mb-0 text-muted">No generó ordenes de compra</p>
-                                    {% endif %}
                                 </div>
                             </div>
                             {% endif %}

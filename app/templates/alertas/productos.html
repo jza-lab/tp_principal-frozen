@@ -73,7 +73,7 @@
                                         <input type="hidden" name="id_producto" value="{{ producto.id }}">
                                         <td>
                                             <div class="input-group">
-                                                <input type="number" min="0" max="2000" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" min="0" required>
+                                                <input type="number" min="0" max="{{ producto.cantidad_maxima_x_pedido | default(2000) }}" name="stock_min_produccion" class="form-control" placeholder="Ej: 100" required>
                                             </div>
                                         </td>
                                         <td>
@@ -124,7 +124,7 @@
                                         <input type="hidden" name="id_producto" value="{{ producto.id }}">
                                         <td>
                                             <div class="input-group">
-                                                <input type="number" name="cantidad_maxima_x_pedido" class="form-control" placeholder="Ej: 10" min="0" required>
+                                                <input type="number" name="cantidad_maxima_x_pedido" class="form-control" placeholder="Ej: 10" min="0" max="1000000000" required>
                                             </div>
                                         </td>
                                         <td>

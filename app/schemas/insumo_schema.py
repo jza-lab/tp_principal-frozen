@@ -44,28 +44,26 @@ class InsumosCatalogoSchema(Schema):
     tem_recomendada = fields.Float(allow_none=True, load_default=None)
 
     stock_min = fields.Int(
+        required=True,
         validate=validate.Range(min=0, error="El stock mínimo no puede ser negativo."),
         error_messages={
             "required": "El stock mínimo es obligatorio",
             "invalid": "El stock mínimo debe ser un número válido."
-        },
-        allow_none=True,
-        load_default=None
+        }
     )
     stock_max = fields.Int(
+        required=True,
         validate=validate.Range(min=0, error="El stock máximo no puede ser negativo."),
         error_messages={
             "required": "El stock máximo es obligatorio",
             "invalid": "El stock máximo debe ser un número válido."
-        },
-        allow_none=True,
-        load_default=None
+        }
     )
 
     vida_util_dias = fields.Int(
-        validate=validate.Range(min=1),
-        allow_none=True,
-        load_default=None
+        required=True,
+        validate=validate.Range(min=1, error="La vida útil debe ser de al menos 1 día."),
+        error_messages={'required': 'Los días de vida útil son obligatorios.'}
     )
     es_critico = fields.Bool(load_default=None)
     requiere_certificacion = fields.Bool(load_default=None)
@@ -74,13 +72,12 @@ class InsumosCatalogoSchema(Schema):
     created_at = fields.DateTime(dump_only=True)
     updated_at = fields.DateTime(dump_only=True)
     precio_unitario = fields.Float(
-        validate=validate.Range(min=1.00, error="El precio unitario debe ser mayor que 0."),
+        required=True,
+        validate=validate.Range(min=0.01, error="El precio unitario debe ser mayor que 0."),
         error_messages={
             "required": "El precio unitario es obligatorio",
             "invalid": "El precio unitario debe ser un número válido."
-        },
-        allow_none=False,
-        load_default=1
+        }
     )
     id_proveedor = fields.Int(
         required=False,

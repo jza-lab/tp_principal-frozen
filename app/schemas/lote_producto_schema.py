@@ -8,11 +8,11 @@ class LoteProductoSchema(Schema):
     numero_lote = fields.Str(required=True, validate=validate.Length(min=1, max=100))
     cantidad_inicial = fields.Float(
         required=True,
-        validate=validate.Range(min=0.001, max=99999999, error="La cantidad debe ser un número positivo y no exceder 99,999,999.")
+        validate=validate.Range(min=0.001, max=1000000000, error="La cantidad debe ser un número positivo y no exceder 1,000,000,000.")
     )
     cantidad_actual = fields.Float(
         required=True,
-        validate=validate.Range(min=0, max=99999999, error="La cantidad debe ser un número no negativo y no exceder 99,999,999.")
+        validate=validate.Range(min=0, max=1000000000, error="La cantidad debe ser un número no negativo y no exceder 1,000,000,000.")
     )
     fecha_produccion = fields.Str(required=True)  # Manejar como string
     fecha_vencimiento = fields.Str(allow_none=True)  # Manejar como string

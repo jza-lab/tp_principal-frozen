@@ -119,8 +119,8 @@ class OrdenProduccionModel(BaseModel):
                             next_month = inicio_mes.replace(day=28) + timedelta(days=4)
                             fin_mes = next_month - timedelta(days=next_month.day)
                             fin_mes = fin_mes.replace(hour=23, minute=59, second=59, microsecond=999999)
-                            query = query.gte('fecha_planificada', inicio_mes.isoformat())
-                            query = query.lte('fecha_planificada', fin_mes.isoformat())
+                            query = query.gte('fecha_inicio_planificada', inicio_mes.isoformat())
+                            query = query.lte('fecha_inicio_planificada', fin_mes.isoformat())
                         # 'historico' doesn't apply any date filter, so we just continue
                         continue
                     elif key == 'fecha_planificada_desde':
