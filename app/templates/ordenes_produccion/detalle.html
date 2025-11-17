@@ -461,7 +461,7 @@
                         <tbody>
                             {% for desperdicio in historial_desperdicios %}
                             <tr>
-                                <td>{{ desperdicio.fecha_registreo | format_datetime if desperdicio.fecha_registreo else 'N/A' }}</td>
+                                <td>{{ desperdicio.fecha_registro | format_datetime if desperdicio.fecha_registro else 'N/A' }}</td>
                                 <td>{{ desperdicio.cantidad }}</td>
                                 <td>{{ desperdicio.motivo_desperdicio.descripcion if desperdicio.motivo_desperdicio else 'No especificado' }}</td>
                                 <td>{{ desperdicio.usuario.nombre if desperdicio.usuario else 'N/A' }} {{ desperdicio.usuario.apellido if desperdicio.usuario else '' }}</td>

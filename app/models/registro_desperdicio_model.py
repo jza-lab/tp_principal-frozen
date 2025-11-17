@@ -27,26 +27,34 @@ class RegistroDesperdicioModel(BaseModel):
         información del usuario y el motivo del desperdicio.
         """
         try:
-            query = self._get_query_builder().select(
-                '*, motivo_desperdicio:motivo_desperdicio_id(descripcion), usuario:usuario_id(nombre, apellido)'
-            )
+            # Usamos RPC para ejecutar una función SQL personalizada que maneja el join cross-schema.
+            # Esto nos da control total sobre la consulta.
+            rpc_params = {
+                'p_orden_produccion_id': filters.get('orden_produccion_id') if filters else None
+            }
+
+            # Llamamos a la función 'get_registros_desperdicio_enriquecidos' que debemos crear en la BD.
+            query = self.db.rpc('get_registros_desperdicio_enriquecidos', rpc_params)
             
-            if filters:
-                for key, value in filters.items():
-                    if isinstance(value, tuple):
-                        operator, val = value
-                        query = query.filter(key, operator, val)
-                    else:
-                        query = query.eq(key, value)
-            
+            # El ordenamiento se aplica al resultado del RPC.
             if order_by:
                 column, order = order_by.split('.')
                 query = query.order(column, desc=order.lower() == 'desc')
             
             result = query.execute()
-            
+
             return self.handle_postgrest_response(result)
 
         except Exception as e:
             self.logger.error(f"Error al obtener registros enriquecidos de {self.get_table_name()}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def handle_postgrest_response(self, response):
+        """
+        Helper para manejar la respuesta de PostgREST de forma consistente.
+        """
+        if hasattr(response, 'data'):
+            return {'success': True, 'data': response.data}
+        else:
+            # Manejar posibles errores o respuestas inesperadas
+            return {'success': False, 'error': 'Respuesta inesperada de la base deatos.'}

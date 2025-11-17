@@ -241,7 +241,7 @@ def detalle(id):
     # --- OBTENER HISTORIAL DE DESPERDICIOS ---
     desperdicio_model = RegistroDesperdicioModel()
     # Se asume la existencia de un método `find_all_enriched` para obtener datos relacionados
-    desperdicios_result = desperdicio_model.find_all_enriched(filters={'orden_produccion_id': id}, order_by='fecha_registreo.desc')
+    desperdicios_result = desperdicio_model.find_all_enriched(filters={'orden_produccion_id': id}, order_by='fecha_registro.desc')
     historial_desperdicios = desperdicios_result.get("data", [])
     # --- FIN OBTENER HISTORIAL ---
 
