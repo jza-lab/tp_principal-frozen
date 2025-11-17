@@ -37,7 +37,7 @@
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('insumos_api') or request.endpoint.startswith('orden_compra') or request.endpoint.startswith('inventario_view') or request.endpoint.startswith('reservas') or request.endpoint.startswith('precios') %}active{% endif %}"
                         href="#" id="navbarDropdownLogistica" role="button" data-bs-toggle="dropdown"
                         aria-expanded="false">
-                        <i class="bi bi-box-seam me-1"></i> Logística
+                        <i class="bi bi-box-seam me-1 icon-responsive"></i> Logística
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownLogistica">
                         {% if 'almacen_ver_insumos' is has_permission %}
@@ -103,7 +103,7 @@
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('productos') or request.endpoint.startswith('orden_venta') or request.endpoint.startswith('lote_producto') %}active{% endif %}"
                         href="#" id="navbarDropdownComercial" role="button" data-bs-toggle="dropdown"
                         aria-expanded="false">
-                        <i class="bi bi-cart-fill me-1"></i> Comercial
+                        <i class="bi bi-cart-fill me-1 icon-responsive"></i> Comercial
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownComercial">
                         {% if 'almacen_consulta_stock' is has_permission %}
@@ -148,7 +148,7 @@
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('planificacion') or request.endpoint.startswith('orden_produccion') %}active{% endif %}"
                         href="#" id="navbarDropdownProduccion" role="button" data-bs-toggle="dropdown"
                         aria-expanded="false">
-                        <i class="fas fa-industry me-1"></i> Producción
+                        <i class="fas fa-industry me-1 icon-responsive"></i> Producción
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownProduccion">
                         {% if 'consultar_plan_de_produccion' is has_permission and current_user.roles.codigo !=
@@ -186,16 +186,16 @@
                 {% if 'configurar_alertas' is has_permission and not is_operario and current_user and
                 current_user.roles.codigo != 'RRHH' %}
                 <li class="nav-item nav-item-separator">
-                    <a class="nav-link {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
+                    <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
                        href="{{ url_for('reportes.indicadores') }}">
-                        <i class="bi bi-bar-chart-line-fill me-1"></i> Indicadores
+                        <i class="bi bi-bar-chart-line-fill me-1 icon-responsive"></i> Indicadores
                     </a>
                 </li>
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                         href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown"
                         aria-expanded="false">
-                        <i class="bi bi-bell-fill me-1"></i> Alertas
+                        <i class="bi bi-bell-fill me-1 icon-responsive"></i> Alertas
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAlertas">
                         <li><a class="dropdown-item {% if request.endpoint == 'alertas.listar_insumos_alertas' %}active{% endif %}"
@@ -233,7 +233,7 @@
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if is_admin_section or request.endpoint.startswith('admin_reclamo') %}active{% endif %}"
                         href="#" id="navbarDropdownAdmin" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="bi bi-gear-fill me-1"></i> Administración
+                        <i class="bi bi-gear-fill me-1 icon-responsive"></i> Administración
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownAdmin">
                         {% if can_gestionar_empleados and not is_dev %}
@@ -326,8 +326,8 @@
             </ul>
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item nav-item-separator">
-                    <a class="nav-link" href="{{ url_for('main_routes.search_page') }}">
-                        <i class="bi bi-search me-1"></i> Buscador global
+                    <a class="nav-link dropdown-toggle" href="{{ url_for('main_routes.search_page') }}">
+                        <i class="bi bi-search me-1"></i><span class="icon-responsive">Buscador global</span>
                     </a>
                 </li>
                 <li class="nav-item dropdown nav-item-separator">

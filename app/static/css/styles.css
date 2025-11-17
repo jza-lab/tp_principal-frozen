@@ -1344,3 +1344,11 @@ h1.h2 {
 .btn-text-white:hover {
     color: white !important;
 }
+
+
+/* Regla para ocultar iconos en pantallas medianas */
+@media (max-width: 1550px) {
+    .icon-responsive {
+        display: none !important;
+    }
+}
