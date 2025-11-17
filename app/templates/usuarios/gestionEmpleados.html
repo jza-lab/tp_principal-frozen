@@ -94,7 +94,7 @@
 
 <script>
     const URL_UNIFIED_ACTIVITY = "{{ url_for('api.obtener_actividad_unificada') }}";
-    const CAN_MANAGE_AUTHORIZATIONS = "{{ has_permission('gestionar_autorizaciones') | tojson }}";
+    const CAN_MANAGE_AUTHORIZATIONS = {{ has_permission('gestionar_autorizaciones') | tojson }};
 </script>
 
 <script src="{{ url_for('static', filename='js/usuarios/gestionEmpleados.js') }}"></script>
