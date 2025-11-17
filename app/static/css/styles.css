@@ -1249,6 +1249,12 @@ h1.h2 {
     /* Asegura que la animación de hover no se active */
 }
 
+.nav-item-separator {
+    border-left: 1px solid rgba(0,0,0,0.1);
+    padding-left: 0.5rem;
+    margin-left: 0.5rem;
+}
+
 /* Estilos para dropdown items deshabilitados */
 .navbar-custom .dropdown-item.disabled {
     opacity: 0.5;
