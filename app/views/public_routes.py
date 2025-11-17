@@ -2,14 +2,17 @@ from flask import Blueprint, flash, redirect, render_template, request, jsonify,
 from flask_jwt_extended import jwt_required, get_current_user
 from datetime import datetime, timedelta
 from app.controllers.pedido_controller import PedidoController
+from datetime import datetime
 from app.controllers.cliente_controller import ClienteController
 from app.controllers.consulta_controller import ConsultaController
 from app.database import Database
 from flask_wtf import FlaskForm
 # Modelos a utilizar para la consulta directa
+import logging
 from app.models.lote_producto import LoteProductoModel
 from app.models.orden_produccion import OrdenProduccionModel
 
+logger = logging.getLogger(__name__)
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
 
@@ -276,81 +279,114 @@ def buscar_cliente_por_cuit():
         # Si no se encuentra, devolvemos un éxito falso pero sin error de servidor
         return jsonify({'success': False, 'message': 'Cliente no encontrado'}), 404
 
-@public_bp.route('/trazabilidad/pedido/<int:id_pedido>')
-def mostrar_trazabilidad_publica(id_pedido):
+from app.utils.security import verify_signed_token
+
+@public_bp.route('/seguimiento/<string:token>')
+def seguimiento_publico_pedido(token):
     """
-    Muestra la página pública de trazabilidad para un pedido específico,
-    obteniendo los datos de forma directa y enriquecida.
+    Muestra la página pública de seguimiento para un pedido, buscado por token.
     """
     pedido_controller = PedidoController()
     lote_model = LoteProductoModel()
-    op_model = OrdenProduccionModel()
-    db = Database().client
 
-    # 1. Obtener el pedido y sus items
+    # 1. Obtener el pedido
+    token_data = verify_signed_token(token)
+    if not token_data or 'pedido_id' not in token_data:
+        flash('El enlace de seguimiento no es válido o ha expirado.', 'danger')
+        return redirect(url_for('public.index'))
+
+    id_pedido = token_data['pedido_id']
     pedido_resp, _ = pedido_controller.obtener_pedido_por_id(id_pedido)
     if not pedido_resp.get('success'):
-        flash('El pedido que buscas no fue encontrado.', 'danger')
+        flash('El enlace de seguimiento no es válido o el pedido ha sido eliminado.', 'danger')
         return redirect(url_for('public.index'))
     pedido = pedido_resp.get('data')
-    pedido_items = pedido.get('items', [])
-    if not pedido_items:
-        flash('Este pedido no tiene productos para mostrar trazabilidad.', 'warning')
-        return redirect(url_for('public.index'))
 
-    # 2. Obtener las reservas para los items de este pedido
-    item_ids = [item['id'] for item in pedido_items]
-    try:
-        reservas_res = db.table('reservas_productos').select('*').in_('pedido_item_id', item_ids).execute()
-        if not reservas_res.data:
-            flash('No se encontró información de lotes para este pedido.', 'warning')
-            return redirect(url_for('public.index'))
-    except Exception as e:
-        flash(f'Error al consultar la base de datos: {e}', 'danger')
-        return redirect(url_for('public.index'))
+    # 2. Definir los hitos del proceso
+    estado_actual = pedido.get('estado', 'PENDIENTE')
+    todos_los_hitos = [
+        {'id': 'PENDIENTE', 'titulo': 'Pedido Recibido', 'descripcion': 'Estamos procesando tu pedido.'},
+        {'id': 'PLANIFICADA', 'titulo': 'Planificado', 'descripcion': 'Tu pedido está planificado para producirse.'},
+        {'id': 'EN_PROCESO', 'titulo': 'En Producción', 'descripcion': 'Estamos elaborando tus productos.'},
+        {'id': 'LISTO_PARA_ENTREGA', 'titulo': 'Listo para Despacho', 'descripcion': 'Tu pedido está listo para ser recolectado.'},
+        {'id': 'EN_TRANSITO', 'titulo': 'En Tránsito', 'descripcion': 'El transportista ya recolectó tu pedido.'},
+        {'id': 'COMPLETADO', 'titulo': 'Entregado', 'descripcion': '¡Llegó tu pedido!'},
+        {'id': 'CANCELADO', 'titulo': 'Cancelado', 'descripcion': 'Tu pedido fue cancelado.'}
+    ]
+
+    # 3. Determinar el estado de cada hito
+    hitos_para_template = []
+    estados_ordenados = ['PENDIENTE', 'PLANIFICADA', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO']
     
-    # 3. Mapear reservas por item_id para fácil acceso
-    reservas_por_item = {r['pedido_item_id']: r for r in reservas_res.data}
+    if estado_actual == 'CANCELADO':
+        # Caso especial para pedidos cancelados
+        for hito in todos_los_hitos:
+            if hito['id'] == 'PENDIENTE':
+                hito['estado'] = 'completado'
+                hito['fecha'] = pedido.get('created_at')
+            elif hito['id'] == 'CANCELADO':
+                hito['estado'] = 'activo'
+                hito['fecha'] = pedido.get('updated_at')
+            else:
+                hito['estado'] = 'inactivo'
+                hito['fecha'] = None
+            if hito['id'] != 'CANCELADO' and hito['estado'] == 'inactivo': continue
+            hitos_para_template.append(hito)
+    else:
+        # Flujo normal
+        try:
+            indice_actual = estados_ordenados.index(estado_actual)
+        except ValueError:
+            indice_actual = 0 # Fallback a PENDIENTE
 
-    # 4. Construir la lista de datos enriquecidos para el template
-    productos_enriquecidos = []
-    for item in pedido_items:
-        reserva = reservas_por_item.get(item['id'])
-        if not reserva:
-            continue
+        for i, estado_hito in enumerate(estados_ordenados):
+            hito = next((h for h in todos_los_hitos if h['id'] == estado_hito), None)
+            if not hito: continue
 
-        # Obtener detalles del Lote de Producto
-        lote_id = reserva.get('lote_producto_id')
-        lote_resp = lote_model.find_by_id(lote_id, id_field='id_lote')
-        lote = lote_resp.get('data') if lote_resp.get('success') else {}
+            if i < indice_actual:
+                hito['estado'] = 'completado'
+                hito['fecha'] = None # Aquí podrías buscar fechas de logs si las tuvieras
+            elif i == indice_actual:
+                hito['estado'] = 'activo'
+                hito['fecha'] = pedido.get('updated_at')
+            else:
+                hito['estado'] = 'inactivo'
+                hito['fecha'] = None
+            hitos_para_template.append(hito)
 
-        # Obtener detalles de la Orden de Producción (si existe)
-        op_id = lote.get('orden_produccion_id')
-        orden_produccion = {}
-        insumos_utilizados = []
-        if op_id:
-            op_resp = op_model.find_by_id(op_id)
-            if op_resp.get('success'):
-                orden_produccion = op_resp.get('data')
-                # Ahora, buscar los insumos para esta OP, incluyendo fecha de vencimiento y fecha de ingreso
-                insumos_res = db.table('reservas_insumos').select(
-                    'lote:insumos_inventario(numero_lote_proveedor, f_vencimiento, f_ingreso, insumo:insumos_catalogo(nombre))'
-                ).eq('orden_produccion_id', op_id).execute()
-                if insumos_res.data:
-                    insumos_utilizados = insumos_res.data
-        
-        # Unir toda la información en un solo diccionario por producto
-        productos_enriquecidos.append({
-            'item_pedido': item,
-            'reserva': reserva,
-            'lote': lote,
-            'orden_produccion': orden_produccion,
-            'insumos': insumos_utilizados
-        })
 
-    # 5. Renderizar el template
+    # 5. Obtener información de lotes para el resumen
+    lotes_por_item = {}
+    item_ids = [item['id'] for item in pedido.get('items', [])]
+    if item_ids:
+        try:
+            # Paso 1: Obtener las reservas para los items del pedido
+            reservas_res = Database().client.table('reservas_productos').select('pedido_item_id, lote_producto_id').in_('pedido_item_id', item_ids).execute()
+            
+            if reservas_res.data:
+                # Paso 2: Extraer los IDs de los lotes
+                lote_ids = [r['lote_producto_id'] for r in reservas_res.data if r.get('lote_producto_id')]
+                
+                if lote_ids:
+                    # Paso 3: Buscar la información de esos lotes DIRECTAMENTE
+                    lotes_info_res = Database().client.table('lotes_productos').select('id_lote, numero_lote, fecha_vencimiento, fecha_produccion').in_('id_lote', lote_ids).execute()
+                    
+                    if lotes_info_res.data:
+                        # Crear un mapa de id_lote -> info_lote para un acceso rápido
+                        lotes_map = {l['id_lote']: l for l in lotes_info_res.data}
+                        
+                        # Paso 4: Construir el diccionario final para la plantilla
+                        for reserva in reservas_res.data:
+                            lote_info = lotes_map.get(reserva['lote_producto_id'])
+                            if lote_info:
+                                lotes_por_item[reserva['pedido_item_id']] = lote_info
+        except Exception as e:
+            logger.error(f"Error al obtener lotes para seguimiento de pedido {pedido.get('id')}: {e}")
+
+
     return render_template(
-        'public/trazabilidad_pedido.html',
+        'public/seguimiento_pedido.html',
         pedido=pedido,
-        productos=productos_enriquecidos
+        hitos=hitos_para_template,
+        lotes_por_item=lotes_por_item
     )
