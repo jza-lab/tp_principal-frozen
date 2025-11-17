@@ -80,9 +80,9 @@ class ConfiguracionController(BaseController):
             """Guarda el umbral de días para la alerta de vencimiento de lotes."""
             try:
                 # 1. Validación de datos 
-                if not isinstance(dias, int) or dias <= 0:
+                if not isinstance(dias, int) or not (0 < dias <= 30):
                     # Retorna (dict, 400)
-                    return self.error_response('Los días deben ser un número entero positivo.', 400)
+                    return self.error_response('Los días deben ser un número entero positivo y no exceder de 30.', 400)
                 
                 # 2. Guardar el valor
                 result = self.model.guardar_valor(DIAS_ALERTA_VENCIMIENTO_LOTE, str(dias))
