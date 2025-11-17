@@ -353,22 +353,22 @@ Agregar nuevo producto al catálogo
                             <div class="row g-3 justify-content-end align-items-center">
 
                                 <div class="col-6 col-md-3 col-lg-3">
-                                    <label class="form-label">Porcentaje Mano de Obra (%)</label>
+                                    <label class="form-label">Porcentaje Mano de Obra (%) <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-person-workspace"></i></span>
                                         <input type="number" step="0.01" min="0" max="100" class="form-control"
                                             id="porcentaje_mano_obra" name="porcentaje_mano_obra"
-                                            value="{{ producto['porcentaje_mano_obra'] if producto else '0' }}">
+                                            value="{{ producto['porcentaje_mano_obra'] if producto else '0' }}" required>
                                     </div>
                                 </div>
                                 
                                 <div class="col-6 col-md-3 col-lg-3">
-                                    <label class="form-label">Porcentaje Ganancia (%)</label>
+                                    <label class="form-label">Porcentaje Ganancia (%) <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text"><i class="bi bi-graph-up-arrow"></i></span>
                                         <input type="number" step="0.01" min="0" max="100" class="form-control"
                                             id="porcentaje_ganancia" name="porcentaje_ganancia"
-                                            value="{{ producto['porcentaje_ganancia'] if producto else '0' }}">
+                                            value="{{ producto['porcentaje_ganancia'] if producto else '0' }}" required>
                                     </div>
                                 </div>
 
