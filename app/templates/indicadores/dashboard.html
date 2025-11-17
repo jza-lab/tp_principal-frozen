@@ -174,8 +174,8 @@
                         <div class="card-body">
                             <h5 class="card-title">Cobertura de Stock</h5>
                             {% if kpis.inventario.cobertura_stock %}
-                                <p class="card-text display-4">{{ "%.2f"|format(kpis.inventario.cobertura_stock.valor) }} días</p>
-                                <p class="card-text"><small class="text-muted">Días de stock disponibles para <strong>{{ kpis.inventario.cobertura_stock.insumo_nombre }}</strong> basado en el consumo promedio.</small></p>
+                                <p class="card-text display-4">{{ kpis.inventario.cobertura_stock.valor }} días</p>
+                                <p class="card-text"><small class="text-muted">Días de stock promedio disponibles para <strong>todos los insumos</strong>, basado en el consumo promedio valorizado.</small></p>
                                 <ul class="list-group list-group-flush">
                                     <li class="list-group-item d-flex justify-content-between align-items-center">
                                         Stock Actual

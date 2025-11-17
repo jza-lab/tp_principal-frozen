@@ -102,3 +102,22 @@ class ControlCalidadProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error contando registros de control de calidad de productos por decisión: {str(e)}", exc_info=True)
             return {'success': False, 'count': 0}
+
+    def get_total_unidades_aprobadas_en_periodo(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Calcula el total de unidades de producto aprobadas en un rango de fechas.
+        """
+        try:
+            # 1. Obtener los registros de C.C. aprobados en el período
+            lotes_res = self.db.table('lotes_productos').select('cantidad_inicial').eq('estado', 'DISPONIBLE').gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat()).execute()
+            
+            if not lotes_res.data:
+                return {'success': True, 'total_unidades': 0}
+
+            total_unidades = sum(lote['cantidad_inicial'] for lote in lotes_res.data)
+            
+            return {'success': True, 'total_unidades': total_unidades}
+
+        except Exception as e:
+            logger.error(f"Error calculando el total de unidades aprobadas: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e), 'total_unidades': 0}

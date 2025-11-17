@@ -11,6 +11,10 @@ from app.models.insumo_inventario import InsumoInventarioModel
 from app.models.reserva_insumo import ReservaInsumoModel
 from app.models.insumo import InsumoModel
 from decimal import Decimal
+from app.utils import estados
+import logging
+
+logger = logging.getLogger(__name__)
 
 class IndicadoresController:
     def __init__(self):
@@ -55,30 +59,44 @@ class IndicadoresController:
         except Exception as e:
             kpis['rotacion_inventario'] = {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
 
-        # 2. Cobertura de Stock (ejemplo con un insumo crítico)
+        # 2. Cobertura de Stock (promedio de todos los insumos)
         try:
-            insumos_res = self.insumo_model.find_all(limit=1, filters={'es_critico': True})
-            if not insumos_res['success'] or not insumos_res['data']:
-                 insumos_res = self.insumo_model.find_all(limit=1) # Fallback al primer insumo
-
+            insumos_res = self.insumo_model.find_all()
             if insumos_res['success'] and insumos_res['data']:
-                insumo_ejemplo = insumos_res['data'][0]
-                id_insumo = insumo_ejemplo['id_insumo']
-                
-                stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
-                consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
+                coberturas = []
+                total_stock_valorizado = 0
+                total_consumo_diario_valorizado = 0
 
-                if stock_res['success'] and consumo_res['success']:
-                    stock_actual = stock_res['stock_actual']
-                    consumo_diario = consumo_res['consumo_promedio_diario']
-                    
-                    cobertura = stock_actual / consumo_diario if consumo_diario else float('inf')
-                    kpis['cobertura_stock'] = {"valor": round(cobertura, 2), "insumo_nombre": insumo_ejemplo.get('nombre', 'N/A'), "stock": stock_actual, "consumo_diario": round(consumo_diario,2)}
+                for insumo in insumos_res['data']:
+                    id_insumo = insumo['id_insumo']
+                    precio_unitario = insumo.get('precio_unitario', 0)
+
+                    stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
+                    consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
+
+                    if stock_res['success'] and consumo_res['success']:
+                        stock_actual = stock_res['stock_actual']
+                        consumo_diario = consumo_res['consumo_promedio_diario']
+
+                        total_stock_valorizado += stock_actual * precio_unitario
+                        total_consumo_diario_valorizado += consumo_diario * precio_unitario
+                        
+                        if consumo_diario > 0:
+                            coberturas.append(stock_actual / consumo_diario)
+
+                if total_consumo_diario_valorizado > 0:
+                    cobertura_promedio = total_stock_valorizado / total_consumo_diario_valorizado
                 else:
-                    kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
+                    cobertura_promedio = float('inf')
+
+                kpis['cobertura_stock'] = {
+                    "valor": round(cobertura_promedio, 2) if cobertura_promedio != float('inf') else 'inf',
+                    "insumo_nombre": "Todos los insumos",
+                    "stock": round(total_stock_valorizado, 2),
+                    "consumo_diario": round(total_consumo_diario_valorizado, 2)
+                }
             else:
                 kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-
         except Exception as e:
             kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
             
@@ -132,58 +150,70 @@ class IndicadoresController:
         tiempo_produccion_planificado = sum([self._calcular_carga_op(op) for op in ordenes_en_periodo]) * 60 # a segundos
         tiempo_produccion_real = sum([(datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() for op in ordenes_en_periodo if op.get('fecha_fin') and op.get('fecha_inicio')])
 
-        disponibilidad = tiempo_produccion_real / tiempo_produccion_planificado if tiempo_produccion_planificado > 0 else 0
+        # Logging para depuración
+        logger.info(f"Cálculo de OEE para el período {fecha_inicio} a {fecha_fin}")
+        logger.info(f"Órdenes en período: {len(ordenes_en_periodo)}")
+        logger.info(f"Tiempo de Producción Planificado (segundos): {tiempo_produccion_planificado}")
+        logger.info(f"Tiempo de Producción Real (segundos): {tiempo_produccion_real}")
+
+        disponibilidad = float(tiempo_produccion_real) / float(tiempo_produccion_planificado) if tiempo_produccion_planificado > 0 else 0
 
         produccion_real = sum([op.get('cantidad_producida', 0) for op in ordenes_en_periodo])
         produccion_teorica = sum([op.get('cantidad_planificada', 0) for op in ordenes_en_periodo])
         rendimiento = produccion_real / produccion_teorica if produccion_teorica > 0 else 0
 
-        unidades_buenas_data_res = self.control_calidad_producto_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        unidades_buenas_data = unidades_buenas_data_res.get('data', [])
-        unidades_buenas = sum([qc.get('unidades_buenas', 0) for qc in unidades_buenas_data])
+        unidades_buenas_res = self.control_calidad_producto_model.get_total_unidades_aprobadas_en_periodo(fecha_inicio, fecha_fin)
+        unidades_buenas = 0
+        if unidades_buenas_res['success']:
+            unidades_buenas = unidades_buenas_res['total_unidades']
+            
         calidad = unidades_buenas / produccion_real if produccion_real > 0 else 0
 
-        oee = (disponibilidad * rendimiento * calidad) * 100
+        oee = disponibilidad * rendimiento * calidad * 100
         return {"valor": round(oee, 2), "disponibilidad": round(disponibilidad, 2), "rendimiento": round(rendimiento, 2), "calidad": round(calidad, 2)}
 
     def _calcular_cumplimiento_plan(self, fecha_inicio, fecha_fin):
-        ordenes_planificadas_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        ordenes_planificadas = ordenes_planificadas_res.get('data', [])
-        total_ordenes_planificadas = len(ordenes_planificadas)
-        ordenes_completadas_a_tiempo = 0
+            ordenes_planificadas_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+            ordenes_planificadas = ordenes_planificadas_res.get('data', [])
+            total_ordenes_planificadas = len(ordenes_planificadas)
+            ordenes_completadas_a_tiempo = 0
 
-        for orden in ordenes_planificadas:
-            if orden.get('estado') == 'COMPLETADA' and orden.get('fecha_fin') and orden.get('fecha_planificada') and datetime.fromisoformat(orden['fecha_fin']).date() <= datetime.fromisoformat(orden['fecha_planificada']).date():
-                ordenes_completadas_a_tiempo += 1
-        
-        cumplimiento = (ordenes_completadas_a_tiempo / total_ordenes_planificadas) * 100 if total_ordenes_planificadas > 0 else 0
-        return {"valor": round(cumplimiento, 2), "completadas_a_tiempo": ordenes_completadas_a_tiempo, "planificadas": total_ordenes_planificadas}
+            print("--- DEBUG: Verificando Cumplimiento del Plan de Producción ---")
+            for i, orden in enumerate(ordenes_planificadas):
+                estado = orden.get('estado')
+                fecha_fin_str = orden.get('fecha_fin')
+                
+                # --- CORRECCIÓN: Usando 'fecha_meta' como indicaste ---
+                fecha_meta_str = orden.get('fecha_meta') 
+                
+                # Usamos 'id_orden_produccion' que es más probable que exista en el dict
+                print(f"Orden #{i+1}: ID={orden.get('id_orden_produccion', 'N/A')}, Estado='{estado}', Fecha Fin='{fecha_fin_str}', Fecha Meta='{fecha_meta_str}'")
 
+                # --- CORRECCIÓN: Usando la variable 'estados.OP_COMPLETADA' (más seguro) y 'fecha_meta_str' ---
+                if estado == estados.OP_COMPLETADA and fecha_fin_str and fecha_meta_str:
+                    fecha_fin_dt = datetime.fromisoformat(fecha_fin_str).date()
+                    fecha_meta_dt = datetime.fromisoformat(fecha_meta_str).date() # Corregido
+                    print(f"  -> Comparando: {fecha_fin_dt} <= {fecha_meta_dt}   -->   {fecha_fin_dt <= fecha_meta_dt}")
+                    if fecha_fin_dt <= fecha_meta_dt:
+                        ordenes_completadas_a_tiempo += 1
+                else:
+                    print("  -> No cumple condiciones para ser 'completada a tiempo'.")
+            
+            print(f"--- Fin DEBUG: Total Planificadas={total_ordenes_planificadas}, Completadas a Tiempo={ordenes_completadas_a_tiempo} ---")
+            
+            cumplimiento = (ordenes_completadas_a_tiempo / total_ordenes_planificadas) * 100 if total_ordenes_planificadas > 0 else 0
+            return {"valor": round(cumplimiento, 2), "completadas_a_tiempo": ordenes_completadas_a_tiempo, "planificadas": total_ordenes_planificadas}
+    
     def _calcular_tasa_desperdicio(self, fecha_inicio, fecha_fin):
         desperdicios_data_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         desperdicios_data = desperdicios_data_res.get('data', [])
         cantidad_desperdicio = sum([d.get('cantidad', 0) for d in desperdicios_data])
         
-        ordenes_en_periodo_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        ordenes_en_periodo = ordenes_en_periodo_res.get('data', [])
-        
-        receta_ids = [op['receta_id'] for op in ordenes_en_periodo if op.get('receta_id')]
-        if not receta_ids:
-            return {"valor": 0, "desperdicio": cantidad_desperdicio, "total_utilizado": 0}
-
-        ingredientes_res = self.receta_model.get_ingredientes_by_receta_ids(receta_ids)
-        ingredientes_por_receta = {}
-        if ingredientes_res.get('success'):
-            for ing in ingredientes_res.get('data', []):
-                if ing['receta_id'] not in ingredientes_por_receta:
-                    ingredientes_por_receta[ing['receta_id']] = []
-                ingredientes_por_receta[ing['receta_id']].append(ing)
-
+        # Lógica mejorada para calcular el material utilizado a partir de las reservas consumidas
+        consumo_res = self.reserva_insumo_model.get_consumo_total_en_periodo(fecha_inicio, fecha_fin)
         cantidad_material_utilizado = 0
-        for op in ordenes_en_periodo:
-            if op.get('receta_id') in ingredientes_por_receta:
-                ingredientes = ingredientes_por_receta[op['receta_id']]
-                cantidad_material_utilizado += sum([i.get('cantidad', 0) for i in ingredientes]) * op.get('cantidad_producida', 0)
+        if consumo_res['success']:
+            cantidad_material_utilizado = consumo_res['total_consumido']
 
         tasa = (cantidad_desperdicio / cantidad_material_utilizado) * 100 if cantidad_material_utilizado > 0 else 0
         return {"valor": round(tasa, 2), "desperdicio": cantidad_desperdicio, "total_utilizado": cantidad_material_utilizado}
@@ -212,7 +242,7 @@ class IndicadoresController:
 
     def _calcular_tasa_reclamos_clientes(self, fecha_inicio, fecha_fin):
         reclamos_res = self.reclamo_model.count_in_date_range(fecha_inicio, fecha_fin)
-        pedidos_entregados_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
+        pedidos_entregados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
 
         num_reclamos = reclamos_res.get('count', 0)
         total_pedidos_entregados = pedidos_entregados_res.get('count', 0)
@@ -222,7 +252,7 @@ class IndicadoresController:
 
     def _calcular_tasa_rechazo_proveedores(self, fecha_inicio, fecha_fin):
         lotes_rechazados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
-        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range('RECIBIDA COMPLETA', fecha_inicio, fecha_fin)
+        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range(estados.OC_RECEPCION_COMPLETA, fecha_inicio, fecha_fin)
 
         lotes_rechazados = lotes_rechazados_res.get('count', 0)
         lotes_recibidos = lotes_recibidos_res.get('count', 0)
@@ -235,11 +265,11 @@ class IndicadoresController:
         
         # 1. Tasa de Cumplimiento de Pedidos (On-Time Full-Fillment)
         try:
-            pedidos_completados_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
-            todos_los_pedidos_res = self.pedido_model.count_by_estados_in_date_range(['COMPLETADO', 'CANCELADO', 'COMPLETADO_TARDE'], fecha_inicio, fecha_fin)
+            pedidos_completados_a_tiempo_res = self.pedido_model.count_completed_on_time_in_date_range(fecha_inicio, fecha_fin)
+            todos_los_pedidos_res = self.pedido_model.count_by_estados_in_date_range([estados.OV_COMPLETADO, estados.OV_CANCELADA], fecha_inicio, fecha_fin)
 
-            if pedidos_completados_res['success'] and todos_los_pedidos_res['success']:
-                completados_a_tiempo = pedidos_completados_res['count']
+            if pedidos_completados_a_tiempo_res['success'] and todos_los_pedidos_res['success']:
+                completados_a_tiempo = pedidos_completados_a_tiempo_res['count']
                 total_pedidos = todos_los_pedidos_res['count']
                 tasa = (completados_a_tiempo / total_pedidos) * 100 if total_pedidos > 0 else 0
                 kpis['cumplimiento_pedidos'] = {"valor": round(tasa, 2), "completados": completados_a_tiempo, "total": total_pedidos}
@@ -251,7 +281,7 @@ class IndicadoresController:
         # 2. Valor Promedio de Pedido
         try:
             total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-            num_pedidos_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
+            num_pedidos_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
 
             if total_valor_res['success'] and num_pedidos_res['success']:
                 total_valor = total_valor_res['total_valor']

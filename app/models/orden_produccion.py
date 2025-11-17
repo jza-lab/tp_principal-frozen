@@ -558,8 +558,8 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name()).select("*")
-            query = query.gte('fecha_planificada', fecha_inicio.isoformat())
-            query = query.lte('fecha_planificada', fecha_fin.isoformat())
+            query = query.gte('fecha_inicio', fecha_inicio.isoformat())
+            query = query.lte('fecha_inicio', fecha_fin.isoformat())
             result = query.execute()
 
             if result.data:

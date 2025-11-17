@@ -147,7 +147,7 @@ class RecetaModel(BaseModel):
     def obtener_operaciones_receta(self, receta_id: int) -> Dict:
         """ Obtiene las operaciones de una receta desde el modelo. """
         try:
-            result = self.db.table('operaciones_receta').select('*').eq('receta_id', receta_id).execute()
+            result = self.db.table('operacionesreceta').select('*').eq('receta_id', receta_id).execute()
             return {'success': True, 'data': result.data} if result.data else {'success': True, 'data': []}
         except Exception as e:
             logger.error(f"Error obteniendo operaciones para receta {receta_id}: {e}", exc_info=True)
