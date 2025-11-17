@@ -99,10 +99,11 @@ document.addEventListener('DOMContentLoaded', function () {
             toggleDireccionEntregaBtn.click()
             actualizarCondicionVenta(clienteId);
 
-            const ivaCode = condicionIvaValue.value;
-            const ivaData = CONDICION_IVA_MAP[ivaCode] || { text: 'N/A', factura: 'B' };
+            const ivaCode = String(cliente.condicion_iva);
+            const ivaData = CONDICION_IVA_MAP[ivaCode] || { text: 'Consumidor Final', factura: 'B' };
             condicionIvaDisplay.value = ivaData.text;
             tipoFacturaInput.value = ivaData.factura;
+            condicionIvaValue.value = ivaCode;
             
             nextStep1Btn.disabled = true; // Se habilita al añadir items
         } else {
@@ -165,19 +166,24 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    [form, itemsContainer].forEach(el => ['input', 'change', 'DOMSubtreeModified'].forEach(evt => el.addEventListener(evt, () => {
+    // --- LÓGICA DE HABILITACIÓN DEL BOTÓN "VER PROFORMA" ---
+    window.updateProformaButtonState = function() {
         const clienteId = idClienteInput.value;
         const cuit = document.getElementById('cuil_cuit_cliente').value.trim();
         const email = document.getElementById('email_cliente').value.trim();
         const isClientDataPresent = clienteId || (cuit.length >= 11 && email.includes('@'));
         const hasItems = itemsContainer.querySelectorAll('.item-row').length > 0;
         nextStep1Btn.disabled = !(isClientDataPresent && hasItems);
-    })));
+    };
+
+    // Escuchar cambios en el formulario para reevaluar el estado del botón.
+    form.addEventListener('input', window.updateProformaButtonState);
+    form.addEventListener('change', window.updateProformaButtonState);
+
 
     nextStep1Btn.addEventListener('click', (e) => { e.preventDefault(); goToStep(2); });
     prevStep2Btn.addEventListener('click', () => goToStep(1));
 
-    addItemBtn.addEventListener('click', addItemRow);
     cancelOrderBtn.addEventListener('click', () => { showNotificationModal('Pedido Cancelado', 'El proceso fue cancelado.', 'warning', () => { window.location.href = LISTAR_URL; }); });
 
     async function goToStep(step) {

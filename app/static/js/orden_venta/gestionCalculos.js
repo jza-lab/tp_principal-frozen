@@ -65,14 +65,9 @@ window.calculateOrderTotals = function () {
             let price = 0;
             let unit = '--';
 
-            if (priceDisplay && priceDisplay.value) {
-                const cleanedPrice = priceDisplay.value.replace(/[$\s.]/g, '').replace(',', '.');
-                price = parseFloat(cleanedPrice) || 0;
-            } else if (selectedOption && selectedOption.value) {
-                price = parseFloat(selectedOption.getAttribute('data-precio')) || window.PRODUCT_PRICES[productId] || 0;
-            }
-
+            // Lógica corregida: Siempre tomar el precio del option seleccionado si existe.
             if (selectedOption && selectedOption.value) {
+                price = parseFloat(selectedOption.getAttribute('data-precio')) || window.PRODUCT_PRICES[productId] || 0;
                 unit = selectedOption.getAttribute('data-unidad') || window.PRODUCT_UNITS[productId] || '--';
             }
             const itemSubtotal = price * quantity;
