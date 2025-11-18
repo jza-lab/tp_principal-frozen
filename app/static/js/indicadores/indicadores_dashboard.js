@@ -23,9 +23,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showError(tabPane, message) {
+        // --- MODIFICADO: Añadido console.log para debugging ---
+        console.log("Mostrando error en UI:", message); 
+        // --- MODIFICADO: Mensaje de error más claro ---
         tabPane.innerHTML = `
             <div class="alert alert-danger text-center p-5" role="alert">
-                <strong>Error:</strong> ${message || 'No se pudieron cargar los datos.'}
+                <strong>Error al cargar:</strong> ${message || 'No se pudieron cargar los datos.'}
             </div>`;
     }
     
@@ -92,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch(getApiUrl(category));
             if (!response.ok) {
-                throw new Error(`Error del servidor: ${response.statusText}`);
+                throw new Error(`Error del servidor: ${response.statusText} (Status: ${response.status})`);
             }
             const data = await response.json();
             
@@ -123,7 +126,8 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
         } catch (error) {
-            console.error(`Error al cargar datos para ${category}:`, error);
+            // --- MODIFICADO: Añadido console.error para debugging ---
+            console.error(`Error detallado al cargar datos para ${category}:`, error);
             showError(tabPane, error.message);
         }
     }
