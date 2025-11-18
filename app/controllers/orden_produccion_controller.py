@@ -181,6 +181,14 @@ class OrdenProduccionController(BaseController):
 
             # 3. Adjuntar las OCs a los datos de la OP
             orden_data['ocs_asociadas'] = ocs_asociadas
+            
+            # 4. Obtener todas las OPs hijas asociadas
+            ops_hijas_res = self.model.find_all(filters={'id_op_padre': orden_id})
+            ops_hijas = []
+            if ops_hijas_res.get('success'):
+                ops_hijas = ops_hijas_res.get('data', [])
+            
+            orden_data['ops_hijas'] = ops_hijas
             result['data'] = orden_data
 
             return result
@@ -230,7 +238,8 @@ class OrdenProduccionController(BaseController):
                     'cantidad_planificada': float(cantidad),
                     'fecha_meta': form_data.get('fecha_meta'),
                     'observaciones': form_data.get('observaciones'),
-                    'estado': 'PENDIENTE'
+                    'estado': 'PENDIENTE',
+                    'id_op_padre': form_data.get('id_op_padre')
                 }
                 if form_data.get('receta_id'):
                     datos_op['receta_id'] = form_data.get('receta_id')
@@ -1180,6 +1189,14 @@ class OrdenProduccionController(BaseController):
             turno_model = UsuarioTurnoModel()
             turno_actual_result = turno_model.find_current_shift()
             turno_actual = turno_actual_result.get('data') if turno_actual_result.get('success') else {}
+            
+            # --- NUEVO: OBTENER TOTAL DESPERDICIO ---
+            desperdicio_model = RegistroDesperdicioModel()
+            desperdicios_result = desperdicio_model.find_all(filters={'orden_produccion_id': orden_id})
+            total_desperdicio = 0
+            if desperdicios_result.get('success'):
+                total_desperdicio = sum(Decimal(d.get('cantidad', 0)) for d in desperdicios_result.get('data', []))
+            orden_data['total_desperdicio'] = total_desperdicio
 
 
             # 4. Ensamblar todos los datos
@@ -1663,7 +1680,9 @@ class OrdenProduccionController(BaseController):
                     return self.success_response(message=gestion_res['message'], data=gestion_res['data'])
 
             # 6. Si no se ha llegado al punto de control, es un reporte normal
-            if (cantidad_producida_actual + cantidad_buena) >= cantidad_planificada:
+            # La orden se considera lista para QC cuando la suma de lo bueno y el desperdicio
+            # iguala o supera lo planificado.
+            if total_procesado_ahora >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 update_data['fecha_fin'] = datetime.now().isoformat()
             
@@ -1726,7 +1745,8 @@ class OrdenProduccionController(BaseController):
                 'prioridad': 'ALTA',
                 'observaciones': f"OP hija para reponer desperdicio de OP: {orden_actual.get('codigo', orden_id)}.",
                 'estado': 'PENDIENTE',
-                'pedido_id': orden_actual.get('pedido_id')
+                'pedido_id': orden_actual.get('pedido_id'),
+                'id_op_padre': orden_id
             }
             creacion_res = self.crear_orden(datos_nueva_op, usuario_id)
             

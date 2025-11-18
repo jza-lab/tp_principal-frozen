@@ -155,6 +155,7 @@
                         
                         <div class="kanban-card {{ 'card-prioridad-alta' if prioridad == 'ALTA' else ('card-prioridad-media' if prioridad == 'MEDIA' else 'card-prioridad-baja') }} {{ 'card-retrasada' if es_retrasada else '' }}" 
                              data-op-id="{{ orden.id }}"
+                             data-cantidad-producida="{{ orden.cantidad_producida or 0 }}"
                              data-linea="{{ orden.linea_asignada or '' }}"
                              data-prioridad="{{ prioridad }}"
                              data-operario="{{ orden.operario_id or '' }}">

@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // Producción
         cantidadProducida: parseFloat(cantidadProducidaDisplay.textContent) || 0,
-        cantidadDesperdicio: 0,
+        cantidadDesperdicio: ORDEN_TOTAL_DESPERDICIO || 0,
         cantidadPlanificada: ORDEN_CANTIDAD_PLANIFICADA,
         ritmoObjetivo: ORDEN_RITMO_OBJETIVO,
         
@@ -307,12 +307,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // ===== REPORTAR AVANCE =====
+    function actualizarRestanteModal() {
+        const buenaReportada = parseFloat(document.getElementById('cantidad-buena').value) || 0;
+        const malaReportada = parseFloat(cantidadMalaInput.value) || 0;
+        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + estado.cantidadDesperdicio + buenaReportada + malaReportada);
+        cantidadRestanteInfo.textContent = `Restante: ${formatNumber(Math.max(0, restante), 2)} kg`;
+    }
+
     btnReportarAvance.addEventListener('click', () => {
-        const restante = estado.cantidadPlanificada - estado.cantidadProducida;
-        cantidadRestanteInfo.textContent = `Restante: ${formatNumber(restante, 2)} kg`;
+        actualizarRestanteModal(); // Calcular al abrir
     });
 
+    document.getElementById('cantidad-buena').addEventListener('input', actualizarRestanteModal);
     cantidadMalaInput.addEventListener('input', () => {
+        actualizarRestanteModal();
         const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
         const esRequerido = cantidadMala > 0;
 
@@ -439,7 +447,7 @@ document.addEventListener('DOMContentLoaded', function () {
         cantidadDesperdicioDisplay.innerHTML = `${formatNumber(estado.cantidadDesperdicio)} <span class="progreso-unit">kg</span>`;
         
         // Actualizar progreso
-        const progreso = (estado.cantidadProducida / estado.cantidadPlanificada) * 100;
+        const progreso = ((estado.cantidadProducida + estado.cantidadDesperdicio) / estado.cantidadPlanificada) * 100;
         progressBar.style.width = `${Math.min(progreso, 100)}%`;
         porcentajeProgreso.textContent = `${formatNumber(progreso, 0)}%`;
         

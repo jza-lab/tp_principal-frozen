@@ -251,7 +251,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         const codigo = card.querySelector('.product-code').innerText;
         const producto = card.querySelector('.product-name').innerText;
-        const cantidadProducida = card.querySelector('.qty-value')?.innerText || card.querySelector('.progress-produced')?.innerText.split(' ')[0] || '0';
+        const cantidadProducida = card.dataset.cantidadProducida || '0';
 
         document.getElementById('op-codigo').innerText = codigo;
         document.getElementById('op-producto').innerText = producto;
