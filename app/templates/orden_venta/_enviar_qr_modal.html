@@ -1,0 +1,21 @@
+<!-- Modal para Confirmar Envío de QR por Email -->
+<div class="modal fade" id="enviarQrModal" tabindex="-1" aria-labelledby="enviarQrModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="enviarQrModalLabel">Confirmar Envío de Correo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Deseas enviar el código QR de seguimiento del pedido al cliente por correo electrónico?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="noEnviarQrBtn">No, solo crear</button>
+                <button type="button" class="btn btn-primary" id="siEnviarQrBtn">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Sí, enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

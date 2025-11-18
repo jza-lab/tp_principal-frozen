@@ -93,7 +93,12 @@ def nueva():
         if status_code < 300:
             nuevo_pedido = response.get('data', {})
             redirect_url = url_for('orden_venta.detalle', id=nuevo_pedido.get('id'))
-            return jsonify({'success': True, 'message': response.get('message'), 'redirect_url': redirect_url}), 201
+            return jsonify({
+                'success': True,
+                'message': response.get('message'),
+                'redirect_url': redirect_url,
+                'data': nuevo_pedido  # <-- LÍNEA AÑADIDA
+            }), 201
         else:
             return jsonify({'success': False, 'message': response.get('message', 'Error al crear el pedido.')}), status_code
 
@@ -174,12 +179,18 @@ def detalle(id):
     response, _ = controller.obtener_pedido_por_id(id)
     if response.get('success'):
         pedido_data = response.get('data')
+        
+        # Generar token de seguimiento para el enlace del QR
+        token_resp, _ = controller.generar_enlace_seguimiento(id)
+        token_seguimiento = token_resp.get('data', {}).get('token') if token_resp.get('success') else None
+
         # --- FIX: Convertir strings de fecha a objetos datetime ---
         if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
             pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
         if pedido_data and pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
             pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
-        return render_template('orden_venta/detalle.html', pedido=pedido_data)
+        
+        return render_template('orden_venta/detalle.html', pedido=pedido_data, token_seguimiento=token_seguimiento)
     else:
         flash(response.get('error', 'Pedido no encontrado.'), 'error')
         return redirect(url_for('orden_venta.listar'))

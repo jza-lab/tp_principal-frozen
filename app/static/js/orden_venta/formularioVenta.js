@@ -117,11 +117,72 @@ async function enviarDatos(payload, csrfToken) {
             },
             body: JSON.stringify(payload),
         });
+
         const result = await response.json();
-        if (response.ok) {
-            showNotificationModal('Éxito', result.message || 'Pedido guardado.', 'success', () => {
-                window.location.href = result.redirect_url || "/orden-venta/";
-            });
+
+        if (response.ok && result.success) {
+            // Si estamos editando, solo mostramos notificación y redirigimos.
+            if (isEditing) {
+                showNotificationModal('Éxito', result.message || 'Pedido actualizado.', 'success', () => {
+                    window.location.href = result.redirect_url || "/orden-venta/";
+                });
+                return;
+            }
+
+            // --- Lógica del Modal para NUEVOS pedidos ---
+            const pedidoId = result.data.id;
+            const detalleUrl = result.redirect_url || `/pedidos/detalle/${pedidoId}`;
+
+            const qrModalElement = document.getElementById('enviarQrModal');
+            if (qrModalElement) {
+                const qrModal = new bootstrap.Modal(qrModalElement);
+                const siEnviarBtn = document.getElementById('siEnviarQrBtn');
+                const noEnviarBtn = document.getElementById('noEnviarQrBtn');
+                const spinner = siEnviarBtn.querySelector('.spinner-border');
+
+                siEnviarBtn.dataset.pedidoId = pedidoId;
+
+                siEnviarBtn.onclick = async () => {
+                    spinner.classList.remove('d-none');
+                    siEnviarBtn.disabled = true;
+                    noEnviarBtn.disabled = true;
+
+                    try {
+                        const qrResponse = await fetch(`/api/pedidos/${pedidoId}/enviar-qr`, {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrfToken }
+                        });
+                        const qrResult = await qrResponse.json();
+                        if (qrResponse.ok && qrResult.success) {
+                            showNotificationModal('Correo Enviado', 'El código de seguimiento fue enviado al cliente.', 'success');
+                        } else {
+                            showNotificationModal('Error de Envío', qrResult.message || 'No se pudo enviar el correo.', 'error');
+                        }
+                    } catch (netError) {
+                        showNotificationModal('Error de Red', 'No se pudo conectar para enviar el correo.', 'error');
+                    } finally {
+                        window.location.href = detalleUrl;
+                    }
+                };
+
+                noEnviarBtn.onclick = () => {
+                    window.location.href = detalleUrl;
+                };
+
+                qrModalElement.addEventListener('hidden.bs.modal', () => {
+                    if (!siEnviarBtn.disabled) {
+                         window.location.href = detalleUrl;
+                    }
+                });
+
+                qrModal.show();
+            } else {
+                 // Fallback si el modal no existe, comportamiento original
+                showNotificationModal('Éxito', result.message || 'Pedido guardado.', 'success', () => {
+                    window.location.href = detalleUrl;
+                });
+            }
+
         } else {
             showNotificationModal('Error', result.error || 'No se pudo guardar el pedido.', 'error');
             submitButton.disabled = false;

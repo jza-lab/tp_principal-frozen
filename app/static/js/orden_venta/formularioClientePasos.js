@@ -337,17 +337,18 @@ document.addEventListener('DOMContentLoaded', function () {
     async function submitOrder(isPayment = false) {
         const createButton = isPayment ? paymentConfirmBtn : acceptOrderBtn;
         const originalButtonText = createButton.innerHTML;
-
+    
         if (createButton.disabled) return;
-
+    
         createButton.disabled = true;
         createButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Procesando...';
-
+    
         if (isPayment) {
             await new Promise(resolve => setTimeout(resolve, 1500)); // Simula espera de pasarela
         }
+    
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-
+    
         try {
             const response = await fetch(CREAR_URL, {
                 method: 'POST',
@@ -357,37 +358,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 },
                 body: pedidoDataTemp.value,
             });
-
+    
             const result = await response.json();
-
+    
             if (response.ok && result.success) {
                 const pedidoId = result.data.id;
+                const redirectUrl = isPayment ? `/public/comprobante-pago/${pedidoId}` : LISTAR_URL;
 
+                // Si es un pago (flujo público), enviar el correo automáticamente en segundo plano
                 if (isPayment) {
-                    const comprobanteUrl = `/public/comprobante-pago/${pedidoId}`;
-                    console.log(comprobanteUrl)
-                    window.location.href = comprobanteUrl;
-                } else {
-                    showNotificationModal(
-                        'Pedido Creado con Éxito',
-                        'Su pedido a crédito ha sido recibido y será procesado a la brevedad.',
-                        'success', // Tipo correcto
-                        () => { window.location.href = LISTAR_URL; });
+                    fetch(`/api/pedidos/${pedidoId}/enviar-qr`, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrfToken }
+                    }).catch(error => console.error('Error en el envío automático de correo:', error));
                 }
 
+                window.location.href = redirectUrl;
             } else {
                 showNotificationModal('Error al Crear el Pedido', result.message || 'No se pudo procesar la solicitud.', 'error');
                 createButton.disabled = false;
                 createButton.innerHTML = originalButtonText;
             }
-
+    
         } catch (error) {
             console.error('Error en submitOrder:', error);
             showNotificationModal('Error de Conexión', 'Fallo de red al crear la orden. Por favor, intente de nuevo.', 'error');
             createButton.disabled = false;
             createButton.innerHTML = originalButtonText;
         }
-
     }
 
     updateResumen();

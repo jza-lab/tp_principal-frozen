@@ -612,6 +612,31 @@
         </div>
     </div>
 </section>
+
+<!-- Modal para Enviar QR por Email -->
+<div class="modal fade" id="enviarQrModal" tabindex="-1" aria-labelledby="enviarQrModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="enviarQrModalLabel">
+                    <i class="bi bi-envelope-check-fill me-2"></i>Pedido Creado con Éxito
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tu pedido se ha creado correctamente.</p>
+                <p class="mb-0">¿Deseas recibir el código de seguimiento por correo electrónico?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="noEnviarQrBtn">No, gracias</button>
+                <button type="button" class="btn btn-primary" id="siEnviarQrBtn">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Sí, enviar correo
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
     
     {% block scripts %}
