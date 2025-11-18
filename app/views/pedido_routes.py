@@ -496,13 +496,21 @@ def registrar_pago(id):
 @permission_required(accion='logistica_gestion_ov')
 def generar_qr_pedido(id_pedido):
     """
-    Genera un código QR que apunta a la página de trazabilidad pública del pedido.
+    Genera un código QR que apunta a la página de seguimiento pública y firmada del pedido.
     """
     try:
-        # 1. Generar la URL pública
-        url_publica = url_for('public.mostrar_trazabilidad_publica', id_pedido=id_pedido, _external=True)
+        # 1. Obtener el token firmado para el pedido
+        controller = PedidoController()
+        token_resp, _ = controller.generar_enlace_seguimiento(id_pedido)
+        if not token_resp.get('success'):
+            raise Exception("No se pudo generar el token de seguimiento.")
+        
+        token = token_resp['data']['token']
 
-        # 2. Crear el QR en memoria
+        # 2. Generar la URL pública con el token
+        url_publica = url_for('public.seguimiento_publico_pedido', token=token, _external=True)
+
+        # 3. Crear el QR en memoria
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_L,

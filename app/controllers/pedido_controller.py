@@ -6,6 +6,7 @@ from flask import jsonify
 from flask_jwt_extended import get_current_user
 from app.controllers.base_controller import BaseController
 from app.controllers.registro_controller import RegistroController
+from app.utils.security import generate_signed_token
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.models.receta import RecetaModel
@@ -1111,3 +1112,16 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error marcando pedidos como vencidos: {e}", exc_info=True)
             return 0
+
+    def generar_enlace_seguimiento(self, pedido_id: int) -> tuple:
+        """
+        Genera un enlace de seguimiento firmado para un pedido específico.
+        """
+        try:
+            # El token contendrá el ID del pedido para verificarlo después
+            token = generate_signed_token({'pedido_id': pedido_id})
+            # La URL se construirá en el template con url_for, aquí solo devolvemos el token
+            return self.success_response(data={'token': token})
+        except Exception as e:
+            logger.error(f"Error generando enlace de seguimiento para pedido {pedido_id}: {e}", exc_info=True)
+            return self.error_response("No se pudo generar el enlace de seguimiento.", 500)

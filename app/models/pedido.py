@@ -140,6 +140,9 @@ class PedidoModel(BaseModel):
                 pedido_data.setdefault('condicion_venta', 'contado')
                 pedido_data.setdefault('pago', 'pendiente')
 
+            # Eliminar la clave 'token_seguimiento' si existe, para evitar errores de BD.
+            pedido_data.pop('token_seguimiento', None)
+
             # 1. Crear el pedido principal
             pedido_result = self.create(pedido_data)
             if not pedido_result['success']:
