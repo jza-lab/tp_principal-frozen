@@ -113,3 +113,21 @@ class ProductoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo categorías distintas de productos: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def find_by_names(self, nombres: list) -> Dict:
+        """
+        Busca productos por una lista de nombres.
+        """
+        try:
+            if not nombres:
+                return {'success': True, 'data': []}
+            
+            result = self.db.table(self.get_table_name()).select('*').in_('nombre', nombres).execute()
+            
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': False, 'error': 'No se encontraron productos con esos nombres'}
+        except Exception as e:
+            logger.error(f"Error buscando productos por nombres: {str(e)}")
+            return {'success': False, 'error': str(e)}

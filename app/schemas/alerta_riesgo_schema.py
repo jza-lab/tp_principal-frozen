@@ -11,7 +11,7 @@ class AlertaRiesgoSchema(Schema):
     
     estado = fields.Str(
         validate=validate.OneOf(
-            ["Pendiente", "En Investigacion", "Resuelta", "Cerrada"],
+            ["Pendiente", "En Investigacion", "Resuelta", "Cerrada", "ANALISIS FINALIZADO"],
             error="Estado no válido."
         ),
         load_default="Pendiente",

@@ -110,8 +110,7 @@ def _register_blueprints(app: Flask):
     from app.views.reportes_routes import reportes_bp
     from app.views.proveedor_routes import proveedor_bp
     from app.views.api_trazabilidad_routes import api_trazabilidad_bp
-    from app.views.admin_riesgo_routes import admin_riesgo_bp, riesgos_bp
-    from app.views.admin_riesgo_routes import admin_riesgo_bp
+    from app.views.admin_riesgo_routes import admin_riesgo_bp, api_riesgos_bp
     from app.views.registro_routes import registros_bp
     from app.views.registro_desperdicio_lote_producto_routes import registro_desperdicio_lote_producto_bp
     from app.views.rentabilidad_routes import rentabilidad_bp
@@ -152,7 +151,7 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(reportes_bp)
     app.register_blueprint(api_trazabilidad_bp)
     app.register_blueprint(admin_riesgo_bp)
-    app.register_blueprint(riesgos_bp)
+    app.register_blueprint(api_riesgos_bp)
     app.register_blueprint(registros_bp)
     app.register_blueprint(registro_desperdicio_lote_producto_bp)
     from app.views.admin_zona_routes import zona_bp
@@ -192,10 +191,10 @@ def _format_datetime_filter(value, format='%d/%m/%Y %H:%M'):
 def _formato_moneda_filter(value):
     """Filtro Jinja para formatear un número como moneda."""
     if value is None:
-        return "0,00"
+        return "$ 0.00"
     try:
-        # Formatea con separador de miles y dos decimales, sin el signo de pesos.
-        return f"{float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        # Formatea con separador de miles y dos decimales
+        return f" {float(value):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
         return value
 

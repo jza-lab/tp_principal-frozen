@@ -344,6 +344,11 @@ class OrdenProduccionModel(BaseModel):
                     item['aprobador_calidad_nombre'] = f"{aprobador_info.get('nombre', '')} {aprobador_info.get('apellido', '')}".strip()
                 else:
                     item['aprobador_calidad_nombre'] = None
+                
+                # --- OBTENER ORDENES DE COMPRA ASOCIADAS ---
+                ocs_res = self.db.table('ordenes_compra').select('id, codigo_oc, estado').eq('orden_produccion_id', orden_id).execute()
+                item['ordenes_compra_asociadas'] = ocs_res.data if ocs_res.data else []
+                # --- FIN ---
 
                 return {'success': True, 'data': item}
             else:
@@ -553,8 +558,8 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name()).select("*")
-            query = query.gte('fecha_planificada', fecha_inicio.isoformat())
-            query = query.lte('fecha_planificada', fecha_fin.isoformat())
+            query = query.gte('fecha_inicio', fecha_inicio.isoformat())
+            query = query.lte('fecha_inicio', fecha_fin.isoformat())
             result = query.execute()
 
             if result.data:
@@ -564,4 +569,70 @@ class OrdenProduccionModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error al obtener órdenes de producción por rango de fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def obtener_volumen_produccion_por_fecha(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Calcula el volumen de producción total por día dentro de un rango de fechas.
+        """
+        try:
+            # Selecciona la fecha de finalización y suma las cantidades producidas
+            result = self.db.table(self.get_table_name()).select(
+                "fecha_fin, cantidad_producida"
+            ).gte(
+                'fecha_fin', fecha_inicio.isoformat()
+            ).lte(
+                'fecha_fin', fecha_fin.isoformat()
+            ).eq(
+                'estado', 'COMPLETADA'
+            ).execute()
+
+            if result.data:
+                # Agrupa los resultados por día en Python
+                volumen_por_dia = {}
+                for record in result.data:
+                    # Extrae solo la parte de la fecha del string ISO
+                    dia = record['fecha_fin'].split('T')[0]
+                    if dia not in volumen_por_dia:
+                        volumen_por_dia[dia] = 0
+                    volumen_por_dia[dia] += record['cantidad_producida']
+
+                # Convierte el diccionario a una lista de diccionarios para un manejo más fácil
+                datos_procesados = [{"fecha": dia, "volumen": volumen} for dia, volumen in sorted(volumen_por_dia.items())]
+                return {'success': True, 'data': datos_procesados}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener el volumen de producción por fecha: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def obtener_comparativa_plan_vs_real(self, fecha_inicio: datetime, fecha_fin: datetime, limite: int = 10) -> Dict:
+        """
+        Obtiene las últimas N órdenes de producción completadas para comparar
+        la cantidad planificada versus la cantidad real producida.
+        """
+        try:
+            # Obtiene las órdenes ordenadas por fecha de finalización descendente
+            result = self.db.table(self.get_table_name()).select(
+                "id, cantidad_planificada, cantidad_producida, producto_id, productos(nombre)"
+            ).gte(
+                'fecha_fin', fecha_inicio.isoformat()
+            ).lte(
+                'fecha_fin', fecha_fin.isoformat()
+            ).eq(
+                'estado', 'COMPLETADA'
+            ).order(
+                'fecha_fin', desc=True
+            ).limit(limite).execute()
+
+            if result.data:
+                # Da la vuelta a los datos para que en el gráfico se muestren del más antiguo al más nuevo
+                datos_invertidos = result.data[::-1]
+                return {'success': True, 'data': datos_invertidos}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener la comparativa plan vs. real: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}

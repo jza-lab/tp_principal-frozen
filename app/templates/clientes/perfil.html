@@ -168,15 +168,17 @@
                                         <td class="text-center">
                                             <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
                                                 class="btn btn-sm btn-outline-info" title="Ver Detalle">
-
                                                 <i class="bi bi-eye"></i>
                                             </a>
-                                            <!-- {% if pedido.estado_pago != 'pagado' %}
+                                            {% if pedido.pago != 'Pagado' %}
                                             <button class="btn btn-sm btn-outline-success btn-registrar-pago"
-                                                data-pedido-id="{{ pedido.id }}" title="Registrar Pago">
+                                                data-pedido-id="{{ pedido.id }}"
+                                                data-monto-total="{{ pedido.precio_orden | default(0) }}"
+                                                data-cliente-nombre="{{ cliente.nombre }}"
+                                                title="Registrar Pago">
                                                 <i class="bi bi-cash-coin"></i>
                                             </button>
-                                            {% endif %} -->
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -295,74 +297,145 @@
 </div>
 
 <!-- Modal para Registrar Pago -->
-<div class="modal fade" id="registrarPagoModal" tabindex="-1" aria-labelledby="registrarPagoModalLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="registrarPagoModal" tabindex="-1" aria-labelledby="registrarPagoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="registrarPagoModalLabel">Registrar Pago</h5>
+                <h5 class="modal-title" id="registrarPagoModalLabel">Registrar Pago para Pedido #<span id="modalPedidoId"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                    <form id="registrarPagoForm" enctype="multipart/form-data">
+            <form id="pagoForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <p>Cliente: <strong id="modalClienteNombre"></strong></p>
                     {{ csrf_form.csrf_token }}
-                    <input type="hidden" id="pedidoId" name="pedido_id">
-                    <div class="mb-3">
-                        <label for="pagoDetalles" class="form-label">Detalles del Pago</label>
-                        <textarea class="form-control" id="pagoDetalles" name="detalles" rows="3"></textarea>
+                    <input type="hidden" id="id_pedido" name="id_pedido">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="monto" class="form-label">Monto a Pagar <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="text" class="form-control" id="monto" name="monto" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
+                            <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                                <option value="transferencia">Transferencia Bancaria</option>
+                                <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                                <option value="tarjeta_debito">Tarjeta de Débito</option>
+                                <option value="efectivo">Efectivo</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="datos_adicionales" class="form-label">Datos Adicionales (Opcional)</label>
+                            <textarea class="form-control" id="datos_adicionales" name="datos_adicionales" rows="3" placeholder="Ej: N° de CBU, últimos 4 dígitos de la tarjeta, etc."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label for="comprobante_pago" class="form-label">Comprobante (Opcional)</label>
+                            <input class="form-control" type="file" id="comprobante_pago" name="comprobante_pago">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="pagoComprobante" class="form-label">Comprobante de Pago (Opcional)</label>
-                        <input class="form-control" type="file" id="pagoComprobante" name="comprobante">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="submitPago">Guardar Pago</button>
-            </div>
+                    <div id="pago-error-alert" class="alert alert-danger d-none mt-3" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="submitPagoBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Registrar Pago
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
-        const registrarPagoButtons = document.querySelectorAll('.btn-registrar-pago');
+document.addEventListener('DOMContentLoaded', function () {
+    const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
+    const pagoForm = document.getElementById('pagoForm');
+    const montoInput = document.getElementById('monto');
+    const errorAlert = document.getElementById('pago-error-alert');
+    const submitBtn = document.getElementById('submitPagoBtn');
+    const spinner = submitBtn.querySelector('.spinner-border');
 
-        registrarPagoButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                const pedidoId = this.dataset.pedidoId;
-                document.getElementById('pedidoId').value = pedidoId;
-                registrarPagoModal.show();
-            });
-        });
+    // Formatear monto en tiempo real
+    const currencyFormatter = new Intl.NumberFormat('es-AR', {
+        style: 'decimal',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
 
-        document.getElementById('submitPago').addEventListener('click', function () {
-            const pedidoId = document.getElementById('pedidoId').value;
-            const form = document.getElementById('registrarPagoForm');
-            const formData = new FormData(form);
+    montoInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^\d,]/g, '').replace(',', '.');
+        if (value.split('.').length > 2) {
+            value = value.substring(0, value.lastIndexOf('.'));
+        }
+    });
 
-            fetch(`/orden-venta/${pedidoId}/registrar-pago`, {
-                method: 'POST',
-                body: formData
-            })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        registrarPagoModal.hide();
-                        location.reload(); // Recargar para ver los cambios
-                    } else {
-                        alert('Error al registrar el pago: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Ocurrió un error al registrar el pago.');
-                });
+    // Abrir modal y popular datos
+    document.querySelectorAll('.btn-registrar-pago').forEach(button => {
+        button.addEventListener('click', function () {
+            const pedidoId = this.dataset.pedidoId;
+            const montoTotal = this.dataset.montoTotal;
+            const clienteNombre = this.dataset.clienteNombre;
+
+            document.getElementById('id_pedido').value = pedidoId;
+            document.getElementById('modalPedidoId').textContent = pedidoId;
+            document.getElementById('modalClienteNombre').textContent = clienteNombre;
+            montoInput.value = parseFloat(montoTotal).toFixed(2).replace('.', ',');
+            
+            pagoForm.reset(); // Limpiar el formulario excepto los campos que acabamos de setear
+            document.getElementById('id_pedido').value = pedidoId;
+            montoInput.value = parseFloat(montoTotal).toFixed(2);
+
+
+            errorAlert.classList.add('d-none');
+            registrarPagoModal.show();
         });
     });
+
+    // Enviar formulario
+    pagoForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        
+        spinner.classList.remove('d-none');
+        submitBtn.disabled = true;
+        errorAlert.classList.add('d-none');
+
+        const formData = new FormData(pagoForm);
+        
+        fetch("{{ url_for('api.registrar_pago') }}", {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                registrarPagoModal.hide();
+                showNotificationModal('Éxito', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                let errorMessage = data.error || 'Ocurrió un error desconocido.';
+                if (typeof errorMessage === 'object') {
+                   errorMessage = Object.entries(errorMessage).map(([field, errors]) => `${field}: ${errors.join(', ')}`).join('; ');
+                }
+                errorAlert.textContent = errorMessage;
+                errorAlert.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error en fetch:', error);
+            errorAlert.textContent = 'Error de conexión. Por favor, intente de nuevo.';
+            errorAlert.classList.remove('d-none');
+        })
+        .finally(() => {
+            spinner.classList.add('d-none');
+            submitBtn.disabled = false;
+        });
+    });
+});
 </script>
 {% endblock %}

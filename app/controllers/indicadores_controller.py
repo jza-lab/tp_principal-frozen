@@ -10,7 +10,15 @@ from app.models.orden_compra_model import OrdenCompraModel
 from app.models.insumo_inventario import InsumoInventarioModel
 from app.models.reserva_insumo import ReservaInsumoModel
 from app.models.insumo import InsumoModel
+from app.models.lote_producto import LoteProductoModel
+from app.models.producto import ProductoModel
 from decimal import Decimal
+from app.utils import estados
+import logging
+# Faltaba importar defaultdict
+from collections import defaultdict 
+
+logger = logging.getLogger(__name__)
 
 class IndicadoresController:
     def __init__(self):
@@ -25,65 +33,29 @@ class IndicadoresController:
         self.insumo_inventario_model = InsumoInventarioModel()
         self.reserva_insumo_model = ReservaInsumoModel()
         self.insumo_model = InsumoModel()
+        self.lote_producto_model = LoteProductoModel()
+        self.producto_model = ProductoModel()
 
-    def obtener_kpis_inventario(self, fecha_inicio_str, fecha_fin_str):
+    def _parsear_fechas(self, fecha_inicio_str, fecha_fin_str, default_days=30):
         if fecha_inicio_str:
             fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
         else:
-            fecha_inicio = datetime.now() - timedelta(days=30)
+            fecha_inicio = datetime.now() - timedelta(days=default_days)
 
         if fecha_fin_str:
             fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
         else:
             fecha_fin = datetime.now()
-            
-        kpis = {}
-        
-        # 1. Rotación de Inventario (mensual)
-        try:
-            cogs_res = self.reserva_insumo_model.get_consumo_total_valorizado_en_periodo(fecha_inicio, fecha_fin)
-            stock_valorizado_res = self.insumo_inventario_model.get_stock_total_valorizado()
+        return fecha_inicio, fecha_fin
 
-            if cogs_res['success'] and stock_valorizado_res['success']:
-                cogs = cogs_res['total_consumido_valorizado']
-                inventario_promedio = stock_valorizado_res['total_valorizado'] # Simplificación: usamos el valor actual
-                
-                rotacion = cogs / inventario_promedio if inventario_promedio else 0
-                kpis['rotacion_inventario'] = {"valor": round(rotacion, 2), "cogs": cogs, "inventario_valorizado": inventario_promedio}
-            else:
-                kpis['rotacion_inventario'] = {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
-        except Exception as e:
-            kpis['rotacion_inventario'] = {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+    # --- CATEGORÍA: PRODUCCIÓN ---
+    def obtener_datos_produccion(self, fecha_inicio_str, fecha_fin_str):
+        """
+        Esta función está reservada para KPIs puramente de producción.
+        La lógica de inventario que estaba aquí fue movida a su propia categoría.
+        """
+        return {}
 
-        # 2. Cobertura de Stock (ejemplo con un insumo crítico)
-        try:
-            insumos_res = self.insumo_model.find_all(limit=1, filters={'es_critico': True})
-            if not insumos_res['success'] or not insumos_res['data']:
-                 insumos_res = self.insumo_model.find_all(limit=1) # Fallback al primer insumo
-
-            if insumos_res['success'] and insumos_res['data']:
-                insumo_ejemplo = insumos_res['data'][0]
-                id_insumo = insumo_ejemplo['id_insumo']
-                
-                stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
-                consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
-
-                if stock_res['success'] and consumo_res['success']:
-                    stock_actual = stock_res['stock_actual']
-                    consumo_diario = consumo_res['consumo_promedio_diario']
-                    
-                    cobertura = stock_actual / consumo_diario if consumo_diario else float('inf')
-                    kpis['cobertura_stock'] = {"valor": round(cobertura, 2), "insumo_nombre": insumo_ejemplo.get('nombre', 'N/A'), "stock": stock_actual, "consumo_diario": round(consumo_diario,2)}
-                else:
-                    kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-            else:
-                kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-
-        except Exception as e:
-            kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-            
-        return kpis
-        
     def obtener_kpis_produccion(self, fecha_inicio_str, fecha_fin_str):
         if fecha_inicio_str:
             fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
@@ -98,92 +70,310 @@ class IndicadoresController:
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
         cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
         tasa_desperdicio = self._calcular_tasa_desperdicio(fecha_inicio, fecha_fin)
+        causas_desperdicio = self.obtener_causas_desperdicio_pareto(fecha_inicio_str, fecha_fin_str)
 
+        # --- NUEVOS GRÁFICOS ---
+        # Gráfico de Gantt de Órdenes de Producción
+        ordenes_gantt_res = self.orden_produccion_model.get_all_enriched(
+            filtros={'fecha_meta_desde': fecha_inicio.isoformat(), 'fecha_meta_hasta': fecha_fin.isoformat(), 'estado_neq': 'PENDIENTE'}
+        )
+        ordenes_gantt = sorted(ordenes_gantt_res.get('data', []), key=lambda x: x.get('fecha_inicio_planificada') or '', reverse=True)[:15]
+
+        # Volumen de Producción Diario
+        volumen_produccion_res = self.orden_produccion_model.obtener_volumen_produccion_por_fecha(fecha_inicio, fecha_fin)
+        volumen_produccion = volumen_produccion_res.get('data', [])
+
+        # Comparativa Plan vs. Real
+        comparativa_res = self.orden_produccion_model.obtener_comparativa_plan_vs_real(fecha_inicio, fecha_fin, limite=10)
+        comparativa_plan_real = comparativa_res.get('data', [])
+
+
+        # Se retorna una estructura defensiva que coincide con el frontend
         return {
-            "oee": oee,
-            "cumplimiento_plan": cumplimiento_plan,
-            "tasa_desperdicio": tasa_desperdicio,
-            "fecha_inicio": fecha_inicio.strftime('%Y-%m-%d'),
-            "fecha_fin": fecha_fin.strftime('%Y-%m-%d')
+            "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
+            "cumplimiento_plan": cumplimiento_plan if isinstance(cumplimiento_plan, dict) else {"valor": 0, "completadas_a_tiempo": 0, "planificadas": 0},
+            "tasa_desperdicio": tasa_desperdicio if isinstance(tasa_desperdicio, dict) else {"valor": 0, "desperdicio": 0, "total_utilizado": 0},
+            "causas_desperdicio_pareto": causas_desperdicio if isinstance(causas_desperdicio, dict) else {"labels": [], "data": [], "line_data": []},
+            "ordenes_gantt": ordenes_gantt,
+            "volumen_produccion_diario": volumen_produccion,
+            "comparativa_plan_real": comparativa_plan_real
         }
 
-    def _calcular_carga_op(self, op_data: dict) -> Decimal:
-        carga_total = Decimal(0)
-        receta_id = op_data.get('receta_id')
-        cantidad = Decimal(op_data.get('cantidad_planificada', 0))
+    # --- CATEGORÍA: CALIDAD ---
+    def obtener_datos_calidad(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
         
-        if not receta_id or cantidad <= 0:
+        rechazo_interno = self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin)
+        reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
+        rechazo_proveedores = self._calcular_tasa_rechazo_proveedores(fecha_inicio, fecha_fin)
+        
+        # Se retorna una estructura defensiva que coincide con el frontend
+        return {
+            "tasa_rechazo_interno": rechazo_interno if isinstance(rechazo_interno, dict) else {"valor": 0, "rechazadas": 0, "inspeccionadas": 0},
+            "tasa_reclamos_clientes": reclamos_clientes if isinstance(reclamos_clientes, dict) else {"valor": 0, "reclamos": 0, "pedidos_entregados": 0},
+            "tasa_rechazo_proveedores": rechazo_proveedores if isinstance(rechazo_proveedores, dict) else {"valor": 0, "rechazados": 0, "recibidos": 0},
+        }
+
+    # --- CATEGORÍA: COMERCIAL ---
+    def obtener_datos_comercial(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, default_days=365)
+        
+        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
+        kpis_data = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
+
+        # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
+        top_productos = self.obtener_top_productos_vendidos(fecha_inicio_str, fecha_fin_str)
+        top_clientes = self.obtener_top_clientes(fecha_inicio_str, fecha_fin_str)
+
+        # --- 3. COMBINAR AMBAS ESTRUCTURAS ---
+        # Aseguramos que la estructura de KPIs sea la que espera el template
+        return {
+            "kpis_comerciales": {
+                "cumplimiento_pedidos": kpis_data.get("cumplimiento_pedidos", {"valor": 0, "completados": 0, "total": 0}),
+                "valor_promedio_pedido": kpis_data.get("valor_promedio_pedido", {"valor": 0, "num_pedidos": 0})
+            },
+            "top_productos_vendidos": top_productos if isinstance(top_productos, dict) else {"labels": [], "data": []},
+            "top_clientes": top_clientes if isinstance(top_clientes, dict) else {"labels": [], "data": []},
+        }
+
+    # --- CATEGORÍA: FINANCIERA ---
+    def obtener_datos_financieros(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        
+        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
+        total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
+        facturacion_total = total_valor_res.get('total_valor', 0.0) if total_valor_res.get('success') else 0.0
+
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        costo_total = 0.0
+        if ordenes_res.get('success'):
+            ordenes_data = ordenes_res.get('data', [])
+            producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('producto_id')]
+            costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
+            
+            costo_mp = sum(self._get_costo_producto(op['producto_id'], costos_cache) * float(op.get('cantidad_producida', 0)) for op in ordenes_data if op.get('producto_id'))
+            horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
+            costo_mo = horas_prod * 15
+            dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
+            gastos_fijos = (5000 / 30) * dias_periodo
+            costo_total = costo_mp + costo_mo + gastos_fijos
+
+        beneficio_bruto = facturacion_total - costo_total
+        margen_beneficio = (beneficio_bruto / facturacion_total) * 100 if facturacion_total > 0 else 0
+        
+        kpis = {
+            "facturacion_total": {"valor": round(facturacion_total, 2), "etiqueta": "Facturación Total"},
+            "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Costo de Ventas"},
+            "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Beneficio Bruto"},
+            "margen_beneficio": {"valor": round(margen_beneficio, 2), "etiqueta": "Margen de Beneficio (%)"}
+        }
+
+        # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
+        facturacion = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str)
+        costo_ganancia = self.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str)
+        rentabilidad = self.obtener_rentabilidad_productos(fecha_inicio_str, fecha_fin_str)
+        descomposicion = self.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str)
+
+        # --- 3. COMBINAR AMBAS ESTRUCTURAS ---
+        return {
+            "kpis_financieros": kpis,
+            "facturacion_periodo": facturacion if isinstance(facturacion, dict) else {"labels": [], "data": []},
+            "costo_vs_ganancia": costo_ganancia if isinstance(costo_ganancia, dict) else {"labels": [], "ingresos": [], "costos": []},
+            "rentabilidad_productos": rentabilidad if isinstance(rentabilidad, dict) else {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []},
+            "descomposicion_costos": descomposicion if isinstance(descomposicion, dict) else {"labels": [], "data": []},
+        }
+        
+    # --- CATEGORÍA: INVENTARIO ---
+    def obtener_datos_inventario(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        
+        rotacion = self._calcular_rotacion_inventario(fecha_inicio, fecha_fin)
+        cobertura = self._calcular_cobertura_stock()
+        antiguedad_insumos = self.obtener_antiguedad_stock('insumo')
+        antiguedad_productos = self.obtener_antiguedad_stock('producto')
+
+        kpis_inventario = {
+            "rotacion_inventario": rotacion if isinstance(rotacion, dict) else {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+        }
+
+        # Se retorna una estructura defensiva que coincide con el frontend
+        return {
+            "kpis_inventario": kpis_inventario,
+            "cobertura_stock": cobertura if isinstance(cobertura, dict) else {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0},
+            "antiguedad_stock_insumos": antiguedad_insumos if isinstance(antiguedad_insumos, dict) else {"labels": [], "data": []},
+            "antiguedad_stock_productos": antiguedad_productos if isinstance(antiguedad_productos, dict) else {"labels": [], "data": []},
+        }
+        
+    # --- MÉTODOS DE CÁLCULO OPTIMIZADOS ---
+
+    def _preparar_cache_operaciones(self, receta_ids: list):
+        """Pre-carga todas las operaciones para una lista de IDs de recetas en una sola consulta."""
+        if not receta_ids: return {}
+        operaciones_res = self.receta_model.get_operaciones_by_receta_ids(list(set(receta_ids)))
+        if not operaciones_res.get('success'): return {}
+        
+        cache = defaultdict(list)
+        for op in operaciones_res.get('data', []):
+            cache[op['receta_id']].append(op)
+        return cache
+
+    def _calcular_carga_op_con_cache(self, op_data: dict, cache_operaciones: dict) -> Decimal:
+        """Calcula la carga de una OP usando la caché de operaciones pre-cargada."""
+        carga_total, receta_id, cantidad = Decimal(0), op_data.get('receta_id'), Decimal(op_data.get('cantidad_planificada', 0))
+        if not receta_id or cantidad <= 0 or receta_id not in cache_operaciones:
             return carga_total
 
-        operaciones_res = self.receta_model.obtener_operaciones_receta(receta_id)
-        if not operaciones_res.get('success') or not operaciones_res.get('data'):
-            return carga_total
-
-        for op_step in operaciones_res['data']:
+        for op_step in cache_operaciones[receta_id]:
             t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
             t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
             carga_total += t_prep + (t_ejec_unit * cantidad)
         return carga_total
+    
+    # --- MÉTODO _calcular_carga_op FALTANTE ---
+    # Asumo que existe o deberías agregarlo si _calcular_oee lo necesita
+    def _calcular_carga_op(self, orden_produccion_data):
+        # Esta es una implementación de EJEMPLO. 
+        # Deberías tener la lógica real de esta función.
+        # Basado en la optimización, probablemente ya no uses este método
+        # y deberías quitar la llamada en _calcular_oee.
+        receta_id = orden_produccion_data.get('receta_id')
+        cantidad = Decimal(orden_produccion_data.get('cantidad_planificada', 0))
+        if not receta_id:
+            return Decimal(0)
+        
+        operaciones_res = self.receta_model.get_operaciones(receta_id)
+        if not operaciones_res.get('success'):
+            return Decimal(0)
+            
+        carga_total = Decimal(0)
+        for op_step in operaciones_res.get('data', []):
+            t_prep = Decimal(op_step.get('tiempo_preparacion', 0))
+            t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
+            carga_total += t_prep + (t_ejec_unit * cantidad)
+        return carga_total
+    # --- FIN MÉTODO FALTANTE ---
+
 
     def _calcular_oee(self, fecha_inicio, fecha_fin):
-        ordenes_en_periodo_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        ordenes_en_periodo = ordenes_en_periodo_res.get('data', [])
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        ordenes_en_periodo = ordenes_res.get('data', [])
+        if not ordenes_en_periodo: return {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0}
+
+        # Optimización: Pre-cargar todas las operaciones de las recetas necesarias.
+        receta_ids = [op['receta_id'] for op in ordenes_en_periodo if op.get('receta_id')]
+        cache_operaciones = self._preparar_cache_operaciones(receta_ids)
+
+        # Usar la caché para calcular el tiempo planificado sin consultas N+1.
+        tiempo_planificado = sum(self._calcular_carga_op_con_cache(op, cache_operaciones) for op in ordenes_en_periodo) * 60
         
-        tiempo_produccion_planificado = sum([self._calcular_carga_op(op) for op in ordenes_en_periodo]) * 60 # a segundos
+        # Esta línea usa la función vieja, la comentamos y usamos la optimizada
+        # tiempo_produccion_planificado = sum([self._calcular_carga_op(op) for op in ordenes_en_periodo]) * 60 # a segundos
+        tiempo_produccion_planificado = tiempo_planificado # Usamos la versión con caché
+
         tiempo_produccion_real = sum([(datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() for op in ordenes_en_periodo if op.get('fecha_fin') and op.get('fecha_inicio')])
 
-        disponibilidad = tiempo_produccion_real / tiempo_produccion_planificado if tiempo_produccion_planificado > 0 else 0
+        # Logging para depuración
+        logger.info(f"Cálculo de OEE para el período {fecha_inicio} a {fecha_fin}")
+        logger.info(f"Órdenes en período: {len(ordenes_en_periodo)}")
+        logger.info(f"Tiempo de Producción Planificado (segundos): {tiempo_produccion_planificado}")
+        logger.info(f"Tiempo de Producción Real (segundos): {tiempo_produccion_real}")
+
+        disponibilidad = float(tiempo_produccion_real) / float(tiempo_produccion_planificado) if tiempo_produccion_planificado > 0 else 0
 
         produccion_real = sum([op.get('cantidad_producida', 0) for op in ordenes_en_periodo])
         produccion_teorica = sum([op.get('cantidad_planificada', 0) for op in ordenes_en_periodo])
         rendimiento = produccion_real / produccion_teorica if produccion_teorica > 0 else 0
 
-        unidades_buenas_data_res = self.control_calidad_producto_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        unidades_buenas_data = unidades_buenas_data_res.get('data', [])
-        unidades_buenas = sum([qc.get('unidades_buenas', 0) for qc in unidades_buenas_data])
+        unidades_buenas_res = self.control_calidad_producto_model.get_total_unidades_aprobadas_en_periodo(fecha_inicio, fecha_fin)
+        unidades_buenas = 0
+        if unidades_buenas_res['success']:
+            unidades_buenas = unidades_buenas_res['total_unidades']
+            
         calidad = unidades_buenas / produccion_real if produccion_real > 0 else 0
 
-        oee = (disponibilidad * rendimiento * calidad) * 100
+        oee = disponibilidad * rendimiento * calidad * 100
         return {"valor": round(oee, 2), "disponibilidad": round(disponibilidad, 2), "rendimiento": round(rendimiento, 2), "calidad": round(calidad, 2)}
+        
+    def _preparar_cache_costos_por_productos(self, producto_ids: list):
+        if not producto_ids: return {}
+        producto_ids_unicos = list(set(producto_ids))
+        
+        recetas_res = self.receta_model.find_all(filters={'producto_id': producto_ids_unicos, 'activa': True})
+        if not recetas_res.get('success') or not recetas_res.get('data'):
+            logging.warning(f"No se encontraron recetas para IDs: {producto_ids_unicos}. Error: {recetas_res.get('error')}")
+            return {}
+
+        receta_ids = [receta['id'] for receta in recetas_res.get('data', [])]
+        if not receta_ids: return {}
+
+        all_insumo_ids = set()
+        ingredientes_res = self.receta_model.get_ingredientes_by_receta_ids(receta_ids)
+        if ingredientes_res.get('success') and ingredientes_res.get('data'):
+            for ing in ingredientes_res['data']:
+                if (insumo_data := ing.get('insumos_catalogo')) and insumo_data.get('id_insumo'):
+                    all_insumo_ids.add(insumo_data['id_insumo'])
+
+        costos_calculados = {}
+        if all_insumo_ids:
+            costos_res = self.insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
+            if costos_res and costos_res.get('success'):
+                costos_calculados = costos_res.get('data', {})
+
+        insumos_sin_costo = all_insumo_ids - set(costos_calculados.keys())
+        if insumos_sin_costo:
+            fallback_res = self.insumo_model.find_all(filters={'id_insumo': list(insumos_sin_costo)})
+            if fallback_res and fallback_res.get('success'):
+                for insumo in fallback_res.get('data', []):
+                    costos_calculados[insumo['id_insumo']] = float(insumo.get('precio_unitario', 0.0))
+                    logging.info(f"Usando precio de catálogo como fallback para costo de insumo: {insumo['id_insumo']}")
+
+        return costos_calculados
+
+    def _get_costo_producto(self, producto_id, costos_insumos_cache=None):
+        return self.receta_model.get_costo_produccion(producto_id, costos_insumos=costos_insumos_cache)
 
     def _calcular_cumplimiento_plan(self, fecha_inicio, fecha_fin):
-        ordenes_planificadas_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        ordenes_planificadas = ordenes_planificadas_res.get('data', [])
-        total_ordenes_planificadas = len(ordenes_planificadas)
-        ordenes_completadas_a_tiempo = 0
+            ordenes_planificadas_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+            ordenes_planificadas = ordenes_planificadas_res.get('data', [])
+            total_ordenes_planificadas = len(ordenes_planificadas)
+            ordenes_completadas_a_tiempo = 0
 
-        for orden in ordenes_planificadas:
-            if orden.get('estado') == 'COMPLETADA' and orden.get('fecha_fin') and orden.get('fecha_planificada') and datetime.fromisoformat(orden['fecha_fin']).date() <= datetime.fromisoformat(orden['fecha_planificada']).date():
-                ordenes_completadas_a_tiempo += 1
-        
-        cumplimiento = (ordenes_completadas_a_tiempo / total_ordenes_planificadas) * 100 if total_ordenes_planificadas > 0 else 0
-        return {"valor": round(cumplimiento, 2), "completadas_a_tiempo": ordenes_completadas_a_tiempo, "planificadas": total_ordenes_planificadas}
+            print("--- DEBUG: Verificando Cumplimiento del Plan de Producción ---")
+            for i, orden in enumerate(ordenes_planificadas):
+                estado = orden.get('estado')
+                fecha_fin_str = orden.get('fecha_fin')
+                
+                # --- CORRECCIÓN: Usando 'fecha_meta' como indicaste ---
+                fecha_meta_str = orden.get('fecha_meta') 
+                
+                # Usamos 'id_orden_produccion' que es más probable que exista en el dict
+                print(f"Orden #{i+1}: ID={orden.get('id_orden_produccion', 'N/A')}, Estado='{estado}', Fecha Fin='{fecha_fin_str}', Fecha Meta='{fecha_meta_str}'")
 
+                # --- CORRECCIÓN: Usando la variable 'estados.OP_COMPLETADA' (más seguro) y 'fecha_meta_str' ---
+                if estado == estados.OP_COMPLETADA and fecha_fin_str and fecha_meta_str:
+                    fecha_fin_dt = datetime.fromisoformat(fecha_fin_str).date()
+                    fecha_meta_dt = datetime.fromisoformat(fecha_meta_str).date() # Corregido
+                    print(f"  -> Comparando: {fecha_fin_dt} <= {fecha_meta_dt}   -->   {fecha_fin_dt <= fecha_meta_dt}")
+                    if fecha_fin_dt <= fecha_meta_dt:
+                        ordenes_completadas_a_tiempo += 1
+                else:
+                    print("  -> No cumple condiciones para ser 'completada a tiempo'.")
+            
+            print(f"--- Fin DEBUG: Total Planificadas={total_ordenes_planificadas}, Completadas a Tiempo={ordenes_completadas_a_tiempo} ---")
+            
+            cumplimiento = (ordenes_completadas_a_tiempo / total_ordenes_planificadas) * 100 if total_ordenes_planificadas > 0 else 0
+            return {"valor": round(cumplimiento, 2), "completadas_a_tiempo": ordenes_completadas_a_tiempo, "planificadas": total_ordenes_planificadas}
+    
     def _calcular_tasa_desperdicio(self, fecha_inicio, fecha_fin):
         desperdicios_data_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         desperdicios_data = desperdicios_data_res.get('data', [])
         cantidad_desperdicio = sum([d.get('cantidad', 0) for d in desperdicios_data])
         
-        ordenes_en_periodo_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        ordenes_en_periodo = ordenes_en_periodo_res.get('data', [])
-        
-        receta_ids = [op['receta_id'] for op in ordenes_en_periodo if op.get('receta_id')]
-        if not receta_ids:
-            return {"valor": 0, "desperdicio": cantidad_desperdicio, "total_utilizado": 0}
-
-        ingredientes_res = self.receta_model.get_ingredientes_by_receta_ids(receta_ids)
-        ingredientes_por_receta = {}
-        if ingredientes_res.get('success'):
-            for ing in ingredientes_res.get('data', []):
-                if ing['receta_id'] not in ingredientes_por_receta:
-                    ingredientes_por_receta[ing['receta_id']] = []
-                ingredientes_por_receta[ing['receta_id']].append(ing)
-
+        # Lógica mejorada para calcular el material utilizado a partir de las reservas consumidas
+        consumo_res = self.reserva_insumo_model.get_consumo_total_en_periodo(fecha_inicio, fecha_fin)
         cantidad_material_utilizado = 0
-        for op in ordenes_en_periodo:
-            if op.get('receta_id') in ingredientes_por_receta:
-                ingredientes = ingredientes_por_receta[op['receta_id']]
-                cantidad_material_utilizado += sum([i.get('cantidad', 0) for i in ingredientes]) * op.get('cantidad_producida', 0)
+        if consumo_res['success']:
+            cantidad_material_utilizado = consumo_res['total_consumido']
 
         tasa = (cantidad_desperdicio / cantidad_material_utilizado) * 100 if cantidad_material_utilizado > 0 else 0
         return {"valor": round(tasa, 2), "desperdicio": cantidad_desperdicio, "total_utilizado": cantidad_material_utilizado}
@@ -200,19 +390,15 @@ class IndicadoresController:
         }
 
     def _calcular_tasa_rechazo_interno(self, fecha_inicio, fecha_fin):
-        rechazados_res = self.control_calidad_producto_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
-        aprobados_res = self.control_calidad_producto_model.count_by_decision_in_date_range('APROBADO', fecha_inicio, fecha_fin)
-        
-        unidades_rechazadas = rechazados_res.get('count', 0)
-        unidades_aprobadas = aprobados_res.get('count', 0)
-        unidades_inspeccionadas = unidades_rechazadas + unidades_aprobadas
-
-        tasa = (unidades_rechazadas / unidades_inspeccionadas) * 100 if unidades_inspeccionadas > 0 else 0
-        return {"valor": round(tasa, 2), "rechazadas": unidades_rechazadas, "inspeccionadas": unidades_inspeccionadas}
+        rechazados = self.control_calidad_producto_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin).get('count', 0)
+        aprobados = self.control_calidad_producto_model.count_by_decision_in_date_range('APROBADO', fecha_inicio, fecha_fin).get('count', 0)
+        inspeccionadas = rechazados + aprobados
+        tasa = (rechazados / inspeccionadas) * 100 if inspeccionadas > 0 else 0
+        return {"valor": round(tasa, 2), "rechazadas": rechazados, "inspeccionadas": inspeccionadas}
 
     def _calcular_tasa_reclamos_clientes(self, fecha_inicio, fecha_fin):
         reclamos_res = self.reclamo_model.count_in_date_range(fecha_inicio, fecha_fin)
-        pedidos_entregados_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
+        pedidos_entregados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
 
         num_reclamos = reclamos_res.get('count', 0)
         total_pedidos_entregados = pedidos_entregados_res.get('count', 0)
@@ -220,47 +406,316 @@ class IndicadoresController:
         tasa = (num_reclamos / total_pedidos_entregados) * 100 if total_pedidos_entregados > 0 else 0
         return {"valor": round(tasa, 2), "reclamos": num_reclamos, "pedidos_entregados": total_pedidos_entregados}
 
+    # --- CORRECCIÓN 2: Función completada ---
     def _calcular_tasa_rechazo_proveedores(self, fecha_inicio, fecha_fin):
         lotes_rechazados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
-        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range('RECIBIDA COMPLETA', fecha_inicio, fecha_fin)
-
+        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range(estados.OC_RECEPCION_COMPLETA, fecha_inicio, fecha_fin)
+        
         lotes_rechazados = lotes_rechazados_res.get('count', 0)
         lotes_recibidos = lotes_recibidos_res.get('count', 0)
-        
+
         tasa = (lotes_rechazados / lotes_recibidos) * 100 if lotes_recibidos > 0 else 0
         return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_recibidos}
 
-    def obtener_kpis_comercial(self, fecha_inicio, fecha_fin):
-        kpis = {}
-        
-        # 1. Tasa de Cumplimiento de Pedidos (On-Time Full-Fillment)
-        try:
-            pedidos_completados_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
-            todos_los_pedidos_res = self.pedido_model.count_by_estados_in_date_range(['COMPLETADO', 'CANCELADO', 'COMPLETADO_TARDE'], fecha_inicio, fecha_fin)
 
-            if pedidos_completados_res['success'] and todos_los_pedidos_res['success']:
-                completados_a_tiempo = pedidos_completados_res['count']
-                total_pedidos = todos_los_pedidos_res['count']
-                tasa = (completados_a_tiempo / total_pedidos) * 100 if total_pedidos > 0 else 0
-                kpis['cumplimiento_pedidos'] = {"valor": round(tasa, 2), "completados": completados_a_tiempo, "total": total_pedidos}
-            else:
-                kpis['cumplimiento_pedidos'] = {"valor": 0, "completados": 0, "total": 0}
-        except Exception as e:
-            kpis['cumplimiento_pedidos'] = {"valor": 0, "completados": 0, "total": 0}
+    def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
+        # 1. Cumplimiento de Pedidos
+        # CORRECCIÓN: Usar el método correcto 'count_by_estados_in_date_range' para el total
+        estados_totales = [
+            estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
+            estados.OV_COMPLETADO, estados.OV_CANCELADA
+        ]
+        total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
+        completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
+        
+        total_pedidos = total_pedidos_res.get('count', 0)
+        num_pedidos_completados = completados_res.get('count', 0)
+        
+        cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
 
         # 2. Valor Promedio de Pedido
+        total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
+        total_valor = total_valor_res.get('total_valor', 0.0)
+        
+        valor_promedio = total_valor / num_pedidos_completados if num_pedidos_completados > 0 else 0.0
+
+        return {
+            "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
+            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_completados}
+        }
+
+    def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
+        try:
+            cogs_res = self.reserva_insumo_model.get_consumo_total_valorizado_en_periodo(fecha_inicio, fecha_fin)
+            stock_valorizado_res = self.insumo_inventario_model.get_stock_total_valorizado()
+
+            if cogs_res['success'] and stock_valorizado_res['success']:
+                cogs = cogs_res.get('total_consumido_valorizado', 0)
+                inventario_promedio = stock_valorizado_res.get('total_valorizado', 0)
+                
+                rotacion = cogs / inventario_promedio if inventario_promedio else 0
+                return {"valor": round(rotacion, 2), "cogs": cogs, "inventario_valorizado": inventario_promedio}
+            return {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+        except Exception:
+            return {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+
+    def _calcular_cobertura_stock(self):
+        try:
+            insumos_res = self.insumo_model.find_all()
+            if not (insumos_res['success'] and insumos_res['data']):
+                return {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
+
+            total_stock_valorizado = 0
+            total_consumo_diario_valorizado = 0
+
+            for insumo in insumos_res['data']:
+                id_insumo = insumo['id_insumo']
+                precio_unitario = insumo.get('precio_unitario', 0)
+
+                stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
+                consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
+
+                if stock_res['success'] and consumo_res['success']:
+                    stock_actual = stock_res.get('stock_actual', 0)
+                    consumo_diario = consumo_res.get('consumo_promedio_diario', 0)
+                    total_stock_valorizado += stock_actual * precio_unitario
+                    total_consumo_diario_valorizado += consumo_diario * precio_unitario
+            
+            cobertura_promedio = (total_stock_valorizado / total_consumo_diario_valorizado 
+                                  if total_consumo_diario_valorizado > 0 else float('inf'))
+
+            return {
+                "valor": round(cobertura_promedio, 2) if cobertura_promedio != float('inf') else 'inf',
+                "insumo_nombre": "Todos los insumos",
+                "stock": round(total_stock_valorizado, 2),
+                "consumo_diario": round(total_consumo_diario_valorizado, 2)
+            }
+        except Exception:
+            return {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
+        
+    # --- MÉTODOS PÚBLICOS PARA GRÁFICOS ---
+
+    def obtener_top_productos_vendidos(self, fecha_inicio_str, fecha_fin_str, top_n=5):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        sales_res = self.pedido_model.get_sales_by_product_in_period(fecha_inicio, fecha_fin)
+        if not sales_res.get('success'): return {"labels": [], "data": []}
+
+        sorted_products = sorted(sales_res.get('data', {}).items(), key=lambda item: item[1], reverse=True)
+        top_products = sorted_products[:top_n]
+        return {"labels": [p[0] for p in top_products], "data": [p[1] for p in top_products]}
+
+    def obtener_facturacion_por_periodo(self, fecha_inicio_str, fecha_fin_str, periodo='mensual'):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
+        ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin)
+        if not ingresos_res.get('success'): return {"labels": [], "data": []}
+
         try:
             total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-            num_pedidos_res = self.pedido_model.count_by_estado_in_date_range('COMPLETADO', fecha_inicio, fecha_fin)
-
-            if total_valor_res['success'] and num_pedidos_res['success']:
-                total_valor = total_valor_res['total_valor']
-                num_pedidos = num_pedidos_res['count']
-                valor_promedio = total_valor / num_pedidos if num_pedidos > 0 else 0
-                kpis['valor_promedio_pedido'] = {"valor": round(valor_promedio, 2), "total_valor": total_valor, "num_pedidos": num_pedidos}
-            else:
-                 kpis['valor_promedio_pedido'] = {"valor": 0, "total_valor": 0, "num_pedidos": 0}
+            num_pedidos_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
         except Exception as e:
-            kpis['valor_promedio_pedido'] = {"valor": 0, "total_valor": 0, "num_pedidos": 0}
+            logger.error(f"Error calculando valor promedio: {e}")
+
+        if isinstance(ingresos_res.get('data'), dict):
+            return ingresos_res['data']
+        else:
+            processed_data = defaultdict(float)
+            for ingreso in ingresos_res.get('data', []):
+                 fecha_dt = datetime.fromisoformat(ingreso['fecha_solicitud'])
+                 key = fecha_dt.strftime('%Y-%m') 
+                 processed_data[key] += float(ingreso['precio_orden'])
             
-        return kpis
+            labels = sorted(processed_data.keys())
+            data = [processed_data[key] for key in labels]
+            return {"labels": labels, "data": data}
+
+    def obtener_rentabilidad_productos(self, fecha_inicio_str, fecha_fin_str):
+        from app.models.insumo_inventario import InsumoInventarioModel
+        insumo_inventario_model = InsumoInventarioModel()
+        empty_return = {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []}
+
+        productos_res = self.producto_model.find_all()
+        if not productos_res.get('success'): return empty_return
+        productos_data = productos_res.get('data', [])
+        producto_ids = [p['id'] for p in productos_data]
+
+        recetas_res = self.receta_model.find_all(filters={'producto_id': ('in', producto_ids), 'activa': True})
+        if not recetas_res.get('success'): return empty_return
+        
+        recetas_por_producto_id = {receta['producto_id']: receta for receta in recetas_res.get('data', [])}
+        receta_ids = [r['id'] for r in recetas_por_producto_id.values()]
+
+        ingredientes_res = self.receta_model.get_ingredientes_by_receta_ids(receta_ids)
+        if not ingredientes_res.get('success'): return empty_return
+        
+        ingredientes_por_receta_id = defaultdict(list)
+        all_insumo_ids = set()
+        for ing in ingredientes_res.get('data', []):
+            ingredientes_por_receta_id[ing['receta_id']].append(ing)
+            if insumo_data := ing.get('insumos_catalogo'):
+                all_insumo_ids.add(insumo_data['id_insumo'])
+
+        costos_insumos_res = insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
+        costos_insumos = costos_insumos_res.get('data', {}) if costos_insumos_res.get('success') else {}
+
+        # Fallback para insumos sin costo pre-calculado
+        insumos_sin_costo = all_insumo_ids - set(costos_insumos.keys())
+        if insumos_sin_costo:
+            fallback_res = self.insumo_model.find_all(filters={'id_insumo': list(insumos_sin_costo)})
+            if fallback_res and fallback_res.get('success'):
+                for insumo in fallback_res.get('data', []):
+                    costos_insumos[insumo['id_insumo']] = float(insumo.get('precio_unitario', 0.0))
+                    logging.info(f"Usando precio de catálogo como fallback para rentabilidad: {insumo['id_insumo']}")
+
+        rentabilidad = {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []}
+        for p in productos_data:
+            costo_total = 0.0
+            receta = recetas_por_producto_id.get(p['id'])
+            if receta:
+                ingredientes = ingredientes_por_receta_id.get(receta['id'], [])
+                for ing in ingredientes:
+                    insumo_id = ing.get('insumos_catalogo', {}).get('id_insumo')
+                    cantidad = float(ing.get('cantidad', 0))
+                    costo_unitario = costos_insumos.get(insumo_id, 0.0)
+                    costo_total += cantidad * costo_unitario
+
+            precio = float(p.get('precio_unitario', 0.0))
+            rentabilidad['labels'].append(p['nombre'])
+            rentabilidad['costos'].append(round(costo_total, 2))
+            rentabilidad['ingresos'].append(round(precio, 2))
+            rentabilidad['rentabilidad_neta'].append(round(precio - costo_total, 2))
+            
+        return rentabilidad
+
+    def obtener_costo_vs_ganancia(self, fecha_inicio_str, fecha_fin_str, periodo='mensual'):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
+        facturacion_res = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str, periodo)
+        empty_return = {"labels": [], "ingresos": [], "costos": []}
+        if not facturacion_res or facturacion_res.get('error'): return empty_return
+        
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        if not ordenes_res.get('success'): return empty_return
+        
+        ordenes_data = ordenes_res.get('data', [])
+        
+        receta_ids_en_ordenes = [op['receta_id'] for op in ordenes_data if op.get('receta_id') and op.get('producto_id')]
+        producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('receta_id') and op.get('producto_id')]
+        
+        costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
+
+        costos_por_periodo = defaultdict(float)
+        for op in ordenes_data:
+            producto_id = op.get('producto_id')
+            if not producto_id: 
+                continue
+                
+            costo_unitario = self._get_costo_producto(producto_id, costos_cache)
+            costo_op = costo_unitario * float(op.get('cantidad_producida', 0))
+            
+            fecha_op_str = op.get('fecha_inicio')
+            if not fecha_op_str:
+                continue
+
+            fecha_op = datetime.fromisoformat(fecha_op_str).date()
+            key = fecha_op.strftime('%Y-%m') if periodo == 'mensual' else fecha_op.strftime('%Y-W%U') if periodo == 'semanal' else fecha_op.strftime('%Y-%m-%d')
+            costos_por_periodo[key] += costo_op
+
+        labels = sorted(list(set(facturacion_res['labels']) | set(costos_por_periodo.keys())))
+        ingresos_map = dict(zip(facturacion_res['labels'], facturacion_res['data']))
+        return {"labels": labels, "ingresos": [ingresos_map.get(l, 0) for l in labels], "costos": [costos_por_periodo.get(l, 0) for l in labels]}
+
+    def obtener_descomposicion_costos(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        if not ordenes_res.get('success'): return {"labels": [], "data": []}
+        
+        ordenes_data = ordenes_res.get('data', [])
+        
+        producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('producto_id')]
+        costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
+
+        costo_mp = 0
+        for op in ordenes_data:
+            producto_id = op.get('producto_id')
+            if producto_id:
+                costo_unitario = self._get_costo_producto(producto_id, costos_cache)
+                costo_mp += costo_unitario * float(op.get('cantidad_producida', 0))
+
+        horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
+        
+        costo_mo = horas_prod * 15 # COSTO_HORA_HOMBRE
+        gastos_fijos = (5000 / 30) * (fecha_fin - fecha_inicio).days # GASTOS_FIJOS_MENSUALES
+
+        return {"labels": ["Materia Prima", "Mano de Obra (Est.)", "Gastos Fijos (Est.)"], "data": [round(costo_mp, 2), round(costo_mo, 2), round(gastos_fijos, 2)]}
+
+    def obtener_top_clientes(self, fecha_inicio_str, fecha_fin_str, top_n=5, criterio='valor'):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
+        pedidos_res = self.pedido_model.get_all_with_items(filtros={'fecha_desde': fecha_inicio.strftime('%Y-%m-%d'), 'fecha_hasta': fecha_fin.strftime('%Y-%m-%d'), 'estado': 'COMPLETADO'})
+        if not pedidos_res.get('success'): return {"labels": [], "data": []}
+
+        clientes_data = defaultdict(lambda: {'valor': 0, 'cantidad': 0, 'nombre': 'N/A'})
+        for pedido in pedidos_res.get('data', []):
+            if not (cid := pedido.get('id_cliente')): continue
+            c_nombre = pedido.get('cliente', {}).get('nombre') or f"Cliente ID {cid}"
+            clientes_data[cid]['valor'] += float(pedido.get('monto_total', 0))
+            clientes_data[cid]['cantidad'] += 1
+            clientes_data[cid]['nombre'] = c_nombre
+        
+        sorted_clientes = sorted(clientes_data.values(), key=lambda x: x[criterio], reverse=True)
+        top = sorted_clientes[:top_n]
+        return {"labels": [c['nombre'] for c in top], "data": [c[criterio] for c in top]}
+
+    def obtener_causas_desperdicio_pareto(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        desperdicios_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        if not desperdicios_res.get('success'): return {"labels": [], "data": [], "line_data": []}
+
+        causas = defaultdict(float)
+        for d in desperdicios_res.get('data', []):
+            motivo = d.get('motivo', {}).get('motivo', 'Desconocido') if isinstance(d.get('motivo'), dict) else 'Desconocido'
+            causas[motivo] += float(d.get('cantidad', 0))
+
+        sorted_causas = sorted(causas.items(), key=lambda x: x[1], reverse=True)
+        labels, data = [c[0] for c in sorted_causas], [c[1] for c in sorted_causas]
+        
+        total = sum(data)
+        acum_porc = []
+        acum = 0
+        for val in data:
+            acum += val
+            acum_porc.append((acum / total) * 100 if total > 0 else 0)
+
+        return {"labels": labels, "data": data, "line_data": [round(p, 2) for p in acum_porc]}
+
+    def obtener_antiguedad_stock(self, tipo='insumo'):
+        hoy = datetime.now().date()
+        categorias = {"0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "+90 días": 0.0}
+        empty_return = {"labels": list(categorias.keys()), "data": [0] * len(categorias)}
+
+        if tipo == 'insumo':
+            lotes_res = self.insumo_inventario_model.get_all_lotes_for_view()
+            if not lotes_res.get('success'): return empty_return
+            for lote in lotes_res.get('data', []):
+                if not (fecha_str := lote.get('fecha_ingreso')): continue
+                antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
+                valor = float(lote.get('precio_unitario') or 0.0) * float(lote.get('cantidad', 0))
+                if 0 <= antiguedad <= 30: categorias["0-30 días"] += valor
+                elif 31 <= antiguedad <= 60: categorias["31-60 días"] += valor
+                elif 61 <= antiguedad <= 90: categorias["61-90 días"] += valor
+                else: categorias["+90 días"] += valor
+        else: # producto
+            lotes_res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
+            if not lotes_res.get('success'): return empty_return
+            lotes_data = lotes_res.get('data', [])
+            
+            for lote in lotes_data:
+                if not (fecha_str := lote.get('fecha_fabricacion')): continue
+                antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
+                
+                valor = float(lote.get('costo_unitario_estimado') or 0.0) * float(lote.get('cantidad_actual', 0)) 
+                
+                if 0 <= antiguedad <= 30: categorias["0-30 días"] += valor
+                elif 31 <= antiguedad <= 60: categorias["31-60 días"] += valor
+                elif 61 <= antiguedad <= 90: categorias["61-90 días"] += valor
+                else: categorias["+90 días"] += valor
+            
+        return {"labels": list(categorias.keys()), "data": list(categorias.values())}

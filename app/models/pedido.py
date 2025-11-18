@@ -3,6 +3,7 @@ from typing import Dict, Any, List, Optional
 import logging
 from postgrest.exceptions import APIError
 from datetime import date, timedelta, datetime
+from app.utils import estados
 
 logger = logging.getLogger(__name__)
 
@@ -605,7 +606,7 @@ class PedidoModel(BaseModel):
 
     def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin):
         try:
-            result = self.db.table(self.get_table_name()).select('fecha_solicitud, total').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
+            result = self.db.table(self.get_table_name()).select('fecha_solicitud, precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error obteniendo ingresos: {str(e)}")
@@ -694,18 +695,51 @@ class PedidoModel(BaseModel):
             logger.error(f"Error contando pedidos por estados y rango de fecha: {str(e)}", exc_info=True)
             return {'success': False, 'count': 0}
 
+    def count_completed_on_time_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Cuenta los pedidos completados a tiempo en un rango de fechas.
+        Se considera "a tiempo" si la fecha de actualización (cuando se completó) es menor o igual a la fecha requerida.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select('updated_at, fecha_requerido')
+            query = query.eq('estado', estados.OV_COMPLETADO)
+            query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
+            query = query.lte('fecha_solicitud', fecha_fin.isoformat())
+            result = query.execute()
+
+            if not result.data:
+                return {'success': True, 'count': 0}
+
+            on_time_count = 0
+            for pedido in result.data:
+                if pedido.get('updated_at') and pedido.get('fecha_requerido'):
+                    try:
+                        completion_date = datetime.fromisoformat(pedido['updated_at']).date()
+                        required_date = datetime.strptime(pedido['fecha_requerido'], '%Y-%m-%d').date()
+                        if completion_date <= required_date:
+                            on_time_count += 1
+                    except (ValueError, TypeError):
+                        # Ignorar si las fechas tienen un formato incorrecto
+                        continue
+            
+            return {'success': True, 'count': on_time_count}
+
+        except Exception as e:
+            logger.error(f"Error contando pedidos completados a tiempo: {str(e)}", exc_info=True)
+            return {'success': False, 'count': 0}
+
     def get_total_valor_pedidos_completados(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
         """
         Obtiene la suma del valor total de los pedidos completados en un rango de fechas.
         """
         try:
-            query = self.db.table(self.get_table_name()).select('total').eq('estado', 'COMPLETADO').gte('fecha_solicitud', fecha_inicio.isoformat()).lte('fecha_solicitud', fecha_fin.isoformat())
+            query = self.db.table(self.get_table_name()).select('precio_orden').eq('estado', estados.OV_COMPLETADO).gte('fecha_solicitud', fecha_inicio.isoformat()).lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
 
             if not result.data:
                 return {'success': True, 'total_valor': 0}
 
-            total_valor = sum(item.get('total', 0) for item in result.data if item.get('total') is not None)
+            total_valor = sum(item.get('precio_orden', 0) for item in result.data if item.get('precio_orden') is not None)
             return {'success': True, 'total_valor': total_valor}
         except Exception as e:
             logger.error(f"Error obteniendo el valor total de pedidos completados: {str(e)}")

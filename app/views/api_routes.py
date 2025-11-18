@@ -1,8 +1,10 @@
 import logging
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.facial_controller import FacialController
 from app.controllers.trazabilidad_controller import TrazabilidadController
+from app.controllers.pago_controller import PagoController
 from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
 from app.utils.decorators import permission_any_of, permission_required
 
@@ -288,3 +290,32 @@ def enviar_qr_pedido(pedido_id):
     controller = PedidoController()
     resultado, status_code = controller.enviar_qr_por_email(pedido_id)
     return jsonify(resultado), status_code
+@api_bp.route('/pagos/registrar', methods=['POST'])
+@permission_required(accion='crear_documentos')
+def registrar_pago():
+    """
+    Endpoint para registrar un nuevo pago para un pedido.
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        if not current_user_id:
+            return jsonify(success=False, error="Se requiere autenticación."), 401
+
+        pago_data = request.form.to_dict()
+        file = request.files.get('comprobante_pago')
+
+        # El schema espera enteros, pero el form envía strings
+        pago_data['id_pedido'] = int(pago_data['id_pedido'])
+        pago_data['id_usuario_registro'] = int(current_user_id)
+        
+        # Eliminar el token CSRF antes de la validación del schema
+        pago_data.pop('csrf_token', None)
+
+        pago_controller = PagoController()
+        response, status_code = pago_controller.registrar_pago(pago_data, file)
+        
+        return jsonify(response), status_code
+
+    except Exception as e:
+        logger.error(f"Error en endpoint registrar_pago: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error interno del servidor al registrar el pago."}), 500

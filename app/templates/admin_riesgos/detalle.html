@@ -12,9 +12,13 @@
             </h4>
             <div>
                 {% if alerta.estado == 'Pendiente' %}
-                <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
-                    <i class="bi bi-shield-check me-1"></i> Marcar como Resuelta
-                </button>
+                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalFinalizarAnalisis">
+                        <i class="bi bi-flag-fill me-1"></i> 
+                        Finalizar Análisis
+                    </button>
+                    <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
+                        <i class="bi bi-shield-check me-1"></i> Forzar Resolución
+                    </button>
                 {% endif %}
             </div>
         </div>
@@ -27,9 +31,19 @@
             </p>
             <p class="card-text"><strong>Estado:</strong>
                 <span
-                    class="badge {% if alerta.estado == 'Pendiente' %}bg-warning text-dark{% elif alerta.estado == 'Resuelta' %}bg-success{% else %}bg-secondary{% endif %}">{{
+                    class="badge {% if alerta.estado == 'Pendiente' %}bg-warning text-dark{% elif alerta.estado in ['Resuelta', 'ANALISIS FINALIZADO'] %}bg-success{% else %}bg-secondary{% endif %}">{{
                     alerta.estado }}</span>
             </p>
+
+            {% if alerta.estado in ['Resuelta', 'ANALISIS FINALIZADO'] and alerta.conclusion_final %}
+            <div class="card bg-light border-success my-3">
+                <div class="card-body">
+                    <h5 class="card-title text-success"><i class="bi bi-check2-circle me-2"></i>Conclusión del Análisis</h5>
+                    <p class="card-text">{{ alerta.conclusion_final }}</p>
+                </div>
+            </div>
+            {% endif %}
+
             <hr>
             
             <div class="row">
@@ -159,8 +173,14 @@
                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-check-circle me-1"></i> Marcar como Apto
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
+                                                        </button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
@@ -270,16 +290,32 @@
                                             </div>
                                             <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
                                                 <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
-                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-check-circle me-1"></i> Marcar como Apto
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
+                                                        </button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
-                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
-                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                    {% if 'No Apto' in lote.resolucion_aplicada and lote.estado == 'DEVOLUCION_PENDIENTE' %}
+                                                        <h4><span class="badge bg-warning text-dark">Devolución Pendiente</span></h4>
+                                                        <div class="d-grid mt-2">
+                                                            <button class="btn btn-sm btn-info btn-recibir-devolucion" data-lote-id="{{ lote.id_lote }}">
+                                                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                                <i class="bi bi-box-arrow-in-down me-1"></i> Recibir Devolución
+                                                            </button>
+                                                        </div>
+                                                    {% else %}
+                                                        {% set resolucion_clase = 'success' if 'Apto' in lote.resolucion_aplicada else 'danger' %}
+                                                        <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                    {% endif %}
                                                 {% else %}
                                                     <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
                                                 {% endif %}
@@ -302,7 +338,7 @@
                             </div>
                         </div>
                         <div class="card-body">
-                             <form id="form-gestion-riesgo" action="{{ url_for('admin_riesgo.ejecutar_accion_riesgo', codigo_alerta=alerta.codigo) }}" method="POST">
+                             <form id="form-gestion-riesgo" method="POST">
                                 {{ csrf_form.csrf_token }}
 
                                 {% set pedidos_pendientes = (alerta.afectados_detalle.pedidos | selectattr('estado_resolucion', 'equalto', 'pendiente') | list) %}
@@ -536,47 +572,96 @@
         if (form) {
             form.querySelectorAll('button[type="submit"]').forEach(button => {
                 button.addEventListener('click', function (e) {
-                    e.preventDefault(); 
+                    e.preventDefault();
 
                     const accion = this.value;
-                    const formData = new FormData(form);
-                    formData.append('accion', accion); 
-
+                    const recrearPedido = form.querySelector('#recrear_pedido')?.checked || false;
+                    const csrfToken = form.querySelector('input[name="csrf_token"]').value;
                     const selectedItems = form.querySelectorAll('.pedido-checkbox:checked');
+                    
                     if (selectedItems.length === 0) {
                         showNotificationModal('Error', 'Debe seleccionar al menos un pedido para ejecutar una acción.', 'error');
                         return;
                     }
-                    
-                    formData.delete('pedido_ids'); 
-                    selectedItems.forEach(cb => {
-                        formData.append('pedido_ids', cb.value);
-                    });
 
+                    const pedidoIds = Array.from(selectedItems).map(cb => cb.value);
 
-                    fetch(form.action, {
+                    const payload = {
+                        accion: accion,
+                        data: {
+                            pedido_ids: pedidoIds,
+                            recrear_pedido: recrearPedido
+                        }
+                    };
+
+                    fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
                         method: 'POST',
-                        body: formData,
                         headers: {
-                            'X-Requested-With': 'XMLHttpRequest'
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showNotificationModal('Éxito', data.message || 'Acción completada.', 'success');
+                            document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
+                                location.reload();
+                            });
+                        } else {
+                            showNotificationModal('Error', data.error || 'Ocurrió un error.', 'error');
                         }
                     })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                showNotificationModal('Éxito', data.message || 'Acción completada.', 'success');
-                                document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
-                                    location.reload();
-                                });
-                            } else {
-                                showNotificationModal('Error', data.error || 'Ocurrió un error.', 'error');
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error en la petición fetch:', error);
-                            showNotificationModal('Error', 'Error de conexión. Por favor, intente de nuevo.', 'error');
-                        });
+                    .catch(error => {
+                        console.error('Error en la petición fetch:', error);
+                        showNotificationModal('Error', 'Error de conexión. Por favor, intente de nuevo.', 'error');
+                    });
                 });
+
+    // Acción de recibir devolución
+    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const loteId = this.dataset.loteId;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const actionContainer = this.closest('.d-grid');
+            const spinner = this.querySelector('.spinner-border');
+
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    accion: 'recibir_devolucion',
+                    data: {
+                        lote_id: loteId
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal('Éxito', data.message, 'success');
+                    actionContainer.innerHTML = `<h4><span class="badge bg-danger">Retirado</span></h4>`;
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                    spinner.classList.add('d-none');
+                    this.disabled = false;
+                }
+            })
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+                spinner.classList.add('d-none');
+                this.disabled = false;
+            });
+        });
+    });
             });
         }
 
@@ -723,7 +808,7 @@
                 spinner.classList.remove('d-none');
                 this.disabled = true;
 
-                fetch("{{ url_for('admin_riesgo.contactar_clientes', codigo_alerta=alerta.codigo) }}", {
+                fetch("{{ url_for('api_riesgos.contactar_clientes', codigo_alerta=alerta.codigo) }}", {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -774,15 +859,38 @@ document.addEventListener('DOMContentLoaded', function () {
             const tipoLote = this.dataset.tipoLote;
             const resolucion = this.dataset.resolucion;
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const actionContainer = this.closest('.border-start-lg'); // Buscar el contenedor padre (nuestra nueva columna)
+            const actionContainer = this.closest('.border-start-lg');
+            const spinner = this.querySelector('.spinner-border');
 
-            fetch("{{ url_for('admin_riesgo.resolver_cuarentena_lote') }}", {
+            // Mostrar spinner y deshabilitar botones
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+            // Deshabilitar el otro botón también para evitar clics dobles
+            const otherButton = this.parentElement.querySelector(this.dataset.resolucion === 'apto' ? '[data-resolucion="no_apto"]' : '[data-resolucion="apto"]');
+            if (otherButton) otherButton.disabled = true;
+
+            let resolucionParaApi;
+            if (resolucion === 'apto') {
+                resolucionParaApi = 'Apto';
+            } else {
+                resolucionParaApi = 'No Apto';
+            }
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify({ lote_id: loteId, tipo_lote: tipoLote, resolucion: resolucion })
+                body: JSON.stringify({
+                    accion: 'resolver_lote',
+                    data: {
+                        lote_id: loteId,
+                        tipo_lote: tipoLote,
+                        resolucion: resolucionParaApi,
+                        alerta_id: '{{ alerta.id }}'
+                    }
+                })
             })
             .then(response => response.json())
             .then(data => {
@@ -814,7 +922,66 @@ document.addEventListener('DOMContentLoaded', function () {
                     showNotificationModal('Error', data.error, 'error');
                 }
             })
-            .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+            })
+            .finally(() => {
+                // Ocultar spinner y rehabilitar botones
+                spinner.classList.add('d-none');
+                this.disabled = false;
+                if (otherButton) otherButton.disabled = false;
+            });
+        });
+    });
+
+    // Acción de recibir devolución
+    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const loteId = this.dataset.loteId;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const resolutionContainer = this.closest('.border-start-lg');
+            const spinner = this.querySelector('.spinner-border');
+
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    accion: 'recibir_devolucion',
+                    data: {
+                        lote_id: loteId
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal('Éxito', data.message, 'success');
+                    // Reemplazar todo el contenido de resolución con el estado final
+                    resolutionContainer.innerHTML = `
+                        <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                        <p class="small text-muted">Este lote fue resuelto como:</p>
+                        <h4><span class="badge bg-danger">Retirado</span></h4>
+                    `;
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+            })
+            .finally(() => {
+                // El botón se elimina, por lo que no es necesario volver a habilitarlo
+                // pero en caso de error, sí.
+                spinner.classList.add('d-none');
+                this.disabled = false;
+            });
         });
     });
     
@@ -991,6 +1158,87 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         // === FIN: SCRIPT PARA BOTONES LOCALES ===
         // === FIN: SCRIPT PARA BOTONES DE COLAPSO ===
+
+        // --- Lógica para el modal de Finalizar Análisis ---
+        const btnConfirmarFinalizar = document.getElementById('btnConfirmarFinalizar');
+        if (btnConfirmarFinalizar) {
+            btnConfirmarFinalizar.addEventListener('click', function() {
+                const conclusionText = document.getElementById('conclusion-final').value;
+                if (!conclusionText.trim()) {
+                    showNotificationModal('Error', 'Debe ingresar una conclusión para finalizar el análisis.', 'error');
+                    return;
+                }
+
+                const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+
+                fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        accion: 'finalizar_analisis',
+                        data: {
+                            conclusion: conclusionText
+                        }
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotificationModal('Éxito', data.message, 'success');
+                        document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
+                            location.reload();
+                        });
+                    } else {
+                        showNotificationModal('Error', data.error, 'error');
+                    }
+                })
+                .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
+            });
+        }
     });
 </script>
+
+<!-- Modal Finalizar Análisis -->
+{% set placeholder_text = "Ej: Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado." %}
+{% set ns = namespace(has_no_apto=false) %}
+{% for lote in (alerta.afectados_detalle.lotes_insumo or []) + (alerta.afectados_detalle.lotes_producto or []) %}
+    {% if lote.resolucion_aplicada and 'no_apto' in lote.resolucion_aplicada %}
+        {% set ns.has_no_apto = true %}
+    {% endif %}
+{% endfor %}
+{% set has_no_apto = ns.has_no_apto %}
+{% set has_nc = alerta.afectados_detalle.pedidos | selectattr('resolucion_aplicada', 'equalto', 'nota_credito') | list | length > 0 %}
+
+{% if has_no_apto %}
+    {% set placeholder_text = "Ej: Mercancía retirada por lote defectuoso. Se gestionó la devolución con los clientes afectados." %}
+{% elif has_nc %}
+    {% set placeholder_text = "Ej: Se emitieron notas de crédito a los clientes afectados para compensar el inconveniente." %}
+{% endif %}
+
+<div class="modal fade" id="modalFinalizarAnalisis" tabindex="-1" aria-labelledby="modalFinalizarAnalisisLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalFinalizarAnalisisLabel">Finalizar/Cerrar Alerta</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>Esta acción marcará la alerta como finalizada y permitirá registrar una conclusión. Todos los ítems pendientes restantes no serán procesados.</p>
+        <form id="formFinalizarAnalisis">
+          <div class="mb-3">
+            <label for="conclusion-final" class="form-label">Conclusión Final <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="conclusion-final" name="conclusion" rows="4" required>{{ placeholder_text }}</textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnConfirmarFinalizar">Confirmar Finalización</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

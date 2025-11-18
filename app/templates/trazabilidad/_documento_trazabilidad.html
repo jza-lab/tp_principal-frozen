@@ -1,0 +1,250 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.3/purify.min.js"></script>
+
+<style>
+    /* --- Contenedor Principal --- */
+    .document-container {
+        font-family: 'Helvetica', 'Arial', sans-serif;
+        color: #212529;
+        background-color: #fff;
+        padding: 20px;
+        box-sizing: border-box;
+        font-size: 10pt; /* Tamaño base consistente */
+        line-height: 1.5;
+    }
+
+    /* --- Encabezado de Compañía --- */
+    .header-pdf table {
+        width: 100%;
+        border-bottom: 3px solid #0056b3;
+        padding-bottom: 10px;
+        margin-bottom: 25px;
+    }
+    .header-pdf #company-name {
+        font-size: 24pt;
+        color: #000;
+        font-weight: bold;
+        margin: 0;
+    }
+    .header-pdf #company-address,
+    .header-pdf #company-cuit {
+        font-size: 11pt;
+        color: #444;
+        margin: 4px 0;
+    }
+    .header-pdf .header-right {
+        text-align: right;
+        font-size: 9pt;
+        color: #666;
+    }
+    .header-pdf .header-right p { margin: 2px 0; }
+    .header-pdf .header-right strong { color: #333; }
+
+
+    /* --- Título del Reporte --- */
+    .report-title-pdf {
+        font-size: 20pt;
+        color: #0056b3;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    /* --- Resumen Ejecutivo --- */
+    .executive-summary {
+        background-color: #f4f7fa;
+        border-left: 5px solid #0056b3;
+        padding: 20px 25px;
+        margin-bottom: 30px;
+        font-size: 10.5pt;
+    }
+    .executive-summary h3 {
+        font-size: 14pt;
+        color: #0056b3;
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-weight: 600;
+    }
+    .executive-summary p { margin-bottom: 10px; }
+    .executive-summary strong { color: #333; }
+
+    /* --- Títulos de Sección --- */
+    .section-title {
+        font-size: 16pt;
+        color: #0056b3;
+        font-weight: 600;
+        margin-top: 35px;
+        margin-bottom: 20px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    
+    /* Subtítulo para agrupar por categoría */
+    .category-subtitle {
+        font-size: 13pt;
+        font-weight: bold;
+        color: #333;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 8px;
+    }
+
+    /* --- Ficha de Entidad --- */
+    .entity-card {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background-color: #fff;
+        page-break-inside: avoid;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    .entity-card h4 {
+        margin-top: 0;
+        margin-bottom: 18px;
+        font-size: 14pt;
+        font-weight: 600;
+        color: #0056b3;
+    }
+
+    /* --- Tabla de Detalles (Reemplaza <dl>) --- */
+    .entity-details-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 15px;
+    }
+    .entity-details-table tr {
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .entity-details-table td {
+        padding: 10px 5px;
+        font-size: 10pt;
+        vertical-align: top;
+    }
+    /* Etiqueta (Label) */
+    .entity-details-table td:first-child {
+        font-weight: 600;
+        color: #333;
+        width: 150px; /* Ancho fijo para la etiqueta */
+        text-align: right;
+        padding-right: 15px;
+    }
+    /* Valor (Value) */
+    .entity-details-table td:last-child {
+        color: #555;
+    }
+    
+    /* Para listas anidadas (items de pedido) */
+    .entity-details-table ul {
+        list-style-type: disc;
+        margin: 0;
+        padding-left: 20px;
+    }
+
+    /* --- Barras de Estado --- */
+    .status-bar-container {
+        margin-bottom: 15px;
+    }
+    .status-label {
+        font-size: 9pt;
+        font-weight: 600;
+        color: #555;
+        margin-bottom: 5px;
+    }
+    .status-bar {
+        width: 100%;
+        background-color: #e9ecef;
+        border-radius: 5px;
+        height: 8px;
+        overflow: hidden;
+    }
+    .status-progress {
+        height: 100%;
+        border-radius: 5px;
+    }
+    .status-bar.completed .status-progress { background-color: #28a745; } /* Verde */
+    .status-bar.pending .status-progress { background-color: #ffc107; } /* Amarillo */
+    .status-bar.cancelled .status-progress { background-color: #dc3545; } /* Rojo */
+    .status-bar.in_progress .status-progress { background-color: #17a2b8; } /* Turquesa */
+
+    /* --- Contenedor del Diagrama --- */
+    .diagram-container-pdf {
+        text-align: center;
+        margin-top: 25px;
+        padding: 20px;
+        border: 1px dashed #ccc;
+        background: #fdfdfd;
+        border-radius: 8px;
+        page-break-inside: avoid;
+    }
+    .diagram-container-pdf img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ddd;
+        display: block;
+        margin: 0 auto;
+    }
+
+    /* --- Otros --- */
+    .no-data {
+        font-style: italic;
+        color: #888;
+        padding: 10px 0;
+        text-align: center;
+    }
+    
+</style>
+
+<div class="document-container">
+    
+    <div class="header-pdf">
+        <table style="width: 100%;">
+            <tr>
+                <td>
+                    <h1 id="company-name"></h1>
+                    <p id="company-address"></p>
+                    <p id="company-cuit"></p>
+                </td>
+                <td class="header-right">
+                    <p><strong>Fecha Generación:</strong> <span id="generation-date"></span></p>
+                    <p><strong>Tipo Informe:</strong> Trazabilidad</p>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <h1 class="report-title-pdf" id="report-title">Informe de Trazabilidad</h1>
+
+    <div class="executive-summary">
+        <h3 id="summary-title">Resumen Ejecutivo</h3>
+        <p>Este informe detalla la trazabilidad de la entidad <strong id="summary-entity-name"></strong> (<span id="summary-entity-type"></span>, ID: <span id="summary-entity-id"></span>).</p>
+        <p>
+            <strong>Entidades de Origen:</strong> <span id="summary-origen-count">0</span> | 
+            <strong>Entidades de Destino:</strong> <span id="summary-destino-count">0</span>
+        </p>
+    </div>
+
+    <h2 class="section-title">Información de Entidad Principal</h2>
+    <div id="main-entity-info">
+        <p class="no-data">Cargando detalles de la entidad principal...</p>
+    </div>
+
+    <h2 class="section-title">Diagrama de Trazabilidad</h2>
+    <div class="diagram-container-pdf">
+        <img id="diagram-image" src="" alt="Diagrama de Trazabilidad" style="display: none;">
+        <p id="diagram-placeholder">Cargando diagrama...</p>
+    </div>
+
+    <div id="trace-details">
+        <h2 class="section-title">Entidades de Origen (Hacia Atrás)</h2>
+        <div id="origen-entities">
+             <p class="no-data">Cargando entidades de origen...</p>
+        </div>
+
+        <h2 class="section-title">Entidades de Destino (Hacia Adelante)</h2>
+        <div id="destino-entities">
+             <p class="no-data">Cargando entidades de destino...</p>
+        </div>
+    </div>
+
+</div>
