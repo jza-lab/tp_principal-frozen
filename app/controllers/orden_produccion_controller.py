@@ -1704,7 +1704,11 @@ class OrdenProduccionController(BaseController):
             
             return {
                 'message': f"Se cubrió el desperdicio ({desperdicio_total:.2f} kg) con stock. La orden se ha ampliado. Nueva meta: {nueva_cantidad_planificada:.2f} kg.",
-                'data': {'accion': 'ampliar_op', 'nueva_cantidad_planificada': float(nueva_cantidad_planificada)}
+                'data': {
+                    'op_hija_creada': False,
+                    'accion': 'ampliar_op', 
+                    'nueva_cantidad_planificada': float(nueva_cantidad_planificada)
+                }
             }
         
         # --- CASO B: NO HAY STOCK SUFICIENTE ---
@@ -1730,12 +1734,17 @@ class OrdenProduccionController(BaseController):
                 # Error crítico, la OP original se finalizó pero la hija no se pudo crear.
                 error_msg = f"OP finalizada, pero falló la creación de la OP hija: {creacion_res.get('error')}"
                 logger.error(error_msg)
-                return {'message': error_msg, 'data': {'accion': 'error'}}
+                return {'message': error_msg, 'data': {'accion': 'error', 'op_hija_creada': False}}
 
             nueva_op = creacion_res['data']
             return {
                 'message': f"Orden finalizada. No hay stock para cubrir desperdicio. Se creó la OP hija {nueva_op.get('codigo')} para Planificación.",
-                'data': {'accion': 'finalizar_op_crear_hija', 'nueva_op_codigo': nueva_op.get('codigo')}
+                'data': {
+                    'op_hija_creada': True,
+                    'accion': 'finalizar_op_crear_hija', 
+                    'nueva_op_codigo': nueva_op.get('codigo'),
+                    'nueva_op_id': nueva_op.get('id')
+                }
             }
 
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:

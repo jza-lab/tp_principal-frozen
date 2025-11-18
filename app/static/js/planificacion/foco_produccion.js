@@ -360,16 +360,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 form.reset();
     
                 // Manejar acciones devueltas por el backend
-                const accion = data.data?.accion;
-                if (accion === 'ampliar_op') {
-                    // Actualizar la cantidad planificada en el estado y en la UI
+                if (data.data?.op_hija_creada) {
+                    // --- NUEVA LÓGICA CON MODAL ---
+                    const modalElem = document.getElementById('modalConfirmacionHija');
+                    const modalBody = document.getElementById('modalConfirmacionHijaBody');
+                    const btnOk = document.getElementById('btnConfirmacionHijaOk');
+                    
+                    modalBody.textContent = data.message;
+                    
+                    const modalInstance = new bootstrap.Modal(modalElem);
+                    
+                    btnOk.onclick = () => {
+                        modalInstance.hide();
+                        window.location.href = '/produccion/kanban/';
+                    };
+                    
+                    modalInstance.show();
+                    stopTimer();
+
+                } else if (data.data?.accion === 'ampliar_op') {
+                    // --- LÓGICA EXISTENTE ---
                     estado.cantidadPlanificada = data.data.nueva_cantidad_planificada;
                     document.querySelector('.objetivo-cantidad').innerHTML = `${formatNumber(estado.cantidadPlanificada, 2)} <span class="objetivo-unidad">kg</span>`;
                     addActivityLog(`OP ampliada. Nueva meta: ${estado.cantidadPlanificada} kg.`, 'info');
-                } else if (accion === 'finalizar_op_crear_hija') {
-                    addActivityLog(`OP finalizada. Se creó la OP hija ${data.data.nueva_op_codigo}.`, 'warning');
-                    stopTimer();
-                    setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
+
                 } else if ((estado.cantidadProducida) >= estado.cantidadPlanificada) {
                     addActivityLog('Orden completada, pasando a C. Calidad', 'success');
                     stopTimer();
