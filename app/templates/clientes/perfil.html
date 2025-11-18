@@ -142,15 +142,13 @@
                                         <td>{{ pedido.condicion_venta | capitalize }}</td>
                                         <td>{{ pedido.fecha_vencimiento if pedido.fecha_vencimiento else 'N/A' }}</td>
                                         <td>
-                                            {% set estado_pago = pedido.pago or 'pendiente' %}
                                             <span class="badge 
-                                                {% if estado_pago == 'pendiente' %}bg-warning text-dark
-                                                {% elif estado_pago == 'Pagado Parcialmente' %}bg-info text-dark
-                                                {% elif estado_pago == 'Pagado' %}bg-success
-                                                {% elif estado_pago == 'vencido' %}bg-danger
+                                                {% if pedido.estado_pago == 'pendiente' %}bg-warning text-dark
+                                                {% elif pedido.estado_pago == 'pagado' %}bg-success
+                                                {% elif pedido.estado_pago == 'vencido' %}bg-danger
                                                 {% else %}bg-secondary
                                                 {% endif %}">
-                                                {{ estado_pago | replace('_', ' ') | title }}
+                                                {{ pedido.estado_pago | capitalize }}
                                             </span>
                                         </td>
                                         <td>
@@ -170,13 +168,13 @@
                                         <td class="text-center">
                                             <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}"
                                                 class="btn btn-sm btn-outline-info" title="Ver Detalle">
-
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                             {% if pedido.pago != 'Pagado' %}
                                             <button class="btn btn-sm btn-outline-success btn-registrar-pago"
-                                                data-pedido-id="{{ pedido.id }}" 
-                                                data-monto-total="{{ pedido.precio_orden | default(0) }}" 
+                                                data-pedido-id="{{ pedido.id }}"
+                                                data-monto-total="{{ pedido.precio_orden | default(0) }}"
+                                                data-cliente-nombre="{{ cliente.nombre }}"
                                                 title="Registrar Pago">
                                                 <i class="bi bi-cash-coin"></i>
                                             </button>
@@ -299,45 +297,55 @@
 </div>
 
 <!-- Modal para Registrar Pago -->
-<div class="modal fade" id="registrarPagoModal" tabindex="-1" aria-labelledby="registrarPagoModalLabel"
-    aria-hidden="true">
-    <div class="modal-dialog">
+<div class="modal fade" id="registrarPagoModal" tabindex="-1" aria-labelledby="registrarPagoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="registrarPagoModalLabel">Registrar Pago</h5>
+                <h5 class="modal-title" id="registrarPagoModalLabel">Registrar Pago para Pedido #<span id="modalPedidoId"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <form id="registrarPagoForm" enctype="multipart/form-data">
+            <form id="pagoForm" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <p>Cliente: <strong id="modalClienteNombre"></strong></p>
                     {{ csrf_form.csrf_token }}
-                    <input type="hidden" id="pedidoId" name="id_pedido">
-                    <div class="mb-3">
-                        <label for="monto" class="form-label">Monto a Pagar</label>
-                        <input type="text" class="form-control" id="monto" name="monto" required>
+                    <input type="hidden" id="id_pedido" name="id_pedido">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="monto" class="form-label">Monto a Pagar <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="text" class="form-control" id="monto" name="monto" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
+                            <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                                <option value="transferencia">Transferencia Bancaria</option>
+                                <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                                <option value="tarjeta_debito">Tarjeta de Débito</option>
+                                <option value="efectivo">Efectivo</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="datos_adicionales" class="form-label">Datos Adicionales (Opcional)</label>
+                            <textarea class="form-control" id="datos_adicionales" name="datos_adicionales" rows="3" placeholder="Ej: N° de CBU, últimos 4 dígitos de la tarjeta, etc."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label for="comprobante_pago" class="form-label">Comprobante (Opcional)</label>
+                            <input class="form-control" type="file" id="comprobante_pago" name="comprobante_pago">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="metodo_pago" class="form-label">Método de Pago</label>
-                        <select class="form-select" id="metodo_pago" name="metodo_pago" required>
-                            <option value="transferencia">Transferencia</option>
-                            <option value="tarjeta">Tarjeta</option>
-                            <option value="efectivo">Efectivo</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="datos_adicionales" class="form-label">Detalles Adicionales (Opcional)</label>
-                        <textarea class="form-control" id="datos_adicionales" name="datos_adicionales" rows="3"
-                            placeholder="Ej: Últimos 4 dígitos de la tarjeta, ID de transacción, etc."></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label for="comprobante" class="form-label">Comprobante de Pago (Opcional)</label>
-                        <input class="form-control" type="file" id="comprobante" name="comprobante">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="submitPago">Guardar Pago</button>
-            </div>
+                    <div id="pago-error-alert" class="alert alert-danger d-none mt-3" role="alert"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="submitPagoBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        Registrar Pago
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -345,113 +353,89 @@
 
 {% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
-        const registrarPagoButtons = document.querySelectorAll('.btn-registrar-pago');
-        const submitButton = document.getElementById('submitPago');
-        const montoInput = document.getElementById('monto');
-        
-        // Convertir los datos de pagos del backend a un objeto JS para fácil acceso
-        const pagosPorPedido = JSON.parse('{{ pagos_por_pedido | tojson | safe }}');
+document.addEventListener('DOMContentLoaded', function () {
+    const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
+    const pagoForm = document.getElementById('pagoForm');
+    const montoInput = document.getElementById('monto');
+    const errorAlert = document.getElementById('pago-error-alert');
+    const submitBtn = document.getElementById('submitPagoBtn');
+    const spinner = submitBtn.querySelector('.spinner-border');
 
-        // --- FUNCIÓN DE FORMATO DE MONEDA ---
-        function formatCurrency(value) {
-            if (!value) return '';
-            // Limpia el valor para asegurarse de que es un número
-            let number = parseFloat(value.toString().replace(/[^0-9,.-]+/g, "").replace(',', '.'));
-            if (isNaN(number)) return '';
-            
-            // Formateador para moneda argentina
-            const formatter = new Intl.NumberFormat('es-AR', {
-                style: 'currency',
-                currency: 'ARS',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-            
-            return formatter.format(number);
+    // Formatear monto en tiempo real
+    const currencyFormatter = new Intl.NumberFormat('es-AR', {
+        style: 'decimal',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
+    montoInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^\d,]/g, '').replace(',', '.');
+        if (value.split('.').length > 2) {
+            value = value.substring(0, value.lastIndexOf('.'));
         }
+    });
 
-        // Event listener para formatear mientras se escribe
-        montoInput.addEventListener('input', function(e) {
-            // Mantiene el cursor en la posición correcta después de formatear
-            let originalCursorPosition = e.target.selectionStart;
-            let originalLength = e.target.value.length;
+    // Abrir modal y popular datos
+    document.querySelectorAll('.btn-registrar-pago').forEach(button => {
+        button.addEventListener('click', function () {
+            const pedidoId = this.dataset.pedidoId;
+            const montoTotal = this.dataset.montoTotal;
+            const clienteNombre = this.dataset.clienteNombre;
+
+            document.getElementById('id_pedido').value = pedidoId;
+            document.getElementById('modalPedidoId').textContent = pedidoId;
+            document.getElementById('modalClienteNombre').textContent = clienteNombre;
+            montoInput.value = parseFloat(montoTotal).toFixed(2).replace('.', ',');
             
-            let rawValue = e.target.value.replace(/[^0-9]/g, '');
-            if (rawValue) {
-                let numberValue = parseInt(rawValue, 10) / 100;
-                e.target.value = formatCurrency(numberValue).replace('ARS', '$').trim();
-            } else {
-                e.target.value = '';
-            }
+            pagoForm.reset(); // Limpiar el formulario excepto los campos que acabamos de setear
+            document.getElementById('id_pedido').value = pedidoId;
+            montoInput.value = parseFloat(montoTotal).toFixed(2);
 
-            let newLength = e.target.value.length;
-            let newCursorPosition = originalCursorPosition + (newLength - originalLength);
-            e.target.setSelectionRange(newCursorPosition, newCursorPosition);
-        });
 
-        registrarPagoButtons.forEach(button => {
-            button.addEventListener('click', function () {
-                const pedidoId = this.dataset.pedidoId;
-                const montoTotalPedido = parseFloat(this.dataset.montoTotal);
-
-                // Limpiar el formulario y luego establecer los valores
-                const form = document.getElementById('registrarPagoForm');
-                form.reset();
-                
-                document.getElementById('pedidoId').value = pedidoId;
-                // Formatear el monto total del pedido usando la nueva función
-                montoInput.value = formatCurrency(montoTotalPedido.toFixed(2)).replace('ARS', '$').trim();
-
-                registrarPagoModal.show();
-            });
-        });
-
-        submitButton.addEventListener('click', function () {
-            const form = document.getElementById('registrarPagoForm');
-            const formData = new FormData(form);
-
-            // --- DE-FORMATEAR MONEDA ANTES DE ENVIAR ---
-            const montoFormateado = formData.get('monto');
-            // Reemplaza el símbolo de peso, los puntos de miles y usa la coma como separador decimal.
-            const montoSinFormato = montoFormateado.replace(/\$\s*/g, '').replace(/\./g, '').replace(',', '.');
-            formData.set('monto', montoSinFormato);
-            
-            // Deshabilitar botón para evitar envíos múltiples
-            submitButton.disabled = true;
-            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
-
-            fetch(`/api/pagos/registrar`, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    // El CSRF token se envía dentro del FormData, no como header aquí
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    registrarPagoModal.hide();
-                    // Opcional: usar una notificación más elegante que alert()
-                    alert('Pago registrado con éxito!');
-                    location.reload(); 
-                } else {
-                    // Mostrar errores de validación o del servidor
-                    const errorMessage = data.error ? (typeof data.error === 'object' ? JSON.stringify(data.error) : data.error) : 'Ocurrió un error desconocido.';
-                    alert('Error al registrar el pago: ' + errorMessage);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Ocurrió un error de conexión al registrar el pago.');
-            })
-            .finally(() => {
-                // Volver a habilitar el botón
-                submitButton.disabled = false;
-                submitButton.innerHTML = `Guardar Pago`;
-            });
+            errorAlert.classList.add('d-none');
+            registrarPagoModal.show();
         });
     });
+
+    // Enviar formulario
+    pagoForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        
+        spinner.classList.remove('d-none');
+        submitBtn.disabled = true;
+        errorAlert.classList.add('d-none');
+
+        const formData = new FormData(pagoForm);
+        
+        fetch("{{ url_for('api.registrar_pago') }}", {
+            method: 'POST',
+            body: formData,
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                registrarPagoModal.hide();
+                showNotificationModal('Éxito', data.message, 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                let errorMessage = data.error || 'Ocurrió un error desconocido.';
+                if (typeof errorMessage === 'object') {
+                   errorMessage = Object.entries(errorMessage).map(([field, errors]) => `${field}: ${errors.join(', ')}`).join('; ');
+                }
+                errorAlert.textContent = errorMessage;
+                errorAlert.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error en fetch:', error);
+            errorAlert.textContent = 'Error de conexión. Por favor, intente de nuevo.';
+            errorAlert.classList.remove('d-none');
+        })
+        .finally(() => {
+            spinner.classList.add('d-none');
+            submitBtn.disabled = false;
+        });
+    });
+});
 </script>
 {% endblock %}

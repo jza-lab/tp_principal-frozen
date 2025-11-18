@@ -1395,7 +1395,7 @@ class LoteProductoController(BaseController):
         """
         try:
             update_data = {
-                'estado': 'retirado',
+                'estado': 'RETIRADO',
                 'cantidad_actual': 0,
                 'cantidad_en_cuarentena': 0,
             }

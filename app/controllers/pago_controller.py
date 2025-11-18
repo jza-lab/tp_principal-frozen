@@ -2,9 +2,7 @@ from .base_controller import BaseController
 from app.models.pago import PagoModel
 from app.models.pedido import PedidoModel
 from app.schemas.pago_schema import PagoSchema
-from .storage_controller import StorageController
 from werkzeug.utils import secure_filename
-import os
 from decimal import Decimal, InvalidOperation
 
 class PagoController(BaseController):
@@ -18,7 +16,16 @@ class PagoController(BaseController):
 
     def registrar_pago(self, pago_data, file=None):
         try:
-            # 1. Validar datos del formulario
+            # 1. Transformar y validar datos del formulario
+            # El schema espera un dict para 'datos_adicionales', pero el form envía un string.
+            # Lo convertimos a un dict simple antes de validar.
+            if 'datos_adicionales' in pago_data and isinstance(pago_data['datos_adicionales'], str):
+                texto_adicional = pago_data['datos_adicionales'].strip()
+                if texto_adicional:
+                    pago_data['datos_adicionales'] = {'nota': texto_adicional}
+                else:
+                    pago_data['datos_adicionales'] = None # Si está vacío, lo tratamos como nulo
+
             errors = self.pago_schema.validate(pago_data)
             if errors:
                 return self.error_response(errors, 400)
@@ -26,12 +33,9 @@ class PagoController(BaseController):
             id_pedido = pago_data['id_pedido']
             monto_pagado = Decimal(pago_data['monto'])
 
-            if monto_pagado <= 0:
-                return self.error_response("El monto del pago debe ser mayor a cero.", 400)
-
             # 2. Obtener el pedido y calcular el saldo pendiente
             pedido_res = self.pedido_model.find_by_id(id_pedido)
-            if not pedido_res.get('success'):
+            if not pedido_res.get('success') or not pedido_res.get('data'):
                 return self.error_response("El pedido asociado no fue encontrado.", 404)
             
             pedido = pedido_res['data']
@@ -45,33 +49,27 @@ class PagoController(BaseController):
 
             saldo_pendiente = monto_total_pedido - total_ya_pagado
 
-            # 3. Validar que el monto no exceda el saldo
-            # Usamos una pequeña tolerancia para evitar errores de punto flotante
+            # 3. Validar que el monto no exceda el saldo (se mantiene por seguridad)
             if monto_pagado > saldo_pendiente + Decimal('0.01'):
                 error_msg = f"El monto a pagar (${monto_pagado:.2f}) no puede exceder el saldo pendiente (${saldo_pendiente:.2f})."
                 return self.error_response(error_msg, 400)
 
-            # 4. Determinar el nuevo estado de pago del pedido
-            nuevo_total_pagado = total_ya_pagado + monto_pagado
-            if nuevo_total_pagado >= monto_total_pedido:
-                nuevo_estado_pago = 'Pagado'
-            else:
-                nuevo_estado_pago = 'Pagado Parcialmente'
-
-            # 5. Subir archivo si existe
+            # 4. Subir archivo si existe (movido antes para tener la URL lista)
             comprobante_url = None
             if file and file.filename:
                 filename = secure_filename(file.filename)
                 file_path = f"comprobantes_pago/{id_pedido}/{filename}"
-                file_content = file.read()
-                upload_response = self.storage_controller.upload_file(file_content, file_path, file.mimetype)
                 
-                if 'error' in upload_response:
-                    return self.error_response(upload_response.get('error', 'Error al subir el archivo'), 500)
+                upload_response, status_code = self.storage_controller.upload_file(
+                    file=file, bucket_name='comprobantes', destination_path=file_path
+                )
                 
-                comprobante_url = self.storage_controller.get_public_url(file_path)
+                if not upload_response.get('success'):
+                    return self.error_response(upload_response.get('error', 'Error al subir el archivo'), status_code)
+                
+                comprobante_url = upload_response.get('url')
 
-            # 6. Preparar y registrar el pago
+            # 5. Preparar y registrar el pago usando el modelo
             pago_to_create = {
                 'id_pedido': id_pedido,
                 'monto': str(monto_pagado),
@@ -86,10 +84,12 @@ class PagoController(BaseController):
             if not result.get('success'):
                  return self.error_response("No se pudo registrar el pago en la base de datos.", 500)
 
-            # 7. Actualizar estado del pedido
-            update_result = self.pedido_model.update(id_pedido, {'pago': nuevo_estado_pago})
-            if not update_result.get('success'):
-                 print(f"ADVERTENCIA: Pago {result['data'][0]['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a '{nuevo_estado_pago}'.")
+            # 6. Actualizar estado del pedido SOLO si es 'al contado'
+            if pedido.get('condicion_venta') == 'contado':
+                update_result = self.pedido_model.update(id_pedido, {'pago': 'Pagado'})
+                if not update_result.get('success'):
+                     # Log de advertencia si la actualización falla pero el pago se creó
+                     print(f"ADVERTENCIA: Pago {result['data'][0]['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a 'Pagado'.")
 
             return self.success_response(result['data'][0], message="Pago registrado con éxito.", status_code=201)
 
@@ -100,7 +100,7 @@ class PagoController(BaseController):
             return self.error_response("Ocurrió un error inesperado al procesar el pago.", 500)
             
     def get_pagos_by_pedido_id(self, id_pedido):
-        pagos = self.pago_model.get_pagos_by_pedido_id(id_pedido)
-        if not pagos or 'data' not in pagos:
-            return self.success_response([]) # Devolver lista vacía si no hay pagos
-        return self.success_response(pagos['data'])
+        pagos_res = self.pago_model.get_pagos_by_pedido_id(id_pedido)
+        if not pagos_res.get('success'):
+            return self.error_response("Error al obtener los pagos del pedido.", 500)
+        return self.success_response(pagos_res.get('data', []))

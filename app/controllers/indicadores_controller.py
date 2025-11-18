@@ -72,12 +72,31 @@ class IndicadoresController:
         tasa_desperdicio = self._calcular_tasa_desperdicio(fecha_inicio, fecha_fin)
         causas_desperdicio = self.obtener_causas_desperdicio_pareto(fecha_inicio_str, fecha_fin_str)
 
+        # --- NUEVOS GRÁFICOS ---
+        # Gráfico de Gantt de Órdenes de Producción
+        ordenes_gantt_res = self.orden_produccion_model.get_all_enriched(
+            filtros={'fecha_meta_desde': fecha_inicio.isoformat(), 'fecha_meta_hasta': fecha_fin.isoformat(), 'estado_neq': 'PENDIENTE'}
+        )
+        ordenes_gantt = sorted(ordenes_gantt_res.get('data', []), key=lambda x: x.get('fecha_inicio_planificada') or '', reverse=True)[:15]
+
+        # Volumen de Producción Diario
+        volumen_produccion_res = self.orden_produccion_model.obtener_volumen_produccion_por_fecha(fecha_inicio, fecha_fin)
+        volumen_produccion = volumen_produccion_res.get('data', [])
+
+        # Comparativa Plan vs. Real
+        comparativa_res = self.orden_produccion_model.obtener_comparativa_plan_vs_real(fecha_inicio, fecha_fin, limite=10)
+        comparativa_plan_real = comparativa_res.get('data', [])
+
+
         # Se retorna una estructura defensiva que coincide con el frontend
         return {
             "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
             "cumplimiento_plan": cumplimiento_plan if isinstance(cumplimiento_plan, dict) else {"valor": 0, "completadas_a_tiempo": 0, "planificadas": 0},
             "tasa_desperdicio": tasa_desperdicio if isinstance(tasa_desperdicio, dict) else {"valor": 0, "desperdicio": 0, "total_utilizado": 0},
-            "causas_desperdicio_pareto": causas_desperdicio if isinstance(causas_desperdicio, dict) else {"labels": [], "data": [], "line_data": []}
+            "causas_desperdicio_pareto": causas_desperdicio if isinstance(causas_desperdicio, dict) else {"labels": [], "data": [], "line_data": []},
+            "ordenes_gantt": ordenes_gantt,
+            "volumen_produccion_diario": volumen_produccion,
+            "comparativa_plan_real": comparativa_plan_real
         }
 
     # --- CATEGORÍA: CALIDAD ---

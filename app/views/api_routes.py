@@ -1,10 +1,10 @@
 import logging
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
-from app.controllers.pago_controller import PagoController
 from app.controllers.facial_controller import FacialController
 from app.controllers.trazabilidad_controller import TrazabilidadController
+from app.controllers.pago_controller import PagoController
 from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
 from app.utils.decorators import permission_any_of, permission_required
 
@@ -280,40 +280,31 @@ def get_insumos_por_proveedor(proveedor_id):
     return jsonify([]), 500
 
 @api_bp.route('/pagos/registrar', methods=['POST'])
-@jwt_required(locations=["cookies"])
-@permission_required(accion='modificar_clientes')
+@permission_required(accion='crear_documentos')
 def registrar_pago():
     """
-    Endpoint para registrar un nuevo pago desde el perfil de cliente.
+    Endpoint para registrar un nuevo pago para un pedido.
     """
     try:
-        if 'comprobante' not in request.files and not request.form.get('monto'):
-             return jsonify(success=False, error="Faltan datos del formulario."), 400
+        current_user_id = get_jwt_identity()
+        if not current_user_id:
+            return jsonify(success=False, error="Se requiere autenticación."), 401
 
         pago_data = request.form.to_dict()
-        comprobante_file = request.files.get('comprobante')
-        
-        # El token CSRF es necesario para la protección, pero no para la validación del schema.
-        if 'csrf_token' in pago_data:
-            pago_data.pop('csrf_token')
+        file = request.files.get('comprobante_pago')
 
-        # Añadir el ID del usuario que está realizando la acción
-        current_user_id = get_jwt_identity()
-        pago_data['id_usuario_registro'] = current_user_id
+        # El schema espera enteros, pero el form envía strings
+        pago_data['id_pedido'] = int(pago_data['id_pedido'])
+        pago_data['id_usuario_registro'] = int(current_user_id)
         
-        # Convertir monto a Decimal si existe
-        if 'monto' in pago_data:
-            from decimal import Decimal
-            try:
-                pago_data['monto'] = Decimal(pago_data['monto'])
-            except (ValueError, TypeError):
-                 return jsonify(success=False, error="El monto proporcionado no es un número válido."), 400
+        # Eliminar el token CSRF antes de la validación del schema
+        pago_data.pop('csrf_token', None)
 
         pago_controller = PagoController()
-        resultado, status_code = pago_controller.registrar_pago(pago_data, file=comprobante_file)
+        response, status_code = pago_controller.registrar_pago(pago_data, file)
         
-        return jsonify(resultado), status_code
+        return jsonify(response), status_code
 
     except Exception as e:
         logger.error(f"Error en endpoint registrar_pago: {e}", exc_info=True)
-        return jsonify(success=False, error="Ocurrió un error interno en el servidor."), 500
+        return jsonify({"success": False, "error": "Error interno del servidor al registrar el pago."}), 500

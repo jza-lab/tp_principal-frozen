@@ -222,7 +222,7 @@ class RiesgoController(BaseController):
                 detalles_enriquecidos['orden_produccion'] = {i['id']: i for i in ops_res}
 
             if ids_por_tipo.get('lote_producto'):
-                lotes_res = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote, numero_lote, cantidad_en_cuarentena,fecha_produccion, fecha_vencimiento, productos(nombre)').in_('id_lote', [int(i) for i in set(ids_por_tipo['lote_producto'])]).execute().data
+                lotes_res = self.alerta_riesgo_model.db.table('lotes_productos').select('id_lote, numero_lote, estado, cantidad_en_cuarentena,fecha_produccion, fecha_vencimiento, productos(nombre)').in_('id_lote', [int(i) for i in set(ids_por_tipo['lote_producto'])]).execute().data
                 detalles_enriquecidos['lote_producto'] = {i['id_lote']: i for i in lotes_res}
             
             participantes = {}
@@ -778,7 +778,9 @@ class RiesgoController(BaseController):
         inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
         self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
 
-        afectados_downstream = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, 99, 'adelante').get('resumen', {})
+        afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
+        
+        afectados_downstream = self._transformar_trazabilidad_a_diccionario(afectados_downstream_res)
         
         for op_data in afectados_downstream.get('ordenes_produccion', []):
             op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_data['id'])
@@ -813,19 +815,26 @@ class RiesgoController(BaseController):
         lote_producto_controller.marcar_lote_retirado_alerta(lote_producto_id)
         self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote_producto_id, 'resuelto', f'No Apto (Retirado) {motivo_adicional}'.strip(), usuario_id)
         
-        afectados_downstream = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_producto', lote_producto_id, 99, 'adelante').get('resumen', {})
+        afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_producto', lote_producto_id, nivel='completo')
+        
+        afectados_downstream = self._transformar_trazabilidad_a_diccionario(afectados_downstream_res)
         
         pedidos_afectados = afectados_downstream.get('pedidos', [])
         if pedidos_afectados:
-            lote_producto_model.actualizar_estado(lote_producto_id, 'Devolución pendiente')
+            lote_producto_model.update(lote_producto_id, {'estado': 'DEVOLUCION_PENDIENTE'}, 'id_lote')
             for pedido_data in pedidos_afectados:
-                pedido_id = pedido_data['id']
-                pedido_actual, _ = pedido_controller.obtener_pedido_por_id(pedido_id)
-                estado_actual = pedido_actual.get('data', {}).get('estado', '').lower()
+                pedido_id = int(pedido_data['id'])
+                pedido_actual_res, _ = pedido_controller.obtener_pedido_por_id(pedido_id)
+                if not pedido_actual_res.get('success'): continue
+
+                estado_actual = pedido_actual_res.get('data', {}).get('estado', '').lower()
                 
                 if estado_actual in ['recibido', 'completado']:
-                    pedido_controller.cambiar_estado_pedido(pedido_id, 'en tránsito')
-        
+                    pedido_controller.cambiar_estado_pedido(pedido_id, 'en_transito')
+        else:
+            # Si no hay pedidos, se retira directamente
+            lote_producto_controller.marcar_lote_retirado_alerta(lote_producto_id)
+
         self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         return {"success": True, "message": "Lote de producto marcado como No Apto y pedidos afectados actualizados."}, 200
 
@@ -867,22 +876,53 @@ class RiesgoController(BaseController):
         
         return {'success': True, 'message': f"Lote {lote_id} procesado como {resolucion}."}, 200
 
+    def _transformar_trazabilidad_a_diccionario(self, trazabilidad_res):
+        """
+        Convierte la respuesta del nuevo método de trazabilidad a la estructura
+        de diccionario anidado que esperaba el código anterior.
+        """
+        diccionario_afectados = {}
+        if not trazabilidad_res or 'resumen' not in trazabilidad_res:
+            return diccionario_afectados
+
+        for item in trazabilidad_res['resumen'].get('destino', []):
+            tipo = item.get('tipo')
+            if not tipo: continue
+            
+            # Mapeo simple de singular a plural para las claves del diccionario
+            map_plural = {
+                'pedido': 'pedidos',
+                'lote_insumo': 'lotes_insumo',
+                'orden_produccion': 'ordenes_produccion',
+                'lote_producto': 'lotes_productos'
+            }
+            tipo_plural = map_plural.get(tipo, f"{tipo}s")
+
+            if tipo_plural not in diccionario_afectados:
+                diccionario_afectados[tipo_plural] = []
+            diccionario_afectados[tipo_plural].append(item)
+            
+        return diccionario_afectados
+
     def _verificar_lotes_producto_asociados(self, lote_insumo_id, alerta_id, usuario_id):
         from app.models.trazabilidad import TrazabilidadModel
-        afectados_lp = TrazabilidadModel().obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, profundidad=1, direccion='adelante')
-        for lp in afectados_lp.get('resumen', {}).get('lotes_productos', []):
+        afectados_res = TrazabilidadModel().obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
+        afectados_dicc = self._transformar_trazabilidad_a_diccionario(afectados_res)
+        
+        for lp in afectados_dicc.get('lotes_productos', []):
             self._ejecutar_resolucion_lote(alerta_id, {'lote_id': lp['id'], 'tipo_lote': 'lote_producto', 'resolucion': 'Apto'}, usuario_id)
 
     def _actualizar_op_y_lotes_producto_por_insumo_no_apto(self, lote_insumo_id, alerta_id, usuario_id):
         from app.models.trazabilidad import TrazabilidadModel
         from app.controllers.orden_produccion_controller import OrdenProduccionController
-        afectados = TrazabilidadModel().obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, profundidad=2, direccion='adelante')
-        
-        for op_data in afectados.get('resumen', {}).get('ordenes_produccion', []):
+        afectados_res = TrazabilidadModel().obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
+        afectados_dicc = self._transformar_trazabilidad_a_diccionario(afectados_res)
+
+        for op_data in afectados_dicc.get('ordenes_produccion', []):
             OrdenProduccionController().cambiar_estado_a_pendiente_con_reemplazo(op_data['id'])
             self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_data['id'], 'resuelto', 'OP a pendiente por insumo no apto', usuario_id)
 
-        for lp_data in afectados.get('resumen', {}).get('lotes_productos', []):
+        for lp_data in afectados_dicc.get('lotes_productos', []):
             self._ejecutar_resolucion_lote(alerta_id, {'lote_id': lp_data['id'], 'tipo_lote': 'lote_producto', 'resolucion': 'No Apto'}, usuario_id)
 
     def _gestionar_devolucion_pedidos_por_lote_producto(self, lote_producto_id, alerta_id, usuario_id):
@@ -890,15 +930,29 @@ class RiesgoController(BaseController):
         from app.controllers.pedido_controller import PedidoController
         from app.models.lote_producto import LoteProductoModel
         
-        LoteProductoModel().actualizar_estado(lote_producto_id, 'Devolución pendiente')
-        afectados = TrazabilidadModel().obtener_trazabilidad_unificada('lote_producto', lote_producto_id, profundidad=1, direccion='adelante')
+        afectados_res = TrazabilidadModel().obtener_trazabilidad_unificada('lote_producto', lote_producto_id, nivel='completo')
+        afectados_dicc = self._transformar_trazabilidad_a_diccionario(afectados_res)
+        
+        pedidos_afectados = afectados_dicc.get('pedidos', [])
 
-        for pedido_data in afectados.get('resumen', {}).get('pedidos', []):
-            pedido_id = pedido_data['id']
-            estado_actual = PedidoController().obtener_estado_pedido(pedido_id)
-            if estado_actual in ['recibido', 'completado']:
-                PedidoController().cambiar_estado_pedido(pedido_id, 'en tránsito')
-            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'pedido', pedido_id, 'resuelto', 'Devolución iniciada por lote producto no apto', usuario_id)
+        if pedidos_afectados:
+            LoteProductoModel().update(lote_producto_id, {'estado': 'DEVOLUCION_PENDIENTE'}, 'id_lote')
+            pedido_controller = PedidoController()
+            for pedido_data in pedidos_afectados:
+                pedido_id = int(pedido_data['id'])
+                
+                pedido_actual_res, _ = pedido_controller.obtener_pedido_por_id(pedido_id)
+                if not pedido_actual_res.get('success'): continue
+
+                estado_actual = pedido_actual_res.get('data', {}).get('estado', '').lower()
+                
+                if estado_actual in ['recibido', 'completado']:
+                    pedido_controller.cambiar_estado_pedido(pedido_id, 'en_transito')
+
+                self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'pedido', pedido_id, 'resuelto', 'Devolución iniciada por lote producto no apto', usuario_id)
+        else:
+            from app.controllers.lote_producto_controller import LoteProductoController
+            LoteProductoController().marcar_lote_retirado_alerta(lote_producto_id)
 
     def _ejecutar_finalizar_analisis(self, alerta_id: int, data: dict, usuario_id: int):
         conclusion = data.get('conclusion')
@@ -917,6 +971,7 @@ class RiesgoController(BaseController):
 
         acciones = {
             "resolver_lote": self._ejecutar_resolucion_lote_api,
+            "recibir_devolucion": self._ejecutar_recibir_devolucion_api,
             "finalizar_analisis": self._ejecutar_finalizar_analisis_api,
             "nota_credito": self._ejecutar_nota_de_credito_api,
             "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos_api,
@@ -1005,3 +1060,23 @@ class RiesgoController(BaseController):
         codigo_alerta = alerta_res.get('data').get('codigo')
 
         return self._ejecutar_resolver_pedidos(codigo_alerta, None, usuario_id) # form_data no es usado
+
+    def _ejecutar_recibir_devolucion_api(self, alerta_id, data, usuario_id):
+        lote_id = data.get('lote_id')
+        if not lote_id:
+            return {"success": False, "error": "Falta el ID del lote."}, 400
+
+        from app.models.lote_producto import LoteProductoModel
+        lote_producto_model = LoteProductoModel()
+        
+        # Corregido: Usar mayúsculas para el estado
+        resultado = lote_producto_model.update(lote_id, {'estado': 'RETIRADO'}, 'id_lote')
+        
+        if resultado.get('success'):
+            self.alerta_riesgo_model.registrar_resolucion_afectado(
+                alerta_id, 'lote_producto', lote_id, 'resuelto', 'Retirado (Devolución Recibida)', usuario_id
+            )
+            return {"success": True, "message": "El lote ha sido marcado como RETIRADO."}, 200
+        else:
+            logger.error(f"Error al actualizar lote a RETIRADO: {resultado.get('error')}")
+            return {"success": False, "error": "No se pudo actualizar el estado del lote."}, 500

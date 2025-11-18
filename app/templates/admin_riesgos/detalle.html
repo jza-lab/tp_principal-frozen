@@ -173,8 +173,14 @@
                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-check-circle me-1"></i> Marcar como Apto
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
+                                                        </button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
@@ -284,16 +290,32 @@
                                             </div>
                                             <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
                                                 <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
-                                                 {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
-                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto"><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto"><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-check-circle me-1"></i> Marcar como Apto
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
+                                                        </button>
                                                     </div>
                                                 {% elif lote.estado_resolucion == 'resuelto' %}
                                                     <p class="small text-muted">Este lote fue resuelto como:</p>
-                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
-                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                    {% if 'No Apto' in lote.resolucion_aplicada and lote.estado == 'DEVOLUCION_PENDIENTE' %}
+                                                        <h4><span class="badge bg-warning text-dark">Devolución Pendiente</span></h4>
+                                                        <div class="d-grid mt-2">
+                                                            <button class="btn btn-sm btn-info btn-recibir-devolucion" data-lote-id="{{ lote.id_lote }}">
+                                                                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                                <i class="bi bi-box-arrow-in-down me-1"></i> Recibir Devolución
+                                                            </button>
+                                                        </div>
+                                                    {% else %}
+                                                        {% set resolucion_clase = 'success' if 'Apto' in lote.resolucion_aplicada else 'danger' %}
+                                                        <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                    {% endif %}
                                                 {% else %}
                                                     <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
                                                 {% endif %}
@@ -596,6 +618,50 @@
                         showNotificationModal('Error', 'Error de conexión. Por favor, intente de nuevo.', 'error');
                     });
                 });
+
+    // Acción de recibir devolución
+    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const loteId = this.dataset.loteId;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const actionContainer = this.closest('.d-grid');
+            const spinner = this.querySelector('.spinner-border');
+
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    accion: 'recibir_devolucion',
+                    data: {
+                        lote_id: loteId
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal('Éxito', data.message, 'success');
+                    actionContainer.innerHTML = `<h4><span class="badge bg-danger">Retirado</span></h4>`;
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                    spinner.classList.add('d-none');
+                    this.disabled = false;
+                }
+            })
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+                spinner.classList.add('d-none');
+                this.disabled = false;
+            });
+        });
+    });
             });
         }
 
@@ -793,7 +859,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const tipoLote = this.dataset.tipoLote;
             const resolucion = this.dataset.resolucion;
             const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const actionContainer = this.closest('.border-start-lg'); 
+            const actionContainer = this.closest('.border-start-lg');
+            const spinner = this.querySelector('.spinner-border');
+
+            // Mostrar spinner y deshabilitar botones
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+            // Deshabilitar el otro botón también para evitar clics dobles
+            const otherButton = this.parentElement.querySelector(this.dataset.resolucion === 'apto' ? '[data-resolucion="no_apto"]' : '[data-resolucion="apto"]');
+            if (otherButton) otherButton.disabled = true;
 
             let resolucionParaApi;
             if (resolucion === 'apto') {
@@ -848,7 +922,66 @@ document.addEventListener('DOMContentLoaded', function () {
                     showNotificationModal('Error', data.error, 'error');
                 }
             })
-            .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+            })
+            .finally(() => {
+                // Ocultar spinner y rehabilitar botones
+                spinner.classList.add('d-none');
+                this.disabled = false;
+                if (otherButton) otherButton.disabled = false;
+            });
+        });
+    });
+
+    // Acción de recibir devolución
+    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const loteId = this.dataset.loteId;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const resolutionContainer = this.closest('.border-start-lg');
+            const spinner = this.querySelector('.spinner-border');
+
+            spinner.classList.remove('d-none');
+            this.disabled = true;
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    accion: 'recibir_devolucion',
+                    data: {
+                        lote_id: loteId
+                    }
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotificationModal('Éxito', data.message, 'success');
+                    // Reemplazar todo el contenido de resolución con el estado final
+                    resolutionContainer.innerHTML = `
+                        <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                        <p class="small text-muted">Este lote fue resuelto como:</p>
+                        <h4><span class="badge bg-danger">Retirado</span></h4>
+                    `;
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                }
+            })
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+            })
+            .finally(() => {
+                // El botón se elimina, por lo que no es necesario volver a habilitarlo
+                // pero en caso de error, sí.
+                spinner.classList.add('d-none');
+                this.disabled = false;
+            });
         });
     });
     
