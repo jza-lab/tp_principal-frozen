@@ -11,10 +11,17 @@
                 Gestión de Alerta de Riesgo: {{ alerta.codigo }}
             </h4>
             <div>
-                {% if alerta.estado == 'Pendiente' %}
+                {% if alerta.estado in ['Pendiente', 'ANALISIS FINALIZADO', 'Resuelta'] %}
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalFinalizarAnalisis">
-                        <i class="bi bi-flag-fill me-1"></i> Finalizar Análisis
+                        <i class="bi bi-flag-fill me-1"></i> 
+                        {% if alerta.estado == 'Pendiente' %}
+                            Finalizar Análisis
+                        {% else %}
+                            Cerrar Alerta
+                        {% endif %}
                     </button>
+                {% endif %}
+                {% if alerta.estado == 'Pendiente' %}
                     <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
                         <i class="bi bi-shield-check me-1"></i> Forzar Resolución
                     </button>
@@ -30,9 +37,19 @@
             </p>
             <p class="card-text"><strong>Estado:</strong>
                 <span
-                    class="badge {% if alerta.estado == 'Pendiente' %}bg-warning text-dark{% elif alerta.estado == 'Resuelta' %}bg-success{% else %}bg-secondary{% endif %}">{{
+                    class="badge {% if alerta.estado == 'Pendiente' %}bg-warning text-dark{% elif alerta.estado in ['Resuelta', 'ANALISIS FINALIZADO'] %}bg-success{% else %}bg-secondary{% endif %}">{{
                     alerta.estado }}</span>
             </p>
+
+            {% if alerta.estado in ['Resuelta', 'ANALISIS FINALIZADO'] and alerta.conclusion_final %}
+            <div class="card bg-light border-success my-3">
+                <div class="card-body">
+                    <h5 class="card-title text-success"><i class="bi bi-check2-circle me-2"></i>Conclusión del Análisis</h5>
+                    <p class="card-text">{{ alerta.conclusion_final }}</p>
+                </div>
+            </div>
+            {% endif %}
+
             <hr>
             
             <div class="row">
@@ -731,7 +748,7 @@
                 spinner.classList.remove('d-none');
                 this.disabled = true;
 
-                fetch("{{ url_for('admin_riesgo.contactar_clientes', codigo_alerta=alerta.codigo) }}", {
+                fetch("{{ url_for('api_riesgos.contactar_clientes', codigo_alerta=alerta.codigo) }}", {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -802,7 +819,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     data: {
                         lote_id: loteId,
                         tipo_lote: tipoLote,
-                        resolucion: resolucionParaApi
+                        resolucion: resolucionParaApi,
+                        alerta_id: '{{ alerta.id }}'
                     }
                 })
             })
@@ -1057,11 +1075,27 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- Modal Finalizar Análisis -->
+{% set placeholder_text = "Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado." %}
+{% set ns = namespace(has_no_apto=false) %}
+{% for lote in (alerta.afectados_detalle.lotes_insumo or []) + (alerta.afectados_detalle.lotes_producto or []) %}
+    {% if lote.resolucion_aplicada and 'no_apto' in lote.resolucion_aplicada %}
+        {% set ns.has_no_apto = true %}
+    {% endif %}
+{% endfor %}
+{% set has_no_apto = ns.has_no_apto %}
+{% set has_nc = alerta.afectados_detalle.pedidos | selectattr('resolucion_aplicada', 'equalto', 'nota_credito') | list | length > 0 %}
+
+{% if has_no_apto %}
+    {% set placeholder_text = "Mercancía retirada por lote defectuoso. Se gestionó la devolución con los clientes afectados." %}
+{% elif has_nc %}
+    {% set placeholder_text = "Se emitieron notas de crédito a los clientes afectados para compensar el inconveniente." %}
+{% endif %}
+
 <div class="modal fade" id="modalFinalizarAnalisis" tabindex="-1" aria-labelledby="modalFinalizarAnalisisLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title" id="modalFinalizarAnalisisLabel">Finalizar Análisis de Alerta</h5>
+        <h5 class="modal-title" id="modalFinalizarAnalisisLabel">Finalizar/Cerrar Alerta</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
@@ -1069,7 +1103,7 @@ document.addEventListener('DOMContentLoaded', function () {
         <form id="formFinalizarAnalisis">
           <div class="mb-3">
             <label for="conclusion-final" class="form-label">Conclusión Final <span class="text-danger">*</span></label>
-            <textarea class="form-control" id="conclusion-final" name="conclusion" rows="4" required placeholder="Ej: Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado."></textarea>
+            <textarea class="form-control" id="conclusion-final" name="conclusion" rows="4" required>{{ placeholder_text }}</textarea>
           </div>
         </form>
       </div>

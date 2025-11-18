@@ -1,6 +1,8 @@
 import logging
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.usuario_controller import UsuarioController
+from app.controllers.pago_controller import PagoController
 from app.controllers.facial_controller import FacialController
 from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
@@ -276,3 +278,38 @@ def get_insumos_por_proveedor(proveedor_id):
         return jsonify(response.get("data", []))
     
     return jsonify([]), 500
+
+@api_bp.route('/pagos/registrar', methods=['POST'])
+@jwt_required(locations=["cookies"])
+@permission_required(accion='modificar_clientes')
+def registrar_pago():
+    """
+    Endpoint para registrar un nuevo pago desde el perfil de cliente.
+    """
+    try:
+        if 'comprobante' not in request.files and not request.form.get('monto'):
+             return jsonify(success=False, error="Faltan datos del formulario."), 400
+
+        pago_data = request.form.to_dict()
+        comprobante_file = request.files.get('comprobante')
+
+        # Añadir el ID del usuario que está realizando la acción
+        current_user_id = get_jwt_identity()
+        pago_data['id_usuario_registro'] = current_user_id
+        
+        # Convertir monto a Decimal si existe
+        if 'monto' in pago_data:
+            from decimal import Decimal
+            try:
+                pago_data['monto'] = Decimal(pago_data['monto'])
+            except (ValueError, TypeError):
+                 return jsonify(success=False, error="El monto proporcionado no es un número válido."), 400
+
+        pago_controller = PagoController()
+        resultado, status_code = pago_controller.registrar_pago(pago_data, file=comprobante_file)
+        
+        return jsonify(resultado), status_code
+
+    except Exception as e:
+        logger.error(f"Error en endpoint registrar_pago: {e}", exc_info=True)
+        return jsonify(success=False, error="Ocurrió un error interno en el servidor."), 500

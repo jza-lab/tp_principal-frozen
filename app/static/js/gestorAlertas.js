@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
             previsualizacionContenido.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Cargando...</span></div></div>';
             modal.show();
 
-            fetch(`/riesgos/api/previsualizar?tipo_entidad=${tipoEntidad}&id_entidad=${idEntidad}`)
+            fetch(`/api/riesgos/previsualizar?tipo_entidad=${tipoEntidad}&id_entidad=${idEntidad}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`Error HTTP ${response.status}: ${response.statusText}`);
@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('evidencia', evidenciaFile);
             
             try {
-                const response = await fetch('/riesgos/api/subir_evidencia', {
+                const response = await fetch('/api/riesgos/subir_evidencia', {
                     method: 'POST',
                     headers: { 'X-CSRFToken': document.querySelector('#csrf_token').value },
                     body: formData
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         try {
-            const response = await fetch('/riesgos/api/crear', {
+            const response = await fetch('/api/riesgos/crear', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -143,12 +143,13 @@
                                         <td>{{ pedido.fecha_vencimiento if pedido.fecha_vencimiento else 'N/A' }}</td>
                                         <td>
                                             <span class="badge 
-                                                {% if pedido.estado_pago == 'pendiente' %}bg-warning text-dark
-                                                {% elif pedido.estado_pago == 'pagado' %}bg-success
-                                                {% elif pedido.estado_pago == 'vencido' %}bg-danger
+                                                {% if pedido.pago == 'pendiente' %}bg-warning text-dark
+                                                {% elif pedido.pago == 'Pagado Parcialmente' %}bg-info text-dark
+                                                {% elif pedido.pago == 'Pagado' %}bg-success
+                                                {% elif pedido.pago == 'vencido' %}bg-danger
                                                 {% else %}bg-secondary
                                                 {% endif %}">
-                                                {{ pedido.estado_pago | capitalize }}
+                                                {{ pedido.pago | replace('_', ' ') | title }}
                                             </span>
                                         </td>
                                         <td>
@@ -171,12 +172,14 @@
 
                                                 <i class="bi bi-eye"></i>
                                             </a>
-                                            <!-- {% if pedido.estado_pago != 'pagado' %}
+                                            {% if pedido.pago != 'Pagado' %}
                                             <button class="btn btn-sm btn-outline-success btn-registrar-pago"
-                                                data-pedido-id="{{ pedido.id }}" title="Registrar Pago">
+                                                data-pedido-id="{{ pedido.id }}" 
+                                                data-monto-total="{{ pedido.precio_orden | default(0) }}" 
+                                                title="Registrar Pago">
                                                 <i class="bi bi-cash-coin"></i>
                                             </button>
-                                            {% endif %} -->
+                                            {% endif %}
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -304,16 +307,29 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                    <form id="registrarPagoForm" enctype="multipart/form-data">
+                <form id="registrarPagoForm" enctype="multipart/form-data">
                     {{ csrf_form.csrf_token }}
-                    <input type="hidden" id="pedidoId" name="pedido_id">
+                    <input type="hidden" id="pedidoId" name="id_pedido">
                     <div class="mb-3">
-                        <label for="pagoDetalles" class="form-label">Detalles del Pago</label>
-                        <textarea class="form-control" id="pagoDetalles" name="detalles" rows="3"></textarea>
+                        <label for="monto" class="form-label">Monto a Pagar</label>
+                        <input type="number" class="form-control" id="monto" name="monto" step="0.01" required>
                     </div>
                     <div class="mb-3">
-                        <label for="pagoComprobante" class="form-label">Comprobante de Pago (Opcional)</label>
-                        <input class="form-control" type="file" id="pagoComprobante" name="comprobante">
+                        <label for="metodo_pago" class="form-label">Método de Pago</label>
+                        <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                            <option value="transferencia">Transferencia</option>
+                            <option value="tarjeta">Tarjeta</option>
+                            <option value="efectivo">Efectivo</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="datos_adicionales" class="form-label">Detalles Adicionales (Opcional)</label>
+                        <textarea class="form-control" id="datos_adicionales" name="datos_adicionales" rows="3"
+                            placeholder="Ej: Últimos 4 dígitos de la tarjeta, ID de transacción, etc."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="comprobante" class="form-label">Comprobante de Pago (Opcional)</label>
+                        <input class="form-control" type="file" id="comprobante" name="comprobante">
                     </div>
                 </form>
             </div>
@@ -331,37 +347,115 @@
     document.addEventListener('DOMContentLoaded', function () {
         const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
         const registrarPagoButtons = document.querySelectorAll('.btn-registrar-pago');
+        const submitButton = document.getElementById('submitPago');
+        const montoInput = document.getElementById('monto');
+        
+        // Convertir los datos de pagos del backend a un objeto JS para fácil acceso
+        const pagosPorPedido = JSON.parse('{{ pagos_por_pedido | tojson | safe }}');
+
+        // --- FUNCIÓN DE FORMATO DE MONEDA ---
+        function formatCurrency(value) {
+            if (!value) return '';
+            // Limpia el valor para asegurarse de que es un número
+            let number = parseFloat(value.toString().replace(/[^0-9,.-]+/g, "").replace(',', '.'));
+            if (isNaN(number)) return '';
+            
+            // Formateador para moneda argentina
+            const formatter = new Intl.NumberFormat('es-AR', {
+                style: 'currency',
+                currency: 'ARS',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+            
+            return formatter.format(number);
+        }
+
+        // Event listener para formatear mientras se escribe
+        montoInput.addEventListener('input', function(e) {
+            // Mantiene el cursor en la posición correcta después de formatear
+            let originalCursorPosition = e.target.selectionStart;
+            let originalLength = e.target.value.length;
+            
+            let rawValue = e.target.value.replace(/[^0-9]/g, '');
+            if (rawValue) {
+                let numberValue = parseInt(rawValue, 10) / 100;
+                e.target.value = formatCurrency(numberValue).replace('ARS', '$').trim();
+            } else {
+                e.target.value = '';
+            }
+
+            let newLength = e.target.value.length;
+            let newCursorPosition = originalCursorPosition + (newLength - originalLength);
+            e.target.setSelectionRange(newCursorPosition, newCursorPosition);
+        });
 
         registrarPagoButtons.forEach(button => {
             button.addEventListener('click', function () {
                 const pedidoId = this.dataset.pedidoId;
+                const montoTotalPedido = parseFloat(this.dataset.montoTotal);
+                
+                // Calcular el total ya pagado para este pedido
+                const pagosExistentes = pagosPorPedido[pedidoId] || [];
+                const totalYaPagado = pagosExistentes.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
+                
+                const saldoPendiente = montoTotalPedido - totalYaPagado;
+
+                // Limpiar el formulario y luego establecer los valores
+                const form = document.getElementById('registrarPagoForm');
+                form.reset();
+                
                 document.getElementById('pedidoId').value = pedidoId;
+                // Formatear el saldo pendiente usando la nueva función
+                montoInput.value = formatCurrency(saldoPendiente.toFixed(2)).replace('ARS', '$').trim();
+
                 registrarPagoModal.show();
             });
         });
 
-        document.getElementById('submitPago').addEventListener('click', function () {
-            const pedidoId = document.getElementById('pedidoId').value;
+        submitButton.addEventListener('click', function () {
             const form = document.getElementById('registrarPagoForm');
             const formData = new FormData(form);
 
-            fetch(`/orden-venta/${pedidoId}/registrar-pago`, {
+            // --- DE-FORMATEAR MONEDA ANTES DE ENVIAR ---
+            const montoFormateado = formData.get('monto');
+            // Reemplaza el símbolo de peso, los puntos de miles y usa la coma como separador decimal.
+            const montoSinFormato = montoFormateado.replace(/\$\s*/g, '').replace(/\./g, '').replace(',', '.');
+            formData.set('monto', montoSinFormato);
+            
+            // Deshabilitar botón para evitar envíos múltiples
+            submitButton.disabled = true;
+            submitButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Guardando...`;
+
+            fetch(`/api/pagos/registrar`, {
                 method: 'POST',
-                body: formData
+                body: formData,
+                headers: {
+                    // El CSRF token se envía dentro del FormData, no como header aquí
+                }
             })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        registrarPagoModal.hide();
-                        location.reload(); // Recargar para ver los cambios
-                    } else {
-                        alert('Error al registrar el pago: ' + data.message);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Ocurrió un error al registrar el pago.');
-                });
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    registrarPagoModal.hide();
+                    // Opcional: usar una notificación más elegante que alert()
+                    alert('Pago registrado con éxito!');
+                    location.reload(); 
+                } else {
+                    // Mostrar errores de validación o del servidor
+                    const errorMessage = data.error ? (typeof data.error === 'object' ? JSON.stringify(data.error) : data.error) : 'Ocurrió un error desconocido.';
+                    alert('Error al registrar el pago: ' + errorMessage);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Ocurrió un error de conexión al registrar el pago.');
+            })
+            .finally(() => {
+                // Volver a habilitar el botón
+                submitButton.disabled = false;
+                submitButton.innerHTML = `Guardar Pago`;
+            });
         });
     });
 </script>

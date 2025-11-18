@@ -558,8 +558,8 @@ class OrdenProduccionModel(BaseModel):
         """
         try:
             query = self.db.table(self.get_table_name()).select("*")
-            query = query.gte('fecha_inicio', fecha_inicio.isoformat())
-            query = query.lte('fecha_inicio', fecha_fin.isoformat())
+            query = query.gte('fecha_planificada', fecha_inicio.isoformat())
+            query = query.lte('fecha_planificada', fecha_fin.isoformat())
             result = query.execute()
 
             if result.data:
@@ -570,3 +570,35 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al obtener órdenes de producción por rango de fecha: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_all_in_actual_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Obtiene todas las órdenes de producción que estuvieron activas o se completaron
+        dentro de un rango de fechas, basado en las fechas reales de inicio y fin.
+        """
+        try:
+            # Solución final y robusta: la lógica correcta para rangos que se solapan.
+            # (start1 <= end2) and (end1 >= start2)
+            query = self.db.table(self.get_table_name()).select(
+                "*, producto_nombre:productos(nombre)"
+            ).lte(
+                'fecha_inicio', fecha_fin.isoformat()  # El inicio de la orden es ANTES de que el rango termine
+            ).gte(
+                'fecha_fin', fecha_inicio.isoformat() # El fin de la orden es DESPUÉS de que el rango empiece
+            )
+
+            result = query.execute()
+
+            if result.data:
+                # Aplanar el nombre del producto para consistencia
+                for item in result.data:
+                    if item.get('producto_nombre'):
+                        item['producto_nombre'] = item.pop('producto_nombre').get('nombre', 'N/A')
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error al obtener órdenes por rango de fecha real: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+

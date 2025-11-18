@@ -741,14 +741,14 @@ class RiesgoController(BaseController):
 
         try:
             if tipo_lote == 'lote_insumo':
-                if resolucion == 'apto':
+                if resolucion.lower() == 'apto':
                     return self._resolver_lote_insumo_apto(alerta_id, lote_id, usuario_id)
-                else: # no_apto
+                else:
                     return self._resolver_lote_insumo_no_apto(alerta_id, lote_id, usuario_id)
             elif tipo_lote == 'lote_producto':
-                if resolucion == 'apto':
+                if resolucion.lower() == 'apto':
                     return self._resolver_lote_producto_apto(alerta_id, lote_id, usuario_id)
-                else: # no_apto
+                else:
                     return self._resolver_lote_producto_no_apto(alerta_id, lote_id, usuario_id)
             else:
                 return {"success": False, "error": "Tipo de lote no válido."}, 400
@@ -760,85 +760,73 @@ class RiesgoController(BaseController):
     def _resolver_lote_insumo_apto(self, alerta_id, lote_insumo_id, usuario_id):
         from app.controllers.inventario_controller import InventarioController
         inventario_controller = InventarioController()
-        
-        # 1. Liberar el lote de insumo de cuarentena
-        inventario_controller.liberar_lote_de_cuarentena(lote_insumo_id, 999999) # Asumimos liberar todo
-        
-        # 2. Marcar el lote de insumo como resuelto en la alerta
-        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_insumo_id], 'apto', 'lote_insumo', usuario_id)
 
-        # 3. Lógica de cascada: Verificar si las OPs y Lotes de producto relacionados ya pueden ser liberados
-        # Esta lógica es compleja y se podría encapsular en el modelo.
+        inventario_controller.liberar_lote_de_cuarentena_alerta(lote_insumo_id, usuario_id)
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'Apto', usuario_id)
         
+        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         return {"success": True, "message": "Lote de insumo marcado como Apto. Se revisarán las entidades dependientes."}, 200
+
 
     def _resolver_lote_insumo_no_apto(self, alerta_id, lote_insumo_id, usuario_id):
         from app.controllers.inventario_controller import InventarioController
-        from app.models.orden_produccion import OrdenProduccionModel
         from app.controllers.orden_produccion_controller import OrdenProduccionController
 
         inventario_controller = InventarioController()
-        op_model = OrdenProduccionModel()
         op_controller = OrdenProduccionController()
 
-        # 1. Marcar el lote de insumo como retirado
-        inventario_controller.marcar_lote_como_no_apto(lote_insumo_id, usuario_id)
-        
-        # 2. Marcar el lote de insumo como resuelto en la alerta
-        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_insumo_id], 'no_apto_retirado', 'lote_insumo', usuario_id)
+        inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
 
-        # 3. Identificar OPs y Lotes de Producto afectados por este insumo
-        afectados_por_insumo = self.trazabilidad_model.obtener_afectados_para_alerta('lote_insumo', lote_insumo_id)
+        afectados_downstream = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, 99, 'adelante').get('resumen', {})
         
-        for afectado in afectados_por_insumo:
-            if afectado['tipo_entidad'] == 'orden_produccion':
-                op_id = afectado['id_entidad']
-                # Poner OP en pendiente para replanificar
-                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
-                # Marcarla como resuelta en la alerta
-                self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [op_id], 'replanificar_por_insumo_no_apto', 'orden_produccion', usuario_id)
+        for op_data in afectados_downstream.get('ordenes_produccion', []):
+            op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_data['id'])
+            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_data['id'], 'resuelto', 'Pendiente por insumo no apto', usuario_id)
 
-            if afectado['tipo_entidad'] == 'lote_producto':
-                # Marcar lote de producto como retirado y resolverlo
-                self._resolver_lote_producto_no_apto(alerta_id, afectado['id_entidad'], usuario_id, "Insumo no apto")
+        for lp_data in afectados_downstream.get('lotes_productos', []):
+            self._resolver_lote_producto_no_apto(alerta_id, lp_data['id'], usuario_id, motivo_adicional=f"originado por insumo no apto {lote_insumo_id}")
         
+        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         return {"success": True, "message": "Lote de insumo marcado como No Apto y entidades dependientes actualizadas."}, 200
 
     def _resolver_lote_producto_apto(self, alerta_id, lote_producto_id, usuario_id):
         from app.controllers.lote_producto_controller import LoteProductoController
         lote_producto_controller = LoteProductoController()
         
-        lote_producto_controller.liberar_lote_de_cuarentena(lote_producto_id, 999999)
-        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_producto_id], 'apto', 'lote_producto', usuario_id)
+        lote_producto_controller.liberar_lote_de_cuarentena_alerta(lote_producto_id)
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote_producto_id, 'resuelto', 'Apto', usuario_id)
+        
+        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         
         return {"success": True, "message": "Lote de producto marcado como Apto."}, 200
 
     def _resolver_lote_producto_no_apto(self, alerta_id, lote_producto_id, usuario_id, motivo_adicional=""):
         from app.controllers.lote_producto_controller import LoteProductoController
-        from app.models.pedido import PedidoModel
+        from app.controllers.pedido_controller import PedidoController
+        from app.models.lote_producto import LoteProductoModel
         
         lote_producto_controller = LoteProductoController()
-        pedido_model = PedidoModel()
-        
-        motivo_final = f"Lote no apto según alerta. {motivo_adicional}".strip()
+        pedido_controller = PedidoController()
+        lote_producto_model = LoteProductoModel()
 
-        # 1. Marcar el lote como NO_APTO (esto anula su stock)
-        lote_producto_controller.marcar_lote_como_no_apto(lote_producto_id, usuario_id, motivo_final, "Inspección por Alerta")
+        lote_producto_controller.marcar_lote_retirado_alerta(lote_producto_id)
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote_producto_id, 'resuelto', f'No Apto (Retirado) {motivo_adicional}'.strip(), usuario_id)
         
-        # 2. Marcar como resuelto en la alerta
-        self.alerta_riesgo_model.actualizar_estado_afectados(alerta_id, [lote_producto_id], 'no_apto_retirado', 'lote_producto', usuario_id)
+        afectados_downstream = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_producto', lote_producto_id, 99, 'adelante').get('resumen', {})
         
-        # 3. Gestionar pedidos afectados
-        pedidos_afectados_res = pedido_model.find_pedidos_by_lote_producto(lote_producto_id)
-        if pedidos_afectados_res.get('success') and pedidos_afectados_res.get('data'):
-            for pedido in pedidos_afectados_res['data']:
-                estado_pedido = pedido.get('estado', '').lower()
-                if estado_pedido in ['en transito', 'recibido', 'completado']:
-                    # Cambiar estado del lote a "Devolución pendiente"
-                    self.model.update(lote_producto_id, {'estado': 'DEVOLUCION_PENDIENTE'}, 'id_lote')
-                    # Cambiar estado del pedido a "En tránsito" para la devolución
-                    pedido_model.cambiar_estado(pedido['id'], 'EN_TRANSITO')
+        pedidos_afectados = afectados_downstream.get('pedidos', [])
+        if pedidos_afectados:
+            lote_producto_model.actualizar_estado(lote_producto_id, 'Devolución pendiente')
+            for pedido_data in pedidos_afectados:
+                pedido_id = pedido_data['id']
+                pedido_actual, _ = pedido_controller.obtener_pedido_por_id(pedido_id)
+                estado_actual = pedido_actual.get('data', {}).get('estado', '').lower()
+                
+                if estado_actual in ['recibido', 'completado']:
+                    pedido_controller.cambiar_estado_pedido(pedido_id, 'en tránsito')
         
+        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         return {"success": True, "message": "Lote de producto marcado como No Apto y pedidos afectados actualizados."}, 200
 
     def ejecutar_accion_riesgo_api(self, alerta_id: int, accion: str, data: dict, usuario_id: int):
@@ -919,3 +907,101 @@ class RiesgoController(BaseController):
         
         self.alerta_riesgo_model.actualizar_alerta(alerta_id, {'estado': 'ANALISIS FINALIZADO', 'conclusion': conclusion})
         return {'success': True, 'message': 'La alerta ha sido marcada como finalizada.'}, 200
+
+    def ejecutar_accion_riesgo_api(self, alerta_id: int, datos: dict, usuario_id: int):
+        accion = datos.get('accion')
+        data = datos.get('data', {})
+
+        if not accion:
+            return {"success": False, "error": "No se especificó una acción."}, 400
+
+        acciones = {
+            "resolver_lote": self._ejecutar_resolucion_lote_api,
+            "finalizar_analisis": self._ejecutar_finalizar_analisis_api,
+            "nota_credito": self._ejecutar_nota_de_credito_api,
+            "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos_api,
+            "resolver_pedidos": self._ejecutar_resolver_pedidos_api,
+        }
+
+        handler = acciones.get(accion)
+
+        if not handler:
+            return {"success": False, "error": f"Acción '{accion}' no reconocida."}, 400
+
+        try:
+            return handler(alerta_id, data, usuario_id)
+        except Exception as e:
+            logger.error(f"Error al ejecutar la acción '{accion}' para la alerta {alerta_id}: {e}", exc_info=True)
+            return {"success": False, "error": "Error interno del servidor al procesar la acción."}, 500
+
+    def _ejecutar_resolucion_lote_api(self, alerta_id, data, usuario_id):
+        # Reutiliza la lógica de resolver_cuarentena_lote_desde_alerta pero con el nuevo formato
+        data['alerta_id'] = alerta_id
+        return self.resolver_cuarentena_lote_desde_alerta(data, usuario_id)
+
+    def _ejecutar_finalizar_analisis_api(self, alerta_id, data, usuario_id):
+        conclusion = data.get('conclusion')
+        if not conclusion:
+            return {"success": False, "error": "La conclusión es obligatoria."}, 400
+
+        resultado = self.alerta_riesgo_model.update(alerta_id, {
+            'estado': 'ANALISIS FINALIZADO',
+            'conclusion_final': conclusion
+        })
+        
+        if resultado.get('success'):
+            return {"success": True, "message": "El análisis de la alerta ha finalizado."}, 200
+        else:
+            return {"success": False, "error": "No se pudo finalizar el análisis de la alerta."}, 500
+
+    def _ejecutar_nota_de_credito_api(self, alerta_id, data, usuario_id):
+        # Simula un `form_data` para reutilizar la lógica existente
+        class FormDataMock:
+            def __init__(self, data):
+                self._data = data
+            def get(self, key):
+                return self._data.get(key)
+            def getlist(self, key):
+                return self._data.get(key, [])
+
+        # Se necesita el código de alerta, no el ID, para la lógica existente.
+        alerta_res = self.alerta_riesgo_model.find_by_id(alerta_id)
+        if not alerta_res.get('success') or not alerta_res.get('data'):
+             return {"success": False, "error": "Alerta no encontrada"}, 404
+        codigo_alerta = alerta_res.get('data').get('codigo')
+        
+        form_data = FormDataMock({
+            'pedido_ids': data.get('pedido_ids', []),
+            'recrear_pedido': 'on' if data.get('recrear_pedido') else ''
+        })
+        return self._ejecutar_nota_de_credito(codigo_alerta, form_data, usuario_id)
+
+    def _ejecutar_inhabilitar_pedidos_api(self, alerta_id, data, usuario_id):
+        # Similar a la de nota de crédito, creamos un mock y obtenemos el código.
+        class FormDataMock:
+            def __init__(self, data):
+                self._data = data
+            def get(self, key):
+                return self._data.get(key)
+            def getlist(self, key):
+                return self._data.get(key, [])
+
+        alerta_res = self.alerta_riesgo_model.find_by_id(alerta_id)
+        if not alerta_res.get('success') or not alerta_res.get('data'):
+             return {"success": False, "error": "Alerta no encontrada"}, 404
+        codigo_alerta = alerta_res.get('data').get('codigo')
+
+        form_data = FormDataMock({
+            'pedido_ids': data.get('pedido_ids', []),
+            'recrear_pedido': 'on' if data.get('recrear_pedido') else ''
+        })
+        return self._ejecutar_inhabilitar_pedidos(codigo_alerta, form_data, usuario_id)
+
+    def _ejecutar_resolver_pedidos_api(self, alerta_id, data, usuario_id):
+        # Esta función ya usa el ID de la alerta internamente.
+        alerta_res = self.alerta_riesgo_model.find_by_id(alerta_id)
+        if not alerta_res.get('success') or not alerta_res.get('data'):
+             return {"success": False, "error": "Alerta no encontrada"}, 404
+        codigo_alerta = alerta_res.get('data').get('codigo')
+
+        return self._ejecutar_resolver_pedidos(codigo_alerta, None, usuario_id) # form_data no es usado

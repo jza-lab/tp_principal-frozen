@@ -139,16 +139,6 @@ def api_subir_evidencia():
     resultado, status_code = controller.upload_file(file, 'evidencias_riesgos', unique_filename)
     return jsonify(resultado), status_code
 
-@api_riesgos_bp.route('/resolver-cuarentena', methods=['POST'])
-@jwt_required(locations=["cookies"])
-@permission_required('riesgos_resolver')
-def resolver_cuarentena_lote_desde_alerta():
-    datos = request.json
-    usuario_id = get_jwt_identity()
-    controller = RiesgoController()
-    resultado, status_code = controller.resolver_cuarentena_lote_desde_alerta(datos, usuario_id)
-    return jsonify(resultado), status_code
-
 @api_riesgos_bp.route('/contactar-clientes/<codigo_alerta>', methods=['POST'])
 @jwt_required(locations=["cookies"])
 @permission_required('riesgos_resolver')
@@ -157,3 +147,13 @@ def contactar_clientes(codigo_alerta):
     controller = RiesgoController()
     response, status_code = controller.contactar_clientes_afectados(codigo_alerta, form_data)
     return jsonify(response), status_code
+
+@api_riesgos_bp.route('/<int:alerta_id>/accion', methods=['POST'])
+@jwt_required(locations=["cookies"])
+@permission_required('riesgos_resolver')
+def ejecutar_accion_api(alerta_id):
+    datos = request.json
+    usuario_id = get_jwt_identity()
+    controller = RiesgoController()
+    resultado, status_code = controller.ejecutar_accion_riesgo_api(alerta_id, datos, usuario_id)
+    return jsonify(resultado), status_code
