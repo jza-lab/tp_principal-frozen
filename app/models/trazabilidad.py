@@ -356,11 +356,26 @@ class TrazabilidadModel:
 
         # Mapeo de configuración para cada tipo de entidad
         mapeo_tablas = {
-            'orden_compra': {'tabla': 'ordenes_compra', 'id_col': 'id', 'selects': '*, estado, orden_produccion_id, proveedores:proveedor_id(nombre)'},
-            'lote_insumo': {'tabla': 'insumos_inventario', 'id_col': 'id_lote', 'selects': '*, insumos_catalogo:id_insumo(nombre)'},
-            'orden_produccion': {'tabla': 'ordenes_produccion', 'id_col': 'id', 'selects': '*, productos:producto_id(nombre), operario:operario_asignado_id(nombre, apellido), supervisor_calidad:aprobador_calidad_id(nombre, apellido)'},
-            'lote_producto': {'tabla': 'lotes_productos', 'id_col': 'id_lote', 'selects': '*, productos:producto_id(nombre)'},
-            'pedido': {'tabla': 'pedidos', 'id_col': 'id', 'selects': '*, clientes:clientes(nombre, razon_social)'}
+            'orden_compra': {
+                'tabla': 'ordenes_compra', 'id_col': 'id',
+                'selects': '*, estado, total, orden_produccion_id, proveedores:proveedores(nombre, cuit), usuarios!ordenes_compra_usuario_creador_id_fkey(nombre, apellido)'
+            },
+            'lote_insumo': {
+                'tabla': 'insumos_inventario', 'id_col': 'id_lote',
+                'selects': '*, insumos_catalogo:insumos_catalogo(nombre, codigo_interno), proveedores:proveedores(nombre)'
+            },
+            'orden_produccion': {
+                'tabla': 'ordenes_produccion', 'id_col': 'id',
+                'selects': '*, productos:productos(nombre, codigo), operario:usuarios!ordenes_produccion_operario_asignado_id_fkey(nombre, apellido), aprobador:usuarios!ordenes_produccion_aprobador_calidad_id_fkey(nombre, apellido), creador:usuarios!ordenes_produccion_usuario_creador_id_fkey(nombre, apellido)'
+            },
+            'lote_producto': {
+                'tabla': 'lotes_productos', 'id_col': 'id_lote',
+                'selects': '*, productos:productos(nombre, codigo)'
+            },
+            'pedido': {
+                'tabla': 'pedidos', 'id_col': 'id',
+                'selects': '*, precio_orden, clientes:clientes(nombre, razon_social, cuit)'
+            }
         }
         
         datos_enriquecidos = {}
@@ -388,6 +403,33 @@ class TrazabilidadModel:
             if not nodo_info.get('es_generico') and tipo in datos_enriquecidos:
                  nodos[(tipo, id)]['data'] = datos_enriquecidos[tipo].get(str(id), {})
         
+        # Lógica adicional para buscar items de pedidos
+        if 'pedido' in ids_por_tipo and ids_por_tipo['pedido']:
+            pedido_ids = list(set(ids_por_tipo['pedido']))
+            try:
+                pedido_items = self.db.table('pedido_items').select(
+                    '*, productos:productos(nombre, codigo)'
+                ).in_('pedido_id', pedido_ids).execute().data or []
+                
+                # Agrupar items por pedido_id
+                items_por_pedido = {}
+                for item in pedido_items:
+                    pid = str(item['pedido_id'])
+                    if pid not in items_por_pedido:
+                        items_por_pedido[pid] = []
+                    items_por_pedido[pid].append(item)
+                
+                # Asignar los items de vuelta a cada nodo de pedido
+                for pid in pedido_ids:
+                    pid_str = str(pid)
+                    if ('pedido', pid_str) in nodos and pid_str in items_por_pedido:
+                        if 'data' not in nodos[('pedido', pid_str)] or not nodos[('pedido', pid_str)]['data']:
+                            nodos[('pedido', pid_str)]['data'] = {}
+                        nodos[('pedido', pid_str)]['data']['items'] = items_por_pedido[pid_str]
+
+            except Exception as e:
+                print(f"Error al enriquecer items de pedidos: {e}")
+
         # Lógica adicional para determinar si una OC es auto-generada para un pedido específico
         if 'orden_compra' in datos_enriquecidos:
             op_ids_from_ocs = {
@@ -509,7 +551,8 @@ class TrazabilidadModel:
             nodo_obj = {
                 'id': f"{tipo}_{id}",
                 'label': label,
-                'group': tipo
+                'group': tipo,
+                'data': data
             }
             if not es_generico and tipo in urls:
                 nodo_obj['url'] = urls[tipo].replace('<id>', str(id))

@@ -6,6 +6,7 @@ import qrcode
 import io
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.cliente_controller import ClienteController
+from app.controllers.pago_controller import PagoController
 from app.utils.decorators import permission_required
 from app.utils.estados import OV_FILTROS_UI, OV_MAP_STRING_TO_INT
 import re
@@ -175,25 +176,28 @@ def editar(id):
 @permission_required(accion='logistica_gestion_ov', allowed_roles=['GERENTE']) # ANTES: 'consultar_ordenes_de_venta'
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
-    controller = PedidoController()
-    response, _ = controller.obtener_pedido_por_id(id)
-    if response.get('success'):
-        pedido_data = response.get('data')
-        
-        # Generar token de seguimiento para el enlace del QR
-        token_resp, _ = controller.generar_enlace_seguimiento(id)
-        token_seguimiento = token_resp.get('data', {}).get('token') if token_resp.get('success') else None
+    pedido_controller = PedidoController()
+    pago_controller = PagoController()
 
-        # --- FIX: Convertir strings de fecha a objetos datetime ---
-        if pedido_data and pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
-            pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
-        if pedido_data and pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
-            pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
-        
-        return render_template('orden_venta/detalle.html', pedido=pedido_data, token_seguimiento=token_seguimiento)
-    else:
+    # Obtener datos del pedido
+    response, _ = pedido_controller.obtener_pedido_por_id(id)
+    if not response.get('success'):
         flash(response.get('error', 'Pedido no encontrado.'), 'error')
         return redirect(url_for('orden_venta.listar'))
+    
+    pedido_data = response.get('data')
+
+    # Obtener pagos asociados
+    pagos_response, _ = pago_controller.get_pagos_by_pedido_id(id)
+    pagos = pagos_response.get('data', []) if pagos_response.get('success') else []
+
+    # --- FIX: Convertir strings de fecha a objetos datetime ---
+    if pedido_data.get('created_at') and isinstance(pedido_data['created_at'], str):
+        pedido_data['created_at'] = datetime.fromisoformat(pedido_data['created_at'])
+    if pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
+        pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
+        
+    return render_template('orden_venta/detalle.html', pedido=pedido_data, pagos=pagos)
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
@@ -487,20 +491,6 @@ def nueva_cliente_pasos():
                            today=hoy,
                            cliente={},
                            es_cliente_nuevo=es_cliente_nuevo)
-
-@orden_venta_bp.route('/<int:id>/registrar-pago', methods=['POST'])
-@jwt_required()
-@permission_required(accion='logistica_gestion_ov')
-def registrar_pago(id):
-    """Endpoint para registrar el pago de un pedido."""
-    controller = PedidoController()
-    pago_data = request.form.to_dict()
-    file = request.files.get('comprobante')
-    response, status_code = controller.registrar_pago(id, pago_data, file)
-    if status_code < 300:
-        return jsonify({'success': True, 'message': response.get('message')}), 200
-    else:
-        return jsonify({'success': False, 'message': response.get('error')}), status_code
 
 @orden_venta_bp.route('/<int:id_pedido>/qr')
 @jwt_required()

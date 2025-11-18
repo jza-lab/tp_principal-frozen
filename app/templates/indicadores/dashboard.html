@@ -4,19 +4,18 @@
 <div class="container-fluid">
     <h1 class="mb-4">Dashboard de Indicadores</h1>
 
-    <!-- Filtro de Fechas -->
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Filtrar por Fecha</h5>
-            <form method="GET" action="{{ url_for('reportes.indicadores') }}">
+            <form id="filter-form">
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
                         <label for="fecha_inicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ kpis.fecha_inicio }}">
+                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-5">
                         <label for="fecha_fin" class="form-label">Fecha de Fin</label>
-                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ kpis.fecha_fin }}">
+                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ fecha_fin.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100">Filtrar</button>
@@ -28,225 +27,43 @@
 
     <ul class="nav nav-tabs" id="kpiTab" role="tablist">
         <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true">Producción</button>
+            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true" data-category="produccion">Producción</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false">Calidad</button>
+            <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false" data-category="comercial">Comercial</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false">Inventario</button>
+            <button class="nav-link" id="financiera-tab" data-bs-toggle="tab" data-bs-target="#financiera" type="button" role="tab" aria-controls="financiera" aria-selected="false" data-category="financiera">Financiera</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false">Comercial</button>
+            <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false" data-category="calidad">Calidad</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false" data-category="inventario">Inventario</button>
         </li>
     </ul>
 
     <div class="tab-content" id="kpiTabContent">
         <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
-            <div class="row mt-4">
-                <!-- OEE -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            OEE (Overall Equipment Effectiveness)
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.produccion.oee.valor }}%</h2>
-                            <p class="card-text">
-                                Disponibilidad: {{ kpis.produccion.oee.disponibilidad * 100 }}%<br>
-                                Rendimiento: {{ kpis.produccion.oee.rendimiento * 100 }}%<br>
-                                Calidad: {{ kpis.produccion.oee.calidad * 100 }}%
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Cumplimiento del Plan -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            Cumplimiento del Plan de Producción
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.produccion.cumplimiento_plan.valor }}%</h2>
-                            <p class="card-text">
-                                Completadas a tiempo: {{ kpis.produccion.cumplimiento_plan.completadas_a_tiempo }}<br>
-                                Total planificadas: {{ kpis.produccion.cumplimiento_plan.planificadas }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Tasa de Desperdicio -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            Tasa de Desperdicio (Scrap Rate)
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.produccion.tasa_desperdicio.valor }}%</h2>
-                            <p class="card-text">
-                                Desperdicio: {{ kpis.produccion.tasa_desperdicio.desperdicio }} kg<br>
-                                Material utilizado: {{ kpis.produccion.tasa_desperdicio.total_utilizado }} kg
-                            </p>
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        
         <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
-            <div class="row mt-4">
-                <!-- Tasa de Rechazo Interno -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            Tasa de Rechazo Interno
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.calidad.tasa_rechazo_interno.valor }}%</h2>
-                            <p class="card-text">
-                                Unidades rechazadas: {{ kpis.calidad.tasa_rechazo_interno.rechazadas }}<br>
-                                Total inspeccionadas: {{ kpis.calidad.tasa_rechazo_interno.inspeccionadas }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Tasa de Reclamos de Clientes -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            Tasa de Reclamos de Clientes
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.calidad.tasa_reclamos_clientes.valor }}%</h2>
-                            <p class="card-text">
-                                Reclamos: {{ kpis.calidad.tasa_reclamos_clientes.reclamos }}<br>
-                                Pedidos entregados: {{ kpis.calidad.tasa_reclamos_clientes.pedidos_entregados }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <!-- Tasa de Rechazo de Proveedores -->
-                <div class="col-md-4">
-                    <div class="card text-center">
-                        <div class="card-header">
-                            Tasa de Rechazo de Proveedores
-                        </div>
-                        <div class="card-body">
-                            <h2 class="card-title">{{ kpis.calidad.tasa_rechazo_proveedores.valor }}%</h2>
-                            <p class="card-text">
-                                Lotes rechazados: {{ kpis.calidad.tasa_rechazo_proveedores.rechazados }}<br>
-                                Lotes recibidos: {{ kpis.calidad.tasa_rechazo_proveedores.recibidos }}
-                            </p>
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        
         <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
-            <div class="row mt-4">
-                <!-- Rotación de Inventario -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Rotación de Inventario (últimos 30 días)</h5>
-                            {% if kpis.inventario.rotacion_inventario %}
-                                <p class="card-text display-4">{{ "%.2f"|format(kpis.inventario.rotacion_inventario.valor) }}</p>
-                                <p class="card-text"><small class="text-muted">Indica cuántas veces el inventario se ha vendido y repuesto en el período.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Costo de Bienes Vendidos (COGS)
-                                        <span class="badge bg-primary rounded-pill">${{ "%.2f"|format(kpis.inventario.rotacion_inventario.cogs) }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Valor de Inventario Promedio
-                                        <span class="badge bg-secondary rounded-pill">${{ "%.2f"|format(kpis.inventario.rotacion_inventario.inventario_valorizado) }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Cobertura de Stock -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Cobertura de Stock</h5>
-                            {% if kpis.inventario.cobertura_stock %}
-                                <p class="card-text display-4">{{ "%.2f"|format(kpis.inventario.cobertura_stock.valor) }} días</p>
-                                <p class="card-text"><small class="text-muted">Días de stock disponibles para <strong>{{ kpis.inventario.cobertura_stock.insumo_nombre }}</strong> basado en el consumo promedio.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Stock Actual
-                                        <span class="badge bg-success rounded-pill">{{ "%.2f"|format(kpis.inventario.cobertura_stock.stock) }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Consumo Promedio Diario
-                                        <span class="badge bg-info rounded-pill">{{ "%.2f"|format(kpis.inventario.cobertura_stock.consumo_diario) }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        
         <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
-            <div class="row mt-4">
-                <!-- Tasa de Cumplimiento de Pedidos -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Tasa de Cumplimiento de Pedidos (a tiempo)</h5>
-                            {% if kpis.comercial.cumplimiento_pedidos %}
-                                <p class="card-text display-4">{{ "%.2f"|format(kpis.comercial.cumplimiento_pedidos.valor) }}%</p>
-                                <p class="card-text"><small class="text-muted">Porcentaje de pedidos entregados a tiempo en el período.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Pedidos Completados a Tiempo
-                                        <span class="badge bg-primary rounded-pill">{{ kpis.comercial.cumplimiento_pedidos.completados }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Total de Pedidos Finalizados
-                                        <span class="badge bg-secondary rounded-pill">{{ kpis.comercial.cumplimiento_pedidos.total }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Valor Promedio de Pedido -->
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title">Valor Promedio de Pedido</h5>
-                            {% if kpis.comercial.valor_promedio_pedido %}
-                                <p class="card-text display-4">${{ "%.2f"|format(kpis.comercial.valor_promedio_pedido.valor) }}</p>
-                                <p class="card-text"><small class="text-muted">Valor monetario promedio de los pedidos completados en el período.</small></p>
-                                <ul class="list-group list-group-flush">
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Valor Total de Ventas
-                                        <span class="badge bg-success rounded-pill">${{ "%.2f"|format(kpis.comercial.valor_promedio_pedido.total_valor) }}</span>
-                                    </li>
-                                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                                        Número de Pedidos
-                                        <span class="badge bg-info rounded-pill">{{ kpis.comercial.valor_promedio_pedido.num_pedidos }}</span>
-                                    </li>
-                                </ul>
-                            {% else %}
-                                <p class="card-text text-danger">No se pudieron calcular los datos.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
             </div>
-        </div>
+        
+        <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
+            </div>
+        
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
+<script src="{{ url_for('static', filename='js/indicadores/indicadores_dashboard.js') }}"></script>
 {% endblock %}

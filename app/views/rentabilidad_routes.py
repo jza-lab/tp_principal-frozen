@@ -17,9 +17,13 @@ def pagina_rentabilidad():
 def api_datos_rentabilidad():
     """
     Endpoint de API para obtener los datos de la matriz de rentabilidad.
+    Acepta 'fecha_inicio' y 'fecha_fin' como query parameters.
     """
+    fecha_inicio = request.args.get('fecha_inicio', None)
+    fecha_fin = request.args.get('fecha_fin', None)
+    
     controller = RentabilidadController()
-    response, status_code = controller.obtener_datos_matriz_rentabilidad()
+    response, status_code = controller.obtener_datos_matriz_rentabilidad(fecha_inicio, fecha_fin)
     return jsonify(response), status_code
 
 @rentabilidad_bp.route('/api/rentabilidad/crecimiento', methods=['GET'])
@@ -42,4 +46,14 @@ def api_detalles_producto(producto_id):
     """
     controller = RentabilidadController()
     response, status_code = controller.obtener_detalles_producto(producto_id)
+    return jsonify(response), status_code
+
+@rentabilidad_bp.route('/api/rentabilidad/producto/<int:producto_id>/evolucion', methods=['GET'])
+@permission_required(accion='consultar_analisis_rentabilidad')
+def api_evolucion_producto(producto_id):
+    """
+    Endpoint de API para obtener la evolución histórica de un producto.
+    """
+    controller = RentabilidadController()
+    response, status_code = controller.obtener_evolucion_producto(producto_id)
     return jsonify(response), status_code

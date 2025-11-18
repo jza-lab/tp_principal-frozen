@@ -71,6 +71,27 @@ class ReservaInsumoModel(BaseModel):
             logger.error(f"Error calculando consumo total valorizado de insumos: {str(e)}")
             return {'success': False, 'error': str(e), 'total_consumido_valorizado': 0}
 
+    def get_consumo_total_en_periodo(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Calcula la cantidad total de insumos consumidos en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                'cantidad_reservada'
+            ).eq('estado', 'CONSUMIDO').gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat())
+            
+            result = query.execute()
+
+            if not result.data:
+                return {'success': True, 'total_consumido': 0}
+
+            total_consumido = sum(item.get('cantidad_reservada', 0) for item in result.data)
+            
+            return {'success': True, 'total_consumido': total_consumido}
+        except Exception as e:
+            logger.error(f"Error calculando consumo total de insumos: {str(e)}")
+            return {'success': False, 'error': str(e), 'total_consumido': 0}
+
     def get_consumo_promedio_diario_por_insumo(self, insumo_id: str, dias_periodo: int = 30) -> Dict:
         """
         Calcula el consumo promedio diario de un insumo específico en los últimos X días.
@@ -90,7 +111,7 @@ class ReservaInsumoModel(BaseModel):
             lote_ids = [lote['id_lote'] for lote in lotes_res.data]
 
             # 2. Obtener las reservas consumidas de esos lotes
-            query = self.db.table(self.get_table_name()).select('cantidad_reservada').eq('estado', 'CONSUMIDO').in_('lote_insumo_id', lote_ids).gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat())
+            query = self.db.table(self.get_table_name()).select('cantidad_reservada').eq('estado', 'CONSUMIDO').in_('lote_inventario_id', lote_ids).gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat())
             
             consumo_res = query.execute()
 

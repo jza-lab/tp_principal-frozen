@@ -14,6 +14,50 @@ class LoteProductoModel(BaseModel):
     def get_table_name(self) -> str:
         return 'lotes_productos'
 
+    def get_all_lotes_for_antiquity_view(self) -> Dict:
+        """
+        Obtiene todos los lotes de producto con su costo de producción calculado,
+        listos para el reporte de antigüedad de stock.
+        """
+        from app.models.receta import RecetaModel # Importación local
+        receta_model = RecetaModel()
+        
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                'fecha_produccion, cantidad_actual, producto_id'
+            ).gt('cantidad_actual', 0)
+
+            lotes_res = query.execute()
+
+            if not lotes_res.data:
+                return {'success': True, 'data': []}
+
+            lotes_data = lotes_res.data
+            # Cache para no recalcular costos para el mismo producto
+            costos_cache = {}
+
+            for lote in lotes_data:
+                producto_id = lote.get('producto_id')
+                if not producto_id:
+                    lote['costo_unitario'] = 0.0
+                    continue
+
+                if producto_id in costos_cache:
+                    lote['costo_unitario'] = costos_cache[producto_id]
+                else:
+                    costo = receta_model.get_costo_produccion(producto_id)
+                    costos_cache[producto_id] = costo
+                    lote['costo_unitario'] = costo
+                
+                # Renombrar para consistencia
+                lote['cantidad'] = lote.pop('cantidad_actual')
+
+            return {'success': True, 'data': lotes_data}
+
+        except Exception as e:
+            logger.error(f"Error en get_all_lotes_for_antiquity_view: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     def find_by_numero_lote(self, numero_lote: str) -> Dict:
         """Busca un lote por su número de lote único."""
         try:

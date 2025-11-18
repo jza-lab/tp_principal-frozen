@@ -46,6 +46,11 @@
                     <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
                 </button>
             </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link-custom" id="documentos-tab" data-bs-toggle="tab" data-bs-target="#documentos-tab-pane" type="button" role="tab" aria-controls="documentos-tab-pane" aria-selected="false">
+                    <i class="bi bi-file-earmark-text me-1"></i>Documentos Adicionales
+                </button>
+            </li>
         </ul>
 
         <!-- Contenido de las Pestañas -->
@@ -196,37 +201,86 @@
         </div>
 
         {% if pedido.notas_credito %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Notas de Crédito Asociadas</h5>
+        <div class="tab-pane fade" id="documentos-tab-pane" role="tabpanel" aria-labelledby="documentos-tab" tabindex="0">
+            <!-- Pagos Registrados -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Historial de Pagos</h5>
+                </div>
+                <div class="card-body">
+                    {% if pagos and pagos|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Monto</th>
+                                    <th>Método</th>
+                                    <th>Registrado por</th>
+                                    <th>Comprobante</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for pago in pagos %}
+                                <tr>
+                                    <td>{{ pago.fecha_creacion | format_datetime }}</td>
+                                    <td>{{ pago.monto | formato_moneda }}</td>
+                                    <td>{{ pago.metodo_pago.replace('_', ' ') | capitalize }}</td>
+                                    <td>{{ pago.usuario_registro.nombre or 'Sistema' }}</td>
+                                    <td>
+                                        {% if pago.comprobante_url %}
+                                        <a href="{{ pago.comprobante_url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-eye"></i> Ver
+                                        </a>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info border-0 bg-info-soft">No se han registrado pagos para este pedido.</div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="accordion accordion-flush" id="accordionNotasCredito">
-                {% for nc in pedido.notas_credito %}
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="heading-nc-{{ nc.id }}">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-nc-{{ nc.id }}" aria-expanded="false" aria-controls="collapse-nc-{{ nc.id }}">
-                            <div class="row w-100 align-items-center">
-                                <div class="col-md-4"><strong>Código:</strong> {{ nc.codigo_nc }}</div>
-                                <div class="col-md-4"><strong>Monto:</strong> <span class="text-success">{{ nc.monto | formato_moneda }}</span></div>
-                                <div class="col-md-4"><strong>Fecha:</strong> {{ nc.created_at | format_datetime }}</div>
-                            </div>
-                        </button>
-                    </h2>
-                    <div id="collapse-nc-{{ nc.id }}" class="accordion-collapse collapse" aria-labelledby="heading-nc-{{ nc.id }}" data-bs-parent="#accordionNotasCredito">
-                        <div class="accordion-body bg-light">
-                            {% include 'orden_venta/_nota_credito_cuerpo.html' with context %}
-                            <div class="text-center mt-3">
-                                <button class="btn btn-primary btn-sm download-nc-pdf" data-nc-id="{{ nc.id }}" data-nc-code="{{ nc.codigo_nc }}">
-                                    <i class="bi bi-download me-1"></i> Descargar PDF
-                                </button>
+
+            <!-- Notas de Crédito -->
+            {% if pedido.notas_credito %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Notas de Crédito Asociadas</h5>
+                </div>
+                <div class="accordion accordion-flush" id="accordionNotasCredito">
+                    {% for nc in pedido.notas_credito %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading-nc-{{ nc.id }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-nc-{{ nc.id }}" aria-expanded="false" aria-controls="collapse-nc-{{ nc.id }}">
+                                <div class="row w-100 align-items-center">
+                                    <div class="col-md-4"><strong>Código:</strong> {{ nc.codigo_nc }}</div>
+                                    <div class="col-md-4"><strong>Monto:</strong> <span class="text-success">{{ nc.monto | formato_moneda }}</span></div>
+                                    <div class="col-md-4"><strong>Fecha:</strong> {{ nc.created_at | format_datetime }}</div>
+                                </div>
+                            </button>
+                        </h2>
+                        <div id="collapse-nc-{{ nc.id }}" class="accordion-collapse collapse" aria-labelledby="heading-nc-{{ nc.id }}" data-bs-parent="#accordionNotasCredito">
+                            <div class="accordion-body bg-light">
+                                {% include 'orden_venta/_nota_credito_cuerpo.html' with context %}
+                                <div class="text-center mt-3">
+                                    <button class="btn btn-primary btn-sm download-nc-pdf" data-nc-id="{{ nc.id }}" data-nc-code="{{ nc.codigo_nc }}">
+                                        <i class="bi bi-download me-1"></i> Descargar PDF
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
+            {% endif %}
         </div>
-        {% endif %}
         <div class="card mb-5">
             <div class="card-header">
                 <h5 class="mb-0">Productos en este Pedido</h5>

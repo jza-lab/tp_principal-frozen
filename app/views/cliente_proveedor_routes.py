@@ -7,6 +7,7 @@ from app.controllers.pedido_controller  import PedidoController
 from app.controllers.proveedor_controller import ProveedorController
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.cliente_controller import ClienteController
+from app.controllers.pago_controller import PagoController
 from app.utils.decorators import permission_required, permission_any_of
 
 # Blueprint para la administración de usuarios
@@ -45,14 +46,31 @@ def ver_perfil_cliente(id):
     """Muestra el perfil de un cliente específico."""
     cliente_controller = ClienteController()
     pedido_controller = PedidoController()
+    pago_controller = PagoController()
+
     cliente_result, status = cliente_controller.obtener_cliente(id)
-    cliente= cliente_result.get('data') if cliente_result.get('success') else None
+    cliente = cliente_result.get('data') if cliente_result.get('success') else None
+    
     pedidos_resp, status = pedido_controller.get_ordenes_by_cliente(id)
-    if pedidos_resp.get('data'):
-        pedidos = pedidos_resp['data']
-    else:
-        pedidos={}
-    return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos)
+    pedidos = pedidos_resp.get('data', []) if pedidos_resp.get('success') else []
+
+    pagos_por_pedido = {}
+    if pedidos:
+        pedido_ids = [p['id'] for p in pedidos]
+        
+        # Realizar una única consulta para obtener todos los pagos
+        todos_los_pagos_resp = pago_controller.pago_model.find_all(filters={'id_pedido': pedido_ids})
+        
+        if todos_los_pagos_resp.get('success'):
+            # Inicializar el diccionario para todos los pedidos
+            for pid in pedido_ids:
+                pagos_por_pedido[pid] = []
+            
+            # Agrupar los pagos por id_pedido
+            for pago in todos_los_pagos_resp.get('data', []):
+                pagos_por_pedido[pago['id_pedido']].append(pago)
+
+    return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos, pagos_por_pedido=pagos_por_pedido)
 
 @cliente_proveedor.route('/clientes/nuevo', methods=['GET', 'PUT', 'POST'])
 @permission_required(accion='gestionar_clientes')

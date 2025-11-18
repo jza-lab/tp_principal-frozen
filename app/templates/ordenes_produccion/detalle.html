@@ -402,6 +402,11 @@
         </div>
     </div>
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        <div class="d-flex justify-content-end mb-3">
+            <button id="export-trazabilidad-pdf" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Exportar a PDF
+            </button>
+        </div>
         
         <div id="resumen-trazabilidad-contenedor">
             <!-- El contenido se generará dinámicamente por JS -->
@@ -444,7 +449,12 @@
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 <script>
     window.ORDEN_ID = "{{ orden.id }}";
+    window.ENTITY_TYPE = "orden_produccion";
+    window.ENTITY_ID = "{{ orden.id }}";
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/trazabilidadOrdenProduccion.js') }}?v=1.0"></script>
+<script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.0"></script>
 {% endblock %}

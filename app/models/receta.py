@@ -53,6 +53,52 @@ class RecetaModel(BaseModel):
     def get_table_name(self) -> str:
         return 'recetas'
 
+    def get_costo_produccion(self, producto_id: int, costos_insumos: Dict[str, float] = None) -> float:
+        """
+        Calcula el costo de producción para una unidad de un producto.
+        Si se provee `costos_insumos` (un dict de {insumo_id: costo}), se usa para evitar
+        consultas N+1 a la base de datos. De lo contrario, calcula los costos al momento.
+        """
+        from app.models.insumo_inventario import InsumoInventarioModel
+        insumo_inventario_model = InsumoInventarioModel()
+
+        receta_res = self.find_all(filters={'producto_id': producto_id, 'activa': True}, limit=1)
+        if not receta_res.get('success') or not receta_res.get('data'):
+            logger.warning(f"No se encontró receta activa para el producto ID {producto_id}.")
+            return 0.0
+        receta = receta_res['data'][0]
+
+        ingredientes_res = self.get_ingredientes(receta['id'])
+        if not ingredientes_res.get('success'):
+            logger.error(f"Error al obtener ingredientes para la receta ID {receta['id']}.")
+            return 0.0
+
+        costo_total = 0.0
+        for ingrediente in ingredientes_res.get('data', []):
+            insumo_id = ingrediente.get('id_insumo')
+            cantidad_necesaria = float(ingrediente.get('cantidad', 0))
+            
+            if not insumo_id:
+                continue
+
+            costo_promedio = 0.0
+            if costos_insumos is not None:
+                # Vía optimizada: usar el costo pre-calculado del diccionario.
+                costo_promedio = costos_insumos.get(insumo_id, 0.0)
+                if costo_promedio == 0.0:
+                     logger.warning(f"El insumo ID {insumo_id} no se encontró en el dict de costos pre-calculados.")
+            else:
+                # Vía no optimizada: hacer una consulta por cada insumo (fallback).
+                costo_promedio_res = insumo_inventario_model.get_costo_promedio_ponderado(insumo_id)
+                if costo_promedio_res.get('success'):
+                    costo_promedio = float(costo_promedio_res.get('costo_promedio', 0.0))
+                else:
+                    logger.warning(f"No se pudo obtener el costo promedio para el insumo ID {insumo_id}.")
+            
+            costo_total += cantidad_necesaria * costo_promedio
+
+        return costo_total
+
     def get_ingredientes(self, receta_id: int) -> dict:
         """
         Obtiene la lista de ingredientes (insumos) para una receta específica,
@@ -147,8 +193,21 @@ class RecetaModel(BaseModel):
     def obtener_operaciones_receta(self, receta_id: int) -> Dict:
         """ Obtiene las operaciones de una receta desde el modelo. """
         try:
-            result = self.db.table('operaciones_receta').select('*').eq('receta_id', receta_id).execute()
+            result = self.db.table('operacionesreceta').select('*').eq('receta_id', receta_id).execute()
             return {'success': True, 'data': result.data} if result.data else {'success': True, 'data': []}
         except Exception as e:
             logger.error(f"Error obteniendo operaciones para receta {receta_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_operaciones_by_receta_ids(self, receta_ids: List[int]) -> Dict:
+        """ Obtiene TODAS las operaciones para una LISTA de IDs de receta. """
+        if not receta_ids:
+            return {'success': True, 'data': []}
+        try:
+            ids_unicos = list(set(receta_ids))
+            query = self.db.table('operacionesreceta').select('*').in_('receta_id', ids_unicos)
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error en get_operaciones_by_receta_ids: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}

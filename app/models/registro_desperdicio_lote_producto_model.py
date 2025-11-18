@@ -33,7 +33,9 @@ class RegistroDesperdicioLoteProductoModel(BaseModel):
     def get_all_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime):
         """Obtiene todos los registros de desperdicio dentro de un rango de fechas."""
         try:
-            query = self._get_query_builder().select("*")
+            query = self._get_query_builder().select(
+                '*, motivo:motivos_desperdicio_lote(motivo)'
+            )
             query = query.gte('created_at', fecha_inicio.isoformat())
             query = query.lte('created_at', fecha_fin.isoformat())
             result = query.execute()
