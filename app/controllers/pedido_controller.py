@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, date, timedelta
 import copy
 
-from flask import jsonify
+from flask import jsonify, request
 from flask_jwt_extended import get_current_user
 from app.controllers.base_controller import BaseController
 from app.controllers.registro_controller import RegistroController
@@ -1125,3 +1125,110 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error generando enlace de seguimiento para pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response("No se pudo generar el enlace de seguimiento.", 500)
+
+    def enviar_qr_por_email(self, pedido_id: int) -> tuple:
+        """
+        Genera un código QR para el seguimiento de un pedido y lo envía por correo al cliente.
+        """
+        from flask import render_template, url_for
+        from app.services.email_service import send_email
+        import qrcode
+        import io
+        import base64
+
+        try:
+            # 1. Obtener datos del pedido
+            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
+            if not pedido_resp.get('success'):
+                return self.error_response("Pedido no encontrado.", 404)
+            pedido = pedido_resp.get('data')
+
+            # 2. Obtener datos del cliente
+            cliente_id = pedido.get('id_cliente')
+            cliente_resp = self.cliente_model.find_by_id(cliente_id)
+            if not cliente_resp.get('success'):
+                return self.error_response("Cliente asociado al pedido no encontrado.", 404)
+            cliente = cliente_resp.get('data')
+            cliente_email = cliente.get('email')
+            cliente_nombre = cliente.get('nombre', 'Cliente')
+
+            if not cliente_email:
+                return self.error_response("El cliente no tiene una dirección de correo electrónico registrada.", 400)
+
+            # 3. Generar la URL de seguimiento público con Token
+            token_resp, _ = self.generar_enlace_seguimiento(pedido_id)
+            if not token_resp.get('success'):
+                return self.error_response("No se pudo generar el token de seguimiento para el correo.", 500)
+            
+            token = token_resp['data']['token']
+            # --- CORRECCIÓN: Construir la URL manualmente para evitar error de contexto ---
+            base_url = request.host_url
+            url_seguimiento = f"{base_url}public/seguimiento/{token}"
+
+            # --- CÁLCULO DEL SUBTOTAL Y TOTAL ---
+            total_pedido = 0
+            for item in pedido.get('items', []):
+                precio = item.get('producto_nombre', {}).get('precio_unitario', 0)
+                cantidad = item.get('cantidad', 0)
+                subtotal = precio * cantidad
+                item['subtotal'] = subtotal
+                total_pedido += subtotal
+            
+            # Añadir el total calculado al diccionario principal del pedido
+            pedido['total'] = total_pedido
+            # --- FIN CÁLCULO ---
+
+            # 4. Generar el código QR en memoria
+            qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_L, box_size=10, border=4)
+            qr.add_data(url_seguimiento)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="black", back_color="white")
+            
+            buffered = io.BytesIO()
+            img.save(buffered, format="PNG")
+            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            qr_data_uri = f"data:image/png;base64,{img_base64}"
+
+            # 5. Formatear fecha y renderizar la plantilla del correo
+            fecha_estimada = pedido.get('fecha_requerido')
+            fecha_formateada = ''
+            if fecha_estimada:
+                try:
+                    # La fecha viene como 'YYYY-MM-DD'
+                    fecha_obj = datetime.strptime(fecha_estimada, '%Y-%m-%d')
+                    fecha_formateada = fecha_obj.strftime('%d/%m/%Y')
+                except (ValueError, TypeError):
+                    fecha_formateada = fecha_estimada # Fallback por si el formato cambia
+            
+            body_html = render_template(
+                'emails/qr_pedido_cliente.html',
+                cliente_nombre=cliente_nombre,
+                pedido=pedido,
+                url_seguimiento=url_seguimiento,
+                qr_data_uri=qr_data_uri,
+                fecha_estimada_entrega=fecha_formateada,
+                current_year=datetime.now().year
+            )
+            
+            asunto = f"Seguimiento de tu pedido #{pedido.get('codigo_ov', pedido_id)}"
+
+            # 6. Enviar el correo
+            email_sent, email_error = send_email(cliente_email, asunto, body_html)
+
+            if not email_sent:
+                logger.error(f"Error al enviar email de seguimiento para pedido {pedido_id}: {email_error}")
+                return self.error_response(f"No se pudo enviar el correo: {email_error}", 500)
+
+            # 7. Registrar la acción
+            self.registro_controller.crear_registro(
+                get_current_user(),
+                'Ordenes de venta',
+                'Envío de QR',
+                f"Se envió el código QR de seguimiento por email para el pedido ID: {pedido_id}."
+            )
+
+            return self.success_response(message="Correo con el código de seguimiento enviado exitosamente.")
+
+        except Exception as e:
+            logger.error(f"Error interno en enviar_qr_por_email para pedido {pedido_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)

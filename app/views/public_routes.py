@@ -93,11 +93,9 @@ def crear_pedido_api():
     nuevo_pedido = response.get('data', {})
     if status_code < 300:
         return jsonify({
-            'success': True, 
+            'success': True,
             'message': '¡Pedido recibido con éxito! Nos pondremos en contacto a la brevedad.',
-            'data': {
-            'id': nuevo_pedido.get('id')
-            }
+            'data': nuevo_pedido  # <-- CORRECCIÓN: Devolver el objeto completo
         }), 201
     else:
         return jsonify({
@@ -110,12 +108,17 @@ def ver_comprobante(pedido_id):
     """
     Muestra una página de confirmación y comprobante de pago para un pedido específico.
     """
+    csrf_form = CSRFOnlyForm()
     pedido_controller = PedidoController()
     response, status_code = pedido_controller.obtener_pedido_por_id(pedido_id)
     
     if response.get('success'):
         pedido_data = response.get('data')
-        return render_template('orden_venta/comprobante_pago.html', pedido=pedido_data)
+        return render_template(
+            'orden_venta/comprobante_pago.html',
+            pedido=pedido_data,
+            csrf_form=csrf_form
+        )
     else:
         return "Pedido no encontrado o error al cargar los datos.", 404
 
