@@ -50,70 +50,12 @@ class IndicadoresController:
 
     # --- CATEGORÍA: PRODUCCIÓN ---
     def obtener_datos_produccion(self, fecha_inicio_str, fecha_fin_str):
-        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
-        
-        # --- CORRECCIÓN 1: Inicializar kpis ---
-        kpis = {}
+        """
+        Esta función está reservada para KPIs puramente de producción.
+        La lógica de inventario que estaba aquí fue movida a su propia categoría.
+        """
+        return {}
 
-        # 1. Rotación de Inventario (mensual)
-        try:
-            cogs_res = self.reserva_insumo_model.get_consumo_total_valorizado_en_periodo(fecha_inicio, fecha_fin)
-            stock_valorizado_res = self.insumo_inventario_model.get_stock_total_valorizado()
-
-            if cogs_res['success'] and stock_valorizado_res['success']:
-                cogs = cogs_res['total_consumido_valorizado']
-                inventario_promedio = stock_valorizado_res['total_valorizado'] # Simplificación: usamos el valor actual
-                
-                rotacion = cogs / inventario_promedio if inventario_promedio else 0
-                kpis['rotacion_inventario'] = {"valor": round(rotacion, 2), "cogs": cogs, "inventario_valorizado": inventario_promedio}
-            else:
-                kpis['rotacion_inventario'] = {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
-        except Exception as e:
-            kpis['rotacion_inventario'] = {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
-
-        # 2. Cobertura de Stock (promedio de todos los insumos)
-        try:
-            insumos_res = self.insumo_model.find_all()
-            if insumos_res['success'] and insumos_res['data']:
-                coberturas = []
-                total_stock_valorizado = 0
-                total_consumo_diario_valorizado = 0
-
-                for insumo in insumos_res['data']:
-                    id_insumo = insumo['id_insumo']
-                    precio_unitario = insumo.get('precio_unitario', 0)
-
-                    stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
-                    consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
-
-                    if stock_res['success'] and consumo_res['success']:
-                        stock_actual = stock_res['stock_actual']
-                        consumo_diario = consumo_res['consumo_promedio_diario']
-
-                        total_stock_valorizado += stock_actual * precio_unitario
-                        total_consumo_diario_valorizado += consumo_diario * precio_unitario
-                        
-                        if consumo_diario > 0:
-                            coberturas.append(stock_actual / consumo_diario)
-
-                if total_consumo_diario_valorizado > 0:
-                    cobertura_promedio = total_stock_valorizado / total_consumo_diario_valorizado
-                else:
-                    cobertura_promedio = float('inf')
-
-                kpis['cobertura_stock'] = {
-                    "valor": round(cobertura_promedio, 2) if cobertura_promedio != float('inf') else 'inf',
-                    "insumo_nombre": "Todos los insumos",
-                    "stock": round(total_stock_valorizado, 2),
-                    "consumo_diario": round(total_consumo_diario_valorizado, 2)
-                }
-            else:
-                kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-        except Exception as e:
-            kpis['cobertura_stock'] = {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
-            
-        return kpis
-        
     def obtener_kpis_produccion(self, fecha_inicio_str, fecha_fin_str):
         if fecha_inicio_str:
             fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
@@ -127,45 +69,82 @@ class IndicadoresController:
 
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
         cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
+        tasa_desperdicio = self._calcular_tasa_desperdicio(fecha_inicio, fecha_fin)
         causas_desperdicio = self.obtener_causas_desperdicio_pareto(fecha_inicio_str, fecha_fin_str)
 
-        return { "oee": oee, "cumplimiento_plan": cumplimiento_plan, "causas_desperdicio_pareto": causas_desperdicio }
+        # Se retorna una estructura defensiva que coincide con el frontend
+        return {
+            "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
+            "cumplimiento_plan": cumplimiento_plan if isinstance(cumplimiento_plan, dict) else {"valor": 0, "completadas_a_tiempo": 0, "planificadas": 0},
+            "tasa_desperdicio": tasa_desperdicio if isinstance(tasa_desperdicio, dict) else {"valor": 0, "desperdicio": 0, "total_utilizado": 0},
+            "causas_desperdicio_pareto": causas_desperdicio if isinstance(causas_desperdicio, dict) else {"labels": [], "data": [], "line_data": []}
+        }
 
     # --- CATEGORÍA: CALIDAD ---
     def obtener_datos_calidad(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
         
+        rechazo_interno = self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin)
+        reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
+        rechazo_proveedores = self._calcular_tasa_rechazo_proveedores(fecha_inicio, fecha_fin)
+        
+        # Se retorna una estructura defensiva que coincide con el frontend
         return {
-            "tasa_rechazo_interno": self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin),
-            "tasa_reclamos_clientes": self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin),
-            "tasa_rechazo_proveedores": self._calcular_tasa_rechazo_proveedores(fecha_inicio, fecha_fin),
+            "tasa_rechazo_interno": rechazo_interno if isinstance(rechazo_interno, dict) else {"valor": 0, "rechazadas": 0, "inspeccionadas": 0},
+            "tasa_reclamos_clientes": reclamos_clientes if isinstance(reclamos_clientes, dict) else {"valor": 0, "reclamos": 0, "pedidos_entregados": 0},
+            "tasa_rechazo_proveedores": rechazo_proveedores if isinstance(rechazo_proveedores, dict) else {"valor": 0, "rechazados": 0, "recibidos": 0},
         }
 
     # --- CATEGORÍA: COMERCIAL ---
     def obtener_datos_comercial(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, default_days=365)
+        
+        kpis = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
+        top_productos = self.obtener_top_productos_vendidos(fecha_inicio_str, fecha_fin_str)
+        top_clientes = self.obtener_top_clientes(fecha_inicio_str, fecha_fin_str)
+
         return {
-            "kpis_comerciales": self._obtener_kpis_comerciales(fecha_inicio, fecha_fin),
-            "top_productos_vendidos": self.obtener_top_productos_vendidos(fecha_inicio_str, fecha_fin_str),
-            "top_clientes": self.obtener_top_clientes(fecha_inicio_str, fecha_fin_str),
+            "kpis_comerciales": {
+                "cumplimiento_pedidos": kpis.get("cumplimiento_pedidos", {"valor": 0, "completados": 0, "total": 0}),
+                "valor_promedio_pedido": kpis.get("valor_promedio_pedido", {"valor": 0, "num_pedidos": 0})
+            },
+            "top_productos_vendidos": top_productos if isinstance(top_productos, dict) else {"labels": [], "data": []},
+            "top_clientes": top_clientes if isinstance(top_clientes, dict) else {"labels": [], "data": []},
         }
 
     # --- CATEGORÍA: FINANCIERA ---
     def obtener_datos_financieros(self, fecha_inicio_str, fecha_fin_str):
+        facturacion = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str)
+        costo_ganancia = self.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str)
+        rentabilidad = self.obtener_rentabilidad_productos(fecha_inicio_str, fecha_fin_str)
+        descomposicion = self.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str)
+
         return {
-            "facturacion_periodo": self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str),
-            "costo_vs_ganancia": self.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str),
-            "rentabilidad_productos": self.obtener_rentabilidad_productos(fecha_inicio_str, fecha_fin_str),
-            "descomposicion_costos": self.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str),
+            "facturacion_periodo": facturacion if isinstance(facturacion, dict) else {"labels": [], "data": []},
+            "costo_vs_ganancia": costo_ganancia if isinstance(costo_ganancia, dict) else {"labels": [], "ingresos": [], "costos": []},
+            "rentabilidad_productos": rentabilidad if isinstance(rentabilidad, dict) else {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []},
+            "descomposicion_costos": descomposicion if isinstance(descomposicion, dict) else {"labels": [], "data": []},
         }
         
     # --- CATEGORÍA: INVENTARIO ---
     def obtener_datos_inventario(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        
+        rotacion = self._calcular_rotacion_inventario(fecha_inicio, fecha_fin)
+        cobertura = self._calcular_cobertura_stock()
+        antiguedad_insumos = self.obtener_antiguedad_stock('insumo')
+        antiguedad_productos = self.obtener_antiguedad_stock('producto')
+
+        kpis_inventario = {
+            "rotacion_inventario": rotacion if isinstance(rotacion, dict) else {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+        }
+
+        # Se retorna una estructura defensiva que coincide con el frontend
         return {
-            "kpis_inventario": self._obtener_kpis_inventario(fecha_inicio, fecha_fin),
-            "antiguedad_stock_insumos": self.obtener_antiguedad_stock('insumo'),
-            "antiguedad_stock_productos": self.obtener_antiguedad_stock('producto'),
+            "kpis_inventario": kpis_inventario,
+            "cobertura_stock": cobertura if isinstance(cobertura, dict) else {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0},
+            "antiguedad_stock_insumos": antiguedad_insumos if isinstance(antiguedad_insumos, dict) else {"labels": [], "data": []},
+            "antiguedad_stock_productos": antiguedad_productos if isinstance(antiguedad_productos, dict) else {"labels": [], "data": []},
         }
         
     # --- MÉTODOS DE CÁLCULO OPTIMIZADOS ---
@@ -374,43 +353,86 @@ class IndicadoresController:
 
 
     def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
-        completados_res = self.pedido_model.count_completed_on_time_in_date_range(fecha_inicio, fecha_fin)
-        completados = completados_res.get('count', 0)
+        # 1. Cumplimiento de Pedidos
+        # CORRECCIÓN: Usar el método correcto 'count_by_estados_in_date_range' para el total
+        estados_totales = [
+            estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
+            estados.OV_COMPLETADO, estados.OV_CANCELADA
+        ]
+        total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
+        completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
         
-        total_res = self.pedido_model.count_by_estados_in_date_range([estados.OV_COMPLETADO, estados.OV_CANCELADA], fecha_inicio, fecha_fin)
-        total = total_res.get('count', 0)
+        total_pedidos = total_pedidos_res.get('count', 0)
+        num_pedidos_completados = completados_res.get('count', 0)
         
-        tasa_cumplimiento = (completados / total) * 100 if total > 0 else 0
+        cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
 
+        # 2. Valor Promedio de Pedido
         total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-        total_valor = total_valor_res.get('total_valor', 0)
-
-        num_pedidos_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
-        num_pedidos = num_pedidos_res.get('count', 0)
-
-        valor_promedio = total_valor / num_pedidos if num_pedidos > 0 else 0
+        total_valor = total_valor_res.get('total_valor', 0.0)
+        
+        valor_promedio = total_valor / num_pedidos_completados if num_pedidos_completados > 0 else 0.0
 
         return {
-            "cumplimiento_pedidos": {"valor": round(tasa_cumplimiento, 2), "completados": completados, "total": total},
-            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "total_valor": total_valor, "num_pedidos": num_pedidos}
+            "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
+            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_completados}
         }
-        
-    def _obtener_kpis_inventario(self, fecha_inicio, fecha_fin):
-        cogs_res = self.reserva_insumo_model.get_consumo_total_valorizado_en_periodo(fecha_inicio, fecha_fin)
-        cogs = cogs_res.get('total_consumido_valorizado', 0)
-        
-        stock_valorizado_res = self.insumo_inventario_model.get_stock_total_valorizado()
-        stock_valorizado = stock_valorizado_res.get('total_valorizado', 0)
-        
-        rotacion = cogs / stock_valorizado if stock_valorizado else 0
-        return {"rotacion_inventario": {"valor": round(rotacion, 2), "cogs": cogs, "inventario_valorizado": stock_valorizado}}
 
+    def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
+        try:
+            cogs_res = self.reserva_insumo_model.get_consumo_total_valorizado_en_periodo(fecha_inicio, fecha_fin)
+            stock_valorizado_res = self.insumo_inventario_model.get_stock_total_valorizado()
+
+            if cogs_res['success'] and stock_valorizado_res['success']:
+                cogs = cogs_res.get('total_consumido_valorizado', 0)
+                inventario_promedio = stock_valorizado_res.get('total_valorizado', 0)
+                
+                rotacion = cogs / inventario_promedio if inventario_promedio else 0
+                return {"valor": round(rotacion, 2), "cogs": cogs, "inventario_valorizado": inventario_promedio}
+            return {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+        except Exception:
+            return {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+
+    def _calcular_cobertura_stock(self):
+        try:
+            insumos_res = self.insumo_model.find_all()
+            if not (insumos_res['success'] and insumos_res['data']):
+                return {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
+
+            total_stock_valorizado = 0
+            total_consumo_diario_valorizado = 0
+
+            for insumo in insumos_res['data']:
+                id_insumo = insumo['id_insumo']
+                precio_unitario = insumo.get('precio_unitario', 0)
+
+                stock_res = self.insumo_inventario_model.get_stock_actual_por_insumo(id_insumo)
+                consumo_res = self.reserva_insumo_model.get_consumo_promedio_diario_por_insumo(id_insumo)
+
+                if stock_res['success'] and consumo_res['success']:
+                    stock_actual = stock_res.get('stock_actual', 0)
+                    consumo_diario = consumo_res.get('consumo_promedio_diario', 0)
+                    total_stock_valorizado += stock_actual * precio_unitario
+                    total_consumo_diario_valorizado += consumo_diario * precio_unitario
+            
+            cobertura_promedio = (total_stock_valorizado / total_consumo_diario_valorizado 
+                                  if total_consumo_diario_valorizado > 0 else float('inf'))
+
+            return {
+                "valor": round(cobertura_promedio, 2) if cobertura_promedio != float('inf') else 'inf',
+                "insumo_nombre": "Todos los insumos",
+                "stock": round(total_stock_valorizado, 2),
+                "consumo_diario": round(total_consumo_diario_valorizado, 2)
+            }
+        except Exception:
+            return {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0}
+        
     # --- MÉTODOS PÚBLICOS PARA GRÁFICOS ---
 
     def obtener_top_productos_vendidos(self, fecha_inicio_str, fecha_fin_str, top_n=5):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
         sales_res = self.pedido_model.get_sales_by_product_in_period(fecha_inicio, fecha_fin)
-        if not sales_res.get('success'): return {"error": "Failed to retrieve sales data"}
+        if not sales_res.get('success'): return {"labels": [], "data": []}
 
         sorted_products = sorted(sales_res.get('data', {}).items(), key=lambda item: item[1], reverse=True)
         top_products = sorted_products[:top_n]
@@ -419,78 +441,90 @@ class IndicadoresController:
     def obtener_facturacion_por_periodo(self, fecha_inicio_str, fecha_fin_str, periodo='mensual'):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
         ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin)
-        if not ingresos_res.get('success'): return {"error": "Failed to retrieve income data"}
-        
-        # --- CORRECCIÓN 3: Se eliminó el bloque 'try/except' duplicado y erróneo ---
+        if not ingresos_res.get('success'): return {"labels": [], "data": []}
 
-        # 2. Valor Promedio de Pedido (Este bloque parece estar en el lugar incorrecto, 
-        # pero lo dejo como estaba en tu código original. 
-        # Si da error, probablemente deba borrarse también)
         try:
             total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
             num_pedidos_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
         except Exception as e:
-            # Manejar excepción si es necesario, pero no usa 'kpis'
             logger.error(f"Error calculando valor promedio: {e}")
 
-        # La función debe retornar los datos de facturación
-        # Asumo que ingresos_res['data'] tiene el formato { 'labels': [...], 'data': [...] }
-        # Si no, esta parte necesita ajuste.
         if isinstance(ingresos_res.get('data'), dict):
-             # Si ya devuelve el formato correcto
             return ingresos_res['data']
         else:
-            # Si devuelve otra cosa, hay que procesarlo.
-            # Esta parte es una suposición de la lógica faltante
             processed_data = defaultdict(float)
             for ingreso in ingresos_res.get('data', []):
-                 # Asumiendo que 'ingreso' tiene 'fecha' y 'monto'
-                 fecha_dt = datetime.fromisoformat(ingreso['fecha'])
-                 key = fecha_dt.strftime('%Y-%m') # Asumiendo mensual
-                 processed_data[key] += float(ingreso['monto'])
+                 fecha_dt = datetime.fromisoformat(ingreso['fecha_solicitud'])
+                 key = fecha_dt.strftime('%Y-%m') 
+                 processed_data[key] += float(ingreso['precio_orden'])
             
             labels = sorted(processed_data.keys())
             data = [processed_data[key] for key in labels]
             return {"labels": labels, "data": data}
 
-
     def obtener_rentabilidad_productos(self, fecha_inicio_str, fecha_fin_str):
-        # Esta función parece que se cortó. La completo con la lógica 
-        # que estaba mezclada en 'obtener_facturacion_por_periodo'
-        
-        productos_res = self.producto_model.find_all()
-        if not productos_res.get('success'):
-            return {"error": "No se pudieron obtener productos"}
+        from app.models.insumo_inventario import InsumoInventarioModel
+        insumo_inventario_model = InsumoInventarioModel()
+        empty_return = {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []}
 
+        productos_res = self.producto_model.find_all()
+        if not productos_res.get('success'): return empty_return
         productos_data = productos_res.get('data', [])
-        costos_insumos_cache = self._preparar_cache_costos_por_productos([p['id'] for p in productos_data])
+        producto_ids = [p['id'] for p in productos_data]
+
+        recetas_res = self.receta_model.find_all(filters={'producto_id': ('in', producto_ids), 'activa': True})
+        if not recetas_res.get('success'): return empty_return
+        
+        recetas_por_producto_id = {receta['producto_id']: receta for receta in recetas_res.get('data', [])}
+        receta_ids = [r['id'] for r in recetas_por_producto_id.values()]
+
+        ingredientes_res = self.receta_model.get_ingredientes_by_receta_ids(receta_ids)
+        if not ingredientes_res.get('success'): return empty_return
+        
+        ingredientes_por_receta_id = defaultdict(list)
+        all_insumo_ids = set()
+        for ing in ingredientes_res.get('data', []):
+            ingredientes_por_receta_id[ing['receta_id']].append(ing)
+            if insumo_data := ing.get('insumos_catalogo'):
+                all_insumo_ids.add(insumo_data['id_insumo'])
+
+        costos_insumos_res = insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
+        costos_insumos = costos_insumos_res.get('data', {}) if costos_insumos_res.get('success') else {}
 
         rentabilidad = {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []}
         for p in productos_data:
-            costo = self._get_costo_producto(p['id'], costos_insumos_cache)
+            costo_total = 0.0
+            receta = recetas_por_producto_id.get(p['id'])
+            if receta:
+                ingredientes = ingredientes_por_receta_id.get(receta['id'], [])
+                for ing in ingredientes:
+                    insumo_id = ing.get('insumos_catalogo', {}).get('id_insumo')
+                    cantidad = float(ing.get('cantidad', 0))
+                    costo_unitario = costos_insumos.get(insumo_id, 0.0)
+                    costo_total += cantidad * costo_unitario
+
             precio = float(p.get('precio_unitario', 0.0))
             rentabilidad['labels'].append(p['nombre'])
-            rentabilidad['costos'].append(round(costo, 2))
+            rentabilidad['costos'].append(round(costo_total, 2))
             rentabilidad['ingresos'].append(round(precio, 2))
-            rentabilidad['rentabilidad_neta'].append(round(precio - costo, 2))
+            rentabilidad['rentabilidad_neta'].append(round(precio - costo_total, 2))
+            
         return rentabilidad
-
 
     def obtener_costo_vs_ganancia(self, fecha_inicio_str, fecha_fin_str, periodo='mensual'):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
         facturacion_res = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str, periodo)
-        if facturacion_res.get('error'): return facturacion_res
+        empty_return = {"labels": [], "ingresos": [], "costos": []}
+        if not facturacion_res or facturacion_res.get('error'): return empty_return
         
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        if not ordenes_res.get('success'): return {"error": "Could not get production orders."}
+        if not ordenes_res.get('success'): return empty_return
         
         ordenes_data = ordenes_res.get('data', [])
         
-        # Pre-cache de costos de recetas usadas en las órdenes
         receta_ids_en_ordenes = [op['receta_id'] for op in ordenes_data if op.get('receta_id') and op.get('producto_id')]
         producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('receta_id') and op.get('producto_id')]
         
-        # Asumo que necesitamos costos por producto_id, no receta_id
         costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
 
         costos_por_periodo = defaultdict(float)
@@ -517,7 +551,7 @@ class IndicadoresController:
     def obtener_descomposicion_costos(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        if not ordenes_res.get('success'): return {"error": "Could not get production orders."}
+        if not ordenes_res.get('success'): return {"labels": [], "data": []}
         
         ordenes_data = ordenes_res.get('data', [])
         
@@ -541,7 +575,7 @@ class IndicadoresController:
     def obtener_top_clientes(self, fecha_inicio_str, fecha_fin_str, top_n=5, criterio='valor'):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, 365)
         pedidos_res = self.pedido_model.get_all_with_items(filtros={'fecha_desde': fecha_inicio.strftime('%Y-%m-%d'), 'fecha_hasta': fecha_fin.strftime('%Y-%m-%d'), 'estado': 'COMPLETADO'})
-        if not pedidos_res.get('success'): return {"error": "Could not get orders."}
+        if not pedidos_res.get('success'): return {"labels": [], "data": []}
 
         clientes_data = defaultdict(lambda: {'valor': 0, 'cantidad': 0, 'nombre': 'N/A'})
         for pedido in pedidos_res.get('data', []):
@@ -558,7 +592,7 @@ class IndicadoresController:
     def obtener_causas_desperdicio_pareto(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
         desperdicios_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        if not desperdicios_res.get('success'): return {"error": "Could not get waste records."}
+        if not desperdicios_res.get('success'): return {"labels": [], "data": [], "line_data": []}
 
         causas = defaultdict(float)
         for d in desperdicios_res.get('data', []):
@@ -580,10 +614,11 @@ class IndicadoresController:
     def obtener_antiguedad_stock(self, tipo='insumo'):
         hoy = datetime.now().date()
         categorias = {"0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "+90 días": 0.0}
+        empty_return = {"labels": list(categorias.keys()), "data": [0] * len(categorias)}
 
         if tipo == 'insumo':
             lotes_res = self.insumo_inventario_model.get_all_lotes_for_view()
-            if not lotes_res.get('success'): return {"error": "Could not get raw material lots."}
+            if not lotes_res.get('success'): return empty_return
             for lote in lotes_res.get('data', []):
                 if not (fecha_str := lote.get('fecha_ingreso')): continue
                 antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
@@ -594,25 +629,18 @@ class IndicadoresController:
                 else: categorias["+90 días"] += valor
         else: # producto
             lotes_res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
-            if not lotes_res.get('success'): return {"error": "Could not get product lots."}
+            if not lotes_res.get('success'): return empty_return
             lotes_data = lotes_res.get('data', [])
             
-            # --- Lógica faltante para procesar lotes de producto ---
-            # Deberías agregar la lógica para 'producto' aquí, similar a 'insumo'
-            # Ejemplo (necesitás ajustar los nombres de campos):
             for lote in lotes_data:
-                if not (fecha_str := lote.get('fecha_fabricacion')): continue # Asumiendo 'fecha_fabricacion'
+                if not (fecha_str := lote.get('fecha_fabricacion')): continue
                 antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
                 
-                # Necesitás una forma de obtener el valor del lote de producto
-                # Esto es un placeholder:
                 valor = float(lote.get('costo_unitario_estimado') or 0.0) * float(lote.get('cantidad_actual', 0)) 
                 
                 if 0 <= antiguedad <= 30: categorias["0-30 días"] += valor
                 elif 31 <= antiguedad <= 60: categorias["31-60 días"] += valor
                 elif 61 <= antiguedad <= 90: categorias["61-90 días"] += valor
                 else: categorias["+90 días"] += valor
-            # --- Fin lógica placeholder ---
             
-        # --- CORRECCIÓN 4: Retornar 'categorias' ---
-        return categorias
+        return {"labels": list(categorias.keys()), "data": list(categorias.values())}

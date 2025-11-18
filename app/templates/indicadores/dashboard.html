@@ -204,40 +204,39 @@
         </div>
         <!-- Contenedor para Comercial -->
         <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card text-center">
+                        <div class="card-header">Cumplimiento de Pedidos</div>
+                        <div class="card-body">
+                            <h2 class="card-title">{{ kpis.comercial.kpis_comerciales.cumplimiento_pedidos.valor }}%</h2>
+                            <p class="card-text">
+                                Completados: {{ kpis.comercial.kpis_comerciales.cumplimiento_pedidos.completados }}<br>
+                                Total: {{ kpis.comercial.kpis_comerciales.cumplimiento_pedidos.total }}
+                            </p>
+                        </div>
+                    </div>
                 </div>
-                <p class="mt-2">Cargando datos Comerciales...</p>
+                <div class="col-md-6">
+                    <div class="card text-center">
+                        <div class="card-header">Valor Promedio de Pedido</div>
+                        <div class="card-body">
+                            <h2 class="card-title">${{ "%.2f"|format(kpis.comercial.kpis_comerciales.valor_promedio_pedido.valor) }}</h2>
+                            <p class="card-text">
+                                Basado en {{ kpis.comercial.kpis_comerciales.valor_promedio_pedido.num_pedidos }} pedidos
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <!-- Contenedor para Financiera -->
         <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos Financieros...</p>
+            <div class="row mt-4">
+                <p class="text-center">Datos financieros se cargan dinámicamente.</p>
             </div>
         </div>
-        <!-- Contenedor para Calidad -->
-        <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos de Calidad...</p>
-            </div>
-        </div>
-        <!-- Contenedor para Inventario -->
-        <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos de Inventario...</p>
-            </div>
-        </div>
+        
     </div>
 </div>
 {% endblock %}

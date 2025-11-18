@@ -198,3 +198,16 @@ class RecetaModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo operaciones para receta {receta_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def get_operaciones_by_receta_ids(self, receta_ids: List[int]) -> Dict:
+        """ Obtiene TODAS las operaciones para una LISTA de IDs de receta. """
+        if not receta_ids:
+            return {'success': True, 'data': []}
+        try:
+            ids_unicos = list(set(receta_ids))
+            query = self.db.table('operacionesreceta').select('*').in_('receta_id', ids_unicos)
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error en get_operaciones_by_receta_ids: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
