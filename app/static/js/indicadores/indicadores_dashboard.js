@@ -9,12 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function getApiUrl(category) {
         const startDate = document.getElementById('fecha_inicio').value;
         const endDate = document.getElementById('fecha_fin').value;
-        const verTodos = document.getElementById('ver-todos-switch').checked;
-        let url = `/reportes/api/indicadores/${category}?fecha_inicio=${startDate}&fecha_fin=${endDate}`;
-        if (verTodos && category === 'produccion') { // Apply only to production tab for now
-            url += '&ver_todos=true';
-        }
-        return url;
+        return `/reportes/api/indicadores/${category}?fecha_inicio=${startDate}&fecha_fin=${endDate}`;
     }
 
     function showLoading(tabPane) {
@@ -28,9 +23,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showError(tabPane, message) {
+        // --- MODIFICADO: Añadido console.log para debugging ---
+        console.log("Mostrando error en UI:", message); 
+        // --- MODIFICADO: Mensaje de error más claro ---
         tabPane.innerHTML = `
             <div class="alert alert-danger text-center p-5" role="alert">
-                <strong>Error:</strong> ${message || 'No se pudieron cargar los datos.'}
+                <strong>Error al cargar:</strong> ${message || 'No se pudieron cargar los datos.'}
             </div>`;
     }
     
@@ -97,7 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch(getApiUrl(category));
             if (!response.ok) {
-                throw new Error(`Error del servidor: ${response.statusText}`);
+                throw new Error(`Error del servidor: ${response.statusText} (Status: ${response.status})`);
             }
             const data = await response.json();
             
@@ -128,7 +126,8 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
         } catch (error) {
-            console.error(`Error al cargar datos para ${category}:`, error);
+            // --- MODIFICADO: Añadido console.error para debugging ---
+            console.error(`Error detallado al cargar datos para ${category}:`, error);
             showError(tabPane, error.message);
         }
     }
@@ -141,18 +140,6 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div> <div class="row mt-4"><div class="col-lg-12 mb-4">';
         content += renderChartCard('pareto-desperdicio-chart', 'Análisis de Causas de Desperdicio (Pareto)', 'Identifica las causas más significativas de desperdicio.', 'Regla 80/20 para encontrar las causas vitales.', 'download-pareto');
         content += '</div></div>';
-        
-        // Nuevos gráficos
-        content += '<div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('gantt-produccion-chart', 'Diagrama de Gantt de Producción', 'Visualización de órdenes de producción en el tiempo.', 'Muestra la duración y estado de cada orden.', 'download-gantt', '600px');
-        content += '</div></div>';
-
-        content += '<div class="row mt-4"><div class="col-lg-6 mb-4">';
-        content += renderChartCard('rendimiento-producto-chart', 'Análisis de Rendimiento por Producto', 'Compara el rendimiento real vs. el teórico.', 'Calculado sobre órdenes completadas. Un 100% es el rendimiento ideal.', 'download-rendimiento');
-        content += '</div><div class="col-lg-6 mb-4">';
-        content += renderChartCard('ciclo-producto-chart', 'Tiempo de Ciclo Promedio por Producto (Horas)', 'Tiempo promedio para completar una orden por producto.', 'Mide desde el inicio hasta el fin de la producción.', 'download-ciclo');
-        content += '</div></div>';
-        
         container.innerHTML = content;
         
         createChart('pareto-desperdicio-chart', {
@@ -164,84 +151,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 { name: 'Acumulado', type: 'line', yAxisIndex: 1, data: data.causas_desperdicio_pareto.line_data }
             ]
         });
-
-        // Lógica para Gantt
-        createChart('gantt-produccion-chart', {
-            tooltip: {
-                formatter: function (params) {
-                    const data = params.value;
-                    return `<b>${params.name}</b><br/>` +
-                           `Producto: ${data[0]}<br/>` +
-                           `Inicio: ${new Date(data[1]).toLocaleString()}<br/>` +
-                           `Fin: ${new Date(data[2]).toLocaleString()}<br/>` +
-                           `Estado: ${data[3]}`;
-                }
-            },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'category', data: data.gantt_produccion.map(d => d.name) },
-            series: [{
-                type: 'custom',
-                renderItem: function(params, api) {
-                    const categoryIndex = api.value(0);
-                    const start = api.coord([api.value(1), categoryIndex]);
-                    const end = api.coord([api.value(2), categoryIndex]);
-                    const height = api.size([0, 1])[1] * 0.6;
-                    const rectShape = echarts.graphic.clipRectByRect({
-                        x: start[0],
-                        y: start[1] - height / 2,
-                        width: end[0] - start[0],
-                        height: height
-                    }, {
-                        x: params.coordSys.x,
-                        y: params.coordSys.y,
-                        width: params.coordSys.width,
-                        height: params.coordSys.height
-                    });
-                    return rectShape && {
-                        type: 'rect',
-                        shape: rectShape,
-                        style: api.style()
-                    };
-                },
-                itemStyle: {
-                    opacity: 0.8
-                },
-                encode: {
-                    x: [1, 2],
-                    y: 0
-                },
-                data: data.gantt_produccion
-            }]
-        });
-
-        // Lógica para Rendimiento
-        createChart('rendimiento-producto-chart', {
-            tooltip: { trigger: 'axis', formatter: '{b}: {c}%' },
-            xAxis: { type: 'category', data: data.analisis_rendimiento.labels },
-            yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
-            series: [{
-                type: 'bar',
-                data: data.analisis_rendimiento.data,
-                itemStyle: {
-                    color: function(params) {
-                        return params.value >= 95 ? '#28A745' : params.value >= 85 ? '#FFC107' : '#DC3545';
-                    }
-                }
-            }]
-        });
-
-        // Lógica para Tiempos de Ciclo
-        createChart('ciclo-producto-chart', {
-            tooltip: { trigger: 'axis', formatter: '{b}: {c} horas' },
-            xAxis: { type: 'category', data: data.tiempos_ciclo_por_producto.labels },
-            yAxis: { type: 'value', name: 'Horas' },
-            series: [{ type: 'bar', data: data.tiempos_ciclo_por_producto.data }]
-        });
-        
-        // --- Descripciones Dinámicas ---
-        document.getElementById('gantt-produccion-chart-descripcion').textContent = generarDescripcionGantt(data.gantt_produccion);
-        document.getElementById('rendimiento-producto-chart-descripcion').textContent = generarDescripcionRendimiento(data.analisis_rendimiento);
-        document.getElementById('ciclo-producto-chart-descripcion').textContent = generarDescripcionTiemposCiclo(data.tiempos_ciclo_por_producto);
     }
 
     function renderCalidad(data) {
@@ -288,7 +197,7 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div><div class="col-lg-5 mb-4">';
         content += renderChartCard('descomposicion-costos-chart', 'Descomposición de Costos', 'Distribución de costos operativos.', 'Mano de obra y gastos fijos son estimados.', 'download-descomposicion');
         content += '</div></div><div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', 'Ingresos vs. costos de los productos más vendidos.', 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
+        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', "Ingresos vs. costos de los productos más vendidos. <br><a href='/analisis/rentabilidad' class='text-warning fw-bold text-decoration-underline'><i class='bi bi-exclamation-triangle-fill me-1'></i>Aviso: Esta es una vista general. Para un análisis detallado, haga clic aquí.</a>", 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
         content += '</div></div>';
         container.innerHTML = content;
 
@@ -346,44 +255,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // --- FUNCIONES DE DESCRIPCIÓN DINÁMICA ---
-
-    function generarDescripcionGantt(data) {
-        if (!data || data.length === 0) return "No hay datos de producción para mostrar en el período seleccionado.";
-        const enProceso = data.filter(d => d.value[3] === 'EN PROCESO').length;
-        return `Se visualizan ${data.length} órdenes de producción. Actualmente, ${enProceso} se encuentran "En Proceso".`;
-    }
-
-    function generarDescripcionRendimiento(data) {
-        if (!data || data.labels.length === 0) return "No hay datos de rendimiento para analizar.";
-        const promedio = data.data.reduce((a, b) => a + b, 0) / data.data.length;
-        const [mejorProductoIdx, peorProductoIdx] = data.data.reduce((acc, value, i) => {
-            if (value > data.data[acc[0]]) acc[0] = i;
-            if (value < data.data[acc[1]]) acc[1] = i;
-            return acc;
-        }, [0, 0]);
-
-        const mejorProductoNombre = data.labels[mejorProductoIdx];
-        const peorProductoNombre = data.labels[peorProductoIdx];
-
-        return `El rendimiento promedio es de ${promedio.toFixed(2)}%. El producto con mejor rendimiento es "${mejorProductoNombre}" y el de menor rendimiento es "${peorProductoNombre}".`;
-    }
-
-    function generarDescripcionTiemposCiclo(data) {
-        if (!data || data.labels.length === 0) return "No hay datos de tiempos de ciclo disponibles.";
-        const promedio = data.data.reduce((a, b) => a + b, 0) / data.data.length;
-        const [masRapidoIdx, masLentoIdx] = data.data.reduce((acc, value, i) => {
-            if (value < data.data[acc[0]]) acc[0] = i;
-            if (value > data.data[acc[1]]) acc[1] = i;
-            return acc;
-        }, [0, 0]);
-
-        const masRapidoNombre = data.labels[masRapidoIdx];
-        const masLentoNombre = data.labels[masLentoIdx];
-
-        return `El tiempo de ciclo promedio es de ${promedio.toFixed(2)} horas. El producto más rápido de fabricar es "${masRapidoNombre}" y el más lento es "${masLentoNombre}".`;
-    }
-
     // --- EVENT LISTENERS ---
 
     tabElements.forEach(tab => {
@@ -404,41 +275,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.getElementById('ver-todos-switch').addEventListener('change', () => {
-        const activeTab = document.querySelector('#kpiTab .nav-link.active');
-        if (activeTab) {
-            const category = activeTab.dataset.category;
-            loadedTabs.clear();
-            chartInstances = {};
-            loadTabData(category);
-        }
-    });
-
     // Cargar la primera pestaña activa al inicio
     const initialActiveTab = document.querySelector('#kpiTab .nav-link.active');
     if (initialActiveTab) {
         loadTabData(initialActiveTab.dataset.category);
     }
-
-    // Event listener para los botones de descarga (delegación de eventos)
-    tabContentContainer.addEventListener('click', function(event) {
-        if (event.target && event.target.id.startsWith('download-')) {
-            const downloadId = event.target.id;
-            const chartId = downloadId.replace('download-', '') + '-chart';
-            const chartInstance = chartInstances[chartId];
-            
-            if (chartInstance) {
-                const url = chartInstance.getDataURL({
-                    pixelRatio: 2,
-                    backgroundColor: '#fff'
-                });
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `${chartId}.png`;
-                a.click();
-            } else {
-                console.error('No se encontró la instancia del gráfico para:', chartId);
-            }
-        }
-    });
 });

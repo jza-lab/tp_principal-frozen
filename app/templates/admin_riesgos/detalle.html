@@ -11,17 +11,11 @@
                 Gestión de Alerta de Riesgo: {{ alerta.codigo }}
             </h4>
             <div>
-                {% if alerta.estado in ['Pendiente', 'ANALISIS FINALIZADO', 'Resuelta'] %}
+                {% if alerta.estado == 'Pendiente' %}
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalFinalizarAnalisis">
                         <i class="bi bi-flag-fill me-1"></i> 
-                        {% if alerta.estado == 'Pendiente' %}
-                            Finalizar Análisis
-                        {% else %}
-                            Cerrar Alerta
-                        {% endif %}
+                        Finalizar Análisis
                     </button>
-                {% endif %}
-                {% if alerta.estado == 'Pendiente' %}
                     <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
                         <i class="bi bi-shield-check me-1"></i> Forzar Resolución
                     </button>
@@ -1075,7 +1069,7 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <!-- Modal Finalizar Análisis -->
-{% set placeholder_text = "Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado." %}
+{% set placeholder_text = "Ej: Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado." %}
 {% set ns = namespace(has_no_apto=false) %}
 {% for lote in (alerta.afectados_detalle.lotes_insumo or []) + (alerta.afectados_detalle.lotes_producto or []) %}
     {% if lote.resolucion_aplicada and 'no_apto' in lote.resolucion_aplicada %}
@@ -1086,9 +1080,9 @@ document.addEventListener('DOMContentLoaded', function () {
 {% set has_nc = alerta.afectados_detalle.pedidos | selectattr('resolucion_aplicada', 'equalto', 'nota_credito') | list | length > 0 %}
 
 {% if has_no_apto %}
-    {% set placeholder_text = "Mercancía retirada por lote defectuoso. Se gestionó la devolución con los clientes afectados." %}
+    {% set placeholder_text = "Ej: Mercancía retirada por lote defectuoso. Se gestionó la devolución con los clientes afectados." %}
 {% elif has_nc %}
-    {% set placeholder_text = "Se emitieron notas de crédito a los clientes afectados para compensar el inconveniente." %}
+    {% set placeholder_text = "Ej: Se emitieron notas de crédito a los clientes afectados para compensar el inconveniente." %}
 {% endif %}
 
 <div class="modal fade" id="modalFinalizarAnalisis" tabindex="-1" aria-labelledby="modalFinalizarAnalisisLabel" aria-hidden="true">

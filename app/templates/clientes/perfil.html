@@ -142,14 +142,15 @@
                                         <td>{{ pedido.condicion_venta | capitalize }}</td>
                                         <td>{{ pedido.fecha_vencimiento if pedido.fecha_vencimiento else 'N/A' }}</td>
                                         <td>
+                                            {% set estado_pago = pedido.pago or 'pendiente' %}
                                             <span class="badge 
-                                                {% if pedido.pago == 'pendiente' %}bg-warning text-dark
-                                                {% elif pedido.pago == 'Pagado Parcialmente' %}bg-info text-dark
-                                                {% elif pedido.pago == 'Pagado' %}bg-success
-                                                {% elif pedido.pago == 'vencido' %}bg-danger
+                                                {% if estado_pago == 'pendiente' %}bg-warning text-dark
+                                                {% elif estado_pago == 'Pagado Parcialmente' %}bg-info text-dark
+                                                {% elif estado_pago == 'Pagado' %}bg-success
+                                                {% elif estado_pago == 'vencido' %}bg-danger
                                                 {% else %}bg-secondary
                                                 {% endif %}">
-                                                {{ pedido.pago | replace('_', ' ') | title }}
+                                                {{ estado_pago | replace('_', ' ') | title }}
                                             </span>
                                         </td>
                                         <td>
@@ -312,7 +313,7 @@
                     <input type="hidden" id="pedidoId" name="id_pedido">
                     <div class="mb-3">
                         <label for="monto" class="form-label">Monto a Pagar</label>
-                        <input type="number" class="form-control" id="monto" name="monto" step="0.01" required>
+                        <input type="text" class="form-control" id="monto" name="monto" required>
                     </div>
                     <div class="mb-3">
                         <label for="metodo_pago" class="form-label">Método de Pago</label>
@@ -342,7 +343,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const registrarPagoModal = new bootstrap.Modal(document.getElementById('registrarPagoModal'));
@@ -394,20 +395,14 @@
             button.addEventListener('click', function () {
                 const pedidoId = this.dataset.pedidoId;
                 const montoTotalPedido = parseFloat(this.dataset.montoTotal);
-                
-                // Calcular el total ya pagado para este pedido
-                const pagosExistentes = pagosPorPedido[pedidoId] || [];
-                const totalYaPagado = pagosExistentes.reduce((sum, pago) => sum + parseFloat(pago.monto), 0);
-                
-                const saldoPendiente = montoTotalPedido - totalYaPagado;
 
                 // Limpiar el formulario y luego establecer los valores
                 const form = document.getElementById('registrarPagoForm');
                 form.reset();
                 
                 document.getElementById('pedidoId').value = pedidoId;
-                // Formatear el saldo pendiente usando la nueva función
-                montoInput.value = formatCurrency(saldoPendiente.toFixed(2)).replace('ARS', '$').trim();
+                // Formatear el monto total del pedido usando la nueva función
+                montoInput.value = formatCurrency(montoTotalPedido.toFixed(2)).replace('ARS', '$').trim();
 
                 registrarPagoModal.show();
             });

@@ -4,7 +4,6 @@
 <div class="container-fluid">
     <h1 class="mb-4">Dashboard de Indicadores</h1>
 
-    <!-- Filtro de Fechas -->
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Filtrar por Fecha</h5>
@@ -12,21 +11,17 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
                         <label for="fecha_inicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d') }}">
+                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-5">
                         <label for="fecha_fin" class="form-label">Fecha de Fin</label>
-                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ datetime.now().strftime('%Y-%m-%d') }}">
+                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ fecha_fin.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100">Filtrar</button>
                     </div>
                 </div>
             </form>
-            <div class="form-check form-switch mt-3">
-                <input class="form-check-input" type="checkbox" role="switch" id="ver-todos-switch">
-                <label class="form-check-label" for="ver-todos-switch">Ver historial completo (ignorar fechas)</label>
-            </div>
         </div>
     </div>
 
@@ -49,57 +44,26 @@
     </ul>
 
     <div class="tab-content" id="kpiTabContent">
-        <!-- Contenedor para Producción -->
         <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
-            <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos de Producción...</p>
             </div>
-        </div>
-        <!-- Contenedor para Comercial -->
-        <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos Comerciales...</p>
-            </div>
-        </div>
-        <!-- Contenedor para Financiera -->
-        <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos Financieros...</p>
-            </div>
-        </div>
-        <!-- Contenedor para Calidad -->
+        
         <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos de Calidad...</p>
             </div>
-        </div>
-        <!-- Contenedor para Inventario -->
+        
         <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
-             <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos de Inventario...</p>
             </div>
-        </div>
+        
+        <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
+            </div>
+        
+        <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
+            </div>
+        
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-<!-- Un solo archivo JS para manejar toda la lógica -->
 <script src="{{ url_for('static', filename='js/indicadores/indicadores_dashboard.js') }}"></script>
 {% endblock %}

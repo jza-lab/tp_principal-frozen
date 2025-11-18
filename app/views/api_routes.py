@@ -292,6 +292,10 @@ def registrar_pago():
 
         pago_data = request.form.to_dict()
         comprobante_file = request.files.get('comprobante')
+        
+        # El token CSRF es necesario para la protección, pero no para la validación del schema.
+        if 'csrf_token' in pago_data:
+            pago_data.pop('csrf_token')
 
         # Añadir el ID del usuario que está realizando la acción
         current_user_id = get_jwt_identity()
