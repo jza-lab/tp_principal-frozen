@@ -99,14 +99,19 @@ class IndicadoresController:
     def obtener_datos_comercial(self, fecha_inicio_str, fecha_fin_str):
         fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, default_days=365)
         
-        kpis = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
+        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
+        kpis_data = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
+
+        # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
         top_productos = self.obtener_top_productos_vendidos(fecha_inicio_str, fecha_fin_str)
         top_clientes = self.obtener_top_clientes(fecha_inicio_str, fecha_fin_str)
 
+        # --- 3. COMBINAR AMBAS ESTRUCTURAS ---
+        # Aseguramos que la estructura de KPIs sea la que espera el template
         return {
             "kpis_comerciales": {
-                "cumplimiento_pedidos": kpis.get("cumplimiento_pedidos", {"valor": 0, "completados": 0, "total": 0}),
-                "valor_promedio_pedido": kpis.get("valor_promedio_pedido", {"valor": 0, "num_pedidos": 0})
+                "cumplimiento_pedidos": kpis_data.get("cumplimiento_pedidos", {"valor": 0, "completados": 0, "total": 0}),
+                "valor_promedio_pedido": kpis_data.get("valor_promedio_pedido", {"valor": 0, "num_pedidos": 0})
             },
             "top_productos_vendidos": top_productos if isinstance(top_productos, dict) else {"labels": [], "data": []},
             "top_clientes": top_clientes if isinstance(top_clientes, dict) else {"labels": [], "data": []},
@@ -114,12 +119,45 @@ class IndicadoresController:
 
     # --- CATEGORÍA: FINANCIERA ---
     def obtener_datos_financieros(self, fecha_inicio_str, fecha_fin_str):
+        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+        
+        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
+        total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
+        facturacion_total = total_valor_res.get('total_valor', 0.0) if total_valor_res.get('success') else 0.0
+
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        costo_total = 0.0
+        if ordenes_res.get('success'):
+            ordenes_data = ordenes_res.get('data', [])
+            producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('producto_id')]
+            costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
+            
+            costo_mp = sum(self._get_costo_producto(op['producto_id'], costos_cache) * float(op.get('cantidad_producida', 0)) for op in ordenes_data if op.get('producto_id'))
+            horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
+            costo_mo = horas_prod * 15
+            dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
+            gastos_fijos = (5000 / 30) * dias_periodo
+            costo_total = costo_mp + costo_mo + gastos_fijos
+
+        beneficio_bruto = facturacion_total - costo_total
+        margen_beneficio = (beneficio_bruto / facturacion_total) * 100 if facturacion_total > 0 else 0
+        
+        kpis = {
+            "facturacion_total": {"valor": round(facturacion_total, 2), "etiqueta": "Facturación Total"},
+            "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Costo de Ventas"},
+            "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Beneficio Bruto"},
+            "margen_beneficio": {"valor": round(margen_beneficio, 2), "etiqueta": "Margen de Beneficio (%)"}
+        }
+
+        # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
         facturacion = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str)
         costo_ganancia = self.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str)
         rentabilidad = self.obtener_rentabilidad_productos(fecha_inicio_str, fecha_fin_str)
         descomposicion = self.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str)
 
+        # --- 3. COMBINAR AMBAS ESTRUCTURAS ---
         return {
+            "kpis_financieros": kpis,
             "facturacion_periodo": facturacion if isinstance(facturacion, dict) else {"labels": [], "data": []},
             "costo_vs_ganancia": costo_ganancia if isinstance(costo_ganancia, dict) else {"labels": [], "ingresos": [], "costos": []},
             "rentabilidad_productos": rentabilidad if isinstance(rentabilidad, dict) else {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []},
@@ -256,12 +294,21 @@ class IndicadoresController:
                 if (insumo_data := ing.get('insumos_catalogo')) and insumo_data.get('id_insumo'):
                     all_insumo_ids.add(insumo_data['id_insumo'])
 
-        costos_insumos = {}
+        costos_calculados = {}
         if all_insumo_ids:
-            if costos_res := self.insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids)):
-                 if costos_res.get('success'):
-                    costos_insumos = costos_res.get('data', {})
-        return costos_insumos
+            costos_res = self.insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
+            if costos_res and costos_res.get('success'):
+                costos_calculados = costos_res.get('data', {})
+
+        insumos_sin_costo = all_insumo_ids - set(costos_calculados.keys())
+        if insumos_sin_costo:
+            fallback_res = self.insumo_model.find_all(filters={'id_insumo': list(insumos_sin_costo)})
+            if fallback_res and fallback_res.get('success'):
+                for insumo in fallback_res.get('data', []):
+                    costos_calculados[insumo['id_insumo']] = float(insumo.get('precio_unitario', 0.0))
+                    logging.info(f"Usando precio de catálogo como fallback para costo de insumo: {insumo['id_insumo']}")
+
+        return costos_calculados
 
     def _get_costo_producto(self, producto_id, costos_insumos_cache=None):
         return self.receta_model.get_costo_produccion(producto_id, costos_insumos=costos_insumos_cache)
@@ -490,6 +537,15 @@ class IndicadoresController:
 
         costos_insumos_res = insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
         costos_insumos = costos_insumos_res.get('data', {}) if costos_insumos_res.get('success') else {}
+
+        # Fallback para insumos sin costo pre-calculado
+        insumos_sin_costo = all_insumo_ids - set(costos_insumos.keys())
+        if insumos_sin_costo:
+            fallback_res = self.insumo_model.find_all(filters={'id_insumo': list(insumos_sin_costo)})
+            if fallback_res and fallback_res.get('success'):
+                for insumo in fallback_res.get('data', []):
+                    costos_insumos[insumo['id_insumo']] = float(insumo.get('precio_unitario', 0.0))
+                    logging.info(f"Usando precio de catálogo como fallback para rentabilidad: {insumo['id_insumo']}")
 
         rentabilidad = {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []}
         for p in productos_data:
