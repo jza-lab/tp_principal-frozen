@@ -340,93 +340,71 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             const response = await fetch(`/produccion/kanban/api/op/${ordenId}/reportar`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: JSON.stringify(payload)
             });
     
             const data = await response.json();
     
             if (response.ok && data.success) {
-                // El backend ahora decide el estado, por lo que la redirección o actualización
-                // se puede basar en si la nueva cantidad alcanza el objetivo.
-                const nuevaCantidadTotal = estado.cantidadProducida + payload.cantidad_buena;
+                showNotification(`✅ ${data.message}`, 'info');
     
-                if (nuevaCantidadTotal >= estado.cantidadPlanificada) {
-                    showNotification('✅ Avance reportado. Orden enviada a Control de Calidad.', 'success');
-                    // Detener el cronómetro antes de redirigir
-                    await fetch(`/produccion/kanban/api/op/${ordenId}/cronometro/detener`, { method: 'POST' });
-                    setTimeout(() => {
-                        window.location.href = '/produccion/kanban/'; // Redirigir siempre que se completa
-                    }, 2000);
+                actualizarProduccion(payload.cantidad_buena, payload.cantidad_desperdicio);
+    
+                const form = document.getElementById('form-reportar');
+                const modalInstance = bootstrap.Modal.getInstance(document.getElementById('modalReportarAvance'));
+                
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+                form.reset();
+    
+                // Manejar acciones devueltas por el backend
+                const accion = data.data?.accion;
+                if (accion === 'ampliar_op') {
+                    // Actualizar la cantidad planificada en el estado y en la UI
+                    estado.cantidadPlanificada = data.data.nueva_cantidad_planificada;
+                    document.querySelector('.objetivo-cantidad').innerHTML = `${formatNumber(estado.cantidadPlanificada, 2)} <span class="objetivo-unidad">kg</span>`;
+                    addActivityLog(`OP ampliada. Nueva meta: ${estado.cantidadPlanificada} kg.`, 'info');
+                } else if (accion === 'finalizar_op_crear_hija') {
+                    addActivityLog(`OP finalizada. Se creó la OP hija ${data.data.nueva_op_codigo}.`, 'warning');
+                    stopTimer();
+                    setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
+                } else if ((estado.cantidadProducida) >= estado.cantidadPlanificada) {
+                    addActivityLog('Orden completada, pasando a C. Calidad', 'success');
+                    stopTimer();
+                    setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
                 } else {
-                    actualizarProduccion(payload.cantidad_buena, payload.cantidad_desperdicio);
-                    const form = document.getElementById('form-reportar');
-                    bootstrap.Modal.getInstance(document.getElementById('modalReportarAvance')).hide();
-                    form.reset();
-                    showNotification('📊 Avance reportado exitosamente', 'success');
-                    addActivityLog(`Reportado: +${formatNumber(payload.cantidad_buena)}kg producidos`, 'success');
+                    addActivityLog(`Reportado: +${formatNumber(payload.cantidad_buena, 2)}kg OK, +${formatNumber(payload.cantidad_desperdicio, 2)}kg Desp.`, 'info');
                 }
             } else {
-                showNotification(`❌ Error al reportar: ${data.error || 'Error desconocido'}`, 'error');
+                showNotification(`❌ Error: ${data.error || 'Error desconocido'}`, 'error');
             }
         } catch (error) {
-            console.error('Error:', error);
-            showNotification('❌ Error de red al reportar avance', 'error');
+            showNotification('❌ Error de red al reportar avance.', 'error');
         }
     }
 
     btnConfirmarReporte.addEventListener('click', (e) => {
         e.preventDefault();
         
-        const form = document.getElementById('form-reportar');
-        const cantidadBuenaInput = document.getElementById('cantidad-buena');
-        const cantidadMalaInput = document.getElementById('cantidad-mala');
-        
-        const cantidadBuena = parseFloat(cantidadBuenaInput.value) || 0;
-        const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
-        const motivoDesperdicio = motivoDesperdicioSelect.value;
+        const cantidadBuena = parseFloat(document.getElementById('cantidad-buena').value) || 0;
+        const cantidadMala = parseFloat(document.getElementById('cantidad-mala').value) || 0;
+        const motivoDesperdicio = document.getElementById('motivo-desperdicio').value;
     
-        // --- VALIDACIÓN MEJORADA ---
-        let esValido = true;
-        
-        // 1. Limpiar validaciones previas
-        cantidadBuenaInput.classList.remove('is-invalid');
-        cantidadMalaInput.classList.remove('is-invalid');
-        motivoDesperdicioSelect.classList.remove('is-invalid');
-
-        // 2. Al menos una de las cantidades debe ser mayor a cero
-        if (cantidadBuena <= 0 && cantidadMala <= 0) {
-            showNotification('⚠️ Debe reportar una cantidad (producida o desperdicio) mayor a cero.', 'warning');
-            cantidadBuenaInput.classList.add('is-invalid');
-            cantidadMalaInput.classList.add('is-invalid');
-            esValido = false;
+        // Validaciones básicas de entrada
+        if (cantidadBuena < 0 || cantidadMala < 0) {
+            showNotification('⚠️ Las cantidades no pueden ser negativas.', 'warning');
+            return;
         }
-
-        // 3. Si hay desperdicio, el motivo es obligatorio
+        if (cantidadBuena === 0 && cantidadMala === 0) {
+            showNotification('⚠️ Debe reportar una cantidad (producida o desperdicio).', 'warning');
+            return;
+        }
         if (cantidadMala > 0 && !motivoDesperdicio) {
             showNotification('⚠️ Debe seleccionar un motivo para el desperdicio.', 'warning');
-            motivoDesperdicioSelect.classList.add('is-invalid');
-            esValido = false;
+            return;
         }
-
-        // 4. El desperdicio reportado no puede exceder la cantidad restante de la orden.
-        const cantidadRestante = estado.cantidadPlanificada - estado.cantidadProducida;
-        if (cantidadMala > cantidadRestante) {
-            showNotification(`❌ El desperdicio (${formatNumber(cantidadMala, 2)}) no puede superar la cantidad restante por producir (${formatNumber(cantidadRestante, 2)}).`, 'error');
-            cantidadMalaInput.classList.add('is-invalid');
-            esValido = false;
-        }
-
-        if (!esValido) {
-            return; // Detener si alguna validación falló
-        }
-    
-        const nuevaCantidadProducida = estado.cantidadProducida + cantidadBuena;
-        const toleranciaDecimal = TOLERANCIA_SOBREPRODUCCION / 100;
-        const cantidadMaximaPermitida = estado.cantidadPlanificada * (1 + toleranciaDecimal);
     
         const payload = {
             cantidad_buena: cantidadBuena,
@@ -434,29 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
             motivo_desperdicio_id: motivoDesperdicio,
         };
 
-        // Lógica de Sobreproducción con Tolerancia Configurable
-        if (nuevaCantidadProducida > cantidadMaximaPermitida + 0.001) { // 0.001 para errores de flotante
-            const excedente = formatNumber(nuevaCantidadProducida - cantidadMaximaPermitida, 2);
-            showNotification(`❌ Límite de sobreproducción (${TOLERANCIA_SOBREPRODUCCION}%) excedido por ${excedente} kg.`, 'error');
-            return;
-        } else if (nuevaCantidadProducida > estado.cantidadPlanificada) {
-            const sobreproduccion = formatNumber(nuevaCantidadProducida - estado.cantidadPlanificada, 2);
-            const porcentaje = (sobreproduccion / estado.cantidadPlanificada) * 100;
-            
-            const confirmacion = window.confirm(
-                `⚠️ Se ha detectado una sobreproducción de ${sobreproduccion} kg (${porcentaje.toFixed(1)}%).\n\n¿Desea continuar y registrar este avance?`
-            );
-            
-            if (confirmacion) {
-                enviarReporteAPI(payload);
-            } else {
-                showNotification('ℹ️ Reporte de avance cancelado por el usuario.', 'info');
-            }
-
-        } else {
-            // Reporte normal, sin sobreproducción
-            enviarReporteAPI(payload);
-        }
+        enviarReporteAPI(payload);
     });
 
     // ===== ACTUALIZAR PRODUCCIÓN =====
