@@ -421,11 +421,27 @@
                 <h5 class="mb-0"><i class="bi bi-qr-code me-2"></i>Etiqueta de Trazabilidad</h5>
             </div>
             <div class="card-body text-center">
-                <p class="text-muted">Escanee este código para ver la trazabilidad pública del pedido.</p>
-                <img src="{{ url_for('orden_venta.generar_qr_pedido', id_pedido=pedido.id) }}" 
-                     alt="Código QR de Trazabilidad" 
-                     class="img-fluid" 
-                     style="max-width: 200px; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
+                <p class="text-muted">Haga clic o escanee este código para ver la trazabilidad pública del pedido.</p>
+                {% if token_seguimiento %}
+                <a href="{{ url_for('public.seguimiento_publico_pedido', token=token_seguimiento) }}" target="_blank">
+                    <img src="{{ url_for('orden_venta.generar_qr_pedido', id_pedido=pedido.id) }}" 
+                         alt="Código QR de Trazabilidad" 
+                         class="img-fluid" 
+                         style="max-width: 200px; border: 1px solid #ddd; padding: 5px; border-radius: 5px; cursor: pointer;">
+                </a>
+                {% else %}
+                    <img src="{{ url_for('orden_venta.generar_qr_pedido', id_pedido=pedido.id) }}" 
+                         alt="Código QR de Trazabilidad" 
+                         class="img-fluid" 
+                         style="max-width: 200px; border: 1px solid #ddd; padding: 5px; border-radius: 5px;">
+                {% endif %}
+                
+                <div class="mt-3 d-grid">
+                    <button class="btn btn-outline-primary" id="enviarQrPorEmailBtn">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        <i class="bi bi-envelope-arrow-up-fill me-1"></i> Enviar al Cliente por Email
+                    </button>
+                </div>
             </div>
         </div>
         
@@ -436,88 +452,75 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
-<script>
-    // URL de la API para obtener el HTML de la factura
-    const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
 
-    // Función para imprimir el contenido HTML generado por el backend
-    function printHtmlContent(htmlContent) {
-        const iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.id = 'factura-print-frame';
-        document.body.appendChild(iframe);
-        const iframeDocument = iframe.contentWindow.document;
-        iframeDocument.open();
-        iframeDocument.write(htmlContent);
-        iframeDocument.close();
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-        setTimeout(() => { document.body.removeChild(iframe); }, 500);
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // --- Lógica para imprimir factura ---
+    const printButton = document.getElementById('btn-imprimir-factura');
+    if (printButton) {
+        const FACTURA_API_URL = "{{ url_for('orden_venta.generar_factura_html', id=pedido.id) }}";
+        
+        function printHtmlContent(htmlContent) {
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.id = 'factura-print-frame';
+            document.body.appendChild(iframe);
+            const iframeDocument = iframe.contentWindow.document;
+            iframeDocument.open();
+            iframeDocument.write(htmlContent);
+            iframeDocument.close();
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            setTimeout(() => { document.body.removeChild(iframe); }, 500);
+        }
+
+        printButton.addEventListener('click', async () => {
+            const originalHtml = printButton.innerHTML;
+            printButton.disabled = true;
+            printButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
+            try {
+                const response = await fetch(FACTURA_API_URL);
+                const result = await response.json();
+                if (result.success) {
+                    printHtmlContent(result.html);
+                } else {
+                    showNotificationModal('Error de Factura', result.error || 'No se pudo generar el HTML.', 'error');
+                }
+            } catch (error) {
+                console.error('Error AJAX al generar factura:', error);
+                showNotificationModal('Error de Conexión', 'Fallo al contactar al servidor.', 'error');
+            } finally {
+                setTimeout(() => {
+                    printButton.disabled = false;
+                    printButton.innerHTML = originalHtml;
+                }, 1000); // 1 segundo de espera para asegurar que el diálogo de impresión aparezca
+            }
+        });
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const printButton = document.getElementById('btn-imprimir-factura');
-        if (printButton) {
-            printButton.addEventListener('click', async () => {
-                printButton.disabled = true;
-                const originalHtml = printButton.innerHTML;
-                printButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
-                try {
-                    const response = await fetch(FACTURA_API_URL);
-                    const result = await response.json();
-                    if (result.success) {
-                        printHtmlContent(result.html);
-                    } else {
-                        showNotificationModal('Error de Factura', result.error || 'No se pudo generar el HTML.', 'error');
-                    }
-                } catch (error) {
-                    console.error('Error AJAX al generar factura:', error);
-                    showNotificationModal('Error de Conexión', 'Fallo al contactar al servidor.', 'error');
-                } finally {
-                    setTimeout(() => {
-                        printButton.disabled = false;
-                        printButton.innerHTML = originalHtml;
-                    }, 500);
-                }
-            });
-        }
-    });
-</script>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Bloquear doble clic en TODOS los formularios de acción
-        const forms = document.querySelectorAll('form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function (e) {
-                const submitButton = form.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = true;
-                    // Mostrar spinner de carga
-                    const originalHtml = submitButton.innerHTML;
-                    submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
-                    // Evitar reenviar el formulario si el usuario hace back o recarga
-                    form.addEventListener('ajax:complete', () => {
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = originalHtml;
-                    });
-                }
-            });
+    // --- Lógica para bloquear doble submit en formularios de acción ---
+    const forms = document.querySelectorAll('form.confirm-form'); // Ser más específico
+    forms.forEach(form => {
+        form.addEventListener('submit', function (e) {
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton && !submitButton.disabled) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+            }
         });
     });
-</script>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const pedidoId = {{ pedido.id }}
-    };
+    // --- Lógica para cambiar estado y confirmar entrega ---
+    const pedidoId = {{ pedido.id }};
     const btnConfirmarEntrega = document.getElementById('btn-confirmar-entrega');
 
-    // Función reutilizable para cambiar el estado del pedido
     async function cambiarEstadoPedido(nuevoEstado, button) {
         const originalHtml = button.innerHTML;
         button.disabled = true;
         button.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Procesando...`;
-
         try {
             const response = await fetch(`/orden-venta/api/${pedidoId}/cambiar-estado`, {
                 method: 'POST',
@@ -527,9 +530,7 @@
                 },
                 body: JSON.stringify({ estado: nuevoEstado })
             });
-
             const result = await response.json();
-
             if (response.ok && result.success) {
                 showNotificationModal('Éxito', result.message || 'El estado del pedido fue actualizado.', 'success', () => {
                     window.location.reload();
@@ -547,7 +548,6 @@
         }
     }
 
-    // Event listener para el botón de confirmar entrega
     if (btnConfirmarEntrega) {
         btnConfirmarEntrega.addEventListener('click', () => {
             showConfirmationModal(
@@ -558,85 +558,86 @@
             );
         });
     }
-});
-</script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
+    // --- Lógica para descargar PDF de Nota de Crédito ---
     const { jsPDF } = window.jspdf;
-
     document.querySelectorAll('.download-nc-pdf').forEach(button => {
         button.addEventListener('click', function () {
             const ncId = this.getAttribute('data-nc-id');
             const ncCode = this.getAttribute('data-nc-code');
             const contentToCapture = document.getElementById(`nc-container-${ncId}`);
-
-            if (!contentToCapture) {
-                console.error('No se encontró el contenido de la nota de crédito para el ID:', ncId);
-                return;
-            }
-
-            // Deshabilitar botón para evitar clics múltiples
+            if (!contentToCapture) { return; }
             this.disabled = true;
             const originalHtml = this.innerHTML;
             this.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
-            
-            // Ocultar el botón ANTES de la captura
             const buttonContainer = this.parentElement;
             buttonContainer.style.display = 'none';
 
-            html2canvas(contentToCapture, {
-                scale: 2, // Mejorar calidad de la imagen
-                useCORS: true 
-            }).then(canvas => {
+            html2canvas(contentToCapture, { scale: 2, useCORS: true }).then(canvas => {
                 const imgData = canvas.toDataURL('image/png');
-                
-                // Tamaño A4: 210x297 mm. Margen de 10mm a cada lado.
-                const page_width = 210;
-                const margin = 10;
+                const page_width = 210, margin = 10;
                 const content_width = page_width - (margin * 2);
-
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = content_width;
                 const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                
-                // Controlar si la altura excede la página
-                let heightLeft = pdfHeight;
-                let position = 0;
+                let heightLeft = pdfHeight, position = 0;
                 const pageHeight = pdf.internal.pageSize.getHeight();
-                
                 pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
                 heightLeft -= pageHeight;
-                
-                // Si el contenido es más largo que una página, añade páginas nuevas
                 while (heightLeft > 0) {
                     position = heightLeft - pdfHeight;
                     pdf.addPage();
                     pdf.addImage(imgData, 'PNG', margin, position, pdfWidth, pdfHeight);
                     heightLeft -= pageHeight;
                 }
-
                 pdf.save(`Nota-de-Credito-${ncCode}.pdf`);
-            }).catch(error => {
-                console.error("Error al generar el PDF:", error);
-                alert("Hubo un problema al generar el PDF. Por favor, intente de nuevo.");
             }).finally(() => {
-                // Volver a mostrar el botón y rehabilitarlo
                 buttonContainer.style.display = 'block';
                 this.disabled = false;
                 this.innerHTML = originalHtml;
             });
         });
     });
-});
-</script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
-<script>
-    // Variable global para que el JS de trazabilidad pueda acceder al ID
+    // --- Lógica para enviar QR por email ---
+    const enviarQrBtn = document.getElementById('enviarQrPorEmailBtn');
+    if (enviarQrBtn) {
+        enviarQrBtn.addEventListener('click', async () => {
+            const spinner = enviarQrBtn.querySelector('.spinner-border');
+            const originalHtml = enviarQrBtn.innerHTML;
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            if (!csrfToken) {
+                showNotificationModal('Error de Seguridad', 'No se pudo encontrar el token de seguridad.', 'error');
+                return;
+            }
+            enviarQrBtn.disabled = true;
+            spinner.classList.remove('d-none');
+            enviarQrBtn.querySelector('i').classList.add('d-none');
+            try {
+                const response = await fetch(`/api/pedidos/${pedidoId}/enviar-qr`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    showNotificationModal('Correo Enviado', 'El código de seguimiento fue enviado al cliente exitosamente.', 'success');
+                } else {
+                    showNotificationModal('Error de Envío', result.message || 'No se pudo enviar el correo.', 'error');
+                }
+            } catch (error) {
+                showNotificationModal('Error de Red', 'No se pudo conectar con el servidor.', 'error');
+            } finally {
+                enviarQrBtn.disabled = false;
+                spinner.classList.add('d-none');
+                enviarQrBtn.innerHTML = originalHtml;
+            }
+        });
+    }
+
+    // --- Inicialización de Trazabilidad ---
     window.PEDIDO_ID = {{ pedido.id|tojson }};
+});
+// --- FIN: BLOQUE ÚNICO DE DOMCONTENTLOADED ---
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadPedido.js') }}?v=1.1"></script>
 

@@ -35,7 +35,8 @@ body {
     background-image: white;
     color: var(--frozen-text-primary);
     line-height: 1.6;
-    padding-top: 15px;
+    /* FIX: Añadir padding-top para compensar la altura del header fijo */
+    padding-top: 70px;
     
     /* FIX: Cambiamos márgenes fijos por padding responsive */
     padding-left: 15px;

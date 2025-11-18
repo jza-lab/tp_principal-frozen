@@ -276,3 +276,15 @@ def get_insumos_por_proveedor(proveedor_id):
         return jsonify(response.get("data", []))
     
     return jsonify([]), 500
+
+from app.controllers.pedido_controller import PedidoController
+
+@api_bp.route('/pedidos/<int:pedido_id>/enviar-qr', methods=['POST'])
+@permission_required(accion='modificar_orden_de_venta')
+def enviar_qr_pedido(pedido_id):
+    """
+    Envía el código QR de seguimiento de un pedido por correo electrónico al cliente.
+    """
+    controller = PedidoController()
+    resultado, status_code = controller.enviar_qr_por_email(pedido_id)
+    return jsonify(resultado), status_code
