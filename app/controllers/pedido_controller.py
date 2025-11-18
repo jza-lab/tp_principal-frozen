@@ -10,7 +10,7 @@ from app.utils.security import generate_signed_token
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.models.receta import RecetaModel
-from Decimal import Decimal
+from decimal import Decimal
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
