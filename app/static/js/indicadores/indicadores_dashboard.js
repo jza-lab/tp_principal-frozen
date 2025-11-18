@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div><div class="col-lg-5 mb-4">';
         content += renderChartCard('descomposicion-costos-chart', 'Descomposición de Costos', 'Distribución de costos operativos.', 'Mano de obra y gastos fijos son estimados.', 'download-descomposicion');
         content += '</div></div><div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', 'Ingresos vs. costos de los productos más vendidos.', 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
+        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', "Ingresos vs. costos de los productos más vendidos. <br><a href='/analisis/rentabilidad' class='text-warning fw-bold text-decoration-underline'><i class='bi bi-exclamation-triangle-fill me-1'></i>Aviso: Esta es una vista general. Para un análisis detallado, haga clic aquí.</a>", 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
         content += '</div></div>';
         container.innerHTML = content;
 
