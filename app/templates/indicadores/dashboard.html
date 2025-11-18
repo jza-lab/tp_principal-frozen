@@ -4,7 +4,6 @@
 <div class="container-fluid">
     <h1 class="mb-4">Dashboard de Indicadores</h1>
 
-    <!-- Filtro de Fechas -->
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">Filtrar por Fecha</h5>
@@ -12,11 +11,11 @@
                 <div class="row g-3 align-items-end">
                     <div class="col-md-5">
                         <label for="fecha_inicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d') }}">
+                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-5">
                         <label for="fecha_fin" class="form-label">Fecha de Fin</label>
-                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ datetime.now().strftime('%Y-%m-%d') }}">
+                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ fecha_fin.strftime('%Y-%m-%d') }}">
                     </div>
                     <div class="col-md-2">
                         <button type="submit" class="btn btn-primary w-100">Filtrar</button>
@@ -45,10 +44,8 @@
     </ul>
 
     <div class="tab-content" id="kpiTabContent">
-        <!-- Contenedor para Producción -->
         <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
             <div class="row mt-4">
-                <!-- OEE -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -64,7 +61,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Cumplimiento del Plan -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -79,7 +75,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Tasa de Desperdicio -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -98,7 +93,6 @@
         </div>
         <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
             <div class="row mt-4">
-                <!-- Tasa de Rechazo Interno -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -113,7 +107,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Tasa de Reclamos de Clientes -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -128,7 +121,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- Tasa de Rechazo de Proveedores -->
                 <div class="col-md-4">
                     <div class="card text-center">
                         <div class="card-header">
@@ -147,7 +139,6 @@
         </div>
         <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
             <div class="row mt-4">
-                <!-- Rotación de Inventario -->
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-body">
@@ -172,7 +163,6 @@
                     </div>
                 </div>
 
-                <!-- Cobertura de Stock -->
                 <div class="col-md-6">
                     <div class="card">
                         <div class="card-body">
@@ -202,7 +192,6 @@
                 <p class="mt-2">Cargando datos de Producción...</p>
             </div>
         </div>
-        <!-- Contenedor para Comercial -->
         <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
             <div class="row mt-4">
                 <div class="col-md-6">
@@ -230,7 +219,6 @@
                 </div>
             </div>
         </div>
-        <!-- Contenedor para Financiera -->
         <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
             <div class="row mt-4">
                 <p class="text-center">Datos financieros se cargan dinámicamente.</p>
@@ -243,6 +231,5 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.3/dist/echarts.min.js"></script>
-<!-- Un solo archivo JS para manejar toda la lógica -->
 <script src="{{ url_for('static', filename='js/indicadores/indicadores_dashboard.js') }}"></script>
 {% endblock %}
