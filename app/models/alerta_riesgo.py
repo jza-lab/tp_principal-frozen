@@ -299,3 +299,58 @@ class AlertaRiesgoModel(BaseModel):
 
         except Exception as e:
             logger.error(f"Error en verificar_y_cerrar_alerta_por_entidad_resuelta para {tipo_entidad}:{id_entidad}: {e}", exc_info=True)
+
+    def registrar_resolucion_afectado(self, alerta_id, tipo_entidad, id_entidad, estado_resolucion, resolucion_aplicada, usuario_id, id_documento_relacionado=None):
+        """
+        Registra la resolución para una única entidad afectada en una alerta.
+        """
+        try:
+            update_data = {
+                'estado': estado_resolucion,
+                'resolucion_aplicada': resolucion_aplicada,
+                'id_usuario_resolucion': usuario_id
+            }
+            if id_documento_relacionado:
+                update_data['id_documento_relacionado'] = id_documento_relacionado
+            
+            result = self.db.table('alerta_riesgo_afectados').update(update_data)\
+                .eq('alerta_id', alerta_id)\
+                .eq('tipo_entidad', tipo_entidad)\
+                .eq('id_entidad', str(id_entidad))\
+                .execute()
+            
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al registrar resolución para {tipo_entidad}:{id_entidad} en alerta {alerta_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_all_paginated(self, page: int, per_page: int, filters: dict, select_query: str = None) -> dict:
+        """
+        Obtiene una lista paginada de alertas de riesgo.
+        """
+        try:
+            offset = (page - 1) * per_page
+            
+            query = self._get_query_builder().select(select_query if select_query else '*', count='exact')
+
+            if filters:
+                for key, value in filters.items():
+                    if value:
+                        query = query.ilike(key, f'%{value}%')
+            
+            query = query.order('id', desc=True).range(offset, offset + per_page - 1)
+            
+            result = query.execute()
+
+            return {
+                'success': True,
+                'data': result.data,
+                'count': result.count
+            }
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al obtener alertas paginadas: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}
