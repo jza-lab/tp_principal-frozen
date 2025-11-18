@@ -10,7 +10,7 @@ from app.utils.security import generate_signed_token
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
 from app.models.receta import RecetaModel
-
+from Decimal import Decimal
 # -------------------------
 from app.models.cliente import ClienteModel
 from app.models.pedido import PedidoModel
@@ -834,15 +834,20 @@ class PedidoController(BaseController):
 
     def actualizar_estado_segun_ops(self, pedido_id: int):
         """
-        Verifica los estados de todas las OPs asociadas a un pedido y actualiza el estado del pedido.
+        Verifica si todos los items de un pedido están completos y actualiza el estado del pedido.
+        - Para items de OPs NO consolidadas, verifica que la OP esté 'COMPLETADA'.
+        - Para items de OPs consolidadas, verifica que la cantidad asignada cubra la cantidad del pedido.
         """
+        from decimal import Decimal
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+
         try:
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
-                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado según OPs.")
+                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado según OPs/asignaciones.")
                 return
 
-            logger.info(f"Verificando estado de ítems para el pedido {pedido_id}")
+            logger.info(f"Verificando estado de ítems para el pedido {pedido_id} post-producción.")
             pedido_data = pedido_resp.get('data')
             todos_los_items = pedido_data.get('items', [])
 
@@ -850,23 +855,48 @@ class PedidoController(BaseController):
                 logger.info(f"El pedido {pedido_id} no tiene ítems. No se cambia el estado.")
                 return
 
-            # Un pedido está listo si TODOS sus ítems están listos.
-            # Un ítem está listo si: su OP está COMPLETADA, o si no tiene OP y su estado es ALISTADO.
-            todos_los_items_listos = all(item.get('op_estado') == 'COMPLETADA' or (not item.get('orden_produccion_id') and item.get('estado') == 'ALISTADO') for item in todos_los_items)
+            asignacion_model = AsignacionPedidoModel()
+            todos_los_items_listos = True
+
+            for item in todos_los_items:
+                item_id = item['id']
+                item_listo = False
+
+                # Caso 1: Item sin OP asociada (ej. producto de stock directo)
+                if not item.get('orden_produccion_id'):
+                    if item.get('estado') == 'ALISTADO':
+                        item_listo = True
+                # Caso 2: Item asociado a una OP NO consolidada
+                elif not item.get('op_es_consolidada'):
+                    if item.get('op_estado') == 'COMPLETADA':
+                        item_listo = True
+                # Caso 3: Item asociado a una OP consolidada
+                else:
+                    asignaciones_res = asignacion_model.find_all({'pedido_item_id': item_id})
+                    if asignaciones_res.get('success'):
+                        total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
+                        if total_asignado >= Decimal(item.get('cantidad', 0)):
+                            item_listo = True
+
+                if not item_listo:
+                    todos_los_items_listos = False
+                    break # Si un item no está listo, no es necesario seguir verificando
 
             if todos_los_items_listos:
-                self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-                logger.info(f"Todas las OPs del pedido {pedido_id} están completadas. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
+                if pedido_data.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                    self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                    logger.info(f"Todos los items del pedido {pedido_id} están satisfechos. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
             else:
-                # Si no todos están listos, pero al menos uno está en producción, el estado general es EN_PROCESO.
-                algun_item_en_proceso = any(item.get('op_estado') in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD'] for item in todos_los_items)
+                algun_item_en_proceso = any(
+                    item.get('op_estado') in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD', 'EN_LINEA_1', 'EN_LINEA_2']
+                    for item in todos_los_items if not item.get('op_es_consolidada')
+                )
                 if algun_item_en_proceso and pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
                     self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
                     logger.info(f"Al menos una OP del pedido {pedido_id} ha iniciado. Pedido actualizado a 'EN_PROCESO'.")
 
-
         except Exception as e:
-            logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs: {e}", exc_info=True)
+            logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs y asignaciones: {e}", exc_info=True)
 
     def planificar_pedido(self, pedido_id: int) -> tuple:
         """
@@ -1232,3 +1262,39 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error interno en enviar_qr_por_email para pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def actualizar_estado_segun_items(self, pedido_id: int):
+        """
+        Verifica si todos los items de un pedido han sido completamente asignados
+        desde producción. Si es así, actualiza el estado del pedido.
+        """
+        try:
+            items_res = self.model.find_all_items({'pedido_id': pedido_id})
+            if not items_res.get('success') or not items_res.get('data'):
+                logger.warning(f"No se encontraron items para el pedido {pedido_id} al verificar estado post-asignación.")
+                return
+
+            todos_los_items = items_res.get('data', [])
+            if not todos_los_items:
+                return # No hay items, no hay nada que hacer.
+
+            from app.models.asignacion_pedido_model import AsignacionPedidoModel
+            asignacion_model = AsignacionPedidoModel()
+
+            todos_completos = True
+            for item in todos_los_items:
+                asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
+                total_asignado = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_res.get('data', []))
+                
+                if total_asignado < Decimal(item['cantidad']):
+                    todos_completos = False
+                    break
+            
+            if todos_completos:
+                pedido_actual = self.model.find_by_id(pedido_id, 'id')['data']
+                if pedido_actual and pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                    self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                    logger.info(f"Todos los items del pedido {pedido_id} están completos. Estado actualizado a LISTO_PARA_ENTREGA.")
+
+        except Exception as e:
+            logger.error(f"Error al actualizar estado del pedido {pedido_id} según items: {e}", exc_info=True)

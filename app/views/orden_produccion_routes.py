@@ -229,10 +229,25 @@ def detalle(id):
     ingredientes = (
         ingredientes_response.get("data", []) if ingredientes_response and isinstance(ingredientes_response, dict) else []
     )
-    pedidos_asociados_resp, status= pedido_controller.obtener_pedidos_por_orden_produccion(id)
-    pedidos_asociados=[]
-    if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
-        pedidos_asociados=pedidos_asociados_resp.get('data')
+    pedidos_asociados_resp, status = pedido_controller.obtener_pedidos_por_orden_produccion(id)
+    pedidos_asociados = []
+    if pedidos_asociados_resp.get('data'):
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+        from decimal import Decimal
+        asignacion_model = AsignacionPedidoModel()
+        
+        # Enriquecer cada pedido con las cantidades asignadas a sus items
+        for pedido in pedidos_asociados_resp.get('data'):
+            items_del_pedido_res = pedido_controller.model.find_all_items({'pedido_id': pedido['id'], 'orden_produccion_id': id})
+            if items_del_pedido_res.get('success'):
+                items_enriquecidos = []
+                for item in items_del_pedido_res.get('data', []):
+                    asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id'], 'orden_produccion_id': id})
+                    total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
+                    item['cantidad_asignada'] = total_asignado
+                    items_enriquecidos.append(item)
+                pedido['items_asociados_a_op'] = items_enriquecidos
+        pedidos_asociados = pedidos_asociados_resp.get('data')
 
     reserva_insumo_model = ReservaInsumoModel()
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)

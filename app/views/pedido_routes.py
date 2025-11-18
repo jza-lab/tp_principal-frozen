@@ -180,6 +180,16 @@ def detalle(id):
     if response.get('success'):
         pedido_data = response.get('data')
         
+        # Enriquecer cada item con la cantidad asignada
+        if pedido_data.get('items'):
+            from app.models.asignacion_pedido_model import AsignacionPedidoModel
+            from decimal import Decimal
+            asignacion_model = AsignacionPedidoModel()
+            for item in pedido_data['items']:
+                asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
+                total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
+                item['cantidad_asignada'] = total_asignado
+
         # Generar token de seguimiento para el enlace del QR
         token_resp, _ = controller.generar_enlace_seguimiento(id)
         token_seguimiento = token_resp.get('data', {}).get('token') if token_resp.get('success') else None

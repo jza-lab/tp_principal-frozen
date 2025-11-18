@@ -250,6 +250,11 @@
                         <tr>
                             <td>
                                 <div class="fw-bold">{{ item.producto_nombre.nombre or 'N/A' }}</div>
+                                {% if item.cantidad_asignada and item.cantidad_asignada > 0 %}
+                                <div class="text-muted small mt-1">
+                                    Asignado de Producción: <strong>{{ item.cantidad_asignada|round(2) }} de {{ item.cantidad }}</strong>
+                                </div>
+                                {% endif %}
                             </td>
                             <td>{{ item.cantidad }} {{ item.producto_nombre.unidad_medida or 'u.' }}</td>
                             {% if pedido['items'] | selectattr('cantidad_lote', '>', 0) | list | length > 0 or pedido['items'] | selectattr('cantidad_produccion', '>', 0) | list | length > 0 %}
