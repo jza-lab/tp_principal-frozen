@@ -62,7 +62,23 @@ class RentabilidadController(BaseController):
                 'costo_total': round(costo_total_ventas, 2)
             })
 
-        return self.success_response(data=datos_matriz)
+        # Calcular promedios para las líneas de los cuadrantes
+        total_productos = len(datos_matriz)
+        volumen_ventas_total = sum(p['volumen_ventas'] for p in datos_matriz)
+        margen_ganancia_total = sum(p['margen_ganancia'] for p in datos_matriz)
+
+        volumen_promedio = volumen_ventas_total / total_productos if total_productos > 0 else 0
+        margen_promedio = margen_ganancia_total / total_productos if total_productos > 0 else 0
+
+        respuesta = {
+            'productos': datos_matriz,
+            'promedios': {
+                'volumen_ventas': round(volumen_promedio, 2),
+                'margen_ganancia': round(margen_promedio, 2)
+            }
+        }
+        
+        return self.success_response(data=respuesta)
 
 
     def _calcular_costo_producto(self, producto_id: int) -> Dict:

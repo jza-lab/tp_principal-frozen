@@ -20,13 +20,6 @@
                             <option value="año">Año</option>
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label for="metrica" class="form-label">Métrica:</label>
-                        <select id="metrica" class="form-select">
-                            <option value="facturacion" selected>Facturación</option>
-                            <option value="unidades">Unidades</option>
-                        </select>
-                    </div>
                     <button id="btn-actualizar-crecimiento" class="btn btn-primary">Actualizar</button>
                     <div id="resultado-crecimiento" class="mt-3"></div>
                 </div>
@@ -34,14 +27,19 @@
         </div>
         <div class="col-md-8">
             <div class="card">
-                 <div class="card-body">
-                    <h5 class="card-title">Leyenda del Gráfico</h5>
-                    <ul class="list-unstyled">
-                        <li><strong>Eje X:</strong> Volumen de Ventas (unidades)</li>
-                        <li><strong>Eje Y:</strong> Margen de Ganancia (%)</li>
-                        <li><strong>Tamaño de Burbuja:</strong> Facturación Total ($)</li>
-                    </ul>
-                    <p class="text-muted">Pase el cursor sobre una burbuja para ver el nombre del producto y haga clic para ver detalles.</p>
+                <div class="card-body">
+                    <h5 class="card-title">Matriz de Rentabilidad y Ventas</h5>
+                    <div class="row">
+                        <div class="col-6">
+                            <p><span style="height: 15px; width: 15px; background-color: rgba(75, 192, 192, 0.7); border-radius: 50%; display: inline-block;"></span> <strong>Estrellas:</strong> Alto margen, altas ventas.</p>
+                            <p><span style="height: 15px; width: 15px; background-color: rgba(255, 206, 86, 0.7); border-radius: 50%; display: inline-block;"></span> <strong>Interrogantes:</strong> Alto margen, bajas ventas.</p>
+                        </div>
+                        <div class="col-6">
+                            <p><span style="height: 15px; width: 15px; background-color: rgba(54, 162, 235, 0.7); border-radius: 50%; display: inline-block;"></span> <strong>Vacas Lecheras:</strong> Bajo margen, altas ventas.</p>
+                            <p><span style="height: 15px; width: 15px; background-color: rgba(255, 99, 132, 0.7); border-radius: 50%; display: inline-block;"></span> <strong>Perros:</strong> Bajo margen, bajas ventas.</p>
+                        </div>
+                    </div>
+                    <p class="text-muted small mt-2">Las líneas discontinuas representan el promedio de ventas y rentabilidad de todos los productos.</p>
                 </div>
             </div>
         </div>
@@ -107,6 +105,7 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const ctx = document.getElementById('rentabilidadChart').getContext('2d');
@@ -114,8 +113,21 @@ document.addEventListener('DOMContentLoaded', function () {
     let datosRentabilidad = []; // Almacenar los datos globalmente para re-ordenar
     let sortConfig = { key: 'ganancia_bruta', direction: 'desc' };
 
-    // --- Funciones de formato ---
+    // --- Funciones de formato y color ---
     const formatCurrency = (value) => `$${(value || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+    
+    function getQuadrantColor(producto, promedios) {
+        const { volumen_ventas, margen_ganancia } = producto;
+        if (volumen_ventas >= promedios.volumen_ventas && margen_ganancia >= promedios.margen_ganancia) {
+            return 'rgba(75, 192, 192, 0.7)'; // Estrellas (verde-azulado)
+        } else if (volumen_ventas >= promedios.volumen_ventas && margen_ganancia < promedios.margen_ganancia) {
+            return 'rgba(54, 162, 235, 0.7)'; // Vacas Lecheras (azul)
+        } else if (volumen_ventas < promedios.volumen_ventas && margen_ganancia >= promedios.margen_ganancia) {
+            return 'rgba(255, 206, 86, 0.7)'; // Interrogantes (amarillo)
+        } else {
+            return 'rgba(255, 99, 132, 0.7)'; // Perros (rojo)
+        }
+    }
 
     // --- Lógica de la Tabla ---
     function renderizarTabla() {
@@ -163,13 +175,17 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // --- Lógica del Gráfico ---
-    function renderizarGrafico(data) {
+    function renderizarGrafico(responseData) {
         if (rentabilidadChart) {
             rentabilidadChart.destroy();
         }
-
+        
+        const data = responseData.productos;
+        const promedios = responseData.promedios;
+        
         const maxFacturacion = Math.max(...data.map(p => p.facturacion_total), 0);
-        const maxRadius = 40; 
+        const maxRadius = 40;
+        const minRadius = 8; // Radio mínimo para garantizar visibilidad
 
         rentabilidadChart = new Chart(ctx, {
             type: 'bubble',
@@ -179,9 +195,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     data: [{
                         x: p.volumen_ventas,
                         y: p.margen_ganancia,
-                        r: maxFacturacion > 0 ? (Math.sqrt(p.facturacion_total) / Math.sqrt(maxFacturacion)) * maxRadius : 5
+                        // Nueva fórmula: escala el radio entre minRadius y maxRadius
+                        r: maxFacturacion > 0 ? ((Math.sqrt(p.facturacion_total) / Math.sqrt(maxFacturacion)) * (maxRadius - minRadius)) + minRadius : minRadius
                     }],
-                    backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.6)`
+                    backgroundColor: getQuadrantColor(p, promedios)
                 }))
             },
             options: {
@@ -190,27 +207,88 @@ document.addEventListener('DOMContentLoaded', function () {
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        callbacks: {
+                         callbacks: {
                             label: function(context) {
-                                let label = context.dataset.label || '';
+                                const producto = data.find(p => p.nombre === context.dataset.label);
+                                if (!producto) return '';
+                                let label = producto.nombre || '';
                                 if (label) label += ': ';
-                                const dataPoint = context.dataset.data[0];
-                                label += `(${dataPoint.x} unidades, ${dataPoint.y}%)`;
+                                label += `(${producto.volumen_ventas} unid., ${producto.margen_ganancia}%)`;
                                 return label;
+                            }
+                        }
+                    },
+                    annotation: {
+                        annotations: {
+                            lineaVentas: {
+                                type: 'line',
+                                xMin: promedios.volumen_ventas,
+                                xMax: promedios.volumen_ventas,
+                                borderColor: 'rgba(255, 99, 132, 0.8)',
+                                borderWidth: 2,
+                                borderDash: [6, 6]
+                            },
+                            lineaMargen: {
+                                type: 'line',
+                                yMin: promedios.margen_ganancia,
+                                yMax: promedios.margen_ganancia,
+                                borderColor: 'rgba(255, 99, 132, 0.8)',
+                                borderWidth: 2,
+                                borderDash: [6, 6]
+                            },
+                            // Etiquetas de Cuadrantes
+                            estrellas: {
+                                type: 'label',
+                                xValue: promedios.volumen_ventas * 1.5,
+                                yValue: promedios.margen_ganancia * 1.5,
+                                content: 'Estrellas',
+                                font: { size: 18, weight: 'bold' },
+                                color: 'rgba(0,0,0,0.15)'
+                            },
+                             vacas: {
+                                type: 'label',
+                                xValue: promedios.volumen_ventas * 1.5,
+                                yValue: promedios.margen_ganancia * 0.5,
+                                content: 'Vacas Lecheras',
+                                font: { size: 18, weight: 'bold' },
+                                color: 'rgba(0,0,0,0.15)'
+                            },
+                            interrogantes: {
+                                type: 'label',
+                                xValue: promedios.volumen_ventas * 0.5,
+                                yValue: promedios.margen_ganancia * 1.5,
+                                content: 'Interrogantes',
+                                font: { size: 18, weight: 'bold' },
+                                color: 'rgba(0,0,0,0.15)'
+                            },
+                            perros: {
+                                type: 'label',
+                                xValue: promedios.volumen_ventas * 0.5,
+                                yValue: promedios.margen_ganancia * 0.5,
+                                content: 'Perros',
+                                font: { size: 18, weight: 'bold' },
+                                color: 'rgba(0,0,0,0.15)'
                             }
                         }
                     }
                 },
                 scales: {
-                    x: { title: { display: true, text: 'Volumen de Ventas (unidades)' } },
-                    y: { title: { display: true, text: 'Margen de Ganancia (%)' } }
+                    x: { 
+                        type: 'logarithmic',
+                        title: { display: true, text: 'Volumen de Ventas (unidades) - Escala Logarítmica' } 
+                    },
+                    y: { 
+                        title: { display: true, text: 'Margen de Ganancia (%)' } 
+                    }
                 },
                 onClick: (event, elements) => {
                     if (elements.length > 0) {
                         const element = elements[0];
                         const dataset = rentabilidadChart.data.datasets[element.datasetIndex];
-                        const productoId = data.find(p => p.nombre === dataset.label).id;
-                        cargarDetallesProducto(productoId);
+                        const producto = data.find(p => p.nombre === dataset.label);
+                        if (producto) {
+                           cargarDetallesProducto(producto.id);
+                        }
                     }
                 }
             }
@@ -222,9 +300,9 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
-                    datosRentabilidad = result.data;
-                    renderizarGrafico(datosRentabilidad);
-                    renderizarTabla(); // Cargar la tabla con los datos iniciales
+                    datosRentabilidad = result.data.productos; // Guardar solo la lista de productos para la tabla
+                    renderizarGrafico(result.data); // Pasar el objeto completo al gráfico
+                    renderizarTabla();
                 } else {
                     console.error('Error al cargar datos:', result.error);
                 }
@@ -300,11 +378,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function actualizarCrecimiento() {
         const periodo = document.getElementById('periodo').value;
-        const metrica = document.getElementById('metrica').value;
         const resultadoDiv = document.getElementById('resultado-crecimiento');
         resultadoDiv.innerHTML = 'Calculando...';
 
-        fetch(`/analisis/api/rentabilidad/crecimiento?periodo=${periodo}&metrica=${metrica}`)
+        // El parámetro 'metrica' se ha eliminado del frontend. El backend usará el valor por defecto.
+        fetch(`/analisis/api/rentabilidad/crecimiento?periodo=${periodo}`)
             .then(response => response.json())
             .then(result => {
                 if (result.success) {
