@@ -86,12 +86,12 @@ class PagoController(BaseController):
 
             # 6. Actualizar estado del pedido SOLO si es 'al contado'
             if pedido.get('condicion_venta') == 'contado':
-                update_result = self.pedido_model.update(id_pedido, {'pago': 'Pagado'})
+                update_result = self.pedido_model.update(id_pedido, {'estado_pago': 'Pagado'})
                 if not update_result.get('success'):
                      # Log de advertencia si la actualización falla pero el pago se creó
-                     print(f"ADVERTENCIA: Pago {result['data'][0]['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a 'Pagado'.")
+                     print(f"ADVERTENCIA: Pago {result['data']['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a 'Pagado'.")
 
-            return self.success_response(result['data'][0], message="Pago registrado con éxito.", status_code=201)
+            return self.success_response(result['data'], message="Pago registrado con éxito.", status_code=201)
 
         except InvalidOperation:
             return self.error_response("El monto proporcionado no es un número válido.", 400)

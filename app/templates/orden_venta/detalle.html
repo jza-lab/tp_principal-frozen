@@ -223,7 +223,7 @@
                             <tbody>
                                 {% for pago in pagos %}
                                 <tr>
-                                    <td>{{ pago.fecha_creacion | format_datetime }}</td>
+                                    <td>{{ pago.created_at | format_datetime }}</td>
                                     <td>{{ pago.monto | formato_moneda }}</td>
                                     <td>{{ pago.metodo_pago.replace('_', ' ') | capitalize }}</td>
                                     <td>{{ pago.usuario_registro.nombre or 'Sistema' }}</td>

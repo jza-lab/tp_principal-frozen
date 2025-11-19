@@ -18,6 +18,7 @@ from app.models.pedido import PedidoModel
 from app.models.despacho import DespachoModel
 from app.models.producto import ProductoModel
 from app.models.direccion import DireccionModel
+from app.models.pago import PagoModel
 from app.models.nota_credito import NotaCreditoModel
 from app.schemas.direccion_schema import DireccionSchema
 from app.schemas.cliente_schema import ClienteSchema
@@ -47,6 +48,7 @@ class PedidoController(BaseController):
         self.dcliente_schema = ClienteSchema()
         self.direccion_schema= DireccionSchema()
         self.receta_model = RecetaModel()
+        self.pago_model = PagoModel()
         self.zona_controller = ZonaController()
         from app.controllers.storage_controller import StorageController
         self.storage_controller = StorageController()
@@ -128,6 +130,14 @@ class PedidoController(BaseController):
                     notas_de_credito_completas.append(nc)
 
             pedido_data['notas_credito'] = notas_de_credito_completas
+
+            # 3. Obtener y adjuntar pagos
+            pagos_result = self.pago_model.get_pagos_by_pedido_id(pedido_id)
+            if pagos_result.get('success'):
+                pedido_data['pagos'] = pagos_result.get('data', [])
+            else:
+                # No devolvemos un error, simplemente no habrá datos de pagos
+                pedido_data['pagos'] = []
 
             return self.success_response(data=pedido_data)
         except Exception as e:
