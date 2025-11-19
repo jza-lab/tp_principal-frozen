@@ -1,15 +1,14 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tabElements = document.querySelectorAll('#kpiTab .nav-link');
-    const filterForm = document.getElementById('filter-form');
     const tabContentContainer = document.getElementById('kpiTabContent');
     let loadedTabs = new Set();
     let chartInstances = {}; // Para almacenar instancias de ECharts
 
     // --- UTILS ---
     function getApiUrl(category) {
-        const startDate = document.getElementById('fecha_inicio').value;
-        const endDate = document.getElementById('fecha_fin').value;
-        return `/reportes/api/indicadores/${category}?fecha_inicio=${startDate}&fecha_fin=${endDate}`;
+        const selectedPeriodInput = document.querySelector('input[name="periodo"]:checked');
+        const periodo = selectedPeriodInput ? selectedPeriodInput.value : 'semanal';
+        return `/reportes/api/indicadores/${category}?periodo=${periodo}`;
     }
 
     function showLoading(tabPane) {
@@ -42,6 +41,15 @@ document.addEventListener('DOMContentLoaded', function () {
         if (chartInstances[containerId]) {
             chartInstances[containerId].dispose();
         }
+
+        // --- NUEVA LÓGICA: Mostrar mensaje si no hay datos ---
+        const hasData = options.series && options.series.some(s => s.data && s.data.length > 0);
+        
+        if (!hasData) {
+            chartDom.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 text-muted">No hay datos disponibles para el período seleccionado.</div>`;
+            return; // No inicializar ECharts
+        }
+        // --- FIN NUEVA LÓGICA ---
 
         const chart = echarts.init(chartDom);
         chart.setOption(options);
@@ -138,186 +146,7 @@ document.addEventListener('DOMContentLoaded', function () {
         content += renderKpiCard('OEE', `${data.oee.valor.toFixed(2)}%`, `Disponibilidad: ${(data.oee.disponibilidad * 100).toFixed(1)}% | Rendimiento: ${(data.oee.rendimiento * 100).toFixed(1)}% | Calidad: ${(data.oee.calidad * 100).toFixed(1)}%`);
         content += renderKpiCard('Cumplimiento del Plan', `${data.cumplimiento_plan.valor.toFixed(2)}%`, `${data.cumplimiento_plan.completadas_a_tiempo} de ${data.cumplimiento_plan.planificadas} órdenes a tiempo`);
         content += '</div>';
-
-        // --- NUEVOS GRÁFICOS ---
-        // Fila 1: Gantt
-        content += '<div class="row mt-4"><div class="col-12 mb-4">';
-        content += renderChartCard('gantt-produccion-chart', 'Diagrama de Gantt de Órdenes de Producción (Últimas 15)', 'Visualiza la planificación y duración de las órdenes de producción.', 'Muestra las fechas planificadas y reales de inicio y fin. Las barras se colorean según el estado actual de la orden.', 'download-gantt', '500px');
-        content += '</div></div>';
-        
-        // --- INICIO: GRÁFICO DE DEMOSTRACIÓN ---
-        content += '<div class="row mt-4"><div class="col-12 mb-4">';
-        content += renderChartCard('gantt-demo-chart', 'Diagrama de Gantt de Demostración (Datos de Ejemplo)', 'Este es un ejemplo visual con datos de prueba.', 'Las barras muestran la duración planificada para órdenes de ejemplo con diferentes estados.', 'download-gantt-demo', '500px');
-        content += '</div></div>';
-        // --- FIN: GRÁFICO DE DEMOSTRACIÓN ---
-
-        // Fila 2: Volumen y Comparativa
-        content += '<div class="row mt-4">';
-        content += '<div class="col-lg-7 mb-4">';
-        content += renderChartCard('volumen-produccion-chart', 'Volumen de Producción Diario', 'Muestra la cantidad total de unidades producidas cada día.', 'Suma de la `cantidad_producida` de todas las órdenes completadas en una fecha específica.', 'download-volumen');
-        content += '</div>';
-        content += '<div class="col-lg-5 mb-4">';
-        content += renderChartCard('plan-vs-real-chart', 'Comparativa Plan vs. Real (Últimas 10 OPs)', 'Compara la cantidad planificada contra la producida.', 'Idealmente, las barras deben tener una altura similar, indicando que la planificación es precisa.', 'download-plan-real');
-        content += '</div>';
-        content += '</div>';
-
-        // Fila 3: Pareto (existente)
-        content += '<div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('pareto-desperdicio-chart', 'Análisis de Causas de Desperdicio (Pareto)', 'Identifica las causas más significativas de desperdicio.', 'Regla 80/20 para encontrar las causas vitales.', 'download-pareto');
-        content += '</div></div>';
-
         container.innerHTML = content;
-        
-        // --- INICIALIZACIÓN DE GRÁFICOS ---
-
-        // Gráfico de Pareto (existente)
-        createChart('pareto-desperdicio-chart', {
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'category', data: data.causas_desperdicio_pareto.labels },
-            yAxis: [ { type: 'value', name: 'Cantidad' }, { type: 'value', name: 'Porcentaje Acumulado', axisLabel: { formatter: '{value}%' } } ],
-            series: [
-                { name: 'Cantidad', type: 'bar', data: data.causas_desperdicio_pareto.data },
-                { name: 'Acumulado', type: 'line', yAxisIndex: 1, data: data.causas_desperdicio_pareto.line_data }
-            ]
-        });
-
-        // Nuevo: Gráfico de Gantt
-        const ganttData = data.ordenes_gantt
-            .filter(op => {
-                if (!op.fecha_inicio_planificada || !op.fecha_meta) return false;
-                const startTime = new Date(op.fecha_inicio_planificada).getTime();
-                const endTime = new Date(op.fecha_meta).getTime();
-                return !isNaN(startTime) && !isNaN(endTime) && startTime <= endTime;
-            })
-            .map((op, index) => {
-            const estadoColores = {
-                'EN ESPERA': '#6c757d', 'LISTA PARA PRODUCIR': '#ffc107',
-                'EN_LINEA_1': '#17a2b8', 'EN_LINEA_2': '#17a2b8',
-                'EN_EMPAQUETADO': '#007bff', 'CONTROL_DE_CALIDAD': '#fd7e14',
-                'COMPLETADA': '#28a745', 'PAUSADA': '#dc3545'
-            };
-            return {
-                name: `OP-${op.id} ${op.producto_nombre}`,
-                value: [
-                    index,
-                    new Date(op.fecha_inicio_planificada).getTime(),
-                    new Date(op.fecha_meta).getTime(),
-                    op.estado
-                ],
-                itemStyle: { color: estadoColores[op.estado] || '#6c757d' }
-            };
-        });
-
-        createChart('gantt-produccion-chart', {
-            tooltip: {
-                formatter: function (params) {
-                    const op = data.ordenes_gantt[params.value[0]];
-                    return `<b>${params.name}</b><br/>
-                            Estado: ${op.estado}<br/>
-                            Inicio Plan.: ${new Date(params.value[1]).toLocaleDateString()}<br/>
-                            Fin Plan.: ${new Date(params.value[2]).toLocaleDateString()}`;
-                }
-            },
-            xAxis: { type: 'time' },
-            yAxis: {
-                type: 'category',
-                data: ganttData.map(d => d.name),
-                axisLabel: { interval: 0 } // Mostrar todas las etiquetas
-            },
-            series: [{
-                type: 'custom',
-                renderItem: function (params, api) {
-                    const categoryIndex = api.value(0);
-                    const start = api.coord([api.value(1), categoryIndex]);
-                    const end = api.coord([api.value(2), categoryIndex]);
-                    const height = api.size([0, 1])[1] * 0.6;
-                    const rectShape = echarts.graphic.clipRectByRect({
-                        x: start[0], y: start[1] - height / 2,
-                        width: end[0] - start[0], height: height
-                    }, {
-                        x: params.coordSys.x, y: params.coordSys.y,
-                        width: params.coordSys.width, height: params.coordSys.height
-                    });
-                    return rectShape && { type: 'rect', shape: rectShape, style: api.style() };
-                },
-                encode: { x: [1, 2], y: 0 },
-                data: ganttData
-            }],
-            grid: { containLabel: true },
-            dataZoom: [{ type: 'inside', yAxisIndex: 0, filterMode: 'none' }, { type: 'slider', yAxisIndex: 0, filterMode: 'none' }] // Scroll para Y
-        });
-        
-        // --- INICIO: LÓGICA GRÁFICO DE DEMOSTRACIÓN ---
-        const mockGanttData = [
-            { id: 1, producto_nombre: "Producto A", fecha_inicio_planificada: "2025-11-10T08:00:00", fecha_meta: "2025-11-12T17:00:00", estado: "COMPLETADA" },
-            { id: 2, producto_nombre: "Producto B", fecha_inicio_planificada: "2025-11-11T09:00:00", fecha_meta: "2025-11-14T18:00:00", estado: "EN_LINEA_1" },
-            { id: 3, producto_nombre: "Producto C", fecha_inicio_planificada: "2025-11-15T10:00:00", fecha_meta: "2025-11-18T12:00:00", estado: "LISTA PARA PRODUCIR" },
-            { id: 4, producto_nombre: "Producto D", fecha_inicio_planificada: "2025-11-18T14:00:00", fecha_meta: "2025-11-20T16:00:00", estado: "EN ESPERA" }
-        ].map((op, index) => {
-            const estadoColores = {
-                'EN ESPERA': '#6c757d', 'LISTA PARA PRODUCIR': '#ffc107', 'EN_LINEA_1': '#17a2b8',
-                'COMPLETADA': '#28a745'
-            };
-            return {
-                name: `OP-${op.id} ${op.producto_nombre}`,
-                value: [index, new Date(op.fecha_inicio_planificada).getTime(), new Date(op.fecha_meta).getTime()],
-                itemStyle: { color: estadoColores[op.estado] || '#6c757d' }
-            };
-        });
-
-        createChart('gantt-demo-chart', {
-            tooltip: { formatter: params => `<b>${params.name}</b>` },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'category', data: mockGanttData.map(d => d.name) },
-            series: [{
-                type: 'custom',
-                renderItem: function (params, api) {
-                    const categoryIndex = api.value(0);
-                    const start = api.coord([api.value(1), categoryIndex]);
-                    const end = api.coord([api.value(2), categoryIndex]);
-                    const height = api.size([0, 1])[1] * 0.6;
-                    return {
-                        type: 'rect',
-                        shape: echarts.graphic.clipRectByRect({ x: start[0], y: start[1] - height / 2, width: end[0] - start[0], height: height }, { x: params.coordSys.x, y: params.coordSys.y, width: params.coordSys.width, height: params.coordSys.height }),
-                        style: api.style()
-                    };
-                },
-                encode: { x: [1, 2], y: 0 },
-                data: mockGanttData
-            }],
-            grid: { containLabel: true }
-        });
-        // --- FIN: LÓGICA GRÁFICO DE DEMOSTRACIÓN ---
-
-        // Nuevo: Gráfico de Volumen de Producción
-        createChart('volumen-produccion-chart', {
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'category', data: data.volumen_produccion_diario.map(d => d.fecha) },
-            yAxis: { type: 'value' },
-            series: [{
-                name: 'Volumen',
-                type: 'line',
-                smooth: true,
-                data: data.volumen_produccion_diario.map(d => d.volumen)
-            }]
-        });
-
-        // Nuevo: Gráfico Comparativa Plan vs. Real
-        createChart('plan-vs-real-chart', {
-            tooltip: { trigger: 'axis' },
-            legend: { data: ['Planificado', 'Producido'] },
-            xAxis: {
-                type: 'category',
-                data: data.comparativa_plan_real.map(d => `OP-${d.id} (${d.productos.nombre})`),
-                axisLabel: { rotate: 45 }
-            },
-            yAxis: { type: 'value' },
-            series: [
-                { name: 'Planificado', type: 'bar', data: data.comparativa_plan_real.map(d => d.cantidad_planificada) },
-                { name: 'Producido', type: 'bar', data: data.comparativa_plan_real.map(d => d.cantidad_producida) }
-            ],
-            grid: { containLabel: true }
-        });
     }
 
     function renderCalidad(data) {
@@ -342,6 +171,8 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div></div>';
         container.innerHTML = content;
 
+        renderPeriodFilter('comercial', 'comercial');
+
         createChart('top-productos-chart', {
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
             xAxis: { type: 'category', data: data.top_productos_vendidos.labels },
@@ -357,48 +188,20 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderFinanciera(data) {
         const container = document.getElementById('financiera');
-        let content = '<div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('facturacion-chart', 'Facturación en el Tiempo', 'Evolución de ingresos por ventas.', 'Suma del valor de pedidos completados.', 'download-facturacion');
-        content += '</div></div><div class="row mt-4"><div class="col-lg-7 mb-4">';
-        content += renderChartCard('costo-ganancia-chart', 'Costos vs. Ingresos', 'Costos de producción vs. ingresos por ventas.', 'Estimación de costos de materia prima.', 'download-costo-ganancia');
-        content += '</div><div class="col-lg-5 mb-4">';
-        content += renderChartCard('descomposicion-costos-chart', 'Descomposición de Costos', 'Distribución de costos operativos.', 'Mano de obra y gastos fijos son estimados.', 'download-descomposicion');
-        content += '</div></div><div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', "Ingresos vs. costos de los productos más vendidos. <br><a href='/analisis/rentabilidad' class='text-warning fw-bold text-decoration-underline'><i class='bi bi-exclamation-triangle-fill me-1'></i>Aviso: Esta es una vista general. Para un análisis detallado, haga clic aquí.</a>", 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
-        content += '</div></div>';
+        let content = '<div class="row mt-4">';
+        // Aquí podrías renderizar KPIs financieros si los hubiera en el futuro.
+        // Por ahora, como no hay KPIs numéricos definidos para esta sección,
+        // podrías mostrar un mensaje o simplemente dejarlo vacío.
+        // Para este caso, mostraremos los KPIs que ya se calculan en el backend
+        // aunque no estuvieran visibles antes.
+        if (data.kpis_financieros) {
+            content += renderKpiCard(data.kpis_financieros.facturacion_total.etiqueta, `$${data.kpis_financieros.facturacion_total.valor.toFixed(2)}`, `Período seleccionado`);
+            content += renderKpiCard(data.kpis_financieros.costo_total.etiqueta, `$${data.kpis_financieros.costo_total.valor.toFixed(2)}`, `Costo de Ventas (COGS)`);
+            content += renderKpiCard(data.kpis_financieros.beneficio_bruto.etiqueta, `$${data.kpis_financieros.beneficio_bruto.valor.toFixed(2)}`, `Facturación - Costo Total`);
+            content += renderKpiCard(data.kpis_financieros.margen_beneficio.etiqueta, `${data.kpis_financieros.margen_beneficio.valor.toFixed(2)}%`, `(Beneficio / Facturación) * 100`);
+        }
+        content += '</div>';
         container.innerHTML = content;
-
-        createChart('facturacion-chart', {
-             tooltip: { trigger: 'axis' },
-             xAxis: { type: 'category', data: data.facturacion_periodo.labels },
-             yAxis: { type: 'value' },
-             series: [{ data: data.facturacion_periodo.data, type: 'line', smooth: true }]
-        });
-        createChart('costo-ganancia-chart', {
-             tooltip: { trigger: 'axis' },
-             legend: { data: ['Ingresos', 'Costos'] },
-             xAxis: { type: 'category', data: data.costo_vs_ganancia.labels },
-             yAxis: { type: 'value' },
-             series: [
-                { name: 'Ingresos', type: 'line', data: data.costo_vs_ganancia.ingresos, smooth: true },
-                { name: 'Costos', type: 'line', data: data.costo_vs_ganancia.costos, smooth: true, lineStyle: { type: 'dashed' } }
-             ]
-        });
-        createChart('descomposicion-costos-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', radius: ['40%', '70%'], data: data.descomposicion_costos.labels.map((name, i) => ({value: data.descomposicion_costos.data[i], name})) }]
-        });
-        createChart('rentabilidad-productos-chart', {
-            tooltip: { trigger: 'axis' },
-            legend: { data: ['Ingresos', 'Costos', 'Rentabilidad Neta'] },
-            xAxis: { type: 'category', data: data.rentabilidad_productos.labels },
-            yAxis: { type: 'value' },
-            series: [
-                { name: 'Ingresos', type: 'bar', data: data.rentabilidad_productos.ingresos },
-                { name: 'Costos', type: 'bar', data: data.rentabilidad_productos.costos },
-                { name: 'Rentabilidad Neta', type: 'line', data: data.rentabilidad_productos.rentabilidad_neta }
-            ]
-        });
     }
     
     function renderInventario(data) {
@@ -422,6 +225,37 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function renderPeriodFilter(containerId, category) {
+        const filterHtml = `
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Filtrar por Período</h5>
+                    <div id="period-filter-${category}" class="btn-group" role="group" aria-label="Selector de período">
+                        <input type="radio" class="btn-check" name="periodo-${category}" id="periodo_semanal_${category}" value="semanal" autocomplete="off" checked>
+                        <label class="btn btn-outline-primary" for="periodo_semanal_${category}">Semanal</label>
+                        <input type="radio" class="btn-check" name="periodo-${category}" id="periodo_mensual_${category}" value="mensual" autocomplete="off">
+                        <label class="btn btn-outline-primary" for="periodo_mensual_${category}">Mensual</label>
+                        <input type="radio" class="btn-check" name="periodo-${category}" id="periodo_anual_${category}" value="anual" autocomplete="off">
+                        <label class="btn btn-outline-primary" for="periodo_anual_${category}">Anual</label>
+                    </div>
+                </div>
+            </div>`;
+        
+        const container = document.getElementById(containerId);
+        if(container) {
+            const firstChild = container.firstChild;
+            container.insertAdjacentHTML('afterbegin', filterHtml);
+
+            // Añadir el listener
+            const periodFilterGroup = document.getElementById(`period-filter-${category}`);
+            periodFilterGroup.addEventListener('change', event => {
+                loadedTabs.delete(category);
+                chartInstances = {};
+                loadTabData(category);
+            });
+        }
+    }
+
     // --- EVENT LISTENERS ---
 
     tabElements.forEach(tab => {
@@ -429,17 +263,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const category = event.target.dataset.category;
             loadTabData(category);
         });
-    });
-
-    filterForm.addEventListener('submit', event => {
-        event.preventDefault();
-        const activeTab = document.querySelector('#kpiTab .nav-link.active');
-        if (activeTab) {
-            const category = activeTab.dataset.category;
-            loadedTabs.clear(); // Forzar recarga de todas las pestañas
-            chartInstances = {}; // Limpiar instancias de gráficos
-            loadTabData(category);
-        }
     });
 
     // Cargar la primera pestaña activa al inicio

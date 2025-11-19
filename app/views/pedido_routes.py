@@ -12,6 +12,9 @@ from app.utils.estados import OV_FILTROS_UI, OV_MAP_STRING_TO_INT
 import re
 from datetime import datetime, date, timedelta
 import base64
+from xhtml2pdf import pisa
+from flask import Response
+from io import BytesIO
 
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
@@ -556,3 +559,82 @@ def generar_qr_pedido(id_pedido):
         # Idealmente, deberías tener una imagen de error placeholder.
         # Por ahora, devolvemos un 404.
         return "Error generando QR", 404
+
+@orden_venta_bp.route('/documento/<tipo>/<int:id_documento>/pdf')
+@jwt_required()
+@permission_required(accion='logistica_gestion_ov')
+def generar_documento_pdf(tipo, id_documento):
+    """
+    Genera un PDF para un documento específico (nota de crédito o pago).
+    """
+    try:
+        pedido_controller = PedidoController()
+        pago_controller = PagoController()
+        
+        if tipo == 'pago':
+            pago_resp, _ = pago_controller.get_pago_by_id(id_documento)
+            if not pago_resp.get('success'):
+                flash('Pago no encontrado.', 'error')
+                return redirect(request.referrer or url_for('orden_venta.listar'))
+            pago = pago_resp.get('data')
+            
+            pedido_resp, _ = pedido_controller.obtener_pedido_por_id(pago.get('id_pedido'))
+            if not pedido_resp.get('success'):
+                flash('Pedido asociado al pago no encontrado.', 'error')
+                return redirect(request.referrer or url_for('orden_venta.listar'))
+            pedido = pedido_resp.get('data')
+
+            template_name = 'orden_venta/_comprobante_pago.html'
+            context = {'pedido': pedido, 'pago': pago}
+            filename = f"Recibo_Pago_{pago['id']}.pdf"
+
+        elif tipo == 'nc':
+            from app.controllers.nota_credito_controller import NotaCreditoController
+            nota_credito_controller = NotaCreditoController()
+            nc_resp, _ = nota_credito_controller.get_nc_by_id(id_documento)
+            if not nc_resp.get('success'):
+                flash('Nota de Crédito no encontrada.', 'error')
+                return redirect(request.referrer or url_for('orden_venta.listar'))
+            nc = nc_resp.get('data')
+
+            pedido_resp, _ = pedido_controller.obtener_pedido_por_id(nc.get('pedido_origen_id'))
+            if not pedido_resp.get('success'):
+                flash('Pedido asociado a la Nota de Crédito no encontrado.', 'error')
+                return redirect(request.referrer or url_for('orden_venta.listar'))
+            pedido = pedido_resp.get('data')
+
+            template_name = 'orden_venta/_nota_credito_cuerpo.html'
+            context = {'pedido': pedido, 'nc': nc}
+            filename = f"Nota_de_Credito_{nc['codigo_nc']}.pdf"
+
+        else:
+            flash('Tipo de documento no válido.', 'error')
+            return redirect(request.referrer or url_for('orden_venta.listar'))
+
+        # Construir la ruta absoluta del logo
+        logo_path = os.path.join(current_app.root_path, 'static', 'img', 'logo_empresa.png')
+        context['logo_path'] = logo_path
+
+        # Renderizar el HTML del cuerpo del documento
+        html_string = render_template(template_name, **context)
+
+        # Generar el PDF en memoria
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(
+            src=html_string,
+            dest=pdf_buffer
+        )
+
+        if pisa_status.err:
+            flash('Error al generar el PDF.', 'danger')
+            return redirect(request.referrer or url_for('orden_venta.listar'))
+
+        pdf_buffer.seek(0)
+        
+        return Response(pdf_buffer.getvalue(),
+                        mimetype='application/pdf',
+                        headers={'Content-Disposition': f'attachment;filename={filename}'})
+
+    except Exception as e:
+        flash(f'Error al generar el PDF: {e}', 'danger')
+        return redirect(request.referrer or url_for('orden_venta.listar'))

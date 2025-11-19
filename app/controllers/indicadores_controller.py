@@ -48,24 +48,36 @@ class IndicadoresController:
             fecha_fin = datetime.now()
         return fecha_inicio, fecha_fin
 
+    def _parsear_periodo(self, periodo):
+        hoy = datetime.now()
+        if periodo == 'semanal':
+            fecha_inicio = hoy - timedelta(days=hoy.weekday())
+            fecha_fin = fecha_inicio + timedelta(days=6)
+        elif periodo == 'mensual':
+            fecha_inicio = hoy.replace(day=1)
+            # Avanzar al próximo mes y luego retroceder un día para obtener el último día del mes actual
+            next_month = hoy.replace(day=28) + timedelta(days=4)
+            fecha_fin = next_month - timedelta(days=next_month.day)
+        elif periodo == 'anual':
+            fecha_inicio = hoy.replace(month=1, day=1)
+            fecha_fin = hoy.replace(month=12, day=31)
+        else: # Por defecto, semanal
+            fecha_inicio = hoy - timedelta(days=hoy.weekday())
+            fecha_fin = fecha_inicio + timedelta(days=6)
+        return fecha_inicio.date(), fecha_fin.date()
+
     # --- CATEGORÍA: PRODUCCIÓN ---
-    def obtener_datos_produccion(self, fecha_inicio_str, fecha_fin_str):
+    def obtener_datos_produccion(self, periodo):
         """
         Esta función está reservada para KPIs puramente de producción.
         La lógica de inventario que estaba aquí fue movida a su propia categoría.
         """
         return {}
 
-    def obtener_kpis_produccion(self, fecha_inicio_str, fecha_fin_str):
-        if fecha_inicio_str:
-            fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
-        else:
-            fecha_inicio = datetime.now() - timedelta(days=30)
-
-        if fecha_fin_str:
-            fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
-        else:
-            fecha_fin = datetime.now()
+    def obtener_kpis_produccion(self, periodo):
+        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
+        fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
 
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
         cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
@@ -100,8 +112,8 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: CALIDAD ---
-    def obtener_datos_calidad(self, fecha_inicio_str, fecha_fin_str):
-        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+    def obtener_datos_calidad(self, periodo):
+        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
         
         rechazo_interno = self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin)
         reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
@@ -115,8 +127,10 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: COMERCIAL ---
-    def obtener_datos_comercial(self, fecha_inicio_str, fecha_fin_str):
-        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str, default_days=365)
+    def obtener_datos_comercial(self, periodo):
+        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
+        fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
         
         # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
         kpis_data = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
@@ -137,8 +151,10 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: FINANCIERA ---
-    def obtener_datos_financieros(self, fecha_inicio_str, fecha_fin_str):
-        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+    def obtener_datos_financieros(self, periodo):
+        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
+        fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
         
         # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
         total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
@@ -184,8 +200,11 @@ class IndicadoresController:
         }
         
     # --- CATEGORÍA: INVENTARIO ---
-    def obtener_datos_inventario(self, fecha_inicio_str, fecha_fin_str):
-        fecha_inicio, fecha_fin = self._parsear_fechas(fecha_inicio_str, fecha_fin_str)
+    def obtener_datos_inventario(self, periodo): # Periodo se ignora aquí
+        # Para la rotación, usamos un período fijo (ej. último año) para que sea consistente
+        hoy = datetime.now()
+        fecha_inicio = hoy - timedelta(days=365)
+        fecha_fin = hoy
         
         rotacion = self._calcular_rotacion_inventario(fecha_inicio, fecha_fin)
         cobertura = self._calcular_cobertura_stock()
@@ -333,7 +352,12 @@ class IndicadoresController:
         return self.receta_model.get_costo_produccion(producto_id, costos_insumos=costos_insumos_cache)
 
     def _calcular_cumplimiento_plan(self, fecha_inicio, fecha_fin):
-            ordenes_planificadas_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+            # CORRECCIÓN: Filtrar por fecha_meta para obtener las órdenes que debían completarse en el período.
+            filtros = {
+                'fecha_meta_desde': fecha_inicio.isoformat(),
+                'fecha_meta_hasta': fecha_fin.isoformat()
+            }
+            ordenes_planificadas_res = self.orden_produccion_model.get_all_enriched(filtros=filtros)
             ordenes_planificadas = ordenes_planificadas_res.get('data', [])
             total_ordenes_planificadas = len(ordenes_planificadas)
             ordenes_completadas_a_tiempo = 0

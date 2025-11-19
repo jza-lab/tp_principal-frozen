@@ -4,26 +4,6 @@
 <div class="container-fluid">
     <h1 class="mb-4">Dashboard de Indicadores</h1>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Filtrar por Fecha</h5>
-            <form id="filter-form">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label for="fecha_inicio" class="form-label">Fecha de Inicio</label>
-                        <input type="date" class="form-control" id="fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio.strftime('%Y-%m-%d') }}">
-                    </div>
-                    <div class="col-md-5">
-                        <label for="fecha_fin" class="form-label">Fecha de Fin</label>
-                        <input type="date" class="form-control" id="fecha_fin" name="fecha_fin" value="{{ fecha_fin.strftime('%Y-%m-%d') }}">
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-                    </div>
-                </div>
-            </form>
-        </div>
-    </div>
 
     <ul class="nav nav-tabs" id="kpiTab" role="tablist">
         <li class="nav-item" role="presentation">

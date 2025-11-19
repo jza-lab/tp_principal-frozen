@@ -1,0 +1,72 @@
+<div class="container-fluid p-4" id="comprobante-{{ pago.id }}">
+    <div class="row mb-4">
+        <div class="col-8">
+            <h2 class="h4">Recibo de Pago</h2>
+            <p class="text-muted mb-0"><strong>N° de Pedido:</strong> PED-{{ pedido.id }}</p>
+            <p class="text-muted mb-0"><strong>ID de Pago:</strong> #{{ pago.id }}</p>
+        </div>
+        <div class="col-4 text-end">
+            <img src="{{ logo_path }}" alt="Logo Empresa" style="max-height: 60px;">
+        </div>
+    </div>
+
+    <hr>
+
+    <div class="row my-4">
+        <div class="col-6">
+            <h6 class="text-uppercase text-muted small">Recibimos de:</h6>
+            <p class="mb-0"><strong>{{ pedido.cliente.razon_social or pedido.nombre_cliente }}</strong></p>
+            <p class="mb-0">{{ pedido.direccion.calle }} {{ pedido.direccion.altura or '' }}</p>
+            <p class="mb-0">{{ pedido.direccion.localidad }}, {{ pedido.direccion.provincia }}</p>
+            <p class="mb-0">CUIT: {{ pedido.cliente.cuit }}</p>
+        </div>
+        <div class="col-6 text-end">
+            <h6 class="text-uppercase text-muted small">Detalles del Pago:</h6>
+            <p class="mb-0"><strong>Fecha de Pago:</strong> {{ pago.created_at | format_datetime }}</p>
+            <p class="mb-0"><strong>Método de Pago:</strong> {{ pago.metodo_pago.replace('_', ' ') | capitalize }}</p>
+            {% if pago.referencia %}
+            <p class="mb-0"><strong>Referencia:</strong> {{ pago.referencia }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-borderless mb-0">
+                    <thead>
+                        <tr>
+                            <th>Descripción</th>
+                            <th class="text-end">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Pago a cuenta del pedido PED-{{ pedido.id }}</td>
+                            <td class="text-end">{{ pago.monto | formato_moneda }}</td>
+                        </tr>
+                    </tbody>
+                    <tfoot>
+                        <tr class="fw-bold bg-light">
+                            <td class="text-end">TOTAL PAGADO:</td>
+                            <td class="text-end h5">{{ pago.monto | formato_moneda }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {% if pago.comprobante_url %}
+    <div class="text-center mb-4">
+        <h6 class="text-uppercase text-muted small">Comprobante Adjunto</h6>
+        <a href="{{ pago.comprobante_url }}" target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-paperclip me-1"></i> Ver Comprobante Adjunto
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="text-center text-muted small">
+        <p>Este es un recibo generado automáticamente y no requiere firma.</p>
+    </div>
+</div>

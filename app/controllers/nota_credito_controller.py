@@ -149,3 +149,21 @@ class NotaCreditoController(BaseController):
         except Exception as e:
             logger.error(f"Error al obtener detalles de NC {nc_id} para PDF: {e}", exc_info=True)
             return {"success": False, "error": "Error interno del servidor."}, 500
+
+    def get_nc_by_id(self, nc_id):
+        """
+        Obtiene una nota de crédito por su ID, incluyendo sus items.
+        """
+        try:
+            nc_res = self.model.find_by_id(nc_id)
+            if not nc_res.get('success'):
+                return self.error_response("Nota de Crédito no encontrada.", 404)
+            
+            nc_data = nc_res.get('data')
+            items = self.model.get_items_by_nc_id(nc_data['id'])
+            nc_data['items'] = items
+            
+            return self.success_response(nc_data)
+        except Exception as e:
+            logger.error(f"Error al obtener NC por ID {nc_id}: {e}", exc_info=True)
+            return self.error_response("Error interno del servidor.", 500)

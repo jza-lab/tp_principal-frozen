@@ -55,3 +55,21 @@ class NotaCreditoModel(BaseModel):
             logger = logging.getLogger(__name__)
             logger.error(f"Error en create_with_items: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def find_by_id(self, nc_id: int) -> dict:
+        """
+        Busca una nota de crédito por su ID.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("*").eq("id", nc_id).maybe_single()
+            result = query.execute()
+            
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': False, 'error': "Nota de Crédito no encontrada."}
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error al buscar Nota de Crédito por ID {nc_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}

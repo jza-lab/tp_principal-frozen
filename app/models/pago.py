@@ -39,3 +39,19 @@ class PagoModel(BaseModel):
             logger.error(f"Error al obtener pagos para el pedido {id_pedido}: {e}", exc_info=True)
             # Retornar un diccionario de error estándar
             return {'success': False, 'error': str(e)}
+
+    def find_by_id(self, id_pago: int) -> dict:
+        """
+        Busca un pago por su ID.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select("*").eq("id", id_pago).maybe_single()
+            result = query.execute()
+            
+            if result.data:
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': False, 'error': "Pago no encontrado."}
+        except Exception as e:
+            logger.error(f"Error al buscar pago por ID {id_pago}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
