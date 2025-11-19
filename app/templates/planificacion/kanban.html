@@ -126,25 +126,19 @@
             <div class="kanban-column h-100" data-estado="{{ estado_key }}">
                 
                 {# ====== HEADER DE COLUMNA ====== #}
-                <div class="column-header">
+                <div class="column-header" data-bs-toggle="collapse" data-bs-target="#collapse-{{ estado_key }}" aria-expanded="true" aria-controls="collapse-{{ estado_key }}">
                     <div class="column-title-section">
                         <span class="kanban-title-text">{{ titulo_columna }}</span>
                         <span class="badge column-count-badge">
                             {{ ordenes_por_estado.get(estado_key, [])|length }}
                         </span>
                     </div>
-                    
-                    {# Estado de la línea (solo para columnas de proceso) #}
-                    {% if estado_key.startswith('EN_LINEA') %}
-                    <div class="line-status-indicator">
-                        <span class="status-dot status-active"></span>
-                        <span class="status-text">Operando</span>
-                    </div>
-                    {% endif %}
+                    <i class="bi bi-chevron-up collapse-icon"></i>
                 </div>
                 
                 {# ====== TARJETAS ====== #}
-                <div class="kanban-cards" id="kanban-cards-{{ estado_key }}">
+                <div class="collapse show" id="collapse-{{ estado_key }}">
+                    <div class="kanban-cards" id="kanban-cards-{{ estado_key }}">
                     {% set ordenes_en_columna = ordenes_por_estado.get(estado_key, []) %}
                     
                     {% if ordenes_en_columna %}
@@ -155,9 +149,13 @@
                         
                         <div class="kanban-card {{ 'card-prioridad-alta' if prioridad == 'ALTA' else ('card-prioridad-media' if prioridad == 'MEDIA' else 'card-prioridad-baja') }} {{ 'card-retrasada' if es_retrasada else '' }}" 
                              data-op-id="{{ orden.id }}"
+                             data-cantidad-producida="{{ orden.cantidad_producida or 0 }}"
                              data-linea="{{ orden.linea_asignada or '' }}"
                              data-prioridad="{{ prioridad }}"
-                             data-operario="{{ orden.operario_id or '' }}">
+                             data-operario="{{ orden.operario_id or '' }}"
+                             data-supervisor-id="{{ orden.supervisor_responsable_id or '' }}"
+                             data-creador-id="{{ orden.usuario_creador_id or '' }}"
+                             data-aprobador-id="{{ orden.aprobador_calidad_id or '' }}">
                             
                             {# ====== HEADER DE LA TARJETA ====== #}
                             <div class="card-header-row">
@@ -393,6 +391,7 @@
                             <p>Sin órdenes</p>
                         </div>
                     {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -405,6 +404,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    const CURRENT_USER_ID = "{{ current_user_id or '' }}";
+</script>
     {# --- SCRIPT DE KANBAN --- #}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="{{ url_for('static', filename='js/planificacion/kanban.js') }}"></script>

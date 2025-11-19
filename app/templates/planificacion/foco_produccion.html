@@ -328,6 +328,23 @@
 {% include 'planificacion/modals/modal_pausar_produccion.html' %}
 {% include 'planificacion/modals/modal_traspaso_turno.html' %}
 
+<!-- Modal de Confirmación Genérico para OP Hija -->
+<div class="modal fade" id="modalConfirmacionHija" tabindex="-1" aria-labelledby="modalConfirmacionHijaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalConfirmacionHijaLabel"><i class="bi bi-info-circle-fill me-2"></i>Aviso de Producción</h5>
+            </div>
+            <div class="modal-body" id="modalConfirmacionHijaBody" style="font-size: 1.1rem; text-align: center; padding: 2rem 1.5rem;">
+                <!-- Mensaje se insertará dinámicamente -->
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
+                <button type="button" class="btn btn-primary btn-lg" id="btnConfirmacionHijaOk">Aceptar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -336,6 +353,7 @@
         const ORDEN_ID = {{ orden.id | tojson }};
         const ORDEN_FECHA_INICIO = {{ orden.fecha_inicio | tojson }};
         const ORDEN_CANTIDAD_PLANIFICADA = {{ orden.cantidad_planificada | tojson }};
+        const ORDEN_TOTAL_DESPERDICIO = {{ orden.total_desperdicio | tojson }};
         const ORDEN_RITMO_OBJETIVO = {{ orden.ritmo_objetivo or 5 | tojson }};
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};

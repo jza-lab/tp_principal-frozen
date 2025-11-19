@@ -47,7 +47,7 @@ def enviar_webhook_async(url: str, data: dict):
 class PlanificacionController(BaseController):
     def __init__(self):
         super().__init__()
-        self.orden_produccion_controller = OrdenProduccionController()
+        self._orden_produccion_controller = None
         self.inventario_controller = InventarioController()
         self.centro_trabajo_model = CentroTrabajoModel()
         self.operacion_receta_model = OperacionRecetaModel()
@@ -57,6 +57,13 @@ class PlanificacionController(BaseController):
         self.issue_planificacion_model = IssuePlanificacionModel()
         self.feriados_ar_cache = None # <-- ¡AÑADIR ESTA LÍNEA!
 
+    @property
+    def orden_produccion_controller(self):
+        """Lazy loader for OrdenProduccionController to prevent circular dependency."""
+        if self._orden_produccion_controller is None:
+            from app.controllers.orden_produccion_controller import OrdenProduccionController
+            self._orden_produccion_controller = OrdenProduccionController()
+        return self._orden_produccion_controller
 
     def _calcular_sugerencias_para_op_optimizado(self, op: Dict, mapas_precargados: Dict) -> Dict:
         """

@@ -54,6 +54,11 @@
             <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
         </button>
     </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="desperdicios-tab" data-bs-toggle="tab" data-bs-target="#desperdicios-content" type="button" role="tab" aria-controls="desperdicios-content" aria-selected="false">
+            <i class="bi bi-trash me-1"></i>Historial de Desperdicios
+        </button>
+    </li>
 </ul>
 
 <div class="tab-content" id="loteDetailTabContent">
@@ -265,6 +270,33 @@
                                 </div>
                             </div>
                             {% endif %}
+
+                            {% if orden.ops_hijas %}
+                            <div class="col-12 mt-3">
+                                <div class="alert alert-warning mb-0">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>
+                                            <i class="bi bi-diagram-2-fill me-2"></i>
+                                            Para esta Orden de Producción, se generaron las siguientes OPs para cubrir desperdicios:
+                                        </span>
+                                    </div>
+                                    <hr>
+                                    <ul class="list-unstyled mb-0">
+                                        {% for op_hija in orden.ops_hijas %}
+                                        <li class="d-flex justify-content-between align-items-center mb-1">
+                                            <span>
+                                                <i class="bi bi-file-earmark-text me-2"></i>
+                                                {{ op_hija.codigo }} - <span class="badge bg-secondary">{{ op_hija.estado.replace('_', ' ') | title }}</span>
+                                            </span>
+                                            <a href="{{ url_for('orden_produccion.detalle', id=op_hija.id) }}" class="btn btn-sm btn-outline-dark">
+                                                Ver {{ op_hija.codigo }} <i class="bi bi-box-arrow-up-right small"></i>
+                                            </a>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div> {# --- INICIO BLOQUE ELIMINADO --- #}
@@ -438,6 +470,43 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+    <div class="tab-pane fade" id="desperdicios-content" role="tabpanel" aria-labelledby="desperdicios-tab">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Registros de Desperdicio</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if historial_desperdicios %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Fecha y Hora</th>
+                                <th>Cantidad</th>
+                                <th>Motivo</th>
+                                <th>Registrado por</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for desperdicio in historial_desperdicios %}
+                            <tr>
+                                <td>{{ desperdicio.fecha_registro | format_datetime if desperdicio.fecha_registro else 'N/A' }}</td>
+                                <td>{{ desperdicio.cantidad }}</td>
+                                <td>{{ desperdicio.motivo_desperdicio.descripcion if desperdicio.motivo_desperdicio else 'No especificado' }}</td>
+                                <td>{{ desperdicio.usuario.nombre if desperdicio.usuario else 'N/A' }} {{ desperdicio.usuario.apellido if desperdicio.usuario else '' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center p-4">
+                    <p class="mb-0 text-muted">No se han registrado desperdicios para esta orden de producción.</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

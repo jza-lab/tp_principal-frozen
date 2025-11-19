@@ -1252,16 +1252,30 @@ class LoteProductoController(BaseController):
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
             if items_vinculados:
+                cantidad_disponible_para_reservar = cantidad_actual_disponible
                 for item in items_vinculados:
+                    if cantidad_disponible_para_reservar <= 0:
+                        break # No hay más stock para reservar.
+
+                    # La cantidad original que el item del pedido necesitaba.
+                    cantidad_necesaria_item = float(item['cantidad'])
+                    
+                    # Se reserva lo que se necesita o lo que queda disponible, lo que sea menor.
+                    cantidad_a_reservar_para_item = min(cantidad_necesaria_item, cantidad_disponible_para_reservar)
+
                     datos_reserva = {
                         'lote_producto_id': lote_creado['id_lote'],
                         'pedido_id': item['pedido_id'],
                         'pedido_item_id': item['id'],
-                        'cantidad_reservada': float(item['cantidad']),
+                        'cantidad_reservada': cantidad_a_reservar_para_item,
                         'usuario_reserva_id': usuario_id,
                         'estado': 'RESERVADO'
                     }
                     self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                    
+                    # Se descuenta lo que acabamos de reservar de lo que queda disponible.
+                    cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item
+
                 logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
                 message_to_use += " y vinculado a los pedidos correspondientes."
 

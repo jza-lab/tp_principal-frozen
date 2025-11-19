@@ -50,6 +50,7 @@ def tablero_produccion():
         contexto = response.get('data', {})
 
     contexto['now'] = datetime.now()
+    contexto['current_user_id'] = usuario_id
     return render_template('planificacion/kanban.html', **contexto) # Plantilla renombrada
 
 @produccion_kanban_bp.route('/foco/<int:op_id>')

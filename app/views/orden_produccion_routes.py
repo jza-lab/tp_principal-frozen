@@ -19,6 +19,7 @@ from app.controllers.receta_controller import RecetaController
 from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.planificacion_controller import PlanificacionController
+from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
 from datetime import date, datetime, timedelta
@@ -228,14 +229,36 @@ def detalle(id):
     ingredientes = (
         ingredientes_response.get("data", []) if ingredientes_response and isinstance(ingredientes_response, dict) else []
     )
-    pedidos_asociados_resp, status= pedido_controller.obtener_pedidos_por_orden_produccion(id)
-    pedidos_asociados=[]
-    if pedidos_asociados_resp.get('data') and len(pedidos_asociados_resp.get('data'))>0:
-        pedidos_asociados=pedidos_asociados_resp.get('data')
+    pedidos_asociados_resp, status = pedido_controller.obtener_pedidos_por_orden_produccion(id)
+    pedidos_asociados = []
+    if pedidos_asociados_resp.get('data'):
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+        from decimal import Decimal
+        asignacion_model = AsignacionPedidoModel()
+        
+        # Enriquecer cada pedido con las cantidades asignadas a sus items
+        for pedido in pedidos_asociados_resp.get('data'):
+            items_del_pedido_res = pedido_controller.model.find_all_items({'pedido_id': pedido['id'], 'orden_produccion_id': id})
+            if items_del_pedido_res.get('success'):
+                items_enriquecidos = []
+                for item in items_del_pedido_res.get('data', []):
+                    asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id'], 'orden_produccion_id': id})
+                    total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
+                    item['cantidad_asignada'] = total_asignado
+                    items_enriquecidos.append(item)
+                pedido['items_asociados_a_op'] = items_enriquecidos
+        pedidos_asociados = pedidos_asociados_resp.get('data')
 
     reserva_insumo_model = ReservaInsumoModel()
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
     lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
+
+    # --- OBTENER HISTORIAL DE DESPERDICIOS ---
+    desperdicio_model = RegistroDesperdicioModel()
+    # Se asume la existencia de un método `find_all_enriched` para obtener datos relacionados
+    desperdicios_result = desperdicio_model.find_all_enriched(filters={'orden_produccion_id': id}, order_by='fecha_registro.desc')
+    historial_desperdicios = desperdicios_result.get("data", [])
+    # --- FIN OBTENER HISTORIAL ---
 
     # No es necesario cargar la trazabilidad aquí, el frontend lo hace por API.
     # Se pasa un diccionario vacío para evitar errores en la plantilla.
@@ -248,7 +271,8 @@ def detalle(id):
         desglose_origen=desglose_origen,
         pedidos_asociados=pedidos_asociados,
         lotes_insumos_reservados=lotes_insumos_reservados,
-        trazabilidad_resumen=trazabilidad_resumen
+        trazabilidad_resumen=trazabilidad_resumen,
+        historial_desperdicios=historial_desperdicios
     )
 
 
@@ -459,4 +483,19 @@ def api_confirmar_inicio(orden_id):
     data = request.get_json()
     usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
+    return jsonify(response), status_code
+
+
+@orden_produccion_bp.route('/<int:orden_id>/ampliar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_confirmar_ampliacion_op(orden_id):
+    """
+    API endpoint para confirmar la ampliación de una OP para cubrir desperdicio.
+    Llamado por el modal de confirmación del frontend.
+    """
+    controller = OrdenProduccionController()
+    data = request.get_json()
+    usuario_id = get_jwt_identity()
+    response, status_code = controller.confirmar_ampliacion_op_por_desperdicio(orden_id, data, usuario_id)
     return jsonify(response), status_code

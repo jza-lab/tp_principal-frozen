@@ -176,6 +176,24 @@ def editar(id):
 @permission_required(accion='logistica_gestion_ov', allowed_roles=['GERENTE']) # ANTES: 'consultar_ordenes_de_venta'
 def detalle(id):
     """Muestra la página de detalle de un pedido de venta."""
+    controller = PedidoController()
+    response, _ = controller.obtener_pedido_por_id(id)
+    if response.get('success'):
+        pedido_data = response.get('data')
+        
+        # Enriquecer cada item con la cantidad asignada
+        if pedido_data.get('items'):
+            from app.models.asignacion_pedido_model import AsignacionPedidoModel
+            from decimal import Decimal
+            asignacion_model = AsignacionPedidoModel()
+            for item in pedido_data['items']:
+                asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
+                total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
+                item['cantidad_asignada'] = total_asignado
+
+        # Generar token de seguimiento para el enlace del QR
+        token_resp, _ = controller.generar_enlace_seguimiento(id)
+        token_seguimiento = token_resp.get('data', {}).get('token') if token_resp.get('success') else None
     pedido_controller = PedidoController()
     pago_controller = PagoController()
 

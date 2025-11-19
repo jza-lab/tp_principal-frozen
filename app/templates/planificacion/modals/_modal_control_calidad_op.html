@@ -10,7 +10,7 @@
                 <p>Producto: <strong id="op-producto"></strong></p>
                 <p>Cantidad Producida: <strong id="op-cantidad-producida"></strong> kg</p>
                 <hr>
-                <form id="form-control-calidad-op" novalidate>
+                <form id="form-control-calidad-op">
                     <input type="hidden" id="op-id" name="op_id">
                     
                     <div class="mb-3">
@@ -28,12 +28,12 @@
                     <div id="campos-cantidades" style="display: none;">
                         <div class="mb-3" id="campo-rechazar" style="display: none;">
                             <label for="cantidad-rechazada" class="form-label">Cantidad a Rechazar (kg)</label>
-                            <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="0.01" min="0">
+                            <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="0.1" min="1">
                         </div>
 
                         <div class="mb-3" id="campo-cuarentena" style="display: none;">
                             <label for="cantidad-cuarentena" class="form-label">Cantidad a Poner en Cuarentena (kg)</label>
-                            <input type="number" class="form-control" id="cantidad-cuarentena" name="cantidad_cuarentena" step="0.01" min="0">
+                            <input type="number" class="form-control" id="cantidad-cuarentena" name="cantidad_cuarentena" step="0.1" min="1">
                         </div>
                     </div>
 

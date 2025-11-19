@@ -45,31 +45,28 @@ class PedidoModel(BaseModel):
 
         if op_ids_vinculadas:
             op_model = OrdenProduccionModel()
-            # Usamos find_by_ids para obtener todas las OPs en una sola consulta
-            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas))) # set() para evitar duplicados
+            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas)))
 
             if ops_result.get('success'):
                 ops_encontradas = ops_result.get('data', [])
                 for op in ops_encontradas:
-                    op_estados[op['id']] = op['estado']
+                    op_estados[op['id']] = {
+                        'estado': op['estado'],
+                        'es_consolidada': op.get('es_consolidada', False)
+                    }
             else:
-                # Error crítico si no podemos obtener las OPs
                 return {'success': False, 'error': f"Error al obtener estados de OPs vinculadas: {ops_result.get('error')}"}
 
-            # Verificar si todas están completadas
             if len(op_estados) != len(set(op_ids_vinculadas)):
-                 # Si no encontramos todas las OPs que esperábamos
                  todas_completadas = False
                  logging.warning(f"Pedido {pedido_id}: No se encontraron todas las OPs vinculadas en la BD.")
 
-
             for op_id in op_ids_vinculadas:
-                estado = op_estados.get(op_id)
-                if estado != 'COMPLETADA':
+                op_info = op_estados.get(op_id, {})
+                if not op_info.get('es_consolidada') and op_info.get('estado') != 'COMPLETADA':
                     todas_completadas = False
-                    break # Basta con una que no esté completada
+                    break
         else:
-             # Si no hay NINGUNA OP vinculada, consideramos que está listo (ej: solo productos comprados)
              todas_completadas = True
 
 
@@ -77,9 +74,12 @@ class PedidoModel(BaseModel):
         for item in items:
             op_id = item.get('orden_produccion_id')
             if op_id:
-                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO')
+                op_info = op_estados.get(op_id, {})
+                item['op_estado'] = op_info.get('estado', 'DESCONOCIDO')
+                item['op_es_consolidada'] = op_info.get('es_consolidada', False)
             else:
                 item['op_estado'] = None
+                item['op_es_consolidada'] = False
 
             # Calcular cantidad de lote desde las reservas
             reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
@@ -469,6 +469,34 @@ class PedidoModel(BaseModel):
             return {'success': False, 'error': 'No se pudo actualizar el ítem o no fue encontrado.'}
         except Exception as e:
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
+            return {'success': False, 'error': str(e)}
+
+    def find_all_items_with_pedido_info(self, filters: Optional[Dict] = None) -> Dict:
+        """
+        Obtiene todos los items de pedido que coinciden con los filtros,
+        anidando la información completa del pedido padre.
+        """
+        try:
+            query = self.db.table('pedido_items').select('*, pedido:pedidos!inner(*)')
+
+            if filters:
+                for key, value in filters.items():
+                    query = query.eq(key, value)
+            
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+
+        except Exception as e:
+            logger.error(f"Error al obtener items de pedido con info de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+        """Actualiza una lista de items de pedido por sus IDs."""
+        try:
+            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error actualizando items de pedido: {str(e)}")
             return {'success': False, 'error': str(e)}
 
     def find_by_cliente(self, id_cliente: int):

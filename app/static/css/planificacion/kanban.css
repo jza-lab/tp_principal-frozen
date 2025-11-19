@@ -143,7 +143,6 @@
     border-radius: 12px;
     border: 2px solid #e5e7eb;
     height: 100%;
-    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -153,8 +152,33 @@
     background: white;
     border-bottom: 2px solid #e5e7eb;
     display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+}
+
+.column-header[aria-expanded="false"] .collapse-icon {
+    transform: rotate(180deg);
+}
+
+.kanban-column .collapse.show {
+    display: flex;
     flex-direction: column;
-    gap: 10px;
+    flex-grow: 1;
+    min-height: 0;
+}
+
+.collapse-icon {
+    transition: transform 0.3s ease;
+}
+
+.column-header[aria-expanded="false"] .collapse-icon {
+    transform: rotate(180deg);
 }
 
 .column-title-section {
@@ -205,6 +229,7 @@
     padding: 15px;
     overflow-y: auto;
     flex-grow: 1;
+    flex-basis: 0;
 }
 
 /* ===== TARJETAS KANBAN ===== */
@@ -752,6 +777,27 @@
 }
 .kanban-board-container {
     height: calc(100vh - 250px); /* Ajusta este valor según la altura de tu navbar y filtros */
+    overflow-x: auto;
+    padding-bottom: 15px; /* Espacio para la barra de scroll */
+}
+
+/* Estilos para la barra de desplazamiento horizontal del tablero Kanban */
+.kanban-board-container::-webkit-scrollbar {
+    height: 12px; /* Altura de la barra de desplazamiento */
+}
+
+.kanban-board-container::-webkit-scrollbar-track {
+    background: #f3f4f6; /* Color del fondo de la pista */
+    border-radius: 6px; /* Bordes redondeados */
+}
+
+.kanban-board-container::-webkit-scrollbar-thumb {
+    background: #d1d5db; /* Color del "pulgar" de la barra */
+    border-radius: 6px; /* Bordes redondeados */
+}
+
+.kanban-board-container::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af; /* Color del "pulgar" al pasar el mouse */
 }
 
 /* ===== NUEVO ESTILO PARA LA BANDERA DE CUARENTENA ===== */
@@ -810,7 +856,7 @@
     display: inline-block;
     position: absolute;
     bottom: 20px;
-    left: 50%;
+    left: 70%;
     transform: translateX(-50%);
 }
 

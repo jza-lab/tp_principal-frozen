@@ -49,3 +49,4 @@ class OrdenProduccionSchema(Schema):
     fecha_inicio_planificada = fields.Date(allow_none=True)
     aprobador_calidad_id = fields.Int(required=False, allow_none=True)
     pedido_id = fields.Int(required=False, allow_none=True)
+    id_op_padre = fields.Int(required=False, allow_none=True)

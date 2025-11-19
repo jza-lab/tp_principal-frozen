@@ -347,8 +347,7 @@ class OrdenProduccionModel(BaseModel):
                 
                 # --- OBTENER ORDENES DE COMPRA ASOCIADAS ---
                 ocs_res = self.db.table('ordenes_compra').select('id, codigo_oc, estado').eq('orden_produccion_id', orden_id).execute()
-                item['ordenes_compra_asociadas'] = ocs_res.data if ocs_res.data else []
-                # --- FIN ---
+                item['ocs_asociadas'] = ocs_res.data if ocs_res.data else []
 
                 return {'success': True, 'data': item}
             else:

@@ -37,6 +37,8 @@ from app.controllers.configuracion_controller import (
 # --- NUEVAS IMPORTACIONES PARA TRASPASO ---
 from app.models.traspaso_turno_model import TraspasoTurnoModel
 from app.schemas.traspaso_turno_schema import TraspasoTurnoSchema
+from app.models.asignacion_pedido_model import AsignacionPedidoModel
+from app.controllers.pedido_controller import PedidoController
 
 
 logger = logging.getLogger(__name__)
@@ -69,6 +71,7 @@ class OrdenProduccionController(BaseController):
         # --- NUEVOS MODELOS Y SCHEMAS PARA TRASPASO ---
         self.traspaso_turno_model = TraspasoTurnoModel()
         self.traspaso_turno_schema = TraspasoTurnoSchema()
+        self.asignacion_pedido_model = AsignacionPedidoModel()
         self._planificacion_controller = None
         self.registro_controller = RegistroController()
 
@@ -163,9 +166,34 @@ class OrdenProduccionController(BaseController):
             result = self.model.get_one_enriched(orden_id)
             if isinstance(result, dict):
                 return result
-            error_msg = f"Error interno al obtener la OP {orden_id}. El modelo devolvió: {str(result)}"
-            logger.error(error_msg)
-            return {'success': False, 'error': error_msg}
+            
+            orden_data = result.get('data')
+            if not orden_data:
+                return self.error_response(f"No se encontraron datos para la OP {orden_id}.", 404)
+
+            # 2. Obtener todas las órdenes de compra asociadas
+            ocs_asociadas_res, _ = self.orden_compra_controller.get_all_ordenes(
+                filtros={'orden_produccion_id': orden_id}
+            )
+            
+            ocs_asociadas = []
+            if ocs_asociadas_res.get('success'):
+                ocs_asociadas = ocs_asociadas_res.get('data', [])
+
+            # 3. Adjuntar las OCs a los datos de la OP
+            orden_data['ocs_asociadas'] = ocs_asociadas
+            
+            # 4. Obtener todas las OPs hijas asociadas
+            ops_hijas_res = self.model.find_all(filters={'id_op_padre': orden_id})
+            ops_hijas = []
+            if ops_hijas_res.get('success'):
+                ops_hijas = ops_hijas_res.get('data', [])
+            
+            orden_data['ops_hijas'] = ops_hijas
+            result['data'] = orden_data
+
+            return result
+
         except Exception as e:
             logger.error(f"Excepción en obtener_orden_por_id para OP {orden_id}: {e}", exc_info=True)
             return {'success': False, 'error': f"Excepción al procesar la solicitud para la OP {orden_id}."}
@@ -205,7 +233,8 @@ class OrdenProduccionController(BaseController):
                     'cantidad_planificada': float(cantidad),
                     'fecha_meta': form_data.get('fecha_meta'),
                     'observaciones': form_data.get('observaciones'),
-                    'estado': 'PENDIENTE'
+                    'estado': 'PENDIENTE',
+                    'id_op_padre': form_data.get('id_op_padre')
                 }
 
                 receta_result = receta_model.find_all({'producto_id': int(producto_id), 'activa': True}, limit=1)
@@ -216,7 +245,9 @@ class OrdenProduccionController(BaseController):
                 datos_op['receta_id'] = receta_result['data'][0]['id']
 
                 try:
-                    validated_data = self.schema.load(datos_op)
+                    # Limpiar datos nulos que no deben ir al schema si no existen
+                    datos_op_limpios = {k: v for k, v in datos_op.items() if v is not None}
+                    validated_data = self.schema.load(datos_op_limpios)
                     validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
                     validated_data['usuario_creador_id'] = usuario_id
 
@@ -1146,6 +1177,14 @@ class OrdenProduccionController(BaseController):
             turno_model = UsuarioTurnoModel()
             turno_actual_result = turno_model.find_current_shift()
             turno_actual = turno_actual_result.get('data') if turno_actual_result.get('success') else {}
+            
+            # --- NUEVO: OBTENER TOTAL DESPERDICIO ---
+            desperdicio_model = RegistroDesperdicioModel()
+            desperdicios_result = desperdicio_model.find_all(filters={'orden_produccion_id': orden_id})
+            total_desperdicio = 0
+            if desperdicios_result.get('success'):
+                total_desperdicio = sum(Decimal(d.get('cantidad', 0)) for d in desperdicios_result.get('data', []))
+            orden_data['total_desperdicio'] = total_desperdicio
 
 
             # 4. Ensamblar todos los datos
@@ -1338,13 +1377,8 @@ class OrdenProduccionController(BaseController):
             fecha_meta_str = op.get('fecha_meta')
             if fecha_meta_str:
                 try:
-                    # --- INICIO DE LA CORRECCIÓN ---
-                    # El bug estaba aquí. 'date.fromisoformat' no puede
-                    # parsear un timestamp completo (ej. ...T00:00:00).
-                    # Lo partimos para tomar solo la fecha YYYY-MM-DD.
                     fecha_meta_solo_str = fecha_meta_str.split('T')[0].split(' ')[0]
                     fechas_meta_originales.append(date.fromisoformat(fecha_meta_solo_str))
-                    # --- FIN DE LA CORRECCIÓN ---
                 except ValueError:
                     logger.warning(f"Formato de fecha meta inválido en OP {op.get('id')}: {fecha_meta_str}")
 
@@ -1358,7 +1392,8 @@ class OrdenProduccionController(BaseController):
             'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
             'prioridad': 'ALTA',
             'observaciones': f'Super OP consolidada desde las OPs: {", ".join(map(str, op_ids))}',
-            'estado': 'PENDIENTE'
+            'estado': 'PENDIENTE',
+            'es_consolidada': True
         }
 
     def _relinkear_items_pedido(self, op_ids: List[int], super_op_id: int) -> dict:
@@ -1475,105 +1510,313 @@ class OrdenProduccionController(BaseController):
 
     # endregion
 
-    def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+    def confirmar_ampliacion_op_por_desperdicio(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
-        Registra el avance de producción para una orden, incluyendo desperdicios,
-        y opcionalmente finaliza la orden.
+        Endpoint llamado tras la confirmación del usuario para ampliar una OP
+        y cubrir el desperdicio usando stock disponible.
         """
         try:
-            # --- CONVERSIÓN Y VALIDACIÓN MEJORADA ---
-            try:
-                cantidad_buena = Decimal(data.get('cantidad_buena', '0'))
-                # Usar '0' si el campo viene vacío o nulo
-                cantidad_desperdicio_str = data.get('cantidad_desperdicio')
-                cantidad_desperdicio = Decimal(cantidad_desperdicio_str) if cantidad_desperdicio_str else Decimal('0')
+            desperdicio_a_cubrir = Decimal(data.get('desperdicio_a_cubrir', '0'))
+            if desperdicio_a_cubrir <= 0:
+                return self.error_response("La cantidad de desperdicio a cubrir debe ser mayor a cero.", 400)
 
-            except (TypeError, ValueError) as e:
-                return self.error_response(f"Valor numérico inválido: {e}", 400)
+            orden_actual_res = self.model.find_by_id(orden_id)
+            if not orden_actual_res.get('success'):
+                return self.error_response("Orden no encontrada.", 404)
+            orden_actual = orden_actual_res['data']
 
+            # Doble chequeo: Verificar que aún haya stock antes de consumir
+            orden_simulada = {'receta_id': orden_actual['receta_id'], 'cantidad_planificada': float(desperdicio_a_cubrir)}
+            stock_check = self.inventario_controller.verificar_stock_para_op(orden_simulada)
+            if not stock_check.get('success') or stock_check['data']['insumos_faltantes']:
+                return self.error_response("El stock que estaba disponible ya no lo está. No se puede ampliar la orden.", 409)
+
+            # Consumir el stock para el desperdicio
+            self.inventario_controller.consumir_stock_por_cantidad_producto(
+                receta_id=orden_actual['receta_id'],
+                cantidad_producto=float(desperdicio_a_cubrir),
+                op_id_referencia=orden_id,
+                motivo='DESPERDICIO_PRODUCCION'
+            )
+            
+            # Ampliar la cantidad planificada de la OP actual
+            nueva_cantidad_planificada = Decimal(orden_actual['cantidad_planificada']) + desperdicio_a_cubrir
+            self.model.update(orden_id, {'cantidad_planificada': nueva_cantidad_planificada})
+            
+            message = f"Confirmado. Se cubrió el desperdicio ({desperdicio_a_cubrir:.2f} kg) con stock. La orden se ha ampliado. Nueva meta: {nueva_cantidad_planificada:.2f} kg."
+            detalle_log = f"Ampliación de OP {orden_actual.get('codigo')} confirmada por usuario para cubrir desperdicio de {desperdicio_a_cubrir:.2f} kg."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Ampliación por Desperdicio', detalle_log)
+
+            return self.success_response(
+                message=message,
+                data={'nueva_cantidad_planificada': float(nueva_cantidad_planificada)}
+            )
+
+        except Exception as e:
+            logger.error(f"Error en confirmar_ampliacion_op_por_desperdicio para OP {orden_id}: {e}", exc_info=True)
+            return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+
+    def reportar_avance(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
+        """
+        Registra el avance de producción, implementando la lógica de "Punto de Control"
+        al alcanzar la cantidad planificada para gestionar el desperdicio.
+        """
+        try:
+            # 1. Validación de datos de entrada
+            cantidad_buena = Decimal(data.get('cantidad_buena', '0'))
+            cantidad_desperdicio = Decimal(data.get('cantidad_desperdicio', '0'))
             motivo_desperdicio_id = data.get('motivo_desperdicio_id')
 
             if cantidad_buena < 0 or cantidad_desperdicio < 0:
                 return self.error_response("Las cantidades no pueden ser negativas.", 400)
 
-            if cantidad_buena == 0 and cantidad_desperdicio == 0:
-                return self.error_response("Debe reportar al menos una cantidad (producida o de desperdicio).", 400)
-
-            # 1. Obtener estado actual de la orden ANTES de validar desperdicio
+            # 2. Obtener estado actual de la OP
             orden_actual_res = self.model.find_by_id(orden_id)
-            if not orden_actual_res.get('success'):
-                return self.error_response("Orden de producción no encontrada.", 404)
-            orden_actual = orden_actual_res.get('data', {})
-            
-            # 2. Nueva validación de desperdicio contra la cantidad restante
+            if not orden_actual_res.get('success'): return self.error_response("Orden no encontrada.", 404)
+            orden_actual = orden_actual_res['data']
+
+            # 3. Calcular totales y validar sobreproducción
+            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
+            desperdicios_anteriores = RegistroDesperdicioModel().find_all({'orden_produccion_id': orden_id}).get('data', [])
+            total_desperdicio_anterior = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_anteriores)
+            total_procesado_anterior = cantidad_producida_actual + total_desperdicio_anterior
             cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
             cantidad_restante = cantidad_planificada - cantidad_producida_actual
 
-            if cantidad_desperdicio > cantidad_restante:
-                return self.error_response(
-                    f"El desperdicio ({cantidad_desperdicio:.2f}) no puede superar la cantidad restante por producir ({cantidad_restante:.2f}).", 400
-                )
+            if (total_procesado_anterior + cantidad_buena + cantidad_desperdicio) > cantidad_planificada:
+                 return self.error_response(f"El reporte excede la cantidad planificada de {cantidad_planificada}. No se puede registrar.", 400)
 
-            # 3. Validar motivo solo si hay desperdicio
-            if cantidad_desperdicio > 0 and not motivo_desperdicio_id:
-                return self.error_response("Se requiere un motivo para el desperdicio reportado.", 400)
-
-            # 4. Registrar desperdicio si existe
+            # 4. Registrar avance (siempre se hace)
+            update_data = {'cantidad_producida': cantidad_producida_actual + cantidad_buena}
             if cantidad_desperdicio > 0:
-                desperdicio_model = RegistroDesperdicioModel()
-                desperdicio_data = {
-                    'orden_produccion_id': orden_id,
-                    'motivo_desperdicio_id': int(motivo_desperdicio_id),
-                    'cantidad': cantidad_desperdicio,
-                    'usuario_id': usuario_id
-                }
-                desperdicio_model.create(desperdicio_data)
+                RegistroDesperdicioModel().create({
+                    'orden_produccion_id': orden_id, 'motivo_desperdicio_id': int(motivo_desperdicio_id),
+                    'cantidad': cantidad_desperdicio, 'usuario_id': usuario_id, 'fecha_registro': datetime.now().isoformat()
+                })
 
-            # 5. Proceder a actualizar la cantidad producida (ya tenemos la orden)
-            cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
-            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
-            nueva_cantidad_producida = cantidad_producida_actual + cantidad_buena
+            # 5. Lógica de "Punto de Control"
+            total_procesado_ahora = total_procesado_anterior + cantidad_buena + cantidad_desperdicio
+            if total_procesado_ahora == cantidad_planificada:
+                desperdicio_total_final = total_desperdicio_anterior + cantidad_desperdicio
+                if desperdicio_total_final > 0:
+                    # Se alcanzó la meta, ahora se gestiona el desperdicio
+                    gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, desperdicio_total_final, usuario_id)
+                    
+                    # --- INICIO DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
+                    # Verificar si la gestión del desperdicio falló antes de continuar.
+                    if not gestion_res.get('success'):
+                        # Si la creación de la OP hija falló, no debemos continuar.
+                        # Devolvemos el error que nos dio el método hijo.
+                        return self.error_response(gestion_res.get('error', 'Error no especificado al gestionar desperdicio.'), 500)
+                    # --- FIN DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
+                    
+                    self.model.update(orden_id, update_data) # Guardar el último avance
+                    return self.success_response(message=gestion_res.get('message'), data=gestion_res.get('data'))
 
-            # --- NUEVA VALIDACIÓN DE SOBREPRODUCCIÓN CON TOLERANCIA CONFIGURABLE ---
-            tolerancia_porcentaje = self.configuracion_controller.obtener_valor_configuracion(
-                TOLERANCIA_SOBREPRODUCCION_PORCENTAJE,
-                DEFAULT_TOLERANCIA_SOBREPRODUCCION
-            )
-
-            tolerancia_decimal = Decimal(tolerancia_porcentaje) / Decimal(100)
-            cantidad_maxima_permitida = cantidad_planificada * (Decimal(1) + tolerancia_decimal)
-
-            # Se usa una pequeña tolerancia adicional para evitar errores de punto flotante
-            TOLERANCIA_CALCULO = Decimal('0.001')
-
-            if nueva_cantidad_producida > cantidad_maxima_permitida + TOLERANCIA_CALCULO:
-                excedente = nueva_cantidad_producida - cantidad_planificada
-                return self.error_response(
-                    f"La cantidad reportada excede el límite de sobreproducción permitido ({tolerancia_porcentaje}%). "
-                    f"Excedente: {excedente:.2f} kg.", 400
-                )
-
-            # La cantidad a guardar sí puede ser mayor que la planificada (si está dentro de la tolerancia)
-            update_data = {'cantidad_producida': nueva_cantidad_producida}
-
-            # --- LÓGICA DE TRANSICIÓN DE ESTADO ---
-            # La orden se mueve al siguiente estado si la cantidad producida alcanza o supera la cantidad PLANIFICADA (no la máxima).
-            if nueva_cantidad_producida >= cantidad_planificada:
+            # 6. Si no se ha llegado al punto de control, es un reporte normal
+            # La orden se considera lista para QC cuando la suma de lo bueno y el desperdicio
+            # iguala o supera lo planificado.
+            if total_procesado_ahora >= cantidad_planificada:
                 update_data['estado'] = 'CONTROL_DE_CALIDAD'
                 # También se debería registrar la fecha_fin
                 update_data['fecha_fin'] = datetime.now().isoformat()
-
+            
             self.model.update(orden_id, update_data)
+            
+            detalle_log = f"Avance en OP {orden_actual.get('codigo')}. Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
+            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle_log)
 
-            detalle = f"Se reportó un avance en la OP {orden_actual.get('codigo')}. Cantidad Buena: {cantidad_buena}, Desperdicio: {cantidad_desperdicio}."
-            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle)
+            if cantidad_buena > 0 and orden_actual.get('es_consolidada'):
+                self._distribuir_produccion_super_op(orden_id, cantidad_buena)
 
             return self.success_response(message="Avance reportado correctamente.")
 
         except Exception as e:
             logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def _distribuir_produccion_super_op(self, super_op_id: int, cantidad_producida: Decimal):
+        """
+        Distribuye la cantidad recién producida de una Super OP entre sus pedidos de cliente
+        asociados, siguiendo un criterio de antigüedad.
+        """
+        try:
+            # 1. Obtener todos los items de pedido asociados a esta Super OP
+            items_res = self.pedido_model.find_all_items_with_pedido_info({'orden_produccion_id': super_op_id})
+            if not items_res.get('success') or not items_res.get('data'):
+                logger.info(f"No se encontraron items de pedido para la Super OP {super_op_id}. No se requiere distribución.")
+                return
+
+            items_asociados = sorted(items_res['data'], key=lambda item: item['pedido']['created_at'])
+            
+            unidades_a_distribuir = cantidad_producida
+            pedido_controller = PedidoController()
+
+            for item in items_asociados:
+                if unidades_a_distribuir <= 0:
+                    break
+
+                item_id = item['id']
+                cantidad_requerida = Decimal(item['cantidad'])
+                
+                # Calcular cuánto se ha asignado previamente a este item
+                asignaciones_previas_res = self.asignacion_pedido_model.find_all({'pedido_item_id': item_id})
+                total_asignado_previo = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_previas_res.get('data', []))
+                
+                faltante_para_item = cantidad_requerida - total_asignado_previo
+
+                if faltante_para_item > 0:
+                    cantidad_a_asignar = min(unidades_a_distribuir, faltante_para_item)
+                    
+                    # Crear el registro de la asignación
+                    self.asignacion_pedido_model.create({
+                        'orden_produccion_id': super_op_id,
+                        'pedido_item_id': item_id,
+                        'cantidad_asignada': cantidad_a_asignar
+                    })
+                    
+                    unidades_a_distribuir -= cantidad_a_asignar
+                    
+                    # Verificar si el pedido padre de este item se ha completado
+                    pedido_controller.actualizar_estado_segun_items(item['pedido_id'])
+
+            logger.info(f"Distribución de {cantidad_producida} unidades para la OP {super_op_id} completada.")
+
+        except Exception as e:
+            logger.error(f"Error crítico durante la distribución de producción para la Super OP {super_op_id}: {e}", exc_info=True)
+
+    def _gestionar_desperdicio_en_punto_de_control(self, orden_actual: Dict, desperdicio_total: Decimal, usuario_id: int) -> Dict:
+        """
+        Lógica transaccional para gestionar el desperdicio al alcanzar el punto de control.
+        """
+        orden_id = orden_actual['id']
+        orden_simulada = {'receta_id': orden_actual['receta_id'], 'cantidad_planificada': float(desperdicio_total)}
+        stock_check = self.inventario_controller.verificar_stock_para_op(orden_simulada)
+
+        # --- CASO A: HAY STOCK SUFICIENTE ---
+        if stock_check.get('success') and not stock_check['data']['insumos_faltantes']:
+            logger.info(f"Stock disponible para desperdicio en OP {orden_id}. Requiere confirmación del usuario.")
+            return {
+                'message': f"Se ha alcanzado la cantidad planificada. Hay stock disponible para producir {desperdicio_total:.2f} kg adicionales y cubrir el desperdicio. ¿Desea continuar?",
+                'data': {
+                    'accion': 'confirmar_ampliacion',
+                    'desperdicio_a_cubrir': float(desperdicio_total)
+                }
+            }
+        
+        # --- CASO B: NO HAY STOCK SUFICIENTE ---
+        else:
+            logger.warning(f"Stock insuficiente para desperdicio en OP {orden_id}. Intentando crear OP hija.")
+            
+            # --- INICIO DE LA NUEVA LÓGICA DE HERENCIA ---
+            # 1. Buscar el pedido_id original a través de los items de la OP padre
+            pedido_id_original = None
+            items_padre_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+            if items_padre_res.get('success') and items_padre_res.get('data'):
+                pedido_id_original = items_padre_res['data'][0].get('pedido_id')
+
+            # 2. Preparar datos para la OP hija, incluyendo los heredados.
+            productos_para_op_hija = [{
+                'id': orden_actual['producto_id'],
+                'cantidad': float(desperdicio_total)
+            }]
+            # --- INICIO CORRECCIÓN DEFINITIVA DE FORMATO DE FECHA ---
+            # Convertir la fecha_meta a string 'YYYY-MM-DD' de forma robusta.
+            fecha_meta_padre = orden_actual.get('fecha_meta')
+            fecha_meta_str = None
+            if isinstance(fecha_meta_padre, datetime):
+                fecha_meta_str = fecha_meta_padre.date().isoformat()
+            elif isinstance(fecha_meta_padre, date):
+                fecha_meta_str = fecha_meta_padre.isoformat()
+            elif isinstance(fecha_meta_padre, str):
+                # Intentar parsear por si viene en formato con hora
+                try:
+                    fecha_meta_str = date.fromisoformat(fecha_meta_padre.split('T')[0]).isoformat()
+                except ValueError:
+                    fecha_meta_str = fecha_meta_padre # Usar como viene si falla el parseo
+            # --- FIN CORRECCIÓN DEFINITIVA ---
+
+            datos_op_hija = {
+                'productos': productos_para_op_hija,
+                'observaciones': f"OP hija para reponer desperdicio de OP: {orden_actual.get('codigo', orden_id)}.",
+                'id_op_padre': orden_id,
+                'fecha_meta': fecha_meta_str # <-- Visibilidad en Planificador
+            }
+            
+            # 2. Intentar crear la OP hija PRIMERO (Transacción)
+            creacion_res = self.crear_orden(datos_op_hija, usuario_id)
+            
+            if not creacion_res.get('success'):
+                error_msg = f"No se pudo crear la OP hija para cubrir el desperdicio. La orden original no ha sido modificada. Error: {creacion_res.get('error')}"
+                logger.error(error_msg)
+                # Devolvemos el error, la OP original sigue 'EN PROCESO'.
+                return {'success': False, 'error': error_msg, 'data': {'accion': 'error'}}
+
+            # 3. SI la creación de la hija fue exitosa, finalizar la orden actual.
+            logger.info(f"OP hija creada exitosamente. Finalizando OP padre {orden_id}.")
+            self.model.update(orden_id, {'estado': 'CONTROL_DE_CALIDAD', 'fecha_fin': datetime.now().isoformat()})
+            
+            # La respuesta de `crear_orden` devuelve una lista de órdenes creadas.
+            nueva_op_data = creacion_res['data'][0] if creacion_res.get('data') else {}
+
+            # 4. Si la OP padre tenía pedidos asociados, transferir los no satisfechos a la hija
+            self._transferir_pedidos_no_satisfechos(op_padre=orden_actual, op_hija=nueva_op_data)
+            
+            return {
+                'success': True,
+                'message': f"Orden enviada a Control de Calidad. Se creó la OP hija {nueva_op_data.get('codigo')} para reponer el desperdicio.",
+                'data': {
+                    'op_hija_creada': True,
+                    'accion': 'finalizar_op_crear_hija', 
+                    'nueva_op_codigo': nueva_op_data.get('codigo'),
+                    'nueva_op_id': nueva_op_data.get('id')
+                }
+            }
+
+    def _transferir_pedidos_no_satisfechos(self, op_padre: Dict, op_hija: Dict):
+        """
+        Transfiere los pedido_items no cubiertos de una OP consolidada padre a su OP hija.
+        """
+        try:
+            op_padre_id = op_padre['id']
+            op_hija_id = op_hija['id']
+            cantidad_producida_buena = Decimal(op_padre.get('cantidad_producida', '0'))
+
+            # 1. Obtener todos los items de pedido asociados a la OP padre, ordenados por antigüedad
+            items_res = self.pedido_model.find_all_items_with_pedido_info({'orden_produccion_id': op_padre_id})
+            if not items_res.get('success') or not items_res.get('data'):
+                logger.warning(f"No se encontraron items de pedido para la OP padre {op_padre_id} durante la transferencia.")
+                return
+
+            items_asociados = sorted(items_res['data'], key=lambda item: item['pedido']['created_at'])
+
+            # 2. Determinar qué items no fueron satisfechos
+            unidades_satisfechas = cantidad_producida_buena
+            items_no_satisfechos_ids = []
+
+            for item in items_asociados:
+                cantidad_requerida = Decimal(item['cantidad'])
+                if unidades_satisfechas >= cantidad_requerida:
+                    unidades_satisfechas -= cantidad_requerida
+                else:
+                    # Este item y todos los siguientes no fueron satisfechos
+                    items_no_satisfechos_ids.append(item['id'])
+            
+            # 3. Si hay items no satisfechos, reasignarlos a la OP hija
+            if items_no_satisfechos_ids:
+                logger.info(f"Transfiriendo {len(items_no_satisfechos_ids)} pedido_items de OP {op_padre_id} a OP hija {op_hija_id}.")
+                self.pedido_model.db.table('pedido_items').update(
+                    {'orden_produccion_id': op_hija_id}
+                ).in_('id', items_no_satisfechos_ids).execute()
+            else:
+                logger.info(f"Toda la producción de la OP {op_padre_id} cubrió los pedidos asignados. No se requiere transferencia.")
+
+        except Exception as e:
+            logger.error(f"Error crítico al transferir pedidos a la OP hija {op_hija_id}: {e}", exc_info=True)
+            # No se relanza la excepción para no romper el flujo principal, pero se registra el error.
+
 
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:
         """
