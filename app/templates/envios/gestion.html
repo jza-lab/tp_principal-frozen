@@ -61,9 +61,8 @@
                                     <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <!-- Botón que activa el modal -->
                                     <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" 
-                                            data-url="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}">
+                                            data-url="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}" data-type="Vehículo">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
@@ -93,8 +92,9 @@
                     <table class="table table-bordered table-hover">
                         <thead class="table-light">
                             <tr>
-                                <th>Nombre de la Zona</th>
-                                <th>Localidades Asignadas</th>
+                                <th>Nombre</th>
+                                <th>Rango Código Postal</th>
+                                <th>Precio de Envío</th>
                                 <th style="width: 15%;">Acciones</th>
                             </tr>
                         </thead>
@@ -102,22 +102,21 @@
                             {% for zona in zonas %}
                             <tr>
                                 <td>{{ zona.nombre }}</td>
-                                <td>
-                                    {% if zona.localidades %}
-                                        {{ zona.localidades|length }}
-                                    {% else %}
-                                        0
-                                    {% endif %}
-                                </td>
+                                <td>{{ zona.codigo_postal_inicio }} - {{ zona.codigo_postal_fin }}</td>
+                                <td>${{ "%.2f"|format(zona.precio|float) }}</td>
                                 <td>
                                     <a href="{{ url_for('zonas.editar_zona', zona_id=zona.id) }}" class="btn btn-secondary btn-sm">
                                         <i class="fas fa-edit me-1"></i> Editar
                                     </a>
+                                     <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" 
+                                            data-url="{{ url_for('zonas.eliminar_zona', zona_id=zona.id) }}" data-type="Zona">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="3" class="text-center">No hay zonas creadas todavía.</td>
+                                <td colspan="4" class="text-center">No hay zonas creadas todavía.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -137,7 +136,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        ¿Está seguro de que desea eliminar este vehículo? Esta acción no se puede deshacer.
+        ¿Está seguro de que desea eliminar este <span id="item-type"></span>? Esta acción no se puede deshacer.
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -159,10 +158,13 @@ document.addEventListener('DOMContentLoaded', function () {
     var confirmDeleteModal = document.getElementById('confirmDeleteModal');
     if (confirmDeleteModal) {
         confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
-            var button = event.relatedTarget; // Botón que activó el modal
-            var url = button.getAttribute('data-url'); // Extraer la URL del atributo data-url
-            var form = confirmDeleteModal.querySelector('#deleteForm'); // Encontrar el formulario dentro del modal
-            form.action = url; // Establecer la acción del formulario a la URL
+            var button = event.relatedTarget;
+            var url = button.getAttribute('data-url');
+            var type = button.getAttribute('data-type');
+            var form = confirmDeleteModal.querySelector('#deleteForm');
+            var itemTypeSpan = confirmDeleteModal.querySelector('#item-type');
+            form.action = url;
+            itemTypeSpan.textContent = type.toLowerCase();
         });
     }
 });

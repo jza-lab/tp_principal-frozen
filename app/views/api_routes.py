@@ -6,11 +6,29 @@ from app.controllers.facial_controller import FacialController
 from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.pago_controller import PagoController
 from app.controllers.reclamo_proveedor_controller import ReclamoProveedorController
+from app.controllers.zona_controller import ZonaController
 from app.utils.decorators import permission_any_of, permission_required
 
 # Blueprint para endpoints de API interna
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 logger = logging.getLogger(__name__)
+
+@api_bp.route('/zonas/costo-por-cp', methods=['GET'])
+def api_costo_por_cp():
+    """
+    Devuelve el costo de envío para un código postal.
+    """
+    codigo_postal = request.args.get('codigo_postal')
+    if not codigo_postal:
+        return jsonify(success=False, error="Se requiere el parámetro 'codigo_postal'."), 400
+
+    zona_controller = ZonaController()
+    resultado = zona_controller.obtener_costo_por_codigo_postal(codigo_postal)
+    
+    if resultado.get('success'):
+        return jsonify(success=True, data=resultado.get('data'))
+    
+    return jsonify(success=False, error=resultado.get('error', 'Error interno')), 500
 
 @api_bp.route('/usuarios/actividad_totem', methods=['GET'])
 @permission_required(accion='consultar_logs_o_auditoria')

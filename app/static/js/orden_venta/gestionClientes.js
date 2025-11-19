@@ -18,6 +18,31 @@ document.addEventListener('DOMContentLoaded', function () {
     const deptoFacturacion = document.getElementById('depto_facturacion');
     const cpFacturacion = document.getElementById('codigo_postal_facturacion');
     const condicionVenta = document.getElementById('condicion_venta');
+    const costoEnvioInput = document.getElementById('costo_envio');
+
+    const cpEntrega = document.getElementById('codigo_postal');
+
+
+    function fetchCostoEnvio(codigoPostal) {
+        if (!codigoPostal || codigoPostal.length < 4) {
+            if(costoEnvioInput) costoEnvioInput.value = '0.00';
+            return;
+        }
+
+        fetch(`/api/zonas/costo-por-cp?codigo_postal=${codigoPostal}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if(costoEnvioInput) costoEnvioInput.value = data.data.precio.toFixed(2);
+                } else {
+                    if(costoEnvioInput) costoEnvioInput.value = '0.00';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching shipping cost:', error);
+                if(costoEnvioInput) costoEnvioInput.value = '0.00';
+            });
+    }
 
 
     // Función para limpiar campos
@@ -35,6 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (deptoFacturacion) deptoFacturacion.value = '';
         if (condicionVenta) condicionVenta.value = '';
         if (cpFacturacion) cpFacturacion.value = '';
+        fetchCostoEnvio('');
     }
 
     // --- Función principal de búsqueda (CORREGIDA LA LÓGICA DE LIMPIEZA) ---
@@ -101,13 +127,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         //Direccion alternativa
                         const checkboxDireccion = document.getElementById('usar_direccion_alternativa');
                         if (checkboxDireccion) {
+                            if (!checkboxDireccion.checked) {
+                                fetchCostoEnvio(dir.codigo_postal);
+                            }
                             // Si el cliente no tiene una calle principal, forzar la dirección alternativa
                             if (!dir.calle) {
                                 checkboxDireccion.checked = true;
                                 // Disparar el evento 'change' para que la otra lógica de UI reaccione
                                 checkboxDireccion.dispatchEvent(new Event('change'));
                             }
+                        } else {
+                            fetchCostoEnvio(dir.codigo_postal);
                         }
+
 
                     } else {
                         limpiarDatosCliente();
@@ -210,4 +242,32 @@ document.addEventListener('DOMContentLoaded', function () {
     cuilParte1.addEventListener('blur', buscarCliente);
     cuilParte2.addEventListener('blur', buscarCliente);
     cuilParte3.addEventListener('blur', buscarCliente);
+
+    if (cpFacturacion) {
+        cpFacturacion.addEventListener('input', (e) => {
+            const checkbox = document.getElementById('usar_direccion_alternativa');
+            if (!checkbox || !checkbox.checked) {
+                fetchCostoEnvio(e.target.value);
+            }
+        });
+    }
+    if (cpEntrega) {
+        cpEntrega.addEventListener('input', (e) => {
+            const checkbox = document.getElementById('usar_direccion_alternativa');
+            if (checkbox && checkbox.checked) {
+                fetchCostoEnvio(e.target.value);
+            }
+        });
+    }
+
+    const checkboxDireccion = document.getElementById('usar_direccion_alternativa');
+    if (checkboxDireccion) {
+        checkboxDireccion.addEventListener('change', function() {
+            if (this.checked) {
+                fetchCostoEnvio(cpEntrega.value);
+            } else {
+                fetchCostoEnvio(cpFacturacion.value);
+            }
+        });
+    }
 });
