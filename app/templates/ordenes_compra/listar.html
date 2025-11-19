@@ -43,6 +43,21 @@
         </div>
     </div>
 
+    <!-- Filtro por OP -->
+    <div class="filter-section">
+        <label class="filter-label">
+            <i class="bi bi-search me-1"></i>Buscar por Código de OP
+        </label>
+        <div class="search-input-wrapper">
+            <i class="bi bi-box-fill"></i>
+            <input 
+                type="text" 
+                id="opSearchInput" 
+                class="search-input" 
+                placeholder="Ingrese el código de la orden de producción (ej: OP-...)">
+        </div>
+    </div>
+
     <!-- Filtros rápidos -->
     <div class="filter-section">
         <label class="filter-label">
@@ -104,6 +119,7 @@
             </button>
         </div>
     </div>
+
 </div>
 
 <!-- Resumen de resultados -->
@@ -122,9 +138,11 @@
     <div class="col-md-4 mb-4 orden-card" 
          data-estado="{{ orden.estado }}"
          data-codigo="{{ orden.codigo_oc }}"
+         data-op-codigo="{{ orden.orden_produccion_codigo or '' }}"
          data-fecha="{{ orden.fecha_emision }}"
          data-creador="{{ orden.usuario_creador_nombre }}"
-         data-aprobador="{{ orden.usuario_aprobador_nombre or '' }}">
+         data-aprobador="{{ orden.usuario_aprobador_nombre or '' }}"
+         data-op-id="{{ orden.orden_produccion_id or '' }}">
         <div class="card h-100 {% if orden.estado in ['RECHAZADA', 'CERRADA', 'CANCELADA'] %}orden-rechazada{% endif %}">
             <div class="card-body d-flex flex-column">
                 <div class="d-flex justify-content-between">

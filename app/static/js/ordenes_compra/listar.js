@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', function () {
     // Variables globales
     const searchInput = document.getElementById('searchInput');
+    const opSearchInput = document.getElementById('opSearchInput');
     const estadoBtns = document.querySelectorAll('.btn-filter-estado');
     const quickActionBtns = document.querySelectorAll('.btn-quick-action');
     const ordenCards = document.querySelectorAll('.orden-card');
@@ -12,7 +13,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let activeFilters = {
         estado: '',
-        search: ''
+        search: '',
+        opSearch: ''
     };
 
     // Total de órdenes
@@ -48,13 +50,27 @@ document.addEventListener('DOMContentLoaded', function () {
                 show = false;
             }
 
-            // Filtro por búsqueda
+            // Filtro por búsqueda de OC
             if (activeFilters.search) {
                 const codigo = card.dataset.codigo.toLowerCase();
                 const searchTerm = activeFilters.search.toLowerCase();
                 if (!codigo.includes(searchTerm)) {
                     show = false;
                 }
+            }
+
+            // Filtro por búsqueda de OP
+            if (activeFilters.opSearch) {
+                const opCodigo = card.dataset.opCodigo.toLowerCase();
+                const opSearchTerm = activeFilters.opSearch.toLowerCase();
+                if (!opCodigo.includes(opSearchTerm)) {
+                    show = false;
+                }
+            }
+
+            // Filtro por OP
+            if (activeFilters.op && card.dataset.opId !== activeFilters.op) {
+                show = false;
             }
 
             // Mostrar u ocultar tarjeta
@@ -106,6 +122,18 @@ document.addEventListener('DOMContentLoaded', function () {
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(() => {
                 activeFilters.search = this.value.trim();
+                applyClientFilters();
+            }, 300);
+        });
+    }
+
+    // Event listener para búsqueda de OP
+    if (opSearchInput) {
+        let opSearchTimeout;
+        opSearchInput.addEventListener('input', function () {
+            clearTimeout(opSearchTimeout);
+            opSearchTimeout = setTimeout(() => {
+                activeFilters.opSearch = this.value.trim();
                 applyClientFilters();
             }, 300);
         });
@@ -166,8 +194,28 @@ document.addEventListener('DOMContentLoaded', function () {
             targetBtn.click();
         }
     } else {
+        // Si no hay filtro de estado, activar el botón "Todas" por defecto
+        const allBtn = document.querySelector('.btn-filter-estado[data-estado=""]');
+        if (allBtn) {
+            allBtn.click();
+        }
         // Asegurarse de que las URLs de acción estén limpias si no hay filtro inicial
         updateActionURLs('');
+    }
+
+    // Event listener for OP filter
+    if (opFilter) {
+        opFilter.addEventListener('change', function () {
+            activeFilters.op = this.value;
+            applyClientFilters();
+        });
+    }
+
+    // Al cargar, aplicar filtro de OP si está en la URL
+    const opFilterFromUrl = urlParamsOnLoad.get('op_id');
+    if (opFilterFromUrl && opFilter) {
+        opFilter.value = opFilterFromUrl;
+        activeFilters.op = opFilterFromUrl;
     }
 
     // Aplicar filtros de cliente iniciales
