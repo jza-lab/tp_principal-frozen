@@ -484,3 +484,18 @@ def api_confirmar_inicio(orden_id):
     usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_inicio_y_aprobar(orden_id, data, usuario_id)
     return jsonify(response), status_code
+
+
+@orden_produccion_bp.route('/<int:orden_id>/ampliar', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_confirmar_ampliacion_op(orden_id):
+    """
+    API endpoint para confirmar la ampliación de una OP para cubrir desperdicio.
+    Llamado por el modal de confirmación del frontend.
+    """
+    controller = OrdenProduccionController()
+    data = request.get_json()
+    usuario_id = get_jwt_identity()
+    response, status_code = controller.confirmar_ampliacion_op_por_desperdicio(orden_id, data, usuario_id)
+    return jsonify(response), status_code

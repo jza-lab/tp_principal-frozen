@@ -855,69 +855,77 @@ class PedidoController(BaseController):
 
     def actualizar_estado_segun_ops(self, pedido_id: int):
         """
-        Verifica si todos los items de un pedido están completos y actualiza el estado del pedido.
-        - Para items de OPs NO consolidadas, verifica que la OP esté 'COMPLETADA'.
-        - Para items de OPs consolidadas, verifica que la cantidad asignada cubra la cantidad del pedido.
+        Verifica si la cantidad total producida por las OPs (padre e hijas)
+        cubre la cantidad requerida por el pedido y actualiza el estado en consecuencia.
         """
         from decimal import Decimal
-        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+        from app.models.orden_produccion import OrdenProduccionModel
 
         try:
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
-                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado según OPs/asignaciones.")
+                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado.")
                 return
 
-            logger.info(f"Verificando estado de ítems para el pedido {pedido_id} post-producción.")
+            logger.info(f"Verificando estado de producción para el pedido {pedido_id}.")
             pedido_data = pedido_resp.get('data')
             todos_los_items = pedido_data.get('items', [])
 
             if not todos_los_items:
                 logger.info(f"El pedido {pedido_id} no tiene ítems. No se cambia el estado.")
                 return
+            
+            # 1. Calcular la cantidad total requerida por el pedido.
+            cantidad_total_requerida = sum(Decimal(item.get('cantidad', 0)) for item in todos_los_items if item.get('estado') != 'ALISTADO')
 
-            asignacion_model = AsignacionPedidoModel()
-            todos_los_items_listos = True
+            # Si todos los items ya están alistados (de stock), no hay nada que producir.
+            if cantidad_total_requerida == 0:
+                if pedido_data.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                     self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                     logger.info(f"Todos los items del pedido {pedido_id} son de stock y están alistados. Pedido actualizado a 'LISTO PARA ENTREGAR'.")
+                return
 
-            for item in todos_los_items:
-                item_id = item['id']
-                item_listo = False
+            # 2. Obtener todas las OPs padres únicas asociadas al pedido.
+            op_padres_ids = {item['orden_produccion_id'] for item in todos_los_items if item.get('orden_produccion_id')}
 
-                # Caso 1: Item sin OP asociada (ej. producto de stock directo)
-                if not item.get('orden_produccion_id'):
-                    if item.get('estado') == 'ALISTADO':
-                        item_listo = True
-                # Caso 2: Item asociado a una OP NO consolidada
-                elif not item.get('op_es_consolidada'):
-                    if item.get('op_estado') == 'COMPLETADA':
-                        item_listo = True
-                # Caso 3: Item asociado a una OP consolidada
-                else:
-                    asignaciones_res = asignacion_model.find_all({'pedido_item_id': item_id})
-                    if asignaciones_res.get('success'):
-                        total_asignado = sum(Decimal(a.get('cantidad_asignada', 0)) for a in asignaciones_res.get('data', []))
-                        if total_asignado >= Decimal(item.get('cantidad', 0)):
-                            item_listo = True
+            if not op_padres_ids:
+                 logger.info(f"Pedido {pedido_id} no tiene OPs asociadas para verificar producción.")
+                 return
 
-                if not item_listo:
-                    todos_los_items_listos = False
-                    break # Si un item no está listo, no es necesario seguir verificando
+            # 3. Calcular la cantidad total producida sumando las OPs padre y sus hijas.
+            op_model = OrdenProduccionModel()
+            cantidad_total_producida = Decimal('0')
+            algun_item_en_proceso = False
 
-            if todos_los_items_listos:
+            for op_padre_id in op_padres_ids:
+                op_padre_res = op_model.find_by_id(op_padre_id)
+                if op_padre_res.get('success') and op_padre_res.get('data'):
+                    op_padre_data = op_padre_res['data']
+                    cantidad_total_producida += Decimal(op_padre_data.get('cantidad_producida', '0'))
+                    if op_padre_data.get('estado') not in ['PENDIENTE', 'COMPLETADA', 'CANCELADA']:
+                        algun_item_en_proceso = True
+                
+                ops_hijas_res = op_model.find_all(filters={'id_op_padre': op_padre_id})
+                if ops_hijas_res.get('success') and ops_hijas_res.get('data'):
+                    for op_hija in ops_hijas_res['data']:
+                        cantidad_total_producida += Decimal(op_hija.get('cantidad_producida', '0'))
+                        if op_hija.get('estado') not in ['PENDIENTE', 'COMPLETADA', 'CANCELADA']:
+                            algun_item_en_proceso = True
+
+            logger.info(f"Pedido {pedido_id}: Cantidad Requerida={cantidad_total_requerida}, Cantidad Producida (total)={cantidad_total_producida}")
+
+            # 4. Actualizar el estado del pedido basándose en las cantidades.
+            if cantidad_total_producida >= cantidad_total_requerida:
                 if pedido_data.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
                     self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-                    logger.info(f"Todos los items del pedido {pedido_id} están satisfechos. Pedido actualizado a 'LISTO_PARA_ENTREGA'.")
+                    logger.info(f"La producción ha cubierto la demanda para el pedido {pedido_id}. Actualizado a 'LISTO_PARA_ENTREGA'.")
             else:
-                algun_item_en_proceso = any(
-                    item.get('op_estado') in ['EN_PRODUCCION', 'CONTROL_DE_CALIDAD', 'EN_LINEA_1', 'EN_LINEA_2']
-                    for item in todos_los_items if not item.get('op_es_consolidada')
-                )
-                if algun_item_en_proceso and pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA']:
+                if algun_item_en_proceso and pedido_data.get('estado') not in ['EN_PROCESO', 'LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
                     self.model.cambiar_estado(pedido_id, 'EN_PROCESO')
-                    logger.info(f"Al menos una OP del pedido {pedido_id} ha iniciado. Pedido actualizado a 'EN_PROCESO'.")
+                    logger.info(f"La producción ha iniciado pero no es suficiente para el pedido {pedido_id}. Actualizado a 'EN_PROCESO'.")
 
         except Exception as e:
-            logger.error(f"Error actualizando el estado del pedido {pedido_id} según OPs y asignaciones: {e}", exc_info=True)
+            logger.error(f"Error crítico actualizando el estado del pedido {pedido_id} según la cantidad producida: {e}", exc_info=True)
 
     def planificar_pedido(self, pedido_id: int) -> tuple:
         """
