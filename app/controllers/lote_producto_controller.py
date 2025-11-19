@@ -23,6 +23,7 @@ import os
 from storage3.exceptions import StorageApiError
 
 
+
 logger = logging.getLogger(__name__)
 
 class LoteProductoController(BaseController):
@@ -225,7 +226,7 @@ class LoteProductoController(BaseController):
             stock_fisico_map = {pid: 0 for pid in producto_ids}
             lote_a_producto_map = {}
             lotes_disponibles = lotes_result.get('data', [])
-            
+
             for lote in lotes_disponibles:
                 pid = lote['producto_id']
                 lote_id = lote['id_lote']
@@ -243,19 +244,19 @@ class LoteProductoController(BaseController):
                 })
                 if not reservas_result.get('success'):
                     return self.error_response(reservas_result.get('error'), 500)
-                
+
                 for reserva in reservas_result.get('data', []):
                     lote_id = reserva['lote_producto_id']
                     pid = lote_a_producto_map.get(lote_id)
                     if pid:
                         stock_reservado_map[pid] += reserva.get('cantidad_reservada', 0)
-            
+
             # 4. Calcular el stock final disponible
             stock_disponible_map = {
                 pid: stock_fisico_map.get(pid, 0) - stock_reservado_map.get(pid, 0)
                 for pid in producto_ids
             }
-            
+
             return self.success_response(data=stock_disponible_map)
 
         except Exception as e:
@@ -392,7 +393,7 @@ class LoteProductoController(BaseController):
 
                 lote_actual = lote_actual_res['data']
                 nueva_cantidad = lote_actual.get('cantidad_actual', 0) + cantidad_a_devolver
-                
+
                 update_data = {'cantidad_actual': nueva_cantidad}
                 if lote_actual.get('estado') == 'AGOTADO':
                     update_data['estado'] = 'DISPONIBLE'
@@ -401,7 +402,7 @@ class LoteProductoController(BaseController):
                 update_lote_res = self.model.update(lote_id, update_data, 'id_lote')
                 if not update_lote_res.get('success'):
                     logger.error(f"¡FALLO CRÍTICO! No se pudo devolver el stock al lote {lote_id}. El stock quedará inconsistente.")
-                
+
                 logger.info(f"Actualizando estado de reserva ID {reserva['id']} a CANCELADO.")
                 self.reserva_model.update(reserva['id'], {'estado': 'CANCELADO'}, 'id')
 
@@ -502,7 +503,7 @@ class LoteProductoController(BaseController):
                         user_res = user_model.find_by_id(h['usuario_id'])
                         if user_res.get('success'):
                             h['usuario'] = user_res.get('data')
-                
+
                 # CORRECCIÓN: Convertir 'created_at' de string a objeto datetime.
                 for h in historial_desperdicios:
                     if h.get('created_at') and isinstance(h['created_at'], str):
@@ -516,7 +517,7 @@ class LoteProductoController(BaseController):
 
 
             lote['historial_desperdicios'] = historial_desperdicios
-            
+
             # Cargar motivos de desperdicio para el formulario
             motivo_model = MotivoDesperdicioLoteModel()
             motivos_res = motivo_model.get_all()
@@ -528,7 +529,7 @@ class LoteProductoController(BaseController):
                 lote['created_at'] = datetime.fromisoformat(lote['created_at'])
             if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
                 lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
-            
+
             for evento in lote.get('historial_calidad', []):
                 if evento.get('created_at') and isinstance(evento['created_at'], str):
                     evento['created_at'] = datetime.fromisoformat(evento['created_at'])
@@ -657,20 +658,20 @@ class LoteProductoController(BaseController):
         """
         if dry_run:
             return {'success': True, 'message': 'Verificación de stock (dry run) omitida.'}
-        
+
         logger.info(f"Iniciando despacho (cambio de estado de reserva) para pedido ID: {pedido_id}")
         try:
             reservas_a_completar_res = self.reserva_model.find_all(filters={'pedido_id': pedido_id, 'estado': 'RESERVADO'})
             if not reservas_a_completar_res.get('success'):
                 raise Exception("No se pudieron obtener los registros de reserva para completar.")
-            
+
             reservas_a_completar = reservas_a_completar_res.get('data', [])
             if not reservas_a_completar:
                 logger.warning(f"No se encontraron reservas 'RESERVADO' para despachar el pedido {pedido_id}. La operación se considera exitosa.")
                 return {'success': True, 'message': 'No había reservas pendientes para despachar.'}
 
             item_ids = [r['id'] for r in reservas_a_completar]
-            
+
             logger.info(f"Marcando {len(item_ids)} reservas como 'COMPLETADO' para el pedido {pedido_id}.")
             update_res = self.reserva_model.db.table(self.reserva_model.get_table_name()) \
                 .update({'estado': 'COMPLETADO', 'fecha_despacho': datetime.now().isoformat()}) \
@@ -682,7 +683,7 @@ class LoteProductoController(BaseController):
 
             logger.info(f"Despacho para pedido {pedido_id} completado con éxito.")
             return {'success': True, 'message': 'Reservas marcadas como completadas.'}
-        
+
         except Exception as e:
             logger.error(f"Error al marcar reservas como completadas para el pedido {pedido_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
@@ -719,13 +720,13 @@ class LoteProductoController(BaseController):
                     nueva_cantidad_lote = stock_fisico_en_lote - cantidad_a_tomar_de_lote
                     update_data = {'cantidad_actual': nueva_cantidad_lote}
                     if nueva_cantidad_lote <= 0: update_data['estado'] = 'AGOTADO'
-                    
+
                     logger.info(f"Intentando descontar {cantidad_a_tomar_de_lote} del lote ID {lote['id_lote']}. Nueva cantidad: {nueva_cantidad_lote}, Nuevo estado: {update_data.get('estado', 'DISPONIBLE')}")
                     update_result = self.model.update(lote['id_lote'], update_data, 'id_lote')
-                    
+
                     if not update_result.get('success') or not update_result.get('data'):
                         raise Exception(f"Fallo crítico al descontar stock del lote {lote['id_lote']}. La operación será revertida.")
-                    
+
                     lotes_modificados.append({'lote_id': lote['id_lote'], 'cantidad_devuelta': cantidad_a_tomar_de_lote, 'estado_anterior': lote.get('estado')})
                     logger.info(f"Descuento exitoso del lote ID {lote['id_lote']}.")
 
@@ -736,11 +737,11 @@ class LoteProductoController(BaseController):
                     }
                     logger.info(f"Creando registro de reserva para lote {lote['id_lote']} y pedido {pedido_id}")
                     resultado_creacion = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
-                    
+
                     if not resultado_creacion.get('success'):
                         raise Exception(f"Se descontó stock del lote {lote['id_lote']} pero no se pudo crear el registro de reserva. La operación será revertida. Error: {resultado_creacion.get('error')}")
                     logger.info(f"Registro de reserva creado exitosamente con ID {resultado_creacion.get('data', {}).get('id')}.")
-                    
+
                     cantidad_restante_a_descontar -= cantidad_a_tomar_de_lote
 
                 if cantidad_restante_a_descontar > 0.01:
@@ -755,7 +756,7 @@ class LoteProductoController(BaseController):
                 lote_id = modificacion['lote_id']
                 cantidad_devuelta = modificacion['cantidad_devuelta']
                 logger.warning(f"Revirtiendo: Devolviendo {cantidad_devuelta} unidades al lote ID {lote_id}.")
-                
+
                 lote_actual_res = self.model.find_by_id(lote_id, 'id_lote')
                 if lote_actual_res.get('success') and lote_actual_res.get('data'):
                     lote_actual = lote_actual_res.get('data')
@@ -770,7 +771,7 @@ class LoteProductoController(BaseController):
         """Obtiene los lotes y el conteo de productos próximos a vencer."""
         try:
             dias_alerta = self.config_controller.obtener_dias_vencimiento()
-            
+
             # Reutilizamos el método del modelo que ya busca por vencimiento
             vencimiento_result = self.model.find_por_vencimiento(dias_alerta)
 
@@ -1066,10 +1067,10 @@ class LoteProductoController(BaseController):
                             'lote_producto',
                             usuario_id
                         )
-                        
+
             except Exception as e_alert:
                 logger.error(f"Error al verificar alertas tras liberar lote de producto {lote_id}: {e_alert}", exc_info=True)
-            
+
             return self.success_response(message="Cantidad liberada de cuarentena con éxito.")
 
         except Exception as e:
@@ -1138,7 +1139,7 @@ class LoteProductoController(BaseController):
 
         except ValidationError as e:
             logger.warning(f"Error de validación al actualizar lote {lote_id}: {e.messages}")
-            
+
             # Formatear el diccionario de errores en una lista HTML
             error_list = '<ul class="list-unstyled mb-0">'
             if isinstance(e.messages, dict):
@@ -1194,7 +1195,7 @@ class LoteProductoController(BaseController):
             # --- LÓGICA COMPLETA DE CÁLCULO DE CANTIDADES ---
             cantidad_rechazada = 0
             cantidad_cuarentena = 0
-            
+
             if qc_data:
                 decision = qc_data.get('decision_inspeccion')
                 cantidad_rechazada = float(qc_data.get('cantidad_rechazada', 0))
@@ -1202,10 +1203,10 @@ class LoteProductoController(BaseController):
 
             # La cantidad inicial del lote es lo que se produjo menos lo que se rechazó.
             cantidad_inicial_lote = cantidad_producida - cantidad_rechazada
-            
+
             # La cantidad actualmente disponible es la inicial menos lo que va a cuarentena.
             cantidad_actual_disponible = cantidad_inicial_lote - cantidad_cuarentena
-            
+
             # Determinar el estado final del lote
             estado_lote_final = 'AGOTADO' # Estado por defecto si no hay cantidad disponible
             if cantidad_actual_disponible > 0:
@@ -1238,7 +1239,7 @@ class LoteProductoController(BaseController):
                 'fecha_vencimiento': fecha_vencimiento,
                 'estado': estado_lote_final
             }
-            
+
             resultado_lote, status_lote = self.crear_lote_desde_formulario(datos_lote, usuario_id=usuario_id)
             if status_lote >= 400:
                 return self.error_response(f"Fallo al registrar el lote de producto: {resultado_lote.get('error')}", 500)
@@ -1269,8 +1270,8 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en crear_lote_y_reservas_desde_op para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
-    
-    
+
+
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int, motivo: str, resultado_inspeccion: str) -> tuple:
         """
         Marca un lote de producto como 'NO_APTO' y anula su stock.
@@ -1326,13 +1327,13 @@ class LoteProductoController(BaseController):
             unique_filename = f"productos/lote_{lote_id}_{int(datetime.now().timestamp())}{extension}"
 
             file_content = file_storage.read()
-            
+
             db_client.storage.from_(bucket_name).upload(
                 path=unique_filename,
                 file=file_content,
                 file_options={"content-type": file_storage.mimetype}
             )
-            
+
             url_response = db_client.storage.from_(bucket_name).get_public_url(unique_filename)
             logger.info(f"Foto subida con éxito para el lote {lote_id}. URL: {url_response}")
             return url_response
@@ -1359,9 +1360,9 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            
+
             afectado_res = self.db.table('alerta_riesgo_afectados').select('estado_previo').eq('tipo_entidad', 'lote_producto').eq('id_entidad', lote_id).order('id', desc=True).limit(1).execute().data
-            
+
             estado_previo = 'disponible'
             if afectado_res and afectado_res[0].get('estado_previo'):
                 estado_previo = afectado_res[0]['estado_previo']
@@ -1371,7 +1372,7 @@ class LoteProductoController(BaseController):
             cantidad_en_cuarentena = lote.get('cantidad_en_cuarentena', 0)
             cantidad_actual = lote.get('cantidad_actual', 0)
             nueva_cantidad_actual = cantidad_actual + cantidad_en_cuarentena
-            
+
             update_data = {
                 'estado': estado_destino,
                 'cantidad_actual': nueva_cantidad_actual,
@@ -1382,7 +1383,7 @@ class LoteProductoController(BaseController):
             result = self.model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             return self.success_response(message="Lote de producto liberado de cuarentena de alerta.")
 
         except Exception as e:
@@ -1400,11 +1401,66 @@ class LoteProductoController(BaseController):
                 'cantidad_en_cuarentena': 0,
             }
             result = self.model.update(lote_id, update_data, 'id_lote')
-            
+
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             return self.success_response(message="Lote de producto marcado como retirado.")
         except Exception as e:
             logger.error(f"Error en marcar_lote_retirado_alerta (producto): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def liberar_reserva_especifica(self, reserva_id: int) -> bool:
+        """
+        Cancela una reserva específica por su ID y DEVUELVE el stock al lote.
+        """
+        try:
+            logger.info(f"Liberando reserva específica ID: {reserva_id}")
+
+            # 1. Obtener datos de la reserva para saber cuánto devolver y a qué lote
+            reserva_data_res = self.reserva_model.find_by_id(reserva_id)
+            if not reserva_data_res.get('success') or not reserva_data_res.get('data'):
+                logger.error(f"No se encontró la reserva {reserva_id} para liberar.")
+                return False
+
+            reserva_data = reserva_data_res['data']
+
+            # Validar que no esté ya cancelada para evitar duplicar stock
+            if reserva_data.get('estado') == 'CANCELADO':
+                logger.warning(f"La reserva {reserva_id} ya estaba cancelada.")
+                return True
+
+            cantidad_a_devolver = float(reserva_data['cantidad_reservada'])
+            lote_id = reserva_data['lote_producto_id']
+
+            # 2. Cambiar estado de la reserva a CANCELADO
+            update_reserva = self.reserva_model.update(reserva_id, {'estado': 'CANCELADO'}, 'id')
+            if not update_reserva.get('success'):
+                logger.error(f"Fallo al actualizar estado de reserva {reserva_id}.")
+                return False
+
+            # 3. CRÍTICO: DEVOLVER EL STOCK AL LOTE
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if lote_res.get('success') and lote_res.get('data'):
+                lote_actual = lote_res['data']
+                nueva_cantidad = float(lote_actual.get('cantidad_actual', 0)) + cantidad_a_devolver
+
+                # Si el lote estaba AGOTADO, lo volvemos a poner DISPONIBLE
+                estado_lote = lote_actual.get('estado')
+                if estado_lote == 'AGOTADO':
+                    estado_lote = 'DISPONIBLE'
+
+                self.model.update(lote_id, {
+                    'cantidad_actual': nueva_cantidad,
+                    'estado': estado_lote
+                }, 'id_lote')
+
+                logger.info(f"Stock devuelto al lote {lote_id}: +{cantidad_a_devolver}. Nueva cantidad: {nueva_cantidad}")
+                return True
+            else:
+                logger.error(f"CRÍTICO: Se canceló la reserva {reserva_id} pero no se encontró el lote {lote_id} para devolver el stock.")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error crítico en liberar_reserva_especifica: {e}", exc_info=True)
+            return False

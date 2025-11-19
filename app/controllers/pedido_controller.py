@@ -24,7 +24,8 @@ from app.schemas.pedido_schema import PedidoSchema
 from typing import Dict, Optional
 from marshmallow import ValidationError
 from app.config import Config
-
+from app.models.reserva_producto import ReservaProductoModel # <--- AGREGAR ESTO
+import time
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ class PedidoController(BaseController):
         self.nota_credito_model = NotaCreditoModel()
         # -----------------------
         self.registro_controller = RegistroController()
+        self.reserva_producto_model = ReservaProductoModel()
 
     def _consolidar_items(self, items_data: list) -> list:
         """
@@ -122,7 +124,7 @@ class PedidoController(BaseController):
                     items = self.nota_credito_model.get_items_by_nc_id(nc['id'])
                     nc['items'] = items
                     notas_de_credito_completas.append(nc)
-            
+
             pedido_data['notas_credito'] = notas_de_credito_completas
 
             return self.success_response(data=pedido_data)
@@ -140,7 +142,7 @@ class PedidoController(BaseController):
             # 1. PREPARACIÓN Y VALIDACIÓN INICIAL
             if 'items-TOTAL_FORMS' in form_data: form_data.pop('items-TOTAL_FORMS')
             if 'items' in form_data: form_data['items'] = self._consolidar_items(form_data['items'])
-            
+
             items_data = form_data.pop('items', [])
             if not items_data:
                 return self.error_response("El pedido debe contener al menos un producto.", 400)
@@ -158,7 +160,7 @@ class PedidoController(BaseController):
                 cliente_data = cliente_info['data']
                 if cliente_data.get('estado_crediticio') == 'alertado' and form_data.get('condicion_venta') != 'contado':
                     return self.error_response("El cliente tiene un estado crediticio 'alertado' y solo puede realizar pedidos al contado.", 403)
-            
+
             condicion_venta = form_data.get('condicion_venta', 'contado')
             if 'fecha_solicitud' in form_data:
                 fecha_solicitud = datetime.fromisoformat(form_data['fecha_solicitud']).date()
@@ -171,7 +173,7 @@ class PedidoController(BaseController):
             # 2. GESTIÓN DE STOCK Y DIVISIÓN DE ITEMS
             items_para_crear = []
             auto_aprobar_produccion = True
-            
+
             producto_ids_pedido = [item['producto_id'] for item in items_data]
             stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(producto_ids_pedido)
             if not stock_global_resp.get('success'):
@@ -185,12 +187,31 @@ class PedidoController(BaseController):
                 producto_info_res = self.producto_model.find_by_id(producto_id, 'id')
                 if not producto_info_res.get('success') or not producto_info_res.get('data'):
                     return self.error_response(f"Producto ID {producto_id} no encontrado.", 404)
-                
+
                 producto_data = producto_info_res['data']
                 if (cantidad_max := float(producto_data.get('cantidad_maxima_x_pedido', 0))) > 0 and cantidad_solicitada > cantidad_max:
                     auto_aprobar_produccion = False
 
                 stock_disponible = stock_global_map.get(producto_id, 0)
+
+                # --- LÓGICA DE ARBITRAJE NUEVA ---
+                # --- LÓGICA DE ARBITRAJE NUEVA ---
+                if stock_disponible < cantidad_solicitada:
+                    fecha_entrega_pedido = form_data.get('fecha_requerido')
+                    if fecha_entrega_pedido:
+                        fecha_obj = datetime.fromisoformat(fecha_entrega_pedido).date()
+
+                        # Intentamos robar stock a pedidos futuros
+                        faltante = cantidad_solicitada - stock_disponible
+                        recuperado = self._intentar_reasignar_stock(producto_id, faltante, fecha_obj)
+
+                        if recuperado > 0:
+                            # Actualizamos el stock disponible localmente
+                            stock_disponible += recuperado
+
+                            # NUEVO: Pausa táctica para permitir consistencia en Supabase
+                            logger.info("Stock liberado. Esperando consistencia de DB...")
+                            time.sleep(1.5)
 
                 if stock_disponible >= cantidad_solicitada:
                     item.update({'estado': 'PENDIENTE_DESCUENTO'})
@@ -205,7 +226,7 @@ class PedidoController(BaseController):
                 else:
                     item.update({'estado': 'PENDIENTE_PRODUCCION'})
                     items_para_crear.append(item)
-            
+
             # 3. DECIDIR ESTADO INICIAL Y ACCIÓN
             hay_items_stock = any(it['estado'] in ['PENDIENTE_DESCUENTO', 'PARCIAL'] for it in items_para_crear)
             hay_items_produccion = any(it['estado'] in ['PENDIENTE_PRODUCCION', 'PARCIAL'] for it in items_para_crear)
@@ -221,7 +242,7 @@ class PedidoController(BaseController):
                     accion_post_creacion = 'INICIAR_PROCESO_AUTO'
 
             form_data['estado'] = estado_inicial
-            
+
             # 4. CREAR PEDIDO EN BD
             result = self.model.create_with_items(form_data, items_para_crear)
             if not result.get('success'):
@@ -234,10 +255,10 @@ class PedidoController(BaseController):
             # 5. EJECUTAR ACCIÓN POST-CREACIÓN (RESERVA DURA Y/O PRODUCCIÓN)
             items_creados = nuevo_pedido.get('items', [])
             items_originales_map = {int(item['producto_id']): item for item in items_para_crear}
-            
+
             items_a_descontar = []
             items_a_producir = []
-            
+
             for item_creado in items_creados:
                 estado = item_creado.get('estado')
                 producto_id = int(item_creado.get('producto_id'))
@@ -256,7 +277,7 @@ class PedidoController(BaseController):
                 if not reserva_result.get('success'):
                     self.model.cambiar_estado(pedido_id_creado, 'PENDIENTE')
                     return self.error_response(f"Pedido creado, pero falló el descuento de stock: {reserva_result.get('error')}. Queda PENDIENTE.", 500)
-                
+
                 ids_completos = [i['id'] for i in items_a_descontar if i['id'] not in [p['id'] for p in items_a_producir]]
                 for item_id in ids_completos:
                     self.model.update_item(item_id, {'estado': 'ALISTADO'})
@@ -329,13 +350,13 @@ class PedidoController(BaseController):
             pedido_actual = pedido_resp['data']
             if pedido_actual.get('estado') not in ['PENDIENTE', 'EN_PROCESO']:
                 return self.error_response(f"El pedido debe estar en 'PENDIENTE' o 'EN PROCESO'. Estado actual: {pedido_actual.get('estado')}", 400)
-            
+
             fecha_requerido_pedido = pedido_actual.get('fecha_requerido')
 
             items_para_op = items_a_producir if items_a_producir is not None else [
                 item for item in pedido_actual.get('items', []) if item.get('orden_produccion_id') is None
             ]
-            
+
             ordenes_creadas = []
             from app.controllers.orden_produccion_controller import OrdenProduccionController
             op_controller = OrdenProduccionController()
@@ -351,12 +372,12 @@ class PedidoController(BaseController):
                         'fecha_meta': fecha_requerido_pedido,
                         'productos': [{'id': item['producto_id'], 'cantidad': item['cantidad']}]
                     }
-                    
+
                     # --- MANEJO ROBUSTO DE LA RESPUESTA ---
                     # El método puede devolver una tupla (dict, status) o solo un dict
                     respuesta_op = op_controller.crear_orden(datos_op, usuario_id)
                     resultado_op = respuesta_op[0] if isinstance(respuesta_op, tuple) else respuesta_op
-                    
+
                     if isinstance(resultado_op, dict) and resultado_op.get('success'):
                         # La respuesta de crear_orden devuelve una lista en 'data'
                         if resultado_op.get('data'):
@@ -450,7 +471,7 @@ class PedidoController(BaseController):
             items_data = form_data.pop('items', [])
             pedido_data = form_data
 
-            
+
             # --- LÓGICA DE CRÉDITO ---
             id_cliente = pedido_data.get('id_cliente')
             cliente_info = self.cliente_model.find_by_id(id_cliente)
@@ -894,7 +915,7 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error interno en planificar_pedido: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
-    
+
     def despachar_pedido(self, pedido_id: int, form_data: Optional[Dict] = None, dry_run: bool = False) -> tuple:
         """
         Cambia el estado de un pedido a 'EN_TRANSITO' y guarda los datos
@@ -1037,7 +1058,7 @@ class PedidoController(BaseController):
                 return self.error_response("Este pedido ya ha sido marcado como pagado.", 400)
 
             update_data = {'estado_pago': 'pagado'}
-            
+
             if file:
                 bucket_name = 'comprobantes-pago'
                 destination_path = f"pedido_{pedido_id}/{file.filename}"
@@ -1070,7 +1091,7 @@ class PedidoController(BaseController):
             pedidos_vencidos_result = self.model.find_all({'id_cliente': cliente_id, 'estado_pago': 'vencido'})
             if pedidos_vencidos_result.get('success'):
                 conteo_vencidos = len(pedidos_vencidos_result['data'])
-                
+
                 umbral_alertado = Config.CREDIT_ALERT_THRESHOLD
 
                 nuevo_estado = 'alertado' if conteo_vencidos > umbral_alertado else 'normal'
@@ -1101,7 +1122,7 @@ class PedidoController(BaseController):
                 return 0
 
             ids_a_actualizar = [p['id'] for p in pedidos_a_vencer_result.data]
-            
+
             if ids_a_actualizar:
                 update_result = self.model.db.table(self.model.get_table_name()) \
                     .update({'estado_pago': 'vencido'}) \
@@ -1159,7 +1180,7 @@ class PedidoController(BaseController):
             token_resp, _ = self.generar_enlace_seguimiento(pedido_id)
             if not token_resp.get('success'):
                 return self.error_response("No se pudo generar el token de seguimiento para el correo.", 500)
-            
+
             token = token_resp['data']['token']
             # --- CORRECCIÓN: Construir la URL manualmente para evitar error de contexto ---
             base_url = request.host_url
@@ -1173,7 +1194,7 @@ class PedidoController(BaseController):
                 subtotal = precio * cantidad
                 item['subtotal'] = subtotal
                 total_pedido += subtotal
-            
+
             # Añadir el total calculado al diccionario principal del pedido
             pedido['total'] = total_pedido
             # --- FIN CÁLCULO ---
@@ -1183,7 +1204,7 @@ class PedidoController(BaseController):
             qr.add_data(url_seguimiento)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white")
-            
+
             buffered = io.BytesIO()
             img.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
@@ -1199,7 +1220,7 @@ class PedidoController(BaseController):
                     fecha_formateada = fecha_obj.strftime('%d/%m/%Y')
                 except (ValueError, TypeError):
                     fecha_formateada = fecha_estimada # Fallback por si el formato cambia
-            
+
             body_html = render_template(
                 'emails/qr_pedido_cliente.html',
                 cliente_nombre=cliente_nombre,
@@ -1209,7 +1230,7 @@ class PedidoController(BaseController):
                 fecha_estimada_entrega=fecha_formateada,
                 current_year=datetime.now().year
             )
-            
+
             asunto = f"Seguimiento de tu pedido #{pedido.get('codigo_ov', pedido_id)}"
 
             # 6. Enviar el correo
@@ -1232,3 +1253,91 @@ class PedidoController(BaseController):
         except Exception as e:
             logger.error(f"Error interno en enviar_qr_por_email para pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def _intentar_reasignar_stock(self, producto_id: int, cantidad_necesaria: int, fecha_limite_urgente: date) -> int:
+        """
+        Intenta liberar stock de pedidos menos urgentes.
+        """
+        cantidad_recuperada = 0
+        fecha_limite_str = fecha_limite_urgente.isoformat()
+
+        logger.info("="*50)
+        logger.info(f"[ARBITRAJE] INICIO para Producto ID: {producto_id}")
+        logger.info(f"[ARBITRAJE] Objetivo: Recuperar {cantidad_necesaria} unidades.")
+        logger.info(f"[ARBITRAJE] Condición: Robar a pedidos con fecha de entrega > {fecha_limite_str}")
+
+        reservas_candidatas = []
+
+        try:
+            # Consulta directa a la base de datos
+            # Buscamos reservas ACTIVAS (RESERVADO) de pedidos FUTUROS
+            response = self.reserva_producto_model.db.table('reservas_productos') \
+                .select('id, cantidad_reservada, pedido_id, pedido_item_id, lotes_productos!inner(producto_id), pedidos!inner(id, fecha_requerido)') \
+                .eq('lotes_productos.producto_id', producto_id) \
+                .eq('estado', 'RESERVADO') \
+                .gt('pedidos.fecha_requerido', fecha_limite_str) \
+                .order('fecha_requerido', desc=True, foreign_table='pedidos') \
+                .execute()
+
+            reservas_candidatas = response.data if response.data else []
+            logger.info(f"[ARBITRAJE] Consulta DB Exitosa. Candidatos encontrados: {len(reservas_candidatas)}")
+
+        except Exception as e:
+            logger.error(f"[ARBITRAJE] ERROR CRÍTICO en la consulta DB: {e}", exc_info=True)
+            return 0
+
+        if not reservas_candidatas:
+            logger.warning("[ARBITRAJE] No hay víctimas disponibles (nadie tiene fecha posterior a la urgente).")
+            return 0
+
+        # Iteramos las reservas encontradas
+        for i, reserva in enumerate(reservas_candidatas):
+            logger.info(f"--- Procesando Candidato #{i+1} ---")
+            logger.info(f"Datos Reserva: {reserva}")
+
+            # 1. Verificar si ya tenemos suficiente
+            if cantidad_recuperada >= cantidad_necesaria:
+                logger.info(f"[ARBITRAJE] Meta alcanzada ({cantidad_recuperada} >= {cantidad_necesaria}). Deteniendo robo.")
+                break
+
+            # --- CORRECCIÓN DE IDENTACIÓN AQUÍ ---
+            # El código a continuación estaba dentro del 'if', por eso no se ejecutaba.
+
+            cantidad_a_liberar = float(reserva.get('cantidad_reservada', 0))
+            pedido_afectado_id = reserva.get('pedido_id')
+            item_afectado_id = reserva.get('pedido_item_id')
+            reserva_id = reserva.get('id')
+
+            logger.info(f"[ARBITRAJE] Intentando quitar {cantidad_a_liberar} u. al Pedido {pedido_afectado_id} (Item {item_afectado_id})")
+
+            # 2. Liberar la reserva
+            exito_liberacion = self.lote_producto_controller.liberar_reserva_especifica(reserva_id)
+
+            if exito_liberacion:
+                cantidad_recuperada += cantidad_a_liberar
+                logger.info(f"[ARBITRAJE] Liberación exitosa. Acumulado recuperado: {cantidad_recuperada}")
+
+                # 3. Actualizar el pedido afectado (La Víctima)
+                if item_afectado_id:
+                    try:
+                        # CORRECCIÓN BASADA EN TU SCHEMA:
+                        # Tu tabla 'pedido_items' no tiene columnas para cantidades divididas.
+                        # Solo cambiamos el estado. Al pasar a 'PENDIENTE_PRODUCCION',
+                        # el sistema entenderá que la 'cantidad' total debe producirse (o buscarse de nuevo).
+
+                        update_payload = {
+                            'estado': 'PENDIENTE_PRODUCCION'
+                        }
+
+                        self.model.update_item(item_afectado_id, update_payload)
+                        logger.info(f"[ARBITRAJE] VICTIMA ACTUALIZADA: Item {item_afectado_id} pasado a PENDIENTE_PRODUCCION.")
+
+                    except Exception as update_error:
+                         logger.error(f"[ARBITRAJE] Error actualizando item víctima {item_afectado_id}: {update_error}")
+            else:
+                logger.error(f"[ARBITRAJE] Falló la liberación de la reserva {reserva_id} en LoteProductoController.")
+
+        logger.info(f"[ARBITRAJE] FIN DEL PROCESO. Total recuperado: {cantidad_recuperada}")
+        logger.info("="*50)
+
+        return cantidad_recuperada
