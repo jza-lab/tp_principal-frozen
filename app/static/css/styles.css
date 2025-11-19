@@ -1353,3 +1353,10 @@ h1.h2 {
         display: none !important;
     }
 }
+
+#lista-insumos.dropdown-menu,
+#lista-productos.dropdown-menu {
+    min-width: 100%;
+    width: auto;
+    white-space: nowrap;
+}

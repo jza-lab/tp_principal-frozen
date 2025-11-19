@@ -19,10 +19,30 @@
     </div>
 </div>
 
+<div class="d-flex justify-content-between mb-3">
+    <div class="btn-group">
+        <button id="actualizar-lotes" class="btn btn-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Actualizar Lotes
+        </button>
+    </div>
+    <small id="last-updated" class="text-muted align-self-center"></small>
+</div>
+
 <div class="row">
     <div class="card col-lg-8 col-xl-9">
-        <div class="card-header">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
             <h5 class="mb-0">Lotes de Insumos</h5>
+            <div class="d-flex align-items-center" style="gap: 10px;">
+                <div class="position-relative">
+                    <input type="text" id="filtro-insumo" class="form-control form-control-sm" placeholder="Buscar por Insumo..." style="width: 200px;" autocomplete="off">
+                    <div id="lista-insumos" class="dropdown-menu">
+                        {% for insumo in insumos %}
+                            <a class="dropdown-item" href="#" title="{{ insumo.insumo_nombre }}">{{ insumo.insumo_nombre }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <input type="text" id="filtro-lote" class="form-control form-control-sm" placeholder="Buscar por N° Lote..." style="width: 200px;">
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -37,9 +57,9 @@
                 <th class="text-center">Lotes</th>
             </tr>
         </thead>
-        <tbody>
+        <tbody id="tabla-insumos-body">
             {% for insumo in insumos %}
-            <tr class="align-middle table-group-header">
+            <tr class="align-middle table-group-header" data-insumo-nombre="{{ insumo.insumo_nombre }}">
                 <td>
                     <button class="btn btn-sm btn-outline-secondary btn-expand" 
                             data-bs-toggle="collapse" 
@@ -50,7 +70,7 @@
                     </button>
                 </td>
                 <td>
-                    <div class="fw-bold">{{ insumo.insumo_nombre }}</div>
+                    <div class="fw-bold truncate-text" title="{{ insumo.insumo_nombre }}">{{ insumo.insumo_nombre }}</div>
                     <small class="text-muted">{{ insumo.insumo_categoria }}</small>
                 </td>
                 <td class="text-end text-muted">
@@ -71,7 +91,7 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="5" class="p-0 border-0">
+                <td colspan="6" class="p-0 border-0">
                     <div class="collapse" id="lotes-{{ insumo.id_insumo }}">
                         <div class="p-3 bg-light">
                             <h6 class="mb-3">Detalle de Lotes para {{ insumo.insumo_nombre }}</h6>
@@ -82,9 +102,12 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" class="text-center text-muted py-4">No hay insumos en el inventario.</td>
+                <td colspan="6" class="text-center text-muted py-4">No hay insumos en el inventario.</td>
             </tr>
             {% endfor %}
+            <tr id="no-results" style="display: none;">
+                <td colspan="6" class="text-center text-muted py-4">No se encontraron insumos que coincidan con los filtros.</td>
+            </tr>
         </tbody>
     </table>
 </div>
@@ -231,6 +254,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/inventario/graficosInventario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inventario/inventario.js') }}"></script>
+<script src="{{ url_for('static', filename='js/inventario/filtros.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
