@@ -6,6 +6,7 @@ from flask import jsonify, request
 from flask_jwt_extended import get_current_user
 from app.controllers.base_controller import BaseController
 from app.controllers.registro_controller import RegistroController
+from app.controllers.zona_controller import ZonaController
 from app.utils.security import generate_signed_token
 # --- IMPORTACIONES NUEVAS ---
 from app.controllers.lote_producto_controller import LoteProductoController
@@ -46,6 +47,7 @@ class PedidoController(BaseController):
         self.dcliente_schema = ClienteSchema()
         self.direccion_schema= DireccionSchema()
         self.receta_model = RecetaModel()
+        self.zona_controller = ZonaController()
         from app.controllers.storage_controller import StorageController
         self.storage_controller = StorageController()
         # --- INSTANCIAS NUEVAS ---
@@ -151,6 +153,17 @@ class PedidoController(BaseController):
             if direccion_id is None:
                 return self.error_response("Error procesando la dirección de entrega.", 400)
             form_data['id_direccion_entrega'] = direccion_id
+
+            # --- CALCULAR COSTO DE ENVÍO ---
+            direccion_info = self.direccion_model.find_by_id(direccion_id)
+            if direccion_info.get('success') and direccion_info.get('data'):
+                codigo_postal = direccion_info['data'].get('codigo_postal')
+                costo_resp = self.zona_controller.obtener_costo_por_codigo_postal(codigo_postal)
+                form_data['costo_envio'] = costo_resp.get('data', {}).get('precio', 0.00)
+            else:
+                form_data['costo_envio'] = 0.00
+            # --- FIN CALCULAR COSTO DE ENVÍO ---
+
             form_data.pop('direccion_entrega', None); form_data.pop('usar_direccion_alternativa', None)
 
             # Lógica de crédito y fechas (sin cambios)
@@ -525,6 +538,17 @@ class PedidoController(BaseController):
                     return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
             pedido_data['id_direccion_entrega'] = direccion_id
+            
+            # --- CALCULAR COSTO DE ENVÍO ---
+            direccion_info = self.direccion_model.find_by_id(direccion_id)
+            if direccion_info.get('success') and direccion_info.get('data'):
+                codigo_postal = direccion_info['data'].get('codigo_postal')
+                costo_resp = self.zona_controller.obtener_costo_por_codigo_postal(codigo_postal)
+                pedido_data['costo_envio'] = costo_resp.get('data', {}).get('precio', 0.00)
+            else:
+                pedido_data['costo_envio'] = 0.00
+            # --- FIN CALCULAR COSTO DE ENVÍO ---
+
             pedido_data.pop('direccion_entrega', None)
             pedido_data.pop('usar_direccion_alternativa', None)
 

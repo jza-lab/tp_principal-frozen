@@ -393,8 +393,8 @@
                                                     <input type="number" class="form-control item-quantity"
                                                         style="min-width: 8ch;" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                                                         name="items-{{ loop.index0 }}-cantidad" placeholder="Ej: 10"
-                                                        max="5000" min="0" step="1"
-                                                        value="{{ item.get('cantidad', 0) | int }}" required {% if pedido and
+                                                        max="5000" min="1" step="1"
+                                                        value="{{ item.get('cantidad', 1) | int }}" required {% if pedido and
                                                         pedido.estado !='PENDIENTE' %}disabled{% endif %}>
                                                     <span class="input-group-text unidad-display">
                                                         {{ unidad_medida if current_product else '--' }}
@@ -464,7 +464,7 @@
                                 </td>
                                 <td>
                                     <div class="input-group input-group-sm">
-                                        <input type="number" min="0" max="5000" step="1" value="0"
+                                        <input type="number" min="1" max="5000" step="1" value="1"
                                             class="form-control item-quantity" style="min-width: 8ch;"
                                             oninput="this.value = this.value.replace(/[^0-9]/g, '')" name="items-__prefix__-cantidad"
                                             placeholder="Ej: 10" required>
@@ -490,7 +490,7 @@
                             <div class="row g-3">
                                 <div class="col-md-6 text-end">Subtotal (Iva incluido): <strong
                                         id="resumen-subtotal">$0.00</strong></div>
-                                <div type="hidden" class="col-md-6 text-end">Costo de Envío: <strong
+                                <div class="col-md-6 text-end">Costo de Envío: <strong
                                         id="resumen-flete">$0.00</strong>
                                 </div>
                                 <div id="iva-row" class="col-md-6 text-end" style="display: none;">

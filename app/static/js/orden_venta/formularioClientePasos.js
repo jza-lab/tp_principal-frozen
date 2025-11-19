@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const provinciaAlternativaInput = document.getElementById('provincia_alternativa');
     const localidadAlternativaInput = document.getElementById('localidad_alternativa');
     const cpAlternativaInput = document.getElementById('codigo_postal_alternativa');
+    const costoEnvioSpan = document.getElementById('resumen-flete');
 
     // Funciones globales (capturadas con un fallback robusto)
     const updateResumen = window.calculateOrderTotals || (() => { });
@@ -88,6 +89,34 @@ document.addEventListener('DOMContentLoaded', function () {
         dirPrincipal = cliente.direcciones.find(d => d.es_principal) || cliente.direcciones[0];
     }
 
+    function fetchCostoEnvio(codigoPostal) {
+        if (!codigoPostal || codigoPostal.length < 4) {
+            costoEnvioSpan.textContent = '$0.00';
+            costoEnvioSpan.dataset.costo = '0';
+            updateResumen();
+            return;
+        }
+
+        fetch(`/api/zonas/costo-por-cp?codigo_postal=${codigoPostal}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const precio = data.data.precio.toFixed(2);
+                    costoEnvioSpan.textContent = `$${precio}`;
+                    costoEnvioSpan.dataset.costo = precio;
+                } else {
+                    costoEnvioSpan.textContent = '$0.00';
+                    costoEnvioSpan.dataset.costo = '0';
+                }
+                updateResumen();
+            })
+            .catch(error => {
+                console.error('Error fetching shipping cost:', error);
+                costoEnvioSpan.textContent = '$0.00';
+                costoEnvioSpan.dataset.costo = '0';
+                updateResumen();
+            });
+    }
 
 
     function inicializarFormularioCliente() {
@@ -106,6 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
             condicionIvaValue.value = ivaCode;
             
             nextStep1Btn.disabled = true; // Se habilita al añadir items
+            fetchCostoEnvio(cpFacturacionInput.value);
         } else {
             // Cliente anónimo: inicialización suave
             // No deshabilitar el botón, solo esperar a que se cumplan las condiciones (cliente + items)
@@ -141,7 +171,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             }
         });
+        if (isUsingAlternativeAddress) {
+            fetchCostoEnvio(cpAlternativaInput.value);
+        } else {
+            fetchCostoEnvio(cpFacturacionInput.value);
+        }
     });
+
+    if (cpAlternativaInput) {
+        cpAlternativaInput.addEventListener('input', (e) => {
+            if (isUsingAlternativeAddress) {
+                fetchCostoEnvio(e.target.value);
+            }
+        });
+    }
 
     // --- LÓGICA DE VALIDACIÓN DEL PASO 1 ---
 
@@ -526,6 +569,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         provinciaFacturacionInput.value = cliente.direccion.provincia;
                         localidadFacturacionInput.value = cliente.direccion.localidad;
                         cpFacturacionInput.value = cliente.direccion.codigo_postal;
+                        fetchCostoEnvio(cliente.direccion.codigo_postal);
                     }
                     actualizarCondicionVenta(cliente.id);
                 } else {

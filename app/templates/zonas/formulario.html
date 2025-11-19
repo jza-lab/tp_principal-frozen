@@ -13,59 +13,45 @@
         </div>
         <div class="card-body">
             <form method="POST" action="">
-                {{ csrf_form.csrf_token }}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                
                 <div class="mb-3">
                     <label for="nombre" class="form-label">Nombre de la Zona</label>
                     <input type="text" class="form-control" id="nombre" name="nombre" value="{{ zona.nombre if zona else '' }}" required>
                 </div>
 
-                <h5 class="mt-4">Localidades Asignadas</h5>
-                <p class="text-muted">A continuación, busque y asigne las localidades que pertenecerán a esta zona.</p>
-
                 <div class="row">
-                    <div class="col-md-6">
-                        <h6>Buscar y Agregar Localidades</h6>
-                        <div class="input-group mb-3">
-                            <input type="text" id="localidad-search" class="form-control" placeholder="Escriba para buscar...">
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="codigo_postal_inicio" class="form-label">Código Postal Inicio</label>
+                            <input type="number" class="form-control" id="codigo_postal_inicio" name="codigo_postal_inicio" value="{{ zona.codigo_postal_inicio if zona else '' }}" required>
                         </div>
-                        <ul id="available-localities" class="list-group" style="height: 250px; overflow-y: auto;">
-                            <!-- Resultados de la búsqueda de la API aparecerán aquí -->
-                        </ul>
                     </div>
-                    <div class="col-md-6">
-                        <h6>Localidades en esta Zona</h6>
-                        <ul id="assigned-localities" class="list-group" style="height: 250px; overflow-y: auto;">
-                            {% if zona and zona.localidades %}
-                                {% for loc in zona.localidades %}
-                                    <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ loc.id }}">
-                                        {{ loc.nombre }}
-                                        <button type="button" class="btn btn-danger btn-sm remove-localidad-btn">&times;</button>
-                                    </li>
-                                {% endfor %}
-                            {% endif %}
-                        </ul>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="codigo_postal_fin" class="form-label">Código Postal Fin</label>
+                            <input type="number" class="form-control" id="codigo_postal_fin" name="codigo_postal_fin" value="{{ zona.codigo_postal_fin if zona else '' }}" required>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label for="precio" class="form-label">Precio de Envío</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="precio" name="precio" step="0.01" value="{{ '%.2f'|format(zona.precio|float) if zona else '' }}" required>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <input type="hidden" name="localidades_ids" id="localidades_ids" value="">
 
                 <div class="mt-4">
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save me-1"></i> Guardar Cambios
                     </button>
-                    <a href="{{ url_for('zonas.listar_zonas') }}" class="btn btn-secondary">Cancelar</a>
+                    <a href="{{ url_for('envio.gestion_envios') }}" class="btn btn-secondary">Cancelar</a>
                 </div>
             </form>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script id="zona-data" type="application/json">
-    {
-        "zonaId": {{ zona.id|tojson if zona else 'null' }}
-    }
-</script>
-<script src="{{ url_for('static', filename='js/despachos/gestion_zonas.js') }}"></script>
 {% endblock %}

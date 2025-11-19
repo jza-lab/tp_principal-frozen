@@ -507,6 +507,9 @@
             <div class="card mb-4">
                 <div class="card-body d-flex justify-content-end">
                     <div class="w-50">
+                        <label for="costo_envio" class="form-label">Costo de Envío</label>
+                        <input type="text" class="form-control text-end fs-5" id="costo_envio" name="costo_envio" value="0.00" readonly>
+
                         <label for="total-final" class="form-label fw-bold">Total del Pedido</label>
                         <input type="text" class="form-control text-end fs-5" id="total-final" name="total"
                             value=" {{ total_pedido | formato_moneda }}" readonly>

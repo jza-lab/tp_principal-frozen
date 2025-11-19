@@ -95,27 +95,23 @@ class DespachoController(BaseController):
                 # asignando peso 0 que romper toda la funcionalidad.
                 print(f"Error al obtener pesos de productos: {e}")
 
-        # 4. Obtener el mapa de zonas
-        zona_map_response = self.zona_controller.obtener_mapa_localidades_a_zonas()
-        zona_map = zona_map_response.get('data', {}) if zona_map_response.get('success') else {}
-
         # 5. Enriquecer cada pedido con su zona y peso total calculado
         pedidos_enriquecidos = []
         for pedido in pedidos:
             cliente = pedido.get('cliente')
             if not cliente: continue
 
-            # --- MODIFICACIÓN: La dirección ahora está en el nivel superior del pedido ---
-            # La consulta get_all_with_items anida la dirección del cliente en el pedido, no en el cliente.
             direccion_entrega = pedido.get('direccion')
-            if not direccion_entrega or not direccion_entrega.get('latitud') or not direccion_entrega.get('longitud'):
+            if not direccion_entrega:
                 continue
-            # --- FIN MODIFICACIÓN ---
 
-
-            # Asignar zona
-            localidad = direccion_entrega.get('localidad', 'Sin Localidad')
-            pedido['zona'] = {'nombre': zona_map.get(localidad, 'Sin Zona Asignada')}
+            # Asignar zona por código postal
+            codigo_postal = direccion_entrega.get('codigo_postal')
+            zona_response = self.zona_controller.obtener_zona_por_codigo_postal(codigo_postal)
+            if zona_response.get('success') and zona_response.get('data'):
+                pedido['zona'] = {'nombre': zona_response['data'].get('nombre', 'Sin Zona')}
+            else:
+                pedido['zona'] = {'nombre': 'Sin Zona Asignada'}
 
             # Calcular peso total usando el mapa de pesos
             peso_total_gramos = 0
@@ -135,22 +131,6 @@ class DespachoController(BaseController):
             pedido['tiempo_estimado'] = f"{round(distancia * 2.5 + 5)} min"
 
             pedidos_enriquecidos.append(pedido)
-
-        # DEBUG: Añadir un pedido de prueba si la lista está vacía para asegurar que el frontend siempre reciba datos
-        if not pedidos_enriquecidos:
-            pedidos_enriquecidos.append({
-                "id": 9999,
-                "cliente": {"nombre": "Cliente de Prueba"},
-                "direccion": {
-                    "calle": "Calle Falsa", "altura": "123", "localidad": "Pruebalandia",
-                    "latitud": -34.60, "longitud": -58.45
-                },
-                "peso_total_calculado_kg": 10.5,
-                "distancia_km": 5.2,
-                "tiempo_estimado": "20 min",
-                "prioridad": "media",
-                "zona": {"nombre": "ZONA TEST"}
-            })
 
         return {'success': True, 'data': pedidos_enriquecidos}
 

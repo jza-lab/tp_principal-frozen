@@ -11,7 +11,7 @@ class EnvioController:
         Orquesta la obtención de datos de vehículos y zonas para la vista de gestión de envíos.
         """
         vehiculos_response = self.vehiculo_controller.obtener_todos_los_vehiculos()
-        zonas_response = self.zona_controller.obtener_zonas_con_localidades()
+        zonas_response = self.zona_controller.obtener_zonas()
 
         vehiculos = vehiculos_response.get('data', []) if vehiculos_response.get('success') else []
         zonas = zonas_response.get('data', []) if zonas_response.get('success') else []
