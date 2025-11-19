@@ -252,14 +252,14 @@ class ProductoController(BaseController):
             roles_data = roles_res.get('data', [])
             if not isinstance(roles_data, list):
                 roles_data = []
-            roles_costo_map = {rol['id']: rol.get('costo_hora', 0) for rol in roles_data if isinstance(rol, dict)}
+            roles_costo_map = {rol['id']: rol.get('costo_por_hora', 0) for rol in roles_data if isinstance(rol, dict)}
             
             costo_mano_obra = 0
             total_horas_mano_obra = 0
             for item in mano_de_obra_items:
-                costo_hora = Decimal(roles_costo_map.get(item['rol_id'], 0) or 0)
+                costo_por_hora = Decimal(roles_costo_map.get(item['rol_id'], 0) or 0)
                 horas = Decimal(item.get('horas_estimadas', 0))
-                costo_mano_obra += costo_hora * horas
+                costo_mano_obra += costo_por_hora * horas
                 total_horas_mano_obra += horas
 
             # 4. Calcular Costos Fijos
@@ -437,14 +437,14 @@ class ProductoController(BaseController):
         try:
             # Calcular Costo de Mano de Obra
             roles_res, _ = self.rol_controller.get_all_roles()
-            roles_costo_map = {rol['id']: rol.get('costo_hora', 0) for rol in roles_res.get('data', [])}
+            roles_costo_map = {rol['id']: rol.get('costo_por_hora', 0) for rol in roles_res.get('data', [])}
             
             costo_mano_obra = Decimal(0)
             total_horas_mano_obra = Decimal(0)
             for item in mano_de_obra_items:
-                costo_hora = Decimal(roles_costo_map.get(int(item['rol_id']), 0) or 0)
+                costo_por_hora = Decimal(roles_costo_map.get(int(item['rol_id']), 0) or 0)
                 horas = Decimal(item.get('horas_estimadas', 0))
-                costo_mano_obra += costo_hora * horas
+                costo_mano_obra += costo_por_hora * horas
                 total_horas_mano_obra += horas
 
             # Calcular Costos Fijos
