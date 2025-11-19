@@ -275,22 +275,38 @@ document.addEventListener('DOMContentLoaded', function () {
             const decision = this.value;
             const camposCantidades = document.getElementById('campos-cantidades');
             const campoRechazar = document.getElementById('campo-rechazar');
+            const inputRechazar = document.getElementById('cantidad-rechazada');
             const campoCuarentena = document.getElementById('campo-cuarentena');
+            const inputCuarentena = document.getElementById('cantidad-cuarentena');
 
+            // Resetear todo
             camposCantidades.style.display = 'none';
             campoRechazar.style.display = 'none';
             campoCuarentena.style.display = 'none';
+            inputRechazar.required = false;
+            inputRechazar.min = '';
+            inputCuarentena.required = false;
+            inputCuarentena.min = '';
 
+            // Configurar según la decisión
             if (decision === 'RECHAZO_PARCIAL') {
                 camposCantidades.style.display = 'block';
                 campoRechazar.style.display = 'block';
+                inputRechazar.required = true;
+                inputRechazar.min = '0.01';
             } else if (decision === 'CUARENTENA_PARCIAL') {
                 camposCantidades.style.display = 'block';
                 campoCuarentena.style.display = 'block';
+                inputCuarentena.required = true;
+                inputCuarentena.min = '0.01';
             } else if (decision === 'MIXTO') {
                 camposCantidades.style.display = 'block';
                 campoRechazar.style.display = 'block';
                 campoCuarentena.style.display = 'block';
+                inputRechazar.required = true;
+                inputRechazar.min = '0.01';
+                inputCuarentena.required = true;
+                inputCuarentena.min = '0.01';
             }
         });
     }
@@ -304,8 +320,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const opId = document.getElementById('op-id').value;
         const form = document.getElementById('form-control-calidad-op');
 
+        // La validación ahora es manejada por checkValidity gracias a los atributos dinámicos.
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
+            // Opcional: mostrar una notificación general si se prefiere a los tooltips del navegador
+            showNotification('Por favor, complete todos los campos requeridos.', 'warning');
             return;
         }
         form.classList.remove('was-validated');

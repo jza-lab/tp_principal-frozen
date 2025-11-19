@@ -21,7 +21,12 @@ def listar():
     """Muestra la lista de órdenes de compra."""
     controller = OrdenCompraController()
     estado = request.args.get("estado")
-    filtros = {"estado": estado} if estado else {}
+    op_id = request.args.get("op_id")
+    filtros = {}
+    if estado:
+        filtros["estado"] = estado
+    if op_id:
+        filtros["orden_produccion_id"] = op_id
     
     # Obtener rol del usuario
     claims = get_jwt()
@@ -154,10 +159,6 @@ def aprobar(id):
             f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    estado_actual = request.args.get('estado', '')
-    
-    if estado_actual:
-        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -210,9 +211,6 @@ def rechazar(id):
             f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    estado_actual = request.args.get('estado', '')
-    if estado_actual:
-        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -229,9 +227,6 @@ def marcar_en_recepcion(id):
             "error",
         )
     
-    estado_actual = request.args.get('estado', '')
-    if estado_actual:
-        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
@@ -248,9 +243,6 @@ def marcar_en_transito(id):
             "error",
         )
     
-    estado_actual = request.args.get('estado', '')
-    if estado_actual:
-        return redirect(url_for("orden_compra.listar", estado=estado_actual))
     return redirect(url_for("orden_compra.listar"))
 
 
