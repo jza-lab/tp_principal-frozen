@@ -26,6 +26,15 @@
     </div>
 </div>
 
+<div class="d-flex justify-content-between mb-3">
+    <div class="btn-group">
+        <button id="actualizar-lotes" class="btn btn-secondary">
+            <i class="bi bi-arrow-clockwise"></i> Actualizar Lotes
+        </button>
+    </div>
+    <small id="last-updated" class="text-muted align-self-center"></small>
+</div>
+
 <div class="row">
     <div class="card col-lg-8 col-xl-9">
         
@@ -39,13 +48,15 @@
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
             <h5 class="mb-0">Lotes de Productos Terminados</h5>
             <div class="d-flex align-items-center" style="gap: 10px;">
-                <select id="filtroProducto" class="form-select form-select-sm" style="width: 200px;" aria-label="Filtrar por producto">
-                    <option value="">-- Todos los Productos --</option>
-                    {% for nombre in productos|sort %}
-                    <option value="{{ nombre }}">{{ nombre }}</option>
-                    {% endfor %}
-                </select>
-                <input type="text" id="filtroLote" class="form-control form-control-sm" placeholder="Buscar por N° Lote..." style="width: 200px;" aria-label="Filtrar por número de lote">
+                <div class="position-relative">
+                    <input type="text" id="filtro-producto" class="form-control form-control-sm" placeholder="Buscar por Producto..." style="width: 200px;" autocomplete="off">
+                    <div id="lista-productos" class="dropdown-menu">
+                        {% for nombre in productos|sort %}
+                            <a class="dropdown-item" href="#" title="{{ nombre }}">{{ nombre }}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <input type="text" id="filtro-lote" class="form-control form-control-sm" placeholder="Buscar por N° Lote..." style="width: 200px;">
             </div>
         </div>
         
@@ -69,7 +80,7 @@
                             data-producto-nombre="{{ lote.producto_nombre or 'N/A' }}"
                             data-lote-numero="{{ lote.numero_lote or 'N/A' }}">
                             <td>
-                                <div class="fw-bold">{{ lote.producto_nombre or 'N/A' }}</div>
+                                <div class="fw-bold truncate-text" title="{{ lote.producto_nombre or 'N/A' }}">{{ lote.producto_nombre or 'N/A' }}</div>
                             </td>
                             <td>{{ lote.numero_lote or 'N/A' }}</td>
                             <td class="text-end fw-bold">
@@ -261,6 +272,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="{{ url_for('static', filename='js/productos/graficosInventario.js') }}"></script>
+<script src="{{ url_for('static', filename='js/inventario/filtros.js') }}"></script>
 
 <!-- Modal de Confirmación para Marcar como No Apto -->
 <div class="modal fade" id="modalNoApto" tabindex="-1" aria-labelledby="modalNoAptoLabel" aria-hidden="true">
@@ -346,44 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // --- CÓDIGO DE FILTRADO ---
-    const filtroProducto = document.getElementById('filtroProducto');
-    const filtroLote = document.getElementById('filtroLote');
-    const filasLote = document.querySelectorAll('#tablaLotesBody .fila-lote');
-    const filaSinResultados = document.getElementById('fila-sin-resultados'); // Ahora existe
-
-    function aplicarFiltros() {
-        const productoSeleccionado = filtroProducto.value;
-        const loteQuery = filtroLote.value.toLowerCase();
-        let filasVisibles = 0;
-
-        filasLote.forEach(fila => {
-            const nombreProducto = fila.dataset.productoNombre;
-            const numeroLote = fila.dataset.loteNumero.toLowerCase();
-
-            const matchProducto = (productoSeleccionado === "" || nombreProducto === productoSeleccionado);
-            const matchLote = (loteQuery === "" || numeroLote.includes(loteQuery));
-
-            if (matchProducto && matchLote) {
-                fila.style.display = ""; 
-                filasVisibles++;
-            } else {
-                fila.style.display = "none"; 
-            }
-        });
-
-        // Mostrar u ocultar el mensaje de "Sin resultados"
-        if (filaSinResultados) {
-             filaSinResultados.style.display = (filasVisibles === 0) ? "" : "none";
-        }
-    }
-
-    if (filtroProducto) {
-        filtroProducto.addEventListener('change', aplicarFiltros);
-    }
-    if (filtroLote) {
-        filtroLote.addEventListener('input', aplicarFiltros);
-    }
+    // El código de filtrado se ha movido a /static/js/inventario/filtros.js
 
     // --- Manejador para el modal MARCAR COMO NO APTO ---
     var modalNoApto = document.getElementById('modalNoApto');
