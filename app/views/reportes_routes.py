@@ -149,7 +149,10 @@ def api_indicadores_por_categoria(categoria):
     """
     Endpoint genérico de la API para obtener los datos de una categoría de indicador específica.
     """
-    periodo = request.args.get('periodo', 'semanal') # Nuevo
+    # Recoge los nuevos parámetros de la solicitud.
+    semana = request.args.get('semana')
+    mes = request.args.get('mes')
+    ano = request.args.get('ano')
 
     # Mapeo de categorías a las nuevas funciones del controlador
     mapa_funciones = {
@@ -167,8 +170,18 @@ def api_indicadores_por_categoria(categoria):
     funcion_controlador = mapa_funciones[categoria]
     
     # El controlador ahora recibe 'periodo' en lugar de fechas
-    datos = funcion_controlador(periodo=periodo)
+    datos = funcion_controlador(
+        semana=request.args.get('semana'),
+        mes=request.args.get('mes'),
+        ano=request.args.get('ano')
+    )
     return jsonify(datos)
+
+@reportes_bp.route('/api/indicadores/anos-disponibles')
+def api_anos_disponibles():
+    """Devuelve los años en los que hay registros de pedidos."""
+    anos = indicadores_controller.obtener_anos_disponibles()
+    return jsonify(anos)
 
 @reportes_bp.route('/api/ventas/facturacion')
 def api_ventas_facturacion():

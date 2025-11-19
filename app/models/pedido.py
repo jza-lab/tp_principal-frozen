@@ -45,28 +45,31 @@ class PedidoModel(BaseModel):
 
         if op_ids_vinculadas:
             op_model = OrdenProduccionModel()
-            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas)))
+            # Usamos find_by_ids para obtener todas las OPs en una sola consulta
+            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas))) # set() para evitar duplicados
 
             if ops_result.get('success'):
                 ops_encontradas = ops_result.get('data', [])
                 for op in ops_encontradas:
-                    op_estados[op['id']] = {
-                        'estado': op['estado'],
-                        'es_consolidada': op.get('es_consolidada', False)
-                    }
+                    op_estados[op['id']] = op['estado']
             else:
+                # Error crítico si no podemos obtener las OPs
                 return {'success': False, 'error': f"Error al obtener estados de OPs vinculadas: {ops_result.get('error')}"}
 
+            # Verificar si todas están completadas
             if len(op_estados) != len(set(op_ids_vinculadas)):
+                 # Si no encontramos todas las OPs que esperábamos
                  todas_completadas = False
                  logging.warning(f"Pedido {pedido_id}: No se encontraron todas las OPs vinculadas en la BD.")
 
+
             for op_id in op_ids_vinculadas:
-                op_info = op_estados.get(op_id, {})
-                if not op_info.get('es_consolidada') and op_info.get('estado') != 'COMPLETADA':
+                estado = op_estados.get(op_id)
+                if estado != 'COMPLETADA':
                     todas_completadas = False
-                    break
+                    break # Basta con una que no esté completada
         else:
+             # Si no hay NINGUNA OP vinculada, consideramos que está listo (ej: solo productos comprados)
              todas_completadas = True
 
 
@@ -74,12 +77,9 @@ class PedidoModel(BaseModel):
         for item in items:
             op_id = item.get('orden_produccion_id')
             if op_id:
-                op_info = op_estados.get(op_id, {})
-                item['op_estado'] = op_info.get('estado', 'DESCONOCIDO')
-                item['op_es_consolidada'] = op_info.get('es_consolidada', False)
+                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO')
             else:
                 item['op_estado'] = None
-                item['op_es_consolidada'] = False
 
             # Calcular cantidad de lote desde las reservas
             reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
@@ -96,12 +96,10 @@ class PedidoModel(BaseModel):
         # 4. Obtener datos de despacho si existen (CORREGIDO)
         pedido_data['despacho'] = None
         try:
-            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
-
-            # Si se encuentra un item_despacho y tiene datos de despacho anidados...
-            if item_despacho_res and item_despacho_res.data:
-                # Tomamos el primer resultado y su despacho asociado.
-                pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
+                       # Corrección: La relación es directa desde pedidos, no desde despacho_items
+            despacho_res = self.db.table('despachos').select('*, vehiculo:vehiculo_id(*)').eq('id_pedido', pedido_id).maybe_single().execute()
+            if despacho_res.data:
+                pedido_data['despacho'] = despacho_res.data
 
         except APIError as e:
             # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
@@ -471,34 +469,6 @@ class PedidoModel(BaseModel):
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def find_all_items_with_pedido_info(self, filters: Optional[Dict] = None) -> Dict:
-        """
-        Obtiene todos los items de pedido que coinciden con los filtros,
-        anidando la información completa del pedido padre.
-        """
-        try:
-            query = self.db.table('pedido_items').select('*, pedido:pedidos!inner(*)')
-
-            if filters:
-                for key, value in filters.items():
-                    query = query.eq(key, value)
-            
-            result = query.execute()
-            return {'success': True, 'data': result.data}
-
-        except Exception as e:
-            logger.error(f"Error al obtener items de pedido con info de pedido: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
-    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
-        """Actualiza una lista de items de pedido por sus IDs."""
-        try:
-            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
-            return {'success': True, 'data': result.data}
-        except Exception as e:
-            logger.error(f"Error actualizando items de pedido: {str(e)}")
-            return {'success': False, 'error': str(e)}
-
     def find_by_cliente(self, id_cliente: int):
         try:
             result = self.db.table(self.get_table_name()).select('*').eq('id_cliente', id_cliente).execute()
@@ -753,6 +723,35 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo reservas para el item {item_id}: {e}")
             return []
+
+
+    def obtener_anos_distintos(self) -> Dict:
+        """
+        Obtiene los años únicos en los que se crearon pedidos.
+        Implementación en Python para evitar la dependencia de una RPC.
+        """
+        try:
+            # Selecciona solo la columna de fecha para minimizar la transferencia de datos.
+            response = self.db.table(self.get_table_name()).select('fecha_solicitud').execute()
+            
+            if response.data:
+                # Usa un set para obtener años únicos eficientemente.
+                years = {
+                    datetime.fromisoformat(item['fecha_solicitud']).year 
+                    for item in response.data 
+                    if item.get('fecha_solicitud')
+                }
+                # Devuelve una lista ordenada de años.
+                return {'success': True, 'data': sorted(list(years), reverse=True)}
+            
+            # Si no hay datos, devuelve una lista vacía.
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo años distintos de pedidos (implementación Python): {str(e)}")
+            # Fallback en caso de error: devolver el año actual.
+            return {'success': True, 'data': [datetime.now().year]}
+
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
 

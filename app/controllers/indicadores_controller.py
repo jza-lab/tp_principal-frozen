@@ -48,34 +48,40 @@ class IndicadoresController:
             fecha_fin = datetime.now()
         return fecha_inicio, fecha_fin
 
-    def _parsear_periodo(self, periodo):
+    def _parsear_periodo(self, semana=None, mes=None, ano=None):
         hoy = datetime.now()
-        if periodo == 'semanal':
-            fecha_inicio = hoy - timedelta(days=hoy.weekday())
+        if semana: # formato "2024-W48"
+            year, week_num = map(int, semana.split('-W'))
+            fecha_inicio = datetime.fromisocalendar(year, week_num, 1)
             fecha_fin = fecha_inicio + timedelta(days=6)
-        elif periodo == 'mensual':
-            fecha_inicio = hoy.replace(day=1)
-            # Avanzar al próximo mes y luego retroceder un día para obtener el último día del mes actual
-            next_month = hoy.replace(day=28) + timedelta(days=4)
+        elif mes: # formato "2024-11"
+            year, month = map(int, mes.split('-'))
+            fecha_inicio = datetime(year, month, 1)
+            next_month = (fecha_inicio.replace(day=28) + timedelta(days=4))
             fecha_fin = next_month - timedelta(days=next_month.day)
-        elif periodo == 'anual':
-            fecha_inicio = hoy.replace(month=1, day=1)
-            fecha_fin = hoy.replace(month=12, day=31)
-        else: # Por defecto, semanal
+        elif ano: # formato "2024"
+            year = int(ano)
+            fecha_inicio = datetime(year, 1, 1)
+            fecha_fin = datetime(year, 12, 31)
+        else: # Por defecto, semana actual
             fecha_inicio = hoy - timedelta(days=hoy.weekday())
             fecha_fin = fecha_inicio + timedelta(days=6)
         return fecha_inicio.date(), fecha_fin.date()
+    
+    def obtener_anos_disponibles(self):
+        """Obtiene los años únicos en los que se registraron pedidos."""
+        return self.pedido_model.obtener_anos_distintos()
 
     # --- CATEGORÍA: PRODUCCIÓN ---
-    def obtener_datos_produccion(self, periodo):
+    def obtener_datos_produccion(self, semana=None, mes=None, ano=None):
         """
         Esta función está reservada para KPIs puramente de producción.
         La lógica de inventario que estaba aquí fue movida a su propia categoría.
         """
         return {}
 
-    def obtener_kpis_produccion(self, periodo):
-        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None):
+        fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
         fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
 
@@ -112,8 +118,8 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: CALIDAD ---
-    def obtener_datos_calidad(self, periodo):
-        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+    def obtener_datos_calidad(self, semana=None, mes=None, ano=None):
+        fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
         rechazo_interno = self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin)
         reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
@@ -127,8 +133,8 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: COMERCIAL ---
-    def obtener_datos_comercial(self, periodo):
-        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+    def obtener_datos_comercial(self, semana=None, mes=None, ano=None):
+        fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
         fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
         
@@ -151,8 +157,8 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: FINANCIERA ---
-    def obtener_datos_financieros(self, periodo):
-        fecha_inicio, fecha_fin = self._parsear_periodo(periodo)
+    def obtener_datos_financieros(self, semana=None, mes=None, ano=None):
+        fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
         fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
         
@@ -200,7 +206,7 @@ class IndicadoresController:
         }
         
     # --- CATEGORÍA: INVENTARIO ---
-    def obtener_datos_inventario(self, periodo): # Periodo se ignora aquí
+    def obtener_datos_inventario(self, semana=None, mes=None, ano=None): # Periodo se ignora aquí
         # Para la rotación, usamos un período fijo (ej. último año) para que sea consistente
         hoy = datetime.now()
         fecha_inicio = hoy - timedelta(days=365)
