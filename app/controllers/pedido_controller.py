@@ -837,23 +837,36 @@ class PedidoController(BaseController):
 
 
     def obtener_pedidos_por_orden_produccion(self, id_orden_produccion: int) -> tuple:
-
+        """
+        Obtiene los pedidos asociados a una OP, buscando tanto
+        vínculos directos (OPs simples) como indirectos a través de la tabla
+        de asignaciones (OPs consolidadas e hijas).
+        """
         try:
+            from app.models.asignacion_pedido_model import AsignacionPedidoModel
+            asignacion_model = AsignacionPedidoModel()
+            
+            pedido_ids = set()
 
-            id_result = self.model.devolver_pedidos_segun_orden(id_orden_produccion)
+            # 1. Búsqueda Directa (para OPs simples)
+            items_directos_res = self.model.find_all_items({'orden_produccion_id': id_orden_produccion})
+            if items_directos_res.get('success') and items_directos_res.get('data'):
+                for item in items_directos_res['data']:
+                    pedido_ids.add(item['pedido_id'])
 
-            if not id_result['success']:
-                error_msg = id_result.get('error', 'Error al obtener IDs de pedidos de la OP.')
-                return self.error_response(error_msg, 500)
-
-            pedido_ids = id_result['data']
+            # 2. Búsqueda Indirecta (para OPs consolidadas e hijas)
+            asignaciones_res = asignacion_model.find_all_with_pedido_id({'orden_produccion_id': id_orden_produccion})
+            if asignaciones_res.get('success') and asignaciones_res.get('data'):
+                for asignacion in asignaciones_res['data']:
+                    if asignacion.get('pedido_id'):
+                        pedido_ids.add(asignacion['pedido_id'])
 
             if not pedido_ids:
                 return self.success_response(data=[])
 
-
-            result = self.model.find_by_id_list(pedido_ids)
-
+            # 3. Obtener los detalles de los pedidos encontrados
+            result = self.model.find_by_id_list(list(pedido_ids))
+            
             if result.get('success'):
                 return self.success_response(data=result.get('data', []))
             else:
@@ -861,6 +874,7 @@ class PedidoController(BaseController):
                 return self.error_response(error_msg, 500)
 
         except Exception as e:
+            logger.error(f"Error en obtener_pedidos_por_orden_produccion para OP {id_orden_produccion}: {e}", exc_info=True)
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
     def obtener_pedidos_por_cliente(self, cliente_id: int) -> tuple:

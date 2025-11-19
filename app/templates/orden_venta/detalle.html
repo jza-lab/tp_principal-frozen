@@ -350,6 +350,9 @@
                                                 {{ op.codigo or ('OP-' + op.id|string) }}
                                             </a>
                                             <span class="badge bg-light text-dark ms-1">{{ op.estado.replace('_',' ') }}</span>
+                                            <div class="small text-muted mt-1">
+                                                Producido: <strong>{{ op.cantidad_producida|default(0)|round(2) }}</strong> de {{ op.cantidad_planificada|round(2) }}
+                                            </div>
                                         </div>
                                     {% endfor %}
                                 {% else %}
