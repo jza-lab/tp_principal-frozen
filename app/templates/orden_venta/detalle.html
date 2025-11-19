@@ -343,16 +343,17 @@
                                 </span>
                             </td>
                             <td>
-                                {% if item.orden_produccion_id %}
-                                <a href="{{ url_for('orden_produccion.detalle', id=item.orden_produccion_id) }}">
-                                    OP-{{ item.orden_produccion_id }}
-                                </a>
-                                {# Mostrar estado de la OP si está disponible #}
-                                {% if item.op_estado %}
-                                <span class="badge bg-light text-dark ms-1">{{ item.op_estado.replace('_',' ') }}</span>
-                                {% endif %}
+                                {% if item.ordenes_produccion %}
+                                    {% for op in item.ordenes_produccion %}
+                                        <div class="mb-1">
+                                            <a href="{{ url_for('orden_produccion.detalle', id=op.id) }}" class="fw-bold">
+                                                {{ op.codigo or ('OP-' + op.id|string) }}
+                                            </a>
+                                            <span class="badge bg-light text-dark ms-1">{{ op.estado.replace('_',' ') }}</span>
+                                        </div>
+                                    {% endfor %}
                                 {% else %}
-                                <span class="text-muted">N/A (Stock Directo)</span>
+                                    <span class="text-muted">N/A (Stock Directo)</span>
                                 {% endif %}
                             </td>
                         </tr>

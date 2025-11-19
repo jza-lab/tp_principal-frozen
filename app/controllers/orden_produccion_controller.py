@@ -1761,8 +1761,8 @@ class OrdenProduccionController(BaseController):
             # La respuesta de `crear_orden` devuelve una lista de órdenes creadas.
             nueva_op_data = creacion_res['data'][0] if creacion_res.get('data') else {}
 
-            # 4. Si la OP padre tenía pedidos asociados, transferir los no satisfechos a la hija
-            self._transferir_pedidos_no_satisfechos(op_padre=orden_actual, op_hija=nueva_op_data)
+            # 4. Si la OP padre tenía pedidos asociados, heredar la asignación a la hija
+            self._heredar_asignaciones_pedido_a_op_hija(op_padre=orden_actual, op_hija=nueva_op_data)
             
             return {
                 'success': True,
@@ -1775,47 +1775,55 @@ class OrdenProduccionController(BaseController):
                 }
             }
 
-    def _transferir_pedidos_no_satisfechos(self, op_padre: Dict, op_hija: Dict):
+    def _heredar_asignaciones_pedido_a_op_hija(self, op_padre: Dict, op_hija: Dict):
         """
-        Transfiere los pedido_items no cubiertos de una OP consolidada padre a su OP hija.
+        Hereda la asociación de un pedido de venta de una OP padre a su OP hija.
+        Maneja dos casos:
+        1. OPs consolidadas, a través de la tabla `asignaciones_pedidos`.
+        2. OPs directas, a través de la tabla `pedido_items`.
+        En ambos casos, crea las asignaciones correspondientes para la OP hija.
         """
         try:
             op_padre_id = op_padre['id']
             op_hija_id = op_hija['id']
-            cantidad_producida_buena = Decimal(op_padre.get('cantidad_producida', '0'))
-
-            # 1. Obtener todos los items de pedido asociados a la OP padre, ordenados por antigüedad
-            items_res = self.pedido_model.find_all_items_with_pedido_info({'orden_produccion_id': op_padre_id})
-            if not items_res.get('success') or not items_res.get('data'):
-                logger.warning(f"No se encontraron items de pedido para la OP padre {op_padre_id} durante la transferencia.")
-                return
-
-            items_asociados = sorted(items_res['data'], key=lambda item: item['pedido']['created_at'])
-
-            # 2. Determinar qué items no fueron satisfechos
-            unidades_satisfechas = cantidad_producida_buena
-            items_no_satisfechos_ids = []
-
-            for item in items_asociados:
-                cantidad_requerida = Decimal(item['cantidad'])
-                if unidades_satisfechas >= cantidad_requerida:
-                    unidades_satisfechas -= cantidad_requerida
-                else:
-                    # Este item y todos los siguientes no fueron satisfechos
-                    items_no_satisfechos_ids.append(item['id'])
+            cantidad_op_hija = Decimal(op_hija.get('cantidad_planificada', '0'))
             
-            # 3. Si hay items no satisfechos, reasignarlos a la OP hija
-            if items_no_satisfechos_ids:
-                logger.info(f"Transfiriendo {len(items_no_satisfechos_ids)} pedido_items de OP {op_padre_id} a OP hija {op_hija_id}.")
-                self.pedido_model.db.table('pedido_items').update(
-                    {'orden_produccion_id': op_hija_id}
-                ).in_('id', items_no_satisfechos_ids).execute()
+            nuevas_asignaciones = []
+
+            # --- Caso 1: Vía `asignaciones_pedidos` (para OPs consolidadas) ---
+            asignaciones_padre_res = self.asignacion_pedido_model.find_all({'orden_produccion_id': op_padre_id})
+            if asignaciones_padre_res.get('success') and asignaciones_padre_res.get('data'):
+                logger.info(f"Detectada OP consolidada. Heredando vía `asignaciones_pedidos`...")
+                for asignacion in asignaciones_padre_res['data']:
+                    nuevas_asignaciones.append({
+                        'orden_produccion_id': op_hija_id,
+                        'pedido_item_id': asignacion['pedido_item_id'],
+                        'cantidad_asignada': float(cantidad_op_hija)
+                    })
             else:
-                logger.info(f"Toda la producción de la OP {op_padre_id} cubrió los pedidos asignados. No se requiere transferencia.")
+                # --- Caso 2: Vía `pedido_items` (para OPs directas) ---
+                logger.info(f"No se encontraron asignaciones. Buscando vínculo directo en `pedido_items`...")
+                items_vinculados_res = self.pedido_model.find_all_items({'orden_produccion_id': op_padre_id})
+                if items_vinculados_res.get('success') and items_vinculados_res.get('data'):
+                    logger.info(f"Detectada OP directa. Heredando vía `pedido_items`...")
+                    for item in items_vinculados_res['data']:
+                        nuevas_asignaciones.append({
+                            'orden_produccion_id': op_hija_id,
+                            'pedido_item_id': item['id'],
+                            'cantidad_asignada': float(cantidad_op_hija)
+                        })
+
+            # --- Creación de las nuevas asignaciones ---
+            if nuevas_asignaciones:
+                logger.info(f"Creando {len(nuevas_asignaciones)} nueva(s) asignacion(es) para la OP hija {op_hija_id}.")
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos').insert(
+                    nuevas_asignaciones
+                ).execute()
+            else:
+                logger.warning(f"La OP padre {op_padre_id} no tenía ninguna asociación de pedido detectable. La OP hija {op_hija_id} queda sin asignación.")
 
         except Exception as e:
-            logger.error(f"Error crítico al transferir pedidos a la OP hija {op_hija_id}: {e}", exc_info=True)
-            # No se relanza la excepción para no romper el flujo principal, pero se registra el error.
+            logger.error(f"Error crítico al heredar asignaciones a la OP hija {op_hija_id}: {e}", exc_info=True)
 
 
     def pausar_produccion(self, orden_id: int, motivo_id: int, usuario_id: int) -> tuple:

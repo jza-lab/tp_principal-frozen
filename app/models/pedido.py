@@ -18,93 +18,84 @@ class PedidoModel(BaseModel):
 
     def get_one_with_items_and_op_status(self, pedido_id: int) -> Dict:
         """
-        Obtiene un pedido con sus items, y para cada item vinculado a una OP,
-        añade el estado de esa OP. También añade una bandera 'todas_ops_completadas'
-        al diccionario principal del pedido.
+        Obtiene un pedido con sus items y todas las OPs asociadas (padre e hijas).
+        Cada item tendrá una lista `ordenes_produccion` con los detalles de las OPs.
         """
-        from app.models.orden_produccion import OrdenProduccionModel # Importación local
+        from app.models.orden_produccion import OrdenProduccionModel
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+        from collections import defaultdict
 
-        pedido_result = self.get_one_with_items(pedido_id) # Reutiliza tu método existente
+        pedido_result = self.get_one_with_items(pedido_id)
 
         if not pedido_result.get('success'):
-            return pedido_result # Devolver el error original
+            return pedido_result
 
         pedido_data = pedido_result['data']
         items = pedido_data.get('items', [])
+        
+        if not items:
+            pedido_data['todas_ops_completadas'] = True
+            return {'success': True, 'data': pedido_data}
 
-        # 1. Recolectar IDs de OPs vinculadas
-        op_ids_vinculadas = []
+        # 1. Recolectar todos los IDs de OPs de todas las fuentes
+        all_op_ids = set()
+        item_ids = []
         for item in items:
-            op_id = item.get('orden_produccion_id')
-            if op_id:
-                op_ids_vinculadas.append(op_id)
+            item_ids.append(item['id'])
+            if op_id := item.get('orden_produccion_id'):
+                all_op_ids.add(op_id)
 
-        # 2. Si hay OPs vinculadas, obtener sus estados
-        op_estados = {}
-        todas_completadas = True # Asumir True inicialmente
+        # Buscar OPs hijas/adicionales en la tabla de asignaciones
+        asignacion_model = AsignacionPedidoModel()
+        asignaciones_res = asignacion_model.find_all(filters={'pedido_item_id': ('in', item_ids)})
+        
+        # Mapear item_id -> {op_id, op_id, ...}
+        ops_por_item = defaultdict(set)
+        if asignaciones_res.get('success') and asignaciones_res.get('data'):
+            for asignacion in asignaciones_res['data']:
+                all_op_ids.add(asignacion['orden_produccion_id'])
+                ops_por_item[asignacion['pedido_item_id']].add(asignacion['orden_produccion_id'])
 
-        if op_ids_vinculadas:
+        # Asegurar que la OP padre (directa) también esté en el mapa
+        for item in items:
+            if op_id := item.get('orden_produccion_id'):
+                ops_por_item[item['id']].add(op_id)
+
+        # 2. Si hay OPs, obtener sus datos completos
+        todas_completadas = True
+        ops_data_map = {}
+        if all_op_ids:
             op_model = OrdenProduccionModel()
-            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas)))
+            ops_result = op_model.find_by_ids(list(all_op_ids))
 
             if ops_result.get('success'):
-                ops_encontradas = ops_result.get('data', [])
-                for op in ops_encontradas:
-                    op_estados[op['id']] = {
-                        'estado': op['estado'],
-                        'es_consolidada': op.get('es_consolidada', False)
-                    }
+                for op in ops_result['data']:
+                    ops_data_map[op['id']] = op
+                    if op.get('estado') != 'COMPLETADA':
+                        todas_completadas = False
             else:
-                return {'success': False, 'error': f"Error al obtener estados de OPs vinculadas: {ops_result.get('error')}"}
-
-            if len(op_estados) != len(set(op_ids_vinculadas)):
-                 todas_completadas = False
-                 logging.warning(f"Pedido {pedido_id}: No se encontraron todas las OPs vinculadas en la BD.")
-
-            for op_id in op_ids_vinculadas:
-                op_info = op_estados.get(op_id, {})
-                if not op_info.get('es_consolidada') and op_info.get('estado') != 'COMPLETADA':
-                    todas_completadas = False
-                    break
-        else:
-             todas_completadas = True
-
-
-        # 3. Añadir estado, cantidades parciales y bandera al pedido
+                return {'success': False, 'error': f"Error al obtener datos de OPs vinculadas: {ops_result.get('error')}"}
+        
+        # 3. Adjuntar la lista de OPs a cada item
         for item in items:
-            op_id = item.get('orden_produccion_id')
-            if op_id:
-                op_info = op_estados.get(op_id, {})
-                item['op_estado'] = op_info.get('estado', 'DESCONOCIDO')
-                item['op_es_consolidada'] = op_info.get('es_consolidada', False)
-            else:
-                item['op_estado'] = None
-                item['op_es_consolidada'] = False
-
-            # Calcular cantidad de lote desde las reservas
+            item_op_ids = ops_por_item.get(item['id'], set())
+            item['ordenes_produccion'] = [ops_data_map[op_id] for op_id in item_op_ids if op_id in ops_data_map]
+            
+            # (Lógica de cantidad de lote se mantiene)
             reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
-            
-            cantidad_lote = 0
-            if reservas_res.data:
-                cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data)
-            
+            cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data) if reservas_res.data else 0
             item['cantidad_lote'] = cantidad_lote
             item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
-
+            
         pedido_data['todas_ops_completadas'] = todas_completadas
 
-        # 4. Obtener datos de despacho si existen (CORREGIDO)
+        # (Lógica de despacho se mantiene)
         pedido_data['despacho'] = None
         try:
             item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
-
-            # Si se encuentra un item_despacho y tiene datos de despacho anidados...
             if item_despacho_res and item_despacho_res.data:
-                # Tomamos el primer resultado y su despacho asociado.
                 pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
-
         except APIError as e:
-            # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
             logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {e.message}")
 
         return {'success': True, 'data': pedido_data}
