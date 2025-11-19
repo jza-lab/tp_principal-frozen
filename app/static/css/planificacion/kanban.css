@@ -781,6 +781,25 @@
     padding-bottom: 15px; /* Espacio para la barra de scroll */
 }
 
+/* Estilos para la barra de desplazamiento horizontal del tablero Kanban */
+.kanban-board-container::-webkit-scrollbar {
+    height: 12px; /* Altura de la barra de desplazamiento */
+}
+
+.kanban-board-container::-webkit-scrollbar-track {
+    background: #f3f4f6; /* Color del fondo de la pista */
+    border-radius: 6px; /* Bordes redondeados */
+}
+
+.kanban-board-container::-webkit-scrollbar-thumb {
+    background: #d1d5db; /* Color del "pulgar" de la barra */
+    border-radius: 6px; /* Bordes redondeados */
+}
+
+.kanban-board-container::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af; /* Color del "pulgar" al pasar el mouse */
+}
+
 /* ===== NUEVO ESTILO PARA LA BANDERA DE CUARENTENA ===== */
 .badge-cuarentena {
     padding: 4px 10px;

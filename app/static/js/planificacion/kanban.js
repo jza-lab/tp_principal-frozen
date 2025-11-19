@@ -94,10 +94,14 @@ document.addEventListener('DOMContentLoaded', function () {
             if (filter === 'todas') {
                 show = true;
             } else if (filter === 'mis-ordenes') {
-                // Mostrar solo órdenes del operario actual
-                // Necesitas pasar el ID del operario actual desde el backend
                 const operarioId = card.dataset.operario;
-                show = operarioId && operarioId !== '';
+                const supervisorId = card.dataset.supervisorId;
+                const creadorId = card.dataset.creadorId;
+                const aprobadorId = card.dataset.aprobadorId;
+                show = (operarioId && operarioId == CURRENT_USER_ID) ||
+                       (supervisorId && supervisorId == CURRENT_USER_ID) ||
+                       (creadorId && creadorId == CURRENT_USER_ID) ||
+                       (aprobadorId && aprobadorId == CURRENT_USER_ID);
             } else if (filter === 'linea-1') {
                 show = card.dataset.linea === '1';
             } else if (filter === 'linea-2') {

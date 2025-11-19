@@ -151,7 +151,10 @@
                              data-op-id="{{ orden.id }}"
                              data-linea="{{ orden.linea_asignada or '' }}"
                              data-prioridad="{{ prioridad }}"
-                             data-operario="{{ orden.operario_id or '' }}">
+                             data-operario="{{ orden.operario_id or '' }}"
+                             data-supervisor-id="{{ orden.supervisor_responsable_id or '' }}"
+                             data-creador-id="{{ orden.usuario_creador_id or '' }}"
+                             data-aprobador-id="{{ orden.aprobador_calidad_id or '' }}">
                             
                             {# ====== HEADER DE LA TARJETA ====== #}
                             <div class="card-header-row">
@@ -400,6 +403,9 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+    const CURRENT_USER_ID = "{{ current_user_id or '' }}";
+</script>
     {# --- SCRIPT DE KANBAN --- #}
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="{{ url_for('static', filename='js/planificacion/kanban.js') }}"></script>
