@@ -82,12 +82,16 @@ class PedidoModel(BaseModel):
                 item['op_es_consolidada'] = False
 
             # Calcular cantidad de lote desde las reservas
-            reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
-            
+            reservas_res = self.db.table('reservas_productos')\
+                .select('cantidad_reservada')\
+                .eq('pedido_item_id', item['id'])\
+                .eq('estado', 'RESERVADO')\
+                .execute()
+
             cantidad_lote = 0
             if reservas_res.data:
                 cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data)
-            
+
             item['cantidad_lote'] = cantidad_lote
             item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
 
@@ -210,7 +214,7 @@ class PedidoModel(BaseModel):
                             query = query.lte('fecha_solicitud', value)
                         else:
                             query = query.eq(key, value)
-            
+
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
             return {'success': True, 'data': result.data}
@@ -482,7 +486,7 @@ class PedidoModel(BaseModel):
             if filters:
                 for key, value in filters.items():
                     query = query.eq(key, value)
-            
+
             result = query.execute()
             return {'success': True, 'data': result.data}
 
@@ -531,14 +535,14 @@ class PedidoModel(BaseModel):
         if not pedido_ids:
             return {'success': True, 'data': []}
 
-        try:            
+        try:
             # Consulta corregida para incluir relaciones que se usan en los templates
             result = self.db.table(self.get_table_name()).select(
                 '*, '
                 'cliente:clientes(email, nombre, cuit, razon_social), '
                 'direccion:id_direccion_entrega(*)'
             ).in_('id', pedido_ids).execute()
-            
+
             if result.data:
                 return {'success': True, 'data': result.data}
             else:
@@ -589,7 +593,7 @@ class PedidoModel(BaseModel):
                 if not item_data: continue
                 pedido_data = item_data.get('pedidos')
                 if not pedido_data: continue
-                    
+
                     # Usar el codigo_pedido si existe, sino un fallback con el ID
                 pedido_nombre = pedido_data.get('codigo_pedido') or f"Venta-{pedido_data.get('id')}"
                 pedidos.append({
@@ -628,7 +632,7 @@ class PedidoModel(BaseModel):
         try:
             # Paso 1: Obtener los IDs de los pedidos dentro del rango de fechas.
             pedidos_response = self.db.table(self.get_table_name()).select('id').gte('fecha_solicitud', start_date.isoformat()).lte('fecha_solicitud', end_date.isoformat()).execute()
-            
+
             if not pedidos_response.data:
                 return {'success': True, 'data': {}}
 
@@ -641,13 +645,13 @@ class PedidoModel(BaseModel):
 
             if not items_response.data:
                 return {'success': True, 'data': {}}
-            
+
             sales_data = {}
             for item in items_response.data:
                 # Asegurarse de que el producto no sea nulo
                 if not item.get('productos'):
                     continue
-                
+
                 nombre_producto = item['productos']['nombre']
                 cantidad = float(item['cantidad'])
 
@@ -655,7 +659,7 @@ class PedidoModel(BaseModel):
                     sales_data[nombre_producto] += cantidad
                 else:
                     sales_data[nombre_producto] = cantidad
-            
+
             return {'success': True, 'data': sales_data}
 
         except Exception as e:
@@ -672,7 +676,7 @@ class PedidoModel(BaseModel):
             query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
             query = query.lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
-            
+
             return {'success': True, 'count': result.count}
 
         except Exception as e:
@@ -689,7 +693,7 @@ class PedidoModel(BaseModel):
             query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
             query = query.lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
-            
+
             return {'success': True, 'count': result.count}
         except Exception as e:
             logger.error(f"Error contando pedidos por estados y rango de fecha: {str(e)}", exc_info=True)
@@ -721,7 +725,7 @@ class PedidoModel(BaseModel):
                     except (ValueError, TypeError):
                         # Ignorar si las fechas tienen un formato incorrecto
                         continue
-            
+
             return {'success': True, 'count': on_time_count}
 
         except Exception as e:
