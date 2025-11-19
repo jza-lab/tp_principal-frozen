@@ -114,6 +114,9 @@ def _register_blueprints(app: Flask):
     from app.views.registro_routes import registros_bp
     from app.views.registro_desperdicio_lote_producto_routes import registro_desperdicio_lote_producto_bp
     from app.views.rentabilidad_routes import rentabilidad_bp
+    from app.views.costos_fijos_routes import costos_fijos_bp
+    from app.views.configuracion_produccion_routes import configuracion_produccion_bp
+    from app.views.rol_routes import rol_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(public_bp)
@@ -154,6 +157,9 @@ def _register_blueprints(app: Flask):
     app.register_blueprint(api_riesgos_bp)
     app.register_blueprint(registros_bp)
     app.register_blueprint(registro_desperdicio_lote_producto_bp)
+    app.register_blueprint(costos_fijos_bp)
+    app.register_blueprint(configuracion_produccion_bp)
+    app.register_blueprint(rol_bp)
     from app.views.admin_zona_routes import zona_bp
     from app.views.admin_envio_routes import envio_bp
     app.register_blueprint(vehiculo_bp)

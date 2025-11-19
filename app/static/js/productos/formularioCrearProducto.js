@@ -1,12 +1,70 @@
 document.addEventListener('DOMContentLoaded', function () {
+    // Tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    });
+
     const itemsContainer = document.getElementById('itemsContainer');
-    const subtotalInput = document.getElementById('subtotal');
     const ivaCheckbox = document.getElementById('iva');
-    const totalInput = document.getElementById('total');
-    const porcentajeManoObraInput = document.getElementById('porcentaje_mano_obra');
     const porcentajeGananciaInput = document.getElementById('porcentaje_ganancia');
     const formulario = document.getElementById('formulario-producto');
+    
+    // Nuevos campos de display
+    const displayCostoMateriaPrima = document.getElementById('display_costo_materia_prima');
+    const displayCostoManoObra = document.getElementById('display_costo_mano_obra');
+    const displayCostoFijos = document.getElementById('display_costo_fijos');
+    const displayCostoTotalProduccion = document.getElementById('display_costo_total_produccion');
+    const displayPrecioFinal = document.getElementById('display_precio_final');
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
+    const rolesData = typeof ROLES_DATA !== 'undefined' && Array.isArray(ROLES_DATA) ? ROLES_DATA : [];
+
+    // --- LÓGICA DE MANO DE OBRA ---
+    const manoDeObraContainer = document.getElementById('mano-obra-container');
+    const addManoObraBtn = document.getElementById('add-mano-obra-btn');
+
+    function agregarFilaManoDeObra() {
+        const row = document.createElement('div');
+        row.className = 'row g-3 align-items-end item-row mb-2';
+        
+        let options = '<option value="">Seleccione un rol...</option>';
+        rolesData.forEach(rol => {
+            options += `<option value="${rol.id}">${rol.nombre}</option>`;
+        });
+
+        row.innerHTML = `
+            <div class="col-md-5">
+                <label class="form-label">Rol</label>
+                <select class="form-select mano-obra-rol" name="mano_obra_rol_id[]" required>
+                    ${options}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Horas Estimadas</label>
+                <input type="number" step="0.25" min="0.25" class="form-control mano-obra-horas" name="mano_obra_horas[]" required>
+            </div>
+            <div class="col-md-3">
+                <button type="button" class="btn btn-outline-danger remove-mano-obra-btn">Eliminar</button>
+            </div>
+        `;
+        manoDeObraContainer.appendChild(row);
+    }
+
+    addManoObraBtn.addEventListener('click', agregarFilaManoDeObra);
+
+    manoDeObraContainer.addEventListener('click', function(e) {
+        if (e.target.closest('.remove-mano-obra-btn')) {
+            e.target.closest('.item-row').remove();
+            actualizarCostosDinamicos();
+        }
+    });
+
+    manoDeObraContainer.addEventListener('input', function(e) {
+        if (e.target.classList.contains('mano-obra-horas') || e.target.classList.contains('mano-obra-rol')) {
+            actualizarCostosDinamicos();
+        }
+    });
+
 
     // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
     const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
@@ -14,12 +72,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const insumoSelect = document.getElementById('insumo-select');
 
     function poblarInsumosEnModal() {
-        insumoSelect.innerHTML = ''; // Limpiar opciones existentes
+        insumoSelect.innerHTML = '';
         insumosData.forEach(insumo => {
             const option = document.createElement('option');
             option.value = insumo.id;
             option.textContent = `${insumo.nombre} (${insumo.unidad_medida})`;
-            option.dataset.id = insumo.id;
+            option.dataset.id = insumo.id_insumo;
             option.dataset.unidad = insumo.unidad_medida;
             option.dataset.precio = insumo.precio_unitario;
             insumoSelect.appendChild(option);
@@ -37,8 +95,11 @@ document.addEventListener('DOMContentLoaded', function () {
     insumoSelect.addEventListener('dblclick', function () {
         const selectedOption = this.options[this.selectedIndex];
         if (!selectedOption || !selectedOption.value) return;
-
-        agregarItemAReceta(selectedOption.dataset);
+        
+        const insumoSeleccionado = insumosData.find(i => i.id_insumo === selectedOption.dataset.id);
+        if (insumoSeleccionado) {
+            agregarItemAReceta(insumoSeleccionado);
+        }
         insumoSearchModal.hide();
     });
 
@@ -48,52 +109,44 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     function agregarItemAReceta(insumo) {
-        // --- INICIO DE MODIFICACIÓN: VERIFICAR SI EL ÍTEM YA EXISTE ---
         let itemExistente = false;
-        const insumoIdAAgregar = insumo.id;
+        const insumoIdAAgregar = insumo.id_insumo;
 
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
             const selector = row.querySelector('.insumo-selector');
-            // El valor del selector es el ID del insumo
             const insumoIdActual = selector.value;
-
             if (insumoIdActual === insumoIdAAgregar) {
                 const cantidadInput = row.querySelector('.cantidad');
-                const cantidadActual = parseFloat(cantidadInput.value) || 0;
-                // Por defecto, al hacer doble clic, sumamos 1
-                cantidadInput.value = cantidadActual + 1;
+                cantidadInput.value = (parseFloat(cantidadInput.value) || 0) + 1;
                 itemExistente = true;
             }
         });
 
-        // Si el ítem ya existía, solo recalculamos y terminamos la función
         if (itemExistente) {
             calcularTotales();
             return; 
         }
-        // --- FIN DE MODIFICACIÓN ---
 
         const row = document.createElement('div');
         row.className = 'row g-3 align-items-end item-row mb-2';
-
         row.innerHTML = `
             <div class="col-md-4">
                 <label class="form-label">Insumo</label>
                 <select class="form-select insumo-selector" name="insumo_id[]" required>
-                    <option value="${insumo.id}" data-id="${insumo.id}" data-unidad="${insumo.unidad}" data-precio="${insumo.precio}" selected>${insumo.nombre || insumosData.find(i => i.id == insumo.id)?.nombre}</option>
+                    <option value="${insumo.id_insumo}" data-unidad="${insumo.unidad_medida}" data-precio="${insumo.precio_unitario}" selected>${insumo.nombre}</option>
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label">Cantidad <span class="unidad-receta-display">(${insumo.unidad})</span></label>
+                <label class="form-label">Cantidad <span class="unidad-receta-display">(${insumo.unidad_medida})</span></label>
                 <input type="number" min="0.01" step="0.01" max="5000" class="form-control cantidad" name="cantidad[]" value="1" required>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Precio Unitario</label>
-                <input type="text" class="form-control precio_unitario" name="precio_unitario[]" value="${formatearADinero(insumo.precio)}" readonly>
+                <input type="text" class="form-control precio_unitario" value="${formatearADinero(insumo.precio_unitario)}" readonly>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Subtotal</label>
-                <input type="text" class="form-control subtotal-item" value="${formatearADinero(insumo.precio)}" readonly>
+                <input type="text" class="form-control subtotal-item" value="${formatearADinero(insumo.precio_unitario)}" readonly>
             </div>
             <div class="col-md-2">
                 <button type="button" class="btn btn-outline-danger removeItemBtn">Eliminar</button>
@@ -101,181 +154,128 @@ document.addEventListener('DOMContentLoaded', function () {
         `;
         itemsContainer.appendChild(row);
         calcularTotales();
-        updateAvailableInsumos();
     }
-    // --- FIN LÓGICA DEL MODAL ---
-
-
-    // [FUNCIONES DE FORMATO DE DINERO]
 
     function limpiarFormatoDinero(valorConFormato) {
         if (!valorConFormato) return 0;
-        // 1. Eliminar '$' y espacios. 2. Reemplazar '.' (miles) por nada. 3. Reemplazar ',' (decimal) por '.'.
-        const cleanString = valorConFormato.toString().replace(/[$.]/g, '').replace(/[^\d,]/g, '');
-        const numeroSinFormato = cleanString.replace(',', '.');
-        return parseFloat(numeroSinFormato) || 0;
+        let valorStr = valorConFormato.toString();
+
+        // Comprueba si el string contiene una coma para decidir el tipo de parseo.
+        if (valorStr.includes(',')) {
+            // Asume formato de moneda local (ej: '$ 1.234,56')
+            // Elimina el símbolo de peso, los separadores de miles (punto) y reemplaza la coma decimal por un punto.
+            const cleanString = valorStr.replace(/[$.]/g, '').replace(/[^\d,]/g, '').replace(',', '.');
+            return parseFloat(cleanString) || 0;
+        } else {
+            // Asume formato de número estándar (ej: '1234.56')
+            // Simplemente elimina cualquier caracter que no sea un dígito o un punto.
+            const cleanString = valorStr.replace(/[^\d.]/g, '');
+            return parseFloat(cleanString) || 0;
+        }
     }
 
     function formatearADinero(numero) {
         if (isNaN(numero) || numero === null) return '$ 0,00';
-        
-        const numeroRedondeado = Math.round(numero * 100) / 100;
-
-        const formatter = new Intl.NumberFormat('es-AR', {
-            style: 'currency',
-            currency: 'ARS',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
-
-        return formatter.format(numeroRedondeado);
+        return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(numero);
     }
     
-    // [FUNCIÓN DE ACTUALIZACIÓN DE UNIDAD]
     function updateUnitDisplay(row) {
         const selector = row.querySelector('.insumo-selector');
         const unidadDisplay = row.querySelector('.unidad-receta-display');
-        
         const selectedOption = selector.options[selector.selectedIndex];
-        const unidad = selectedOption ? selectedOption.dataset.unidad : '';
-        
-        if (unidadDisplay) {
-            unidadDisplay.textContent = unidad ? `(${unidad})` : '';
+        if (unidadDisplay && selectedOption) {
+            unidadDisplay.textContent = `(${selectedOption.dataset.unidad || ''})`;
         }
     }
 
     function calcularTotales() {
-        let subtotalTotal = 0;
+        let costoMateriaPrima = 0;
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
-            updateUnitDisplay(row); 
-            
-            const precioInput = row.querySelector('.precio_unitario');
-            const cantidadInput = row.querySelector('.cantidad');
-            
-            const cantidad = parseFloat(cantidadInput.value) || 0;
-            // [CORRECCIÓN DE ÁMBITO Y FUNCIÓN] Aseguramos que precio sea el valor limpio del input
-            const precio = limpiarFormatoDinero(precioInput.value); 
-            
+            const precio = limpiarFormatoDinero(row.querySelector('.precio_unitario').value);
+            const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
             const subtotal = cantidad * precio;
-            
-            // Aplicar formato
             row.querySelector('.subtotal-item').value = formatearADinero(subtotal);
-            
-            subtotalTotal += subtotal;
+            costoMateriaPrima += subtotal;
         });
 
-        // Aplicar formato a Subtotal General
-        subtotalInput.value = formatearADinero(subtotalTotal);
-
-        const porcentajeManoObra = parseFloat(porcentajeManoObraInput.value) || 0;
-        const costoProduccion = subtotalTotal * (1 + (porcentajeManoObra / 100));
-
+        const costoManoObra = limpiarFormatoDinero(displayCostoManoObra.textContent);
+        const costoFijos = limpiarFormatoDinero(displayCostoFijos.textContent);
+        const costoTotalProduccion = costoMateriaPrima + costoManoObra + costoFijos;
         const porcentajeGanancia = parseFloat(porcentajeGananciaInput.value) || 0;
-        let precioSinIva = costoProduccion * (1 + (porcentajeGanancia / 100));
+        let precioSinIva = costoTotalProduccion * (1 + (porcentajeGanancia / 100));
 
         if (ivaCheckbox.checked) {
             precioSinIva *= 1.21;
         }
-        
-        totalInput.value = formatearADinero(precioSinIva);
+
+        displayCostoMateriaPrima.textContent = formatearADinero(costoMateriaPrima);
+        displayCostoTotalProduccion.textContent = formatearADinero(costoTotalProduccion);
+        displayPrecioFinal.value = formatearADinero(precioSinIva);
     }
 
-    function updateAvailableInsumos() {
-        const selectedInsumoIds = new Set();
-        // ... (resto del código de exclusión de insumos) ...
-        itemsContainer.querySelectorAll('.insumo-selector').forEach(select => {
-            if (select.value) {
-                selectedInsumoIds.add(select.value);
+    async function actualizarCostosDinamicos() {
+        const manoDeObraItems = [];
+        manoDeObraContainer.querySelectorAll('.item-row').forEach(row => {
+            const rolId = row.querySelector('.mano-obra-rol').value;
+            const horas = row.querySelector('.mano-obra-horas').value;
+            if (rolId && horas) {
+                manoDeObraItems.push({ rol_id: rolId, horas_estimadas: horas });
             }
         });
 
-        itemsContainer.querySelectorAll('.insumo-selector').forEach(currentSelect => {
-            const currentValue = currentSelect.value;
-            currentSelect.querySelectorAll('option[data-id]').forEach(option => {
-                const optionId = option.getAttribute('data-id');
-                option.disabled = selectedInsumoIds.has(optionId) && optionId !== currentValue;
-                option.hidden = selectedInsumoIds.has(optionId) && optionId !== currentValue;
+        try {
+            const response = await fetch('/api/catalogo/recalcular-costos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mano_de_obra: manoDeObraItems })
             });
-        });
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success) {
+                    displayCostoManoObra.textContent = formatearADinero(result.data.costo_mano_obra);
+                    displayCostoFijos.textContent = formatearADinero(result.data.costo_fijos_aplicado);
+                    calcularTotales();
+                }
+            }
+        } catch (error) {
+            console.error('Error al actualizar costos dinámicos:', error);
+        }
     }
-    
-    // [EVENT LISTENER: INPUT] Manejo de input de cantidad
-    itemsContainer.addEventListener('input', function (e) {
+
+    itemsContainer.addEventListener('input', e => {
         if (e.target.classList.contains('cantidad')) {
-            const row = e.target.closest('.item-row');
-            const precioInput = row.querySelector('.precio_unitario');
-
-            const precio = limpiarFormatoDinero(precioInput.value) || 0;
-            const cantidad = parseFloat(e.target.value) || 0;
-            const subtotal = cantidad * precio;
-
-            row.querySelector('.subtotal-item').value = formatearADinero(subtotal);
-            
             calcularTotales();
         }
     });
 
-    // [EVENT LISTENER: CHANGE] Manejo de cambio de insumo
-    itemsContainer.addEventListener('change', function (e) {
+    itemsContainer.addEventListener('change', e => {
         if (e.target.classList.contains('insumo-selector')) {
-            const option = e.target.selectedOptions[0];
-            const row = e.target.closest('.item-row');
-            
-            // Actualizar unidad y precio
-            updateUnitDisplay(row); 
-
-            const rawPrice = parseFloat(option.dataset.precio) || 0;
-            row.querySelector('.precio_unitario').value = formatearADinero(rawPrice); 
-
-            // Recalcular subtotal
-            const cantidadInput = row.querySelector('.cantidad');
-            const cantidad = parseFloat(cantidadInput.value) || 0;
-            const subtotal = cantidad * rawPrice;
-            
-            row.querySelector('.subtotal-item').value = formatearADinero(subtotal);
-            
             calcularTotales();
-            updateAvailableInsumos();
         }
     });
-
-    porcentajeManoObraInput.addEventListener('input', calcularTotales);
+    
     porcentajeGananciaInput.addEventListener('input', calcularTotales);
     ivaCheckbox.addEventListener('change', calcularTotales);
 
-    // [FUNCIÓN CLAVE: AÑADIR ITEM SIN TEMPLATE]
-    // La función agregarItemAReceta se encarga de añadir la fila con su botón de eliminar.
-    // Este listener se encarga de la acción de eliminar.
-    itemsContainer.addEventListener('click', function (e) {
-        // Usamos .closest() para asegurarnos de que el click en el ícono dentro del botón también funcione
+    itemsContainer.addEventListener('click', e => {
         if (e.target.closest('.removeItemBtn')) {
             e.target.closest('.item-row').remove();
             calcularTotales();
-            updateAvailableInsumos();
         }
     });
 
-    // [INICIALIZACIÓN DE FORMATO Y UNIDADES]
     document.querySelectorAll('#itemsContainer .item-row').forEach(row => {
         updateUnitDisplay(row);
-        
         const precioInput = row.querySelector('.precio_unitario');
         const subtotalInput = row.querySelector('.subtotal-item');
-    
-        // [CORRECCIÓN] Priorizar parseFloat para valores numéricos directos.
-        // limpiarFormatoDinero se usa como fallback si el valor ya tiene formato de moneda.
-        const precioLimpio = parseFloat(precioInput.value) || limpiarFormatoDinero(precioInput.value) || 0;
-        precioInput.value = formatearADinero(precioLimpio);
-    
-        // Formatear Subtotal Item (corregido de la misma manera)
-        const rawSubtotal = parseFloat(subtotalInput.value) || limpiarFormatoDinero(subtotalInput.value) || 0;
-        subtotalInput.value = formatearADinero(rawSubtotal);
+        precioInput.value = formatearADinero(limpiarFormatoDinero(precioInput.value));
+        subtotalInput.value = formatearADinero(limpiarFormatoDinero(subtotalInput.value));
     });
 
     calcularTotales();
-    updateAvailableInsumos();
+    actualizarCostosDinamicos();
 
-    const form = document.getElementById('formulario-producto');
     form.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
@@ -286,108 +286,44 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const formData = new FormData(form);
-
-        // --- ¡INICIO DE LA MODIFICACIÓN 1! (Compatibilidad de Línea) ---
-        // 1. Encontrar el radio button seleccionado (o usar '2' como default)
-        const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked').value || '2';
-        // --- ¡FIN DE LA MODIFICACIÓN 1! ---
-
-
-        // --- ¡INICIO DE LA MODIFICACIÓN 2! (Leer Pasos de Receta) ---
-        const pasosReceta = [
-            {
-                nombre_operacion: 'Preparacion Previa',
-                secuencia: 1,
-                tiempo_preparacion: parseFloat(document.getElementById('step_prep_1').value) || 0,
-                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_1').value) || 0
-            },
-            {
-                nombre_operacion: 'Coccion',
-                secuencia: 2,
-                tiempo_preparacion: parseFloat(document.getElementById('step_prep_2').value) || 0,
-                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_2').value) || 0
-            },
-            {
-                nombre_operacion: 'Refrigeracion',
-                secuencia: 3,
-                tiempo_preparacion: parseFloat(document.getElementById('step_prep_3').value) || 0,
-                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_3').value) || 0
-            },
-            {
-                nombre_operacion: 'Empaquetado',
-                secuencia: 4,
-                tiempo_preparacion: parseFloat(document.getElementById('step_prep_4').value) || 0,
-                tiempo_ejecucion_unitario: parseFloat(document.getElementById('step_ejec_4').value) || 0
-            }
-        ];
-        // --- FIN DE LA MODIFICACIÓN 2 ---
-
-        // ... (código existente para leer 'unidadMedida', 'unidadesPorPaquete', etc.) ...
-        const unidadMedida = formData.get('unidad_medida');
-        let unidadesPorPaquete = 1;
-        let pesoPorPaqueteValor = 0;
-        let pesoPorPaqueteUnidad = 'kg';
-        let unidadMedidaFinal = unidadMedida;
-
-        if ( unidadMedida === 'paquete') {
-            const tipoPaquete = document.getElementById('tipo_paquete').value;
-            if (tipoPaquete === 'unidades') {
-                unidadesPorPaquete = parseInt(document.getElementById('unidades_por_paquete').value) || 1;
-                unidadMedidaFinal = `paquete(x${unidadesPorPaquete}u)`; 
-            } else if (tipoPaquete === 'peso_volumen') {
-                pesoPorPaqueteValor = parseFloat(document.getElementById('peso_por_paquete_valor').value) || 0.01;
-                pesoPorPaqueteUnidad = document.getElementById('peso_por_paquete_unidad').value || 'kg';
-                unidadMedidaFinal = `paquete(x${pesoPorPaqueteValor}${pesoPorPaqueteUnidad})`; 
-            }
-        }
-        // --- (Fin del código existente) ---
+        const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked')?.value || '2';
 
         const productoData = {
             codigo: formData.get('codigo'),
             nombre: formData.get('nombre'),
             categoria: formData.get('categoria'),
-            unidad_medida: unidadMedidaFinal, 
+            unidad_medida: formData.get('unidad_medida'),
             descripcion: formData.get('descripcion'),
-            porcentaje_mano_obra: formData.get('porcentaje_mano_obra'),
             porcentaje_ganancia: formData.get('porcentaje_ganancia'),
             iva: formData.get('iva') === '1',
-            precio_unitario: limpiarFormatoDinero(document.getElementById('total').value) || 0,
-            unidades_por_paquete: unidadesPorPaquete,
-            peso_por_paquete_valor: pesoPorPaqueteValor,
-            peso_por_paquete_unidad: pesoPorPaqueteUnidad,
+            precio_unitario: limpiarFormatoDinero(displayPrecioFinal.value) || 0,
             vida_util_dias: formData.get('vida_util_dias'),
-            linea_compatible: lineaCompatibleStr, 
-            pasos_receta: pasosReceta, // <-- ¡AÑADIDO!
-            receta_items: []
+            receta_items: [],
+            mano_de_obra: []
         };
 
-        const itemRows = itemsContainer.querySelectorAll('.item-row');
-
-        if (itemRows.length === 0) {
-            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
-            showNotificationModal('No se ha asignado una receta al producto', 'Por favor, ingrese al menos un ingrediente para crear el producto.', 'warning');
-            return;
-        }
-
-        itemRows.forEach(row => {
-            // ... (código existente para leer los items de la receta) ...
-            const selector = row.querySelector('.insumo-selector');
-            const selectedOption = selector.options[selector.selectedIndex];
-            const insumoId = selector.value;
-            const cantidad = parseFloat(row.querySelector('.cantidad').value);
-
-            if (insumoId && cantidad && selectedOption.dataset.unidad) {
-                productoData.receta_items.push({
-                    id_insumo: insumoId,
-                    cantidad: cantidad,
-                    unidad_medida: selectedOption.dataset.unidad
+        manoDeObraContainer.querySelectorAll('.item-row').forEach(row => {
+            const rolId = row.querySelector('.mano-obra-rol').value;
+            const horas = row.querySelector('.mano-obra-horas').value;
+            if (rolId && horas) {
+                productoData.mano_de_obra.push({
+                    rol_id: parseInt(rolId),
+                    horas_estimadas: parseFloat(horas)
                 });
             }
         });
 
+        itemsContainer.querySelectorAll('.item-row').forEach(row => {
+            const insumoId = row.querySelector('.insumo-selector').value;
+            const cantidad = parseFloat(row.querySelector('.cantidad').value);
+            const unidad = row.querySelector('.insumo-selector').selectedOptions[0].dataset.unidad;
+            if (insumoId && cantidad) {
+                productoData.receta_items.push({ id_insumo: insumoId, cantidad, unidad_medida: unidad });
+            }
+        });
+
         if (productoData.receta_items.length === 0) {
-            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
-            showNotificationModal('Receta Vacía', 'Debe especificar el insumo y la cantidad para cada ítem de la receta.', 'error');
+            showNotificationModal('Receta Vacía', 'Debe especificar al menos un ingrediente para la receta.', 'warning');
             return;
         }
 
@@ -396,35 +332,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const response = await fetch(url, {
-                method: method,
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(productoData)
             });
-
             const result = await response.json();
 
-            // --- ¡CORRECCIÓN MODAL! (Problema 2) ---
             if (response.ok && result.success) {
-                let mensaje;
-                if (isEditBoolean) {
-                    mensaje = 'Se ha modificado el producto correctamente.'
-                } else {
-                    mensaje = 'Se creó el producto exitosamente.'
-                }
-                showNotificationModal(result.message || 'Operación exitosa', mensaje, 'success');
+                showNotificationModal('Operación exitosa', isEditBoolean ? 'Producto actualizado.' : 'Producto creado.', 'success');
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
-                let errorMessage = 'Ocurrió un error.';
-                if (result && result.error) {
-                    errorMessage = typeof result.error === 'object' ? Object.values(result.error).flat().join('\n') : result.error;
-                }
+                const errorMessage = result.error ? (typeof result.error === 'object' ? Object.values(result.error).flat().join('\n') : result.error) : 'Ocurrió un error.';
                 showNotificationModal('Error al guardar', errorMessage, 'error');
             }
         } catch (error) {
-            console.error('Error en el fetch:', error);
             showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
         }
-        // --- ¡FIN DE LA CORRECCIÓN MODAL! ---
     });
-
 });

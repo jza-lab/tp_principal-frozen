@@ -1,0 +1,43 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Configuración de Producción - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h3>Configuración de Horas de Producción</h3>
+                    <p class="text-muted">Define las horas de producción estándar para cada día de la semana.</p>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('configuracion_produccion.gestionar_configuracion') }}">
+                        {{ csrf_form.csrf_token }}
+                        {% for dia_id, dia_nombre in dias_semana.items() %}
+                        <div class="row mb-3 align-items-center">
+                            <div class="col-md-4">
+                                <label for="horas_{{ dia_id }}" class="form-label">{{ dia_nombre }}</label>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="horas_{{ dia_id }}" name="horas_{{ dia_id }}" step="0.5" min="0" max="24" value="{{ configuraciones[dia_id].horas if configuraciones[dia_id] else 0 }}" required>
+                                    <span class="input-group-text">horas</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <a href="{{ url_for('admin_dashboard.index') }}" class="btn btn-secondary me-2">Cancelar</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-2"></i>Guardar Configuración
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -2,6 +2,8 @@ from app.controllers.base_controller import BaseController
 from app.models.receta import RecetaModel
 from app.models.producto import ProductoModel
 from app.models.insumo import InsumoModel
+from app.models.receta_mano_obra import RecetaManoObraModel
+from app.models.receta_ingrediente import RecetaIngredienteModel
 from app.schemas.receta_schema import RecetaSchema
 from typing import Dict, List, Optional
 from marshmallow import ValidationError
@@ -19,6 +21,11 @@ class RecetaController(BaseController):
         self.schema = RecetaSchema()
         self.producto_model = ProductoModel()
         self.insumo_model = InsumoModel()
+        self.receta_mano_obra_model = RecetaManoObraModel()
+        self.receta_ingrediente_model = RecetaIngredienteModel()
+        # Importar RolController aquí para evitar importación circular a nivel de módulo
+        from app.controllers.rol_controller import RolController
+        self.rol_controller = RolController()
 
     def _calcular_y_actualizar_peso_producto(self, receta_id: int) -> Dict:
         """
@@ -84,20 +91,40 @@ class RecetaController(BaseController):
 
     def obtener_receta_con_ingredientes(self, receta_id: int) -> Optional[Dict]:
         """
-        Obtiene una receta específica junto con su lista de ingredientes.
+        Obtiene una receta específica junto con su lista de ingredientes y mano de obra enriquecida.
         """
         receta_result = self.model.find_by_id(receta_id, 'id')
         if not receta_result.get('success'):
-            return None
+            return None, 500
 
         receta = receta_result['data']
         
         try:
-            ingredientes_result = self.model.db.table('receta_ingredientes').select('*').eq('receta_id', receta_id).execute()
-            receta['ingredientes'] = ingredientes_result.data
+            # Obtener ingredientes usando el nuevo modelo
+            ingredientes_result = self.receta_ingrediente_model.find_by_receta_id_with_insumo(receta_id)
+            if ingredientes_result.get('success'):
+                receta['ingredientes'] = ingredientes_result['data']
+            else:
+                receta['ingredientes'] = []
+
+            # Obtener y enriquecer mano de obra
+            mano_obra_result = self.receta_mano_obra_model.find_by_receta_id(receta_id)
+            mano_de_obra = mano_obra_result.get('data', [])
+
+            if mano_de_obra:
+                # Obtener todos los roles de una vez para eficiencia
+                roles_response, _ = self.rol_controller.get_all_roles()
+                roles_map = {rol['id']: rol for rol in roles_response.get('data', [])}
+                
+                for mo in mano_de_obra:
+                    rol_info = roles_map.get(mo['rol_id'])
+                    mo['rol'] = {'nombre': rol_info['nombre']} if rol_info else {'nombre': 'Rol no encontrado'}
+
+            receta['mano_de_obra'] = mano_de_obra
+
             return {'success': True, 'data': receta}, 200
         except Exception as e:
-            return {'success': False, 'error': f"Error al obtener ingredientes: {str(e)}"}, 500
+            return {'success': False, 'error': f"Error al obtener detalles de la receta: {str(e)}"}, 500
 
     def obtener_recetas_con_ingredientes_masivo(self, receta_ids: List[int]) -> tuple:
         """
@@ -164,11 +191,12 @@ class RecetaController(BaseController):
     
     def crear_receta_con_ingredientes(self, data: Dict) -> Dict:
         """
-        Crea una receta y sus ingredientes asociados de forma transaccional.
+        Crea una receta, sus ingredientes y la mano de obra asociada.
         """
         try:
             validated_data = self.schema.load(data)
             ingredientes_data = validated_data.pop('ingredientes', [])
+            mano_obra_data = validated_data.pop('mano_de_obra', [])
 
             # Crear la receta principal
             receta_result = self.model.create(validated_data)
@@ -177,16 +205,19 @@ class RecetaController(BaseController):
 
             nueva_receta_id = receta_result['data']['id']
 
-            # Crear los ingredientes
-            for ingrediente in ingredientes_data:
-                ingrediente['receta_id'] = nueva_receta_id
-                # Asumo que existe un self.ingrediente_model
-                ingrediente_result = self.model.db.table('receta_ingredientes').insert(ingrediente).execute()
-
-                # Si falla un ingrediente, se intenta revertir la creación de la receta
-                if not ingrediente_result.data:
+            # Gestionar ingredientes
+            if ingredientes_data:
+                ingredientes_result = self.gestionar_ingredientes_para_receta(nueva_receta_id, ingredientes_data)
+                if not ingredientes_result.get('success'):
                     self.model.delete(nueva_receta_id, 'id')
-                    return {'success': False, 'error': "Error al crear ingrediente"}
+                    return ingredientes_result
+
+            # Gestionar mano de obra
+            if mano_obra_data:
+                mano_obra_result = self.gestionar_mano_de_obra_para_receta(nueva_receta_id, mano_obra_data)
+                if not mano_obra_result.get('success'):
+                    self.model.delete(nueva_receta_id, 'id')
+                    return mano_obra_result
 
             # Calcular el peso del producto después de crear la receta
             self._calcular_y_actualizar_peso_producto(nueva_receta_id)
@@ -213,15 +244,24 @@ class RecetaController(BaseController):
                 return {'success': True} 
 
             # 2. Preparar los nuevos ingredientes para una inserción en lote
-            ingredientes_a_insertar = [
-                {
+            # 2. Preparar los nuevos ingredientes, buscando la unidad de medida si falta.
+            ingredientes_a_insertar = []
+            for item in receta_items:
+                unidad_medida = item.get('unidad_medida')
+                if not unidad_medida:
+                    # Si la unidad no viene, la buscamos en el catálogo de insumos
+                    insumo_id = item.get('id_insumo')
+                    if insumo_id:
+                        insumo_res = self.insumo_model.find_by_id(insumo_id, 'id_insumo')
+                        if insumo_res.get('success'):
+                            unidad_medida = insumo_res['data'].get('unidad_medida', 'N/A')
+                
+                ingredientes_a_insertar.append({
                     'receta_id': receta_id,
                     'id_insumo': item['id_insumo'],
                     'cantidad': item['cantidad'],
-                    'unidad_medida': item['unidad_medida']
-                }
-                for item in receta_items
-            ]
+                    'unidad_medida': unidad_medida or 'N/A' # Asegurar que no sea None
+                })
             
             # 3. Insertar todos los nuevos ingredientes en una sola llamada
             insert_result = self.model.db.table('receta_ingredientes').insert(ingredientes_a_insertar).execute()
@@ -236,4 +276,23 @@ class RecetaController(BaseController):
             return {'success': True}
         except Exception as e:
             # Loggear el error sería una buena práctica aquí
+            return {'success': False, 'error': str(e)}
+
+    def gestionar_mano_de_obra_para_receta(self, receta_id: int, mano_de_obra_items: List[Dict]) -> Dict:
+        """
+        Gestiona la mano de obra de una receta, eliminando las asignaciones
+        anteriores e insertando las nuevas.
+        """
+        try:
+            # 1. Eliminar asignaciones antiguas
+            self.receta_mano_obra_model.delete_by_receta_id(receta_id)
+
+            if not mano_de_obra_items:
+                return {'success': True}
+
+            # 2. Crear las nuevas asignaciones en lote
+            result = self.receta_mano_obra_model.bulk_create_for_receta(receta_id, mano_de_obra_items)
+            
+            return result
+        except Exception as e:
             return {'success': False, 'error': str(e)}

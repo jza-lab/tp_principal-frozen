@@ -1,0 +1,44 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Gestión de Roles - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom">
+        <h1 class="h2">Gestión de Roles y Costos por Hora</h1>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">Nombre del Rol</th>
+                        <th scope="col">Descripción</th>
+                        <th scope="col">Costo por Hora</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rol in roles %}
+                    <tr>
+                        <td>{{ rol.nombre }}</td>
+                        <td>{{ rol.descripcion or 'N/A' }}</td>
+                        <td>${{ "%.2f"|format(rol.costo_hora) if rol.costo_hora else 'No asignado' }}</td>
+                        <td>
+                            <a href="{{ url_for('rol.editar', id=rol.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil-square"></i> Editar Costo
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center">No hay roles definidos en el sistema.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

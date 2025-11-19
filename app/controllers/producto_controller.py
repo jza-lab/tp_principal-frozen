@@ -4,6 +4,9 @@ import re
 from app.controllers.base_controller import BaseController
 from app.controllers.receta_controller import RecetaController
 from app.controllers.registro_controller import RegistroController
+from app.controllers.costo_fijo_controller import CostoFijoController
+from app.controllers.configuracion_produccion_controller import ConfiguracionProduccionController
+from app.controllers.rol_controller import RolController
 from flask_jwt_extended import get_current_user
 from app.models.producto import ProductoModel
 from app.models.receta import RecetaModel
@@ -29,6 +32,9 @@ class ProductoController(BaseController):
         self.receta_model = RecetaModel()
         self.registro_controller = RegistroController()
         self.operacion_receta_model = OperacionRecetaModel()
+        self.costo_fijo_controller = CostoFijoController()
+        self.config_produccion_controller = ConfiguracionProduccionController()
+        self.rol_controller = RolController()
 
     def _abrev(self, texto, length=4):
         """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
@@ -80,15 +86,12 @@ class ProductoController(BaseController):
                 data['codigo'] = self._generar_codigo_producto(data.get('nombre', ''))
 
             receta_items = data.pop('receta_items', [])
+            mano_de_obra_items = data.pop('mano_de_obra', [])
             linea_compatible_str = data.pop('linea_compatible', '2')
-
-            # --- ¡INICIO DE LA MODIFICACIÓN! (Leer pasos) ---
             pasos_receta_data = data.pop('pasos_receta', [])
-            # --- FIN DE LA MODIFICACIÓN ---
 
             validated_data = self.schema.load(data)
 
-            # ... (código de crear producto) ...
             if self.model.find_by_codigo(validated_data['codigo']).get('data'):
                 return self.error_response('El código del producto ya está en uso.', 409)
 
@@ -98,7 +101,7 @@ class ProductoController(BaseController):
 
             producto_creado = result_producto['data']
             producto_id = producto_creado['id']
-            # ... (código de crear receta) ...
+            
             receta_data = {
                 'nombre': f"Receta para {producto_creado['nombre']}",
                 'version': '1.0',
@@ -107,47 +110,19 @@ class ProductoController(BaseController):
             }
             result_receta = self.receta_model.create(receta_data)
             if not result_receta.get('success'):
-                self.model.delete(producto_id, 'id') # Rollback manual
-                return self.error_response(result_receta.get('error', 'Error al crear la receta para el producto.'), 500)
+                self.model.delete(producto_id, 'id')
+                return self.error_response(result_receta.get('error', 'Error al crear la receta.'), 500)
 
-            receta_creada = result_receta['data']
-            receta_id = receta_creada['id']
+            receta_id = result_receta['data']['id']
 
-            # --- ¡INICIO DE LA MODIFICACIÓN! (Guardar pasos) ---
-            try:
-                pasos_a_insertar = []
-                # Si por alguna razón no vinieron los pasos, usamos los placeholders
-                if not pasos_receta_data:
-                    logger.warning(f"No se recibieron 'pasos_receta' desde el formulario. Usando defaults.")
-                    pasos_a_insertar = [
-                        {'receta_id': receta_id, 'nombre_operacion': 'Preparacion Previa', 'secuencia': 1, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
-                        {'receta_id': receta_id, 'nombre_operacion': 'Coccion', 'secuencia': 2, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
-                        {'receta_id': receta_id, 'nombre_operacion': 'Refrigeracion', 'secuencia': 3, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1},
-                        {'receta_id': receta_id, 'nombre_operacion': 'Empaquetado', 'secuencia': 4, 'tiempo_preparacion': 1, 'tiempo_ejecucion_unitario': 0.1}
-                    ]
-                else:
-                    # Preparamos los datos recibidos del formulario JS
-                    for paso in pasos_receta_data:
-                        paso['receta_id'] = receta_id # Añadimos el ID de la receta
-                        pasos_a_insertar.append(paso)
-
-                # Insertar los pasos
-                insert_result = self.operacion_receta_model.db.table('operacionesreceta').insert(pasos_a_insertar).execute()
-
-                if not insert_result.data or len(insert_result.data) != len(pasos_a_insertar):
-                     logger.warning(f"No se pudieron insertar todos los pasos para la receta {receta_id}")
-
-            except Exception as e_steps:
-                logger.error(f"Error al insertar pasos para receta {receta_id}: {e_steps}")
-            # --- FIN DE LA MODIFICACIÓN ---
-
-            # ... (resto de la función: gestión de ingredientes, registro, etc.) ...
             if receta_items:
-                gestion_result = self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
-                if not gestion_result.get('success'):
-                    self.receta_model.delete(receta_id, 'id')
-                    self.model.delete(producto_id, 'id')
-                    return self.error_response(gestion_result.get('error', 'Error al crear los ingredientes.'), 500)
+                self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
+            
+            if mano_de_obra_items:
+                self.receta_controller.gestionar_mano_de_obra_para_receta(receta_id, mano_de_obra_items)
+
+            # Recalcular todos los costos
+            self._recalcular_costos_producto(producto_id)
 
             detalle = f"Se creó el producto '{producto_creado['nombre']}' (ID: {producto_id})."
             self.registro_controller.crear_registro(get_current_user(), 'Productos', 'Creación', detalle)
@@ -164,6 +139,7 @@ class ProductoController(BaseController):
         """Actualiza un producto existente y su receta."""
         try:
             receta_items = data.pop('receta_items', None)
+            mano_de_obra_items = data.pop('mano_de_obra', None)
             validated_data = self.schema.load(data, partial=True)
 
             if 'codigo' in validated_data and validated_data['codigo'] != self.model.find_by_id(producto_id, 'id')['data']['codigo']:
@@ -174,26 +150,26 @@ class ProductoController(BaseController):
             if not result_producto.get('success'):
                  return self.error_response(result_producto.get('error', 'Error al actualizar el producto.'))
 
-            receta_existente = self.receta_model.find_all({'producto_id': producto_id})
-            receta_id = None
+            receta_existente_res = self.receta_model.find_all({'producto_id': producto_id})
+            receta_id = receta_existente_res['data'][0]['id'] if receta_existente_res.get('data') else None
 
-            if receta_existente.get('success') and receta_existente.get('data'):
-                receta_id = receta_existente['data'][0]['id']
-            else:
-                receta_data = {
-                    'nombre': f"Receta para {result_producto['data']['nombre']}",
-                    'version': '1.0',
-                    'producto_id': producto_id
-                }
-                result_receta = self.receta_model.create(receta_data)
-                if not result_receta.get('success'):
-                    return self.error_response('Error al crear la receta para el producto actualizado.', 500)
-                receta_id = result_receta['data']['id']
+            if not receta_id:
+                # Si no hay receta, se crea una (caso borde)
+                receta_data = {'nombre': f"Receta para {validated_data.get('nombre', '')}", 'producto_id': producto_id}
+                receta_nueva_res = self.receta_model.create(receta_data)
+                receta_id = receta_nueva_res['data']['id'] if receta_nueva_res.get('success') else None
+
+            if not receta_id:
+                return self.error_response('No se pudo encontrar o crear una receta para el producto.', 500)
 
             if receta_items is not None:
-                gestion_result = self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
-                if not gestion_result.get('success'):
-                    return self.error_response(gestion_result.get('error', 'Error al actualizar la receta.'), 500)
+                self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
+
+            if mano_de_obra_items is not None:
+                self.receta_controller.gestionar_mano_de_obra_para_receta(receta_id, mano_de_obra_items)
+
+            # Siempre recalcular costos al final
+            self._recalcular_costos_producto(producto_id)
 
             producto_actualizado = result_producto.get('data')
             detalle = f"Se actualizó el producto '{producto_actualizado['nombre']}' (ID: {producto_id})."
@@ -249,61 +225,78 @@ class ProductoController(BaseController):
             logger.error(f"Error en actualizar_costo_productos_insumo: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
-    def actualizar_costo_producto(self, producto_id: int) -> Dict:
-        """Actualiza el costo del producto basado en su receta."""
+    def _recalcular_costos_producto(self, producto_id: int) -> Dict:
+        """
+        Orquestador central para calcular todos los costos de un producto y actualizar la DB.
+        """
         try:
-            receta_existente = self.receta_model.find_all({'producto_id': producto_id})
+            # 1. Obtener datos base
+            producto_res = self.model.find_by_id(producto_id, 'id')
+            if not producto_res.get('success'): return producto_res
+            producto = producto_res['data']
 
-            if not (receta_existente.get('success') and receta_existente.get('data')):
-                return self.error_response('El producto no tiene una receta asociada.', 400)
+            receta_res = self.receta_model.find_all({'producto_id': producto_id})
+            if not receta_res.get('data'): return {'success': True, 'message': 'Producto sin receta, no se calculan costos.'}
+            receta_id = receta_res['data'][0]['id']
 
-            receta_id = receta_existente['data'][0]['id']
+            # 2. Calcular Costo de Materia Prima
+            costo_materia_prima_res = self.receta_controller.calcular_costo_total_receta(receta_id)
+            costo_materia_prima = costo_materia_prima_res['data']['costo_total'] if costo_materia_prima_res.get('success') else 0
 
-            costo_result = self.receta_controller.calcular_costo_total_receta(receta_id)
+            # 3. Calcular Costo de Mano de Obra
+            mano_obra_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
+            mano_de_obra_items = mano_obra_res.get('data', {}).get('mano_de_obra', [])
+            
+            roles_res, _ = self.rol_controller.get_all_roles()
+            # Corrección explícita: Asegurarse de que 'roles' es una lista de diccionarios
+            roles_data = roles_res.get('data', [])
+            if not isinstance(roles_data, list):
+                roles_data = []
+            roles_costo_map = {rol['id']: rol.get('costo_hora', 0) for rol in roles_data if isinstance(rol, dict)}
+            
+            costo_mano_obra = 0
+            total_horas_mano_obra = 0
+            for item in mano_de_obra_items:
+                costo_hora = Decimal(roles_costo_map.get(item['rol_id'], 0) or 0)
+                horas = Decimal(item.get('horas_estimadas', 0))
+                costo_mano_obra += costo_hora * horas
+                total_horas_mano_obra += horas
 
-            if not costo_result.get('success'):
-                return self.error_response(costo_result.get('error', 'Error al calcular el costo de la receta.'), 500)
+            # 4. Calcular Costos Fijos
+            costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
+            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', []))
 
-            # --- ¡INICIO DE LA CORRECCIÓN! ---
-            # self.obtener_producto_por_id ahora devuelve la respuesta estándar
-            producto_resp = self.obtener_producto_por_id(producto_id)
-            if not producto_resp.get('success'):
-                return self.error_response('Producto no encontrado.', 404)
+            config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
+            horas_prod_config = config_prod_res.get('data', [])
+            
+            # Asumiendo 4 semanas por mes
+            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4
+            
+            tasa_costo_fijo_por_hora = total_costos_fijos_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else 0
+            costo_fijos_aplicado = tasa_costo_fijo_por_hora * total_horas_mano_obra
 
-            costo_materia_prima = costo_result['data']['costo_total']
+            # 5. Calcular Totales y Precio Final
+            costo_total_produccion = Decimal(costo_materia_prima) + costo_mano_obra + costo_fijos_aplicado
+            
+            porcentaje_ganancia = Decimal(producto.get('porcentaje_ganancia', 0) or 0) / Decimal(100)
+            precio_sin_iva = costo_total_produccion * (1 + porcentaje_ganancia)
+            
+            factor_iva = Decimal('1.21') if producto.get('iva') else Decimal('1.0')
+            precio_final = precio_sin_iva * factor_iva
 
-            # Aplicar costo de mano de obra
-            porcentaje_mano_obra = (producto.get('porcentaje_mano_obra', 0) or 0) / 100
-            costo_produccion = costo_materia_prima * (1 + porcentaje_mano_obra)
-
-            # Aplicar margen de ganancia
-            porcentaje_ganancia = (producto.get('porcentaje_ganancia', 0) or 0) / 100
-            precio_sin_iva = costo_produccion * (1 + porcentaje_ganancia)
-
-
-            producto = producto_resp.get('data') # <-- Desempaquetar aquí
-            if not producto:
-                 return self.error_response('No se encontraron datos del producto.', 404)
-            # --- FIN DE LA CORRECCIÓN! ---
-
-            nuevo_costo_base = costo_result['data']['costo_total']
-
-            porcentaje_margen = producto.get('porcentaje_extra', 0) / 100
-            costo_con_margen = nuevo_costo_base * (1 + porcentaje_margen)
-
-            factor_iva = 1.21 if producto.get('iva') else 1.0
-            nuevo_costo = round(precio_sin_iva * factor_iva, 2)
-
-            update_result = self.model.update(producto_id, {'precio_unitario': nuevo_costo}, 'id')
-
-            if not update_result.get('success'):
-                return self.error_response(update_result.get('error', 'Error al actualizar el costo del producto.'), 500)
-
-            return self.success_response(update_result.get('data'), "Costo del producto actualizado con éxito")
+            # 6. Actualizar Producto en DB
+            update_data = {
+                'costo_mano_obra': float(costo_mano_obra),
+                'costo_fijos': float(costo_fijos_aplicado),
+                'costo_total_produccion': float(costo_total_produccion),
+                'precio_unitario': float(precio_final)
+            }
+            self.model.update(producto_id, update_data, 'id')
+            return {'success': True}
 
         except Exception as e:
-            logger.error(f"Error en actualizar_costo_producto: {e}", exc_info=True)
-            return self.error_response('Error interno del servidor', 500)
+            logger.error(f"Error crítico en _recalcular_costos_producto para ID {producto_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
 
     def obtener_producto_por_id(self, producto_id: int) -> Dict:
         """
@@ -434,4 +427,43 @@ class ProductoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error en actualizar_cantidad_minima_produccion: {str(e)}", exc_info=True)
+            return self.error_response('Error interno del servidor.', 500)
+
+    def recalcular_costos_dinamicos(self, mano_de_obra_items: List[Dict]) -> tuple:
+        """
+        Calcula dinámicamente el costo de mano de obra y los costos fijos aplicados
+        basado en los datos de mano de obra proporcionados, sin guardarlos en la DB.
+        """
+        try:
+            # Calcular Costo de Mano de Obra
+            roles_res, _ = self.rol_controller.get_all_roles()
+            roles_costo_map = {rol['id']: rol.get('costo_hora', 0) for rol in roles_res.get('data', [])}
+            
+            costo_mano_obra = Decimal(0)
+            total_horas_mano_obra = Decimal(0)
+            for item in mano_de_obra_items:
+                costo_hora = Decimal(roles_costo_map.get(int(item['rol_id']), 0) or 0)
+                horas = Decimal(item.get('horas_estimadas', 0))
+                costo_mano_obra += costo_hora * horas
+                total_horas_mano_obra += horas
+
+            # Calcular Costos Fijos
+            costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
+            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', []))
+
+            config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
+            horas_prod_config = config_prod_res.get('data', [])
+            
+            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4
+            
+            tasa_costo_fijo_por_hora = total_costos_fijos_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else Decimal(0)
+            costo_fijos_aplicado = tasa_costo_fijo_por_hora * total_horas_mano_obra
+
+            return self.success_response({
+                'costo_mano_obra': float(costo_mano_obra),
+                'costo_fijos_aplicado': float(costo_fijos_aplicado)
+            })
+
+        except Exception as e:
+            logger.error(f"Error en recalcular_costos_dinamicos: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
