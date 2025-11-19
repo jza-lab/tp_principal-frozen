@@ -7,10 +7,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const pageId = window.location.pathname; // Usar la ruta para una clave única
         const storageKey = `lastUpdatedTimestamp_${pageId}`;
 
-        // Al cargar la página, mostrar el timestamp guardado
+        // Al cargar la página, mostrar el timestamp guardado o un texto por defecto
         const savedTimestamp = localStorage.getItem(storageKey);
         if (savedTimestamp) {
             lastUpdatedSpan.textContent = `Última actualización: ${savedTimestamp}`;
+        } else {
+            lastUpdatedSpan.textContent = 'Última actualización: Pendiente';
         }
 
         // Al hacer clic en el botón, guardar timestamp y recargar
