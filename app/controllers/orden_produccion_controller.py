@@ -245,7 +245,9 @@ class OrdenProduccionController(BaseController):
                 datos_op['receta_id'] = receta_result['data'][0]['id']
 
                 try:
-                    validated_data = self.schema.load(datos_op)
+                    # Limpiar datos nulos que no deben ir al schema si no existen
+                    datos_op_limpios = {k: v for k, v in datos_op.items() if v is not None}
+                    validated_data = self.schema.load(datos_op_limpios)
                     validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
                     validated_data['usuario_creador_id'] = usuario_id
 
@@ -1602,8 +1604,16 @@ class OrdenProduccionController(BaseController):
                     # Se alcanzó la meta, ahora se gestiona el desperdicio
                     gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, desperdicio_total_final, usuario_id)
                     
+                    # --- INICIO DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
+                    # Verificar si la gestión del desperdicio falló antes de continuar.
+                    if not gestion_res.get('success'):
+                        # Si la creación de la OP hija falló, no debemos continuar.
+                        # Devolvemos el error que nos dio el método hijo.
+                        return self.error_response(gestion_res.get('error', 'Error no especificado al gestionar desperdicio.'), 500)
+                    # --- FIN DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
+                    
                     self.model.update(orden_id, update_data) # Guardar el último avance
-                    return self.success_response(message=gestion_res['message'], data=gestion_res['data'])
+                    return self.success_response(message=gestion_res.get('message'), data=gestion_res.get('data'))
 
             # 6. Si no se ha llegado al punto de control, es un reporte normal
             # La orden se considera lista para QC cuando la suma de lo bueno y el desperdicio
@@ -1700,17 +1710,39 @@ class OrdenProduccionController(BaseController):
         else:
             logger.warning(f"Stock insuficiente para desperdicio en OP {orden_id}. Intentando crear OP hija.")
             
-            # 1. Preparar datos para la OP hija.
-            # CORRECCIÓN CLAVE: El método `crear_orden` espera una lista de productos.
+            # --- INICIO DE LA NUEVA LÓGICA DE HERENCIA ---
+            # 1. Buscar el pedido_id original a través de los items de la OP padre
+            pedido_id_original = None
+            items_padre_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+            if items_padre_res.get('success') and items_padre_res.get('data'):
+                pedido_id_original = items_padre_res['data'][0].get('pedido_id')
+
+            # 2. Preparar datos para la OP hija, incluyendo los heredados.
             productos_para_op_hija = [{
                 'id': orden_actual['producto_id'],
                 'cantidad': float(desperdicio_total)
             }]
+            # --- INICIO CORRECCIÓN DEFINITIVA DE FORMATO DE FECHA ---
+            # Convertir la fecha_meta a string 'YYYY-MM-DD' de forma robusta.
+            fecha_meta_padre = orden_actual.get('fecha_meta')
+            fecha_meta_str = None
+            if isinstance(fecha_meta_padre, datetime):
+                fecha_meta_str = fecha_meta_padre.date().isoformat()
+            elif isinstance(fecha_meta_padre, date):
+                fecha_meta_str = fecha_meta_padre.isoformat()
+            elif isinstance(fecha_meta_padre, str):
+                # Intentar parsear por si viene en formato con hora
+                try:
+                    fecha_meta_str = date.fromisoformat(fecha_meta_padre.split('T')[0]).isoformat()
+                except ValueError:
+                    fecha_meta_str = fecha_meta_padre # Usar como viene si falla el parseo
+            # --- FIN CORRECCIÓN DEFINITIVA ---
+
             datos_op_hija = {
                 'productos': productos_para_op_hija,
                 'observaciones': f"OP hija para reponer desperdicio de OP: {orden_actual.get('codigo', orden_id)}.",
-                'id_op_padre': orden_id
-                # No se necesita estado, fecha_meta, etc. `crear_orden` los maneja.
+                'id_op_padre': orden_id,
+                'fecha_meta': fecha_meta_str # <-- Visibilidad en Planificador
             }
             
             # 2. Intentar crear la OP hija PRIMERO (Transacción)
@@ -1729,9 +1761,8 @@ class OrdenProduccionController(BaseController):
             # La respuesta de `crear_orden` devuelve una lista de órdenes creadas.
             nueva_op_data = creacion_res['data'][0] if creacion_res.get('data') else {}
 
-            # 4. Si la OP padre era consolidada, transferir los pedidos no satisfechos
-            if orden_actual.get('es_consolidada'):
-                self._transferir_pedidos_no_satisfechos(op_padre=orden_actual, op_hija=nueva_op_data)
+            # 4. Si la OP padre tenía pedidos asociados, transferir los no satisfechos a la hija
+            self._transferir_pedidos_no_satisfechos(op_padre=orden_actual, op_hija=nueva_op_data)
             
             return {
                 'success': True,
