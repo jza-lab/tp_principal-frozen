@@ -1,50 +1,42 @@
 # Sistema de Gestión de Producción - FrozenProd
+Puedes ver la página desde Render: https://tp-principal-frozen.onrender.com/
 
-Este es un sistema de gestión de producción desarrollado en Flask, diseñado para administrar insumos, órdenes de producción, reportes y más.
+FrozenProd es un sistema integral de gestión de producción desarrollado en Flask, diseñado para administrar y optimizar todos los procesos clave de una empresa de fabricación. Desde la gestión de insumos hasta el despacho de productos terminados, FrozenProd ofrece una solución completa para mejorar la eficiencia, la trazabilidad y el control de calidad de la empresa Frozen.
 
-## Requisitos Previos
+## Características Principales
 
-Asegúrate de tener instalado Python 3 en tu sistema. Puedes descargarlo desde [python.org](https://www.python.org/downloads/).
+El sistema está organizado en módulos que cubren las áreas críticas de la gestión de producción:
 
-## Guía de Inicio Rápido
+- **Gestión de Insumos y Proveedores:**
+  - Administración del catálogo de materias primas y su stock.
+  - Gestión de proveedores y órdenes de compra automáticas y manuales.
+  - Control de calidad de insumos en la recepción.
 
-Sigue estos pasos para configurar y ejecutar el proyecto en tu entorno local.
+- **Producción:**
+  - Creación y seguimiento de órdenes de producción.
+  - Planificación de la producción con un dashboard interactivo y un Kanban.
+  - Gestión de recetas (listas de materiales) para los productos.
 
-### 1. Clona el Repositorio (Opcional)
+- **Inventario y Productos:**
+  - Administración de productos terminados y su stock por lotes.
+  - Trazabilidad completa desde la materia prima hasta el producto final.
+  - Gestión de despachos y envíos.
 
-Si estás trabajando con `git`, clona el repositorio. Si ya tienes los archivos, puedes saltar este paso.
+- **Gestión Comercial:**
+  - Administración de clientes y pedidos de venta.
+  - Análisis de rentabilidad y precios.
+  - Portal para clientes y gestión de reclamos.
 
-```bash
-git clone <URL_DEL_REPOSITORIO>
-cd tp_principal-frozen
-```
+- **Administración y Seguridad:**
+  - Gestión de usuarios, roles y permisos detallados.
+  - Registro de actividades (logs) para auditoría.
+  - Dashboard de administrador con alertas y métricas clave.
 
-### 2. Instala las Dependencias
+- **Tecnología:**
+  - Acceso mediante reconocimiento facial en tótems.
+  - Chatbot para consultas frecuentes.
+  - API para integraciones externas.
 
-Instala todas las librerías de Python necesarias que se encuentran en el archivo `requirements.txt`.
+## Flujo de trabajo
+Estamos trabajando bajo la metodología Git Flow, donde los cambios más recientes se encuentran de la rama **Develop**, y la versión más estable está en la rama **Main**.
 
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Configura las Variables de Entorno
-
-El proyecto utiliza un archivo `.env` para gestionar las variables de entorno, como las credenciales de la base de datos y las claves secretas.
-
-1. Pedi el archivo .env (contiene las credenciales del supabase)
-2. Tiralo en la carpeta principal con el nombre credenciales.env
-3. El archivo `.env` ya contiene las claves necesarias para ejecutar el proyecto en el entorno de desarrollo proporcionado. No necesitas modificarlo para empezar.
-
-**Nota de Seguridad Importante:** El archivo `.env` contiene información sensible. Está excluido del control de versiones (en `.gitignore`) para prevenir que se suba accidentalmente a un repositorio. **Nunca compartas ni publiques el contenido de este archivo.**
-
-### 4. Ejecuta la Aplicación
-
-Una vez que hayas completado los pasos anteriores, puedes iniciar el servidor de desarrollo de Flask.
-
-```bash
-python main.py
-```
-
-Después de ejecutar el comando, verás un mensaje en la terminal indicando que el servidor se está ejecutando, generalmente en `http://127.0.0.1:5000`.
-
-¡Abre esa dirección en tu navegador y listo! Ya puedes interactuar con la aplicación.
