@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else if (collapseElement) {
                     const lotesRows = collapseElement.querySelectorAll('tbody tr');
                     lotesRows.forEach(loteRow => {
-                        const loteNumeroCell = loteRow.cells[1]; // El número de lote está en la segunda celda
+                        const loteNumeroCell = loteRow.cells[0]; // El número de lote está en la segunda celda
                         if (loteNumeroCell) {
                            const loteNumero = loteNumeroCell.textContent.toLowerCase().trim();
                             if (loteNumero.includes(loteQuery)) {

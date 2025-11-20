@@ -653,19 +653,58 @@ class OrdenCompraController:
         except Exception as e_reclamo:
             logger.error(f"Error al crear el reclamo automático para la OC {orden_data.get('codigo_oc')}: {e_reclamo}")
 
-    def _manejar_escenario_fallido(self, orden_data, motivo, descripcion, orden_produccion_controller: "OrdenProduccionController"):
-        # El reclamo automático ahora se llama ANTES de esta función
+    # --- MÉTODO CLAVE: MANEJO DE ESCENARIOS FALLIDOS (ACTUALIZADO) ---
+    def _manejar_escenario_fallido(self, orden_data, motivo, descripcion, orden_produccion_controller: "OrdenProduccionController", modo_oc='auto', usuario_id=None):
+        """
+        Maneja los escenarios donde la recepción es incompleta (calidad o cantidad).
+        Aplica la lógica de negocio:
+        1. Marca OC como RECEPCION_INCOMPLETA.
+        2. Si hay OP vinculada:
+           - Si modo_oc == 'auto': OP -> EN_ESPERA, Crea OC Hija.
+           - Si modo_oc == 'manual': OP -> PENDIENTE, No crea OC Hija.
+        """
+        op_id = orden_data.get('orden_produccion_id')
+        mensaje_extra = ""
 
-        if orden_data.get('orden_produccion_id'):
-            orden_produccion_controller.cambiar_estado_orden_simple(orden_data['orden_produccion_id'], 'EN ESPERA')
+        # 1. Actualizar estado de la OC actual
         self.model.update(orden_data['id'], {'estado': 'RECEPCION_INCOMPLETA'})
 
-        # Devolvemos un 'partial' success para que la ruta muestre un flash 'warning'
+        if op_id:
+            logger.info(f"[OC RECEPCION] Fallo/Discrepancia en OC {orden_data.get('codigo_oc')} vinculada a OP {op_id}. Modo: {modo_oc}")
+
+            if modo_oc == 'manual':
+                # --- CASO B: MANUAL ---
+                # La OP vuelve a PENDIENTE para ser replanificada por el usuario.
+                # El stock aprobado ya existe (lotes creados), así que la replanificación solo pedirá el faltante.
+                orden_produccion_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+                mensaje_extra = "La OP asociada volvió al estado PENDIENTE para gestión manual del faltante."
+                logger.info(f"[OC RECEPCION] OP {op_id} movida a PENDIENTE (Gestión Manual).")
+
+            else:
+                # --- CASO A: AUTOMÁTICO (Default) ---
+                # La OP pasa a EN_ESPERA.
+                orden_produccion_controller.cambiar_estado_orden_simple(op_id, 'EN ESPERA')
+
+                # Intentar crear la OC hija automáticamente
+                if usuario_id:
+                    resultado_hija = self.crear_oc_hija_desde_fallo(orden_data['id'], usuario_id)
+                    if resultado_hija.get('success'):
+                        nueva_oc = resultado_hija.get('data', {}).get('data', {}).get('codigo_oc', 'N/A')
+                        mensaje_extra = f"La OP pasó a EN ESPERA. Se generó automáticamente la OC complementaria {nueva_oc}."
+                        logger.info(f"[OC RECEPCION] OP {op_id} movida a EN_ESPERA. OC Hija creada.")
+                    else:
+                        mensaje_extra = f"La OP pasó a EN ESPERA, pero falló la creación automática de la OC hija: {resultado_hija.get('error')}"
+                        logger.error(f"[OC RECEPCION] Fallo creando OC hija automática: {resultado_hija.get('error')}")
+                else:
+                     mensaje_extra = "La OP pasó a EN ESPERA. (No se pudo crear OC hija por falta de ID de usuario)."
+
         return {
             'success': True,
             'partial': True,
-            'message': f'{motivo}: {descripcion}. Se generó un reclamo y la OP asociada está en espera.'
+            'message': f"{motivo}. Se generó un reclamo. {mensaje_extra}"
         }
+
+
 
     # --- INICIO DE LA MODIFICACIÓN: La función ahora guarda las cantidades correctas y el QC ---
     def _crear_lotes_para_items_recibidos(self, items_recibidos, orden_data, usuario_id):
@@ -757,12 +796,6 @@ class OrdenCompraController:
     # --- FIN DE LA MODIFICACIÓN ---
 
     def procesar_recepcion(self, orden_id, form_data, files_data, usuario_id, orden_produccion_controller: "OrdenProduccionController"):
-
-        # --- MODIFICACIÓN: Instanciar el modelo de QC ---
-        from app.models.control_calidad_insumo import ControlCalidadInsumoModel
-        self.control_calidad_insumo_model = ControlCalidadInsumoModel()
-        # --- FIN MODIFICACIÓN ---
-
         try:
             orden_actual_res, status = self.get_orden(orden_id)
             if not orden_actual_res.get('success'):
@@ -770,251 +803,179 @@ class OrdenCompraController:
             orden_actual = orden_actual_res.get('data')
 
             if orden_actual.get('estado') != 'EN_RECEPCION':
-                return {'success': False, 'error': f"La recepción solo puede procesarse si la orden está 'EN RECEPCION'. Estado actual: {orden_actual.get('estado')}"}
+                return {'success': False, 'error': f"Estado incorrecto: {orden_actual.get('estado')}"}
 
             paso = form_data.get('paso')
-            items_originales_map = {str(item['id']): item for item in orden_actual.get('items', [])}
 
+            # --- PASO 1: VERIFICACIÓN DE CANTIDAD ---
             if paso == '1':
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_recibidas_form = form_data.getlist('cantidad_recibida[]')
 
                 if len(item_ids) != len(cantidades_recibidas_form):
-                    logger.error(f"Error de formulario en recepción OC {orden_id}: Descalce de listas. item_ids ({len(item_ids)}) vs cantidad_recibida ({len(cantidades_recibidas_form)})")
-                    return {'success': False, 'error': 'Error en el formulario: la cantidad de items no coincide con la cantidad de campos de recepción.'}
+                    return {'success': False, 'error': 'Error en formulario: descalce de items.'}
 
-                # --- PASO 1 SÓLO GUARDA Y AVANZA ---
                 for i, item_id_str in enumerate(item_ids):
                     cantidad_recibida = float(cantidades_recibidas_form[i])
                     self.model.item_model.update(int(item_id_str), {'cantidad_recibida': cantidad_recibida})
 
                 self.model.update(orden_id, {'paso_recepcion': 1})
-                return {'success': True, 'message': 'Paso 1: Cantidades verificadas correctamente. Proceda al control de calidad.'}
+                return {'success': True, 'message': 'Paso 1 completado. Proceda al control de calidad.'}
 
+            # --- PASO 2: CONTROL DE CALIDAD Y CIERRE ---
             elif paso == '2':
-                # --- INICIO DE LA LÓGICA MODIFICADA PARA PASO 2 ---
                 if orden_actual.get('paso_recepcion') != 1:
-                    return {'success': False, 'error': 'Debe completar el Paso 1 (Verificación de Cantidad) primero.'}
+                    return {'success': False, 'error': 'Debe completar el Paso 1 primero.'}
+
+                # 1. Capturar la decisión del usuario (Auto vs Manual)
+                modo_oc = form_data.get('modo_oc', 'auto') # Default a auto si no viene
 
                 item_ids = form_data.getlist('item_id[]')
                 cantidades_aprobadas_form = form_data.getlist('cantidad_aprobada[]')
-                # --- NUEVOS CAMPOS ---
                 cantidades_cuarentena_form = form_data.getlist('cantidad_cuarentena[]')
                 cantidades_rechazadas_form = form_data.getlist('cantidad_rechazada[]')
                 resultado_inspeccion_form = form_data.getlist('resultado_inspeccion[]')
                 comentarios_form = form_data.getlist('comentarios[]')
 
-                if not (len(item_ids) == len(cantidades_aprobadas_form) == len(cantidades_cuarentena_form) ==
-                        len(cantidades_rechazadas_form) == len(resultado_inspeccion_form) == len(comentarios_form)):
-                    logger.error(f"Error de formulario en recepción OC {orden_id}: Descalce de listas en Paso 2...")
-                    return {'success': False, 'error': 'Error en el formulario: descalce en las listas de control de calidad...'}
+                # Validaciones de formulario...
+                if not (len(item_ids) == len(cantidades_aprobadas_form)):
+                     return {'success': False, 'error': 'Error en formulario Paso 2.'}
 
+                # Refrescamos items
                 items_result, _ = self.get_orden(orden_id)
                 items_actualizados = items_result.get('data', {}).get('items', [])
+                items_originales_map = {str(item['id']): item for item in items_actualizados}
 
-                # 1. Verificamos la discrepancia de cantidad (Solicitado vs Recibido)
+                # Flags de estado
                 hay_discrepancia_cantidad = False
-                descripcion_discrepancia = "Discrepancia en cantidades recibidas:\n"
+                hay_fallo_calidad = False
+                descripcion_problemas = ""
 
+                # 2. Detectar Discrepancia Global (Solicitado vs Recibido Físico en Paso 1)
                 for item in items_actualizados:
                     solicitada = float(item.get('cantidad_solicitada', 0))
                     recibida = float(item.get('cantidad_recibida', 0))
-                    if not math.isclose(recibida, solicitada):
+                    if not math.isclose(recibida, solicitada) and recibida < solicitada:
                         hay_discrepancia_cantidad = True
-                        descripcion_discrepancia += f"- Insumo ID {item['insumo_id']}: Solicitado={solicitada}, Recibido={recibida}\n"
+                        descripcion_problemas += f"- Faltante Físico: {item['insumo_nombre']} (Ped: {solicitada}, Llegó: {recibida})\n"
 
-                # 2. Verificamos el fallo de calidad (Recibido vs Aprobado)
-                hay_fallo_calidad = False
-                descripcion_fallo_calidad = "Fallo en control de calidad:\n"
-
-                # --- MODIFICACIÓN: Renombrado ---
+                # 3. Procesar QC y preparar lotes
                 items_para_crear_lote = []
-
-                items_originales_map = {str(item['id']): item for item in items_actualizados}
 
                 for i, item_id_str in enumerate(item_ids):
                     item_original = items_originales_map.get(item_id_str)
                     if not item_original: continue
 
-                    item_id = int(item_id_str)
-                    cantidad_aprobada = float(cantidades_aprobadas_form[i])
-                    cantidad_cuarentena = float(cantidades_cuarentena_form[i])
-                    cantidad_rechazada = float(cantidades_rechazadas_form[i])
-                    total_recibido_item = float(item_original.get('cantidad_recibida', 0))
+                    cant_aprobada = float(cantidades_aprobadas_form[i])
+                    cant_cuarentena = float(cantidades_cuarentena_form[i])
+                    cant_rechazada = float(cantidades_rechazadas_form[i])
+                    total_recibido = float(item_original.get('cantidad_recibida', 0))
 
-                    # --- MODIFICACIÓN: Recolectar datos de QC ---
-                    qc_data_for_lote = None
-
-                    if cantidad_rechazada > 0 or cantidad_cuarentena > 0:
+                    # Detectar fallo de calidad
+                    if cant_rechazada > 0 or cant_cuarentena > 0:
                         hay_fallo_calidad = True
-
                         motivo = resultado_inspeccion_form[i]
                         comentarios = comentarios_form[i]
-                        decision = "RECHAZADO" if cantidad_rechazada > 0 else "EN CUARENTENA"
-                        cantidad_afectada = cantidad_rechazada if cantidad_rechazada > 0 else cantidad_cuarentena
+                        tipo_fallo = "RECHAZADO" if cant_rechazada > 0 else "CUARENTENA"
+                        cantidad_afectada = cant_rechazada if cant_rechazada > 0 else cant_cuarentena
 
-                        desc_fallo = (f"- Insumo ID {item_original['insumo_id']}: {cantidad_afectada} {decision}. "
-                                      f"Motivo: {motivo}. Comentarios: {comentarios}\n")
-                        descripcion_fallo_calidad += desc_fallo
+                        descripcion_problemas += (f"- Calidad {tipo_fallo}: {item_original['insumo_nombre']} "
+                                                  f"({cantidad_afectada} un.). Motivo: {motivo}. {comentarios}\n")
 
-                        # (La lógica de la foto es compleja, la omitimos por ahora)
-                        foto_url = None
-
-                        qc_data_for_lote = {
+                        qc_data = {
                             'usuario_supervisor_id': usuario_id,
-                            'decision_final': decision,
+                            'decision_final': tipo_fallo,
                             'comentarios': comentarios,
                             'resultado_inspeccion': motivo,
-                            'foto_url': foto_url
-                            # 'lote_insumo_id' y 'orden_compra_id' se añaden en la función de crear lote
+                            'foto_url': None
                         }
-                        # --- FIN RECOLECCIÓN ---
+                    else:
+                        qc_data = None
 
-                    if total_recibido_item > 0:
+                    if total_recibido > 0:
                         items_para_crear_lote.append({
                             'data': item_original,
-                            'cantidad_total_recibida': total_recibido_item,
-                            'cantidad_aprobada': cantidad_aprobada,
-                            'cantidad_cuarentena': cantidad_cuarentena,
-                            'qc_data': qc_data_for_lote # <-- Se pasan los datos de QC
+                            'cantidad_total_recibida': total_recibido,
+                            'cantidad_aprobada': cant_aprobada,
+                            'cantidad_cuarentena': cant_cuarentena,
+                            'qc_data': qc_data
                         })
 
-                # 3. Creamos los lotes
+                # 4. Crear Lotes (Esto consolida el stock real en el sistema)
                 lotes_creados, errores_lote = self._crear_lotes_para_items_recibidos(
                     items_para_crear_lote, orden_actual, usuario_id
                 )
 
-                # 4. Decidimos el resultado final
                 if errores_lote:
-                    error_str = ", ".join(errores_lote)
-                    return self._manejar_escenario_fallido(orden_actual, "Error creando lotes", error_str, orden_produccion_controller)
+                    # Si falla la creación de lotes, es un error de sistema, no de flujo.
+                    return {'success': False, 'error': f"Error creando inventario: {', '.join(errores_lote)}"}
 
-                if hay_fallo_calidad:
-                    # ESCENARIO FALLIDO (CALIDAD)
-                    self._crear_reclamo_automatico(orden_actual, "Fallo en Control de Calidad", descripcion_fallo_calidad)
+                # 5. Decisión final basada en los flags
+                if hay_discrepancia_cantidad or hay_fallo_calidad:
 
-                    # --- ¡¡INICIO DE LA NUEVA ALERTA n8n (POR CALIDAD)!! ---
+                    # A. Crear Reclamo
+                    tipo_problema = "Fallo de Calidad" if hay_fallo_calidad else "Recepción Incompleta"
+                    self._crear_reclamo_automatico(orden_actual, tipo_problema, descripcion_problemas)
+
+                    # B. Enviar Webhook (Notificación)
                     try:
-                        # 1. Reutilizamos el mismo webhook de alerta de OC
-                        N8N_OC_ALERTA_URL = "https://n8n-kthy.onrender.com/webhook/alerta-oc-hija" # <-- ¡Verifica esta URL!
-
-                        # 2. URL BASE DE TU APLICACIÓN
+                        N8N_OC_ALERTA_URL = "https://n8n-kthy.onrender.com/webhook/alerta-oc-hija"
                         BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
-
-                        # 3. Preparar el payload (usando la descripción del FALLO DE CALIDAD)
                         payload = {
                             "oc_id": orden_id,
-                            "oc_codigo": orden_actual.get('codigo_oc', f"ID {orden_id}"),
-                            "proveedor_nombre": orden_actual.get('proveedor_nombre', 'N/A'),
-                            # ¡Usamos la descripción del fallo de calidad!
-                            "descripcion": descripcion_fallo_calidad.strip(),
+                            "oc_codigo": orden_actual.get('codigo_oc'),
+                            "proveedor_nombre": orden_actual.get('proveedor_nombre'),
+                            "descripcion": descripcion_problemas.strip(),
                             "link_url": f"{BASE_APP_URL}/compras/detalle/{orden_id}"
                         }
-
-                        # 4. Enviar
-                        # (Asegúrate de tener la función 'enviar_webhook_async' al inicio de este archivo)
                         enviar_webhook_async(N8N_OC_ALERTA_URL, payload)
+                    except Exception as e_hook:
+                        logger.error(f"Error webhook: {e_hook}")
 
-                    except Exception as e_webhook:
-                        logger.error(f"Error al iniciar el hilo del webhook de n8n (Fallo Calidad): {e_webhook}")
-                    # --- ¡¡FIN DE LA ALERTA n8n!! ---
+                    # C. Manejar Estados de OP y OC Hija usando la función centralizada
+                    return self._manejar_escenario_fallido(
+                        orden_data=orden_actual,
+                        motivo=tipo_problema,
+                        descripcion=descripcion_problemas,
+                        orden_produccion_controller=orden_produccion_controller,
+                        modo_oc=modo_oc,  # <-- Pasamos la decisión del usuario
+                        usuario_id=usuario_id
+                    )
 
-                    # 4. Continuamos con el flujo de error original
-                    return self._manejar_escenario_fallido(orden_actual, "Fallo en Control de Calidad", descripcion_fallo_calidad, orden_produccion_controller)
-
-                if hay_discrepancia_cantidad:
-                    # ESCENARIO FALLIDO (CANTIDAD)
-                    self._crear_reclamo_automatico(orden_actual, "Cantidad incorrecta", descripcion_discrepancia)
-
-                    if orden_actual.get('orden_produccion_id'):
-                        orden_produccion_controller.cambiar_estado_orden_simple(orden_actual['orden_produccion_id'], 'EN ESPERA')
-
-                    self.model.update(orden_id, {'estado': 'RECEPCION_INCOMPLETA'})
-
-                    # --- ¡¡INICIO DE LA NUEVA ALERTA n8n!! ---
-                    try:
-                        # 1. URL del Webhook (la que ya tienes)
-                        N8N_OC_ALERTA_URL = "https://n8n-kthy.onrender.com/webhook/alerta-oc-hija" # <-- ¡Verifica esta URL!
-
-                        # 2. URL BASE DE TU APLICACIÓN (la que mencionaste)
-                        BASE_APP_URL = "https://tp-principal-frozen.onrender.com"
-
-                        # 3. Preparar el payload MEJORADO
-                        payload = {
-                            "oc_id": orden_id, # <-- ID para construir el enlace
-                            "oc_codigo": orden_actual.get('codigo_oc', f"ID {orden_id}"),
-                            "proveedor_nombre": orden_actual.get('proveedor_nombre', 'N/A'),
-                            "descripcion": descripcion_discrepancia.strip(),
-                            "link_url": f"{BASE_APP_URL}/compras/detalle/{orden_id}" # <-- ¡El enlace directo!
-                        }
-
-                        # 4. Enviar
-                        enviar_webhook_async(N8N_OC_ALERTA_URL, payload)
-
-                    except Exception as e_webhook:
-                        logger.error(f"Error al iniciar el hilo del webhook de n8n (OC Hija): {e_webhook}")
-                    # --- ¡¡FIN DE LA ALERTA n8n!! ---
-
-                    return {
-                        'success': True,
-                        'partial': True,
-                        'message': f'Recepción Parcial Completada. Se crearon {lotes_creados} lotes. Se generó un reclamo por items faltantes.'
-                    }
-
-                # 5. Escenario Exitoso (Todo OK)
+                # 6. Escenario Exitoso (Recepción Perfecta)
                 else:
-                    update_result = self.model.update(orden_id, {'estado': 'RECEPCION_COMPLETA'})
+                    self.model.update(orden_id, {'estado': 'RECEPCION_COMPLETA'})
 
-                    if update_result.get('success'):
-                        # --- INICIO DE LA NUEVA LÓGICA ---
-                        id_op_vinculada = orden_actual.get('orden_produccion_id')
-                        if id_op_vinculada:
-                            # 1. Buscar todas las OCs para esta OP
-                            todas_ocs_res = self.model.get_all({'orden_produccion_id': id_op_vinculada})
-                            if todas_ocs_res.get('success'):
-                                todas_ocs = todas_ocs_res.get('data', [])
+                    # Verificar OP vinculada
+                    id_op_vinculada = orden_actual.get('orden_produccion_id')
+                    if id_op_vinculada:
+                        # Verificar si TODAS las OCs de esa OP están completas
+                        todas_ocs_res = self.model.get_all({'orden_produccion_id': id_op_vinculada})
+                        if todas_ocs_res.get('success'):
+                            todas_ocs = todas_ocs_res.get('data', [])
+                            # Actualizar estado en memoria de la actual
+                            for oc in todas_ocs:
+                                if oc['id'] == orden_id: oc['estado'] = 'RECEPCION_COMPLETA'
 
-                                # Sobrescribir el estado de la OC actual en la lista, ya que puede no estar actualizado
-                                for oc in todas_ocs:
-                                    if oc['id'] == orden_id:
-                                        oc['estado'] = 'RECEPCION_COMPLETA'
-                                        break
+                            if all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in todas_ocs):
+                                logger.info(f"Todas las OCs completas. Actualizando OP {id_op_vinculada}.")
+                                orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
+                    else:
+                        # Es una OC manual sin OP, verificar stock general
+                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
 
-                                # 2. Verificar si TODAS están completas
-                                if all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in todas_ocs):
-                                    logger.info(f"Todas las OCs para la OP {id_op_vinculada} están completas. Actualizando OP a 'LISTA PARA PRODUCIR'.")
-                                    # Llamar al método que verifica stock y cambia el estado de la OP
-                                    orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
-                                else:
-                                    ocs_pendientes = [oc.get('codigo_oc') for oc in todas_ocs if oc.get('estado') != 'RECEPCION_COMPLETA']
-                                    logger.info(f"La OC {orden_actual.get('codigo_oc')} se completó, pero la OP {id_op_vinculada} aún espera las OCs: {', '.join(ocs_pendientes)}.")
-                        else:
-                             # Si la OC es manual, se ejecuta la verificación general para todas las OPs en espera.
-                            logger.info(f"La OC {orden_actual.get('codigo_oc')} es manual. Verificando todas las OPs en espera de insumos.")
-                            orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
-                        # --- FIN DE LA NUEVA LÓGICA ---
+                    # Cerrar OC padre si existe
+                    id_padre = orden_actual.get('complementa_a_orden_id')
+                    if id_padre:
+                        self.model.update(id_padre, {'estado': 'RECEPCION_COMPLETA'})
 
-                        id_padre = orden_actual.get('complementa_a_orden_id')
-                        if id_padre:
-                            logger.info(f"La OC Hija {orden_actual.get('codigo_oc')} se completó. Cerrando OC Padre ID: {id_padre}.")
-                            padre_update_result = self.model.update(id_padre, {'estado': 'RECEPCION_COMPLETA'})
-
-                            if padre_update_result.get('success'):
-                                oc_padre_data = padre_update_result.get('data', {})
-                                detalle = (f"La OC Padre {oc_padre_data.get('codigo_oc')} se marcó como 'RECEPCION_COMPLETA' "
-                                           f"automáticamente tras la completitud de la OC Hija {orden_actual.get('codigo_oc')}.")
-                                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Cierre Automático', detalle)
-                            else:
-                                logger.error(f"Error al intentar cerrar la OC Padre ID: {id_padre}. Error: {padre_update_result.get('error')}")
-
-                    return {'success': True, 'message': f'Escenario Exitoso: Recepción completada y {lotes_creados} lotes creados y reservados.'}
-                # --- FIN LÓGICA PASO 2 ---
+                    return {'success': True, 'message': f'Recepción Completa. {lotes_creados} lotes ingresados.'}
 
             else:
-                return {'success': False, 'error': 'Paso de recepción no válido.'}
+                return {'success': False, 'error': 'Paso inválido.'}
 
         except Exception as e:
-            logger.error(f"Error crítico procesando la recepción de la orden {orden_id}: {e}", exc_info=True)
+            logger.error(f"Error procesando recepción: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     # --- INICIO DE LA MODIFICACIÓN ---

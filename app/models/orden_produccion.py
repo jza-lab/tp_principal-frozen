@@ -218,11 +218,13 @@ class OrdenProduccionModel(BaseModel):
 
                     processed_data.append(item)
 
+                # --- INICIO DE LA LÓGICA DE HERENCIA DE PEDIDOS PARA OPS HIJAS ---
+
+                # 1. Primera pasada: Obtener pedidos asociados directamente
                 op_ids = [op['id'] for op in processed_data]
                 pedidos_por_op = {}
 
                 if op_ids:
-                    # Obtenemos todos los items de pedido vinculados a estas OP, incluyendo los datos del pedido.
                     items_result = self.db.table('pedido_items').select(
                         'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente, estado)'
                     ).in_('orden_produccion_id', op_ids).execute()
@@ -233,14 +235,46 @@ class OrdenProduccionModel(BaseModel):
                             if op_id not in pedidos_por_op:
                                 pedidos_por_op[op_id] = []
                             pedido_info = item.get('pedido')
-                            if pedido_info:
-                                # Evitamos duplicados si múltiples items de un mismo pedido apuntan a la misma OP
-                                if not any(p['id'] == pedido_info['id'] for p in pedidos_por_op[op_id]):
-                                    pedidos_por_op[op_id].append(pedido_info)
+                            if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_por_op.get(op_id, [])):
+                                pedidos_por_op[op_id].append(pedido_info)
 
-                # Adjuntamos la lista de pedidos (o una lista vacía) a cada OP
+                # 2. Identificar OPs hijas que necesitan heredar la asociación
+                parent_op_ids_needed = set()
                 for op in processed_data:
-                    op['pedidos_asociados'] = pedidos_por_op.get(op['id'], [])
+                    parent_id = op.get('id_op_padre')
+                    if parent_id and not pedidos_por_op.get(op['id']):
+                        parent_op_ids_needed.add(parent_id)
+
+                # 3. Obtener los pedidos de los padres, si es necesario
+                pedidos_de_padres = {}
+                if parent_op_ids_needed:
+                    parent_items_result = self.db.table('pedido_items').select(
+                        'orden_produccion_id, pedido:pedidos!pedido_items_pedido_id_fkey(id, nombre_cliente, estado)'
+                    ).in_('orden_produccion_id', list(parent_op_ids_needed)).execute()
+
+                    if parent_items_result.data:
+                        for item in parent_items_result.data:
+                            parent_op_id = item['orden_produccion_id']
+                            if parent_op_id not in pedidos_de_padres:
+                                pedidos_de_padres[parent_op_id] = []
+                            pedido_info = item.get('pedido')
+                            if pedido_info and not any(p['id'] == pedido_info['id'] for p in pedidos_de_padres.get(parent_op_id, [])):
+                                pedidos_de_padres[parent_op_id].append(pedido_info)
+
+                # 4. Asignar los pedidos a cada OP (directos o heredados)
+                for op in processed_data:
+                    op_id = op['id']
+                    parent_id = op.get('id_op_padre')
+                    
+                    direct_pedidos = pedidos_por_op.get(op_id)
+                    if direct_pedidos:
+                        op['pedidos_asociados'] = direct_pedidos
+                    elif parent_id and parent_id in pedidos_de_padres:
+                        op['pedidos_asociados'] = pedidos_de_padres[parent_id]
+                    else:
+                        op['pedidos_asociados'] = []
+                
+                # --- FIN DE LA LÓGICA DE HERENCIA ---
 
                 return {'success': True, 'data': processed_data}
             else:

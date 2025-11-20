@@ -90,12 +90,16 @@ def obtener_productos():
 @permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'produccion_consulta', 'almacen_consulta_stock')
 def obtener_producto_por_id(id_producto):
     try:
-        producto_resp = producto_controller.obtener_producto_por_id(id_producto)
-        if not producto_resp.get('success'):
-            flash(producto_resp.get('error', 'Producto no encontrado.'), 'error')
-            return redirect(url_for('productos.obtener_productos'))
+        response_producto = producto_controller.obtener_producto_por_id(id_producto)
         
-        producto = producto_resp['data']
+        if not response_producto.get('success'):
+             flash(response_producto.get('error', 'Producto no encontrado'), 'error')
+             return redirect(url_for("productos.obtener_productos"))
+
+        producto = response_producto.get('data')
+
+        response_insumos, status_insumo = insumo_controller.obtener_insumos()
+        insumos = response_insumos.get("data", [])
 
         receta_completa = None
         receta_items = []

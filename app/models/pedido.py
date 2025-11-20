@@ -5,6 +5,7 @@ from postgrest.exceptions import APIError
 from datetime import date, timedelta, datetime
 from app.utils import estados
 
+from decimal import Decimal # Importar Decimal
 logger = logging.getLogger(__name__)
 
 class PedidoModel(BaseModel):
@@ -18,92 +19,104 @@ class PedidoModel(BaseModel):
 
     def get_one_with_items_and_op_status(self, pedido_id: int) -> Dict:
         """
-        Obtiene un pedido con sus items, y para cada item vinculado a una OP,
-        añade el estado de esa OP. También añade una bandera 'todas_ops_completadas'
-        al diccionario principal del pedido.
+        Obtiene un pedido con sus items y todas las OPs asociadas (padre e hijas).
+        Cada item tendrá una lista `ordenes_produccion` con los detalles de las OPs.
         """
-        from app.models.orden_produccion import OrdenProduccionModel # Importación local
+        from app.models.orden_produccion import OrdenProduccionModel
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
+        from collections import defaultdict
+        from decimal import Decimal
 
-        pedido_result = self.get_one_with_items(pedido_id) # Reutiliza tu método existente
+        pedido_result = self.get_one_with_items(pedido_id)
 
         if not pedido_result.get('success'):
-            return pedido_result # Devolver el error original
+            return pedido_result
 
         pedido_data = pedido_result['data']
         items = pedido_data.get('items', [])
 
-        # 1. Recolectar IDs de OPs vinculadas
-        op_ids_vinculadas = []
+        if not items:
+            pedido_data['todas_ops_completadas'] = True
+            return {'success': True, 'data': pedido_data}
+
+        # 1. Para cada item del pedido, recolectar las OPs directamente asignadas
+        all_op_ids = set()
+        ops_por_item = defaultdict(set)
+        item_ids = [item['id'] for item in items]
+
+        # Buscar en la tabla de asignaciones, que es la fuente de verdad
+        asignacion_model = AsignacionPedidoModel()
+        asignaciones_res = asignacion_model.find_all(filters={'pedido_item_id': ('in', item_ids)})
+
+        if asignaciones_res.get('success') and asignaciones_res.get('data'):
+            for asignacion in asignaciones_res['data']:
+                op_id = asignacion['orden_produccion_id']
+                item_id = asignacion['pedido_item_id']
+                all_op_ids.add(op_id)
+                ops_por_item[item_id].add(op_id)
+
+        # Asegurar que la OP padre (directa del item) también esté, por si no hay asignación explícita
         for item in items:
-            op_id = item.get('orden_produccion_id')
-            if op_id:
-                op_ids_vinculadas.append(op_id)
+            if item.get('orden_produccion_id'):
+                op_id = item.get('orden_produccion_id')
+                all_op_ids.add(op_id)
+                ops_por_item[item['id']].add(op_id)
 
-        # 2. Si hay OPs vinculadas, obtener sus estados
-        op_estados = {}
-        todas_completadas = True # Asumir True inicialmente
+        # 2. Si hay OPs, obtener sus datos completos y calcular la producción total asignada
+        ops_data_map = {}
+        total_cantidad_producida_asignada = Decimal('0') # Para la lógica de 'todas_ops_completadas'
 
-        if op_ids_vinculadas:
+        if all_op_ids:
             op_model = OrdenProduccionModel()
-            # Usamos find_by_ids para obtener todas las OPs en una sola consulta
-            ops_result = op_model.find_by_ids(list(set(op_ids_vinculadas))) # set() para evitar duplicados
+            ops_result = op_model.find_by_ids(list(all_op_ids))
 
             if ops_result.get('success'):
-                ops_encontradas = ops_result.get('data', [])
-                for op in ops_encontradas:
-                    op_estados[op['id']] = op['estado']
+                for op in ops_result['data']:
+                    ops_data_map[op['id']] = op
+                    # Sumar solo si la OP está completada para la lógica de 'todas_ops_completadas'
+                    if op.get('estado') == 'COMPLETADA':
+                         total_cantidad_producida_asignada += Decimal(str(op.get('cantidad_producida', '0')))
+                    elif op.get('estado') == 'CONSOLIDADA':
+                         pass
             else:
-                # Error crítico si no podemos obtener las OPs
-                return {'success': False, 'error': f"Error al obtener estados de OPs vinculadas: {ops_result.get('error')}"}
+                return {'success': False, 'error': f"Error al obtener datos de OPs vinculadas: {ops_result.get('error')}"}
 
-            # Verificar si todas están completadas
-            if len(op_estados) != len(set(op_ids_vinculadas)):
-                 # Si no encontramos todas las OPs que esperábamos
-                 todas_completadas = False
-                 logging.warning(f"Pedido {pedido_id}: No se encontraron todas las OPs vinculadas en la BD.")
-
-
-            for op_id in op_ids_vinculadas:
-                estado = op_estados.get(op_id)
-                if estado != 'COMPLETADA':
-                    todas_completadas = False
-                    break # Basta con una que no esté completada
-        else:
-             # Si no hay NINGUNA OP vinculada, consideramos que está listo (ej: solo productos comprados)
-             todas_completadas = True
-
-
-        # 3. Añadir estado, cantidades parciales y bandera al pedido
+        # 3. Adjuntar la lista de OPs a cada item y CALCULAR STOCK REAL
         for item in items:
-            op_id = item.get('orden_produccion_id')
-            if op_id:
-                item['op_estado'] = op_estados.get(op_id, 'DESCONOCIDO')
-            else:
-                item['op_estado'] = None
+            # A. Lógica de OPs (Mantenemos la de HEAD para soporte múltiple)
+            item_op_ids = ops_por_item.get(item['id'], set())
+            item['ordenes_produccion'] = [ops_data_map[op_id] for op_id in item_op_ids if op_id in ops_data_map]
 
-            # Calcular cantidad de lote desde las reservas
-            reservas_res = self.db.table('reservas_productos').select('cantidad_reservada').eq('pedido_item_id', item['id']).execute()
-            
+            # B. Lógica de Stock (Mantenemos la CORRECCIÓN de dev-gonza)
+            # IMPORTANTE: Filtrar por estado='RESERVADO' para que las reservas 'CANCELADO' (robadas) no sumen.
+            reservas_res = self.db.table('reservas_productos')\
+                .select('cantidad_reservada')\
+                .eq('pedido_item_id', item['id'])\
+                .eq('estado', 'RESERVADO')\
+                .execute()
+
             cantidad_lote = 0
             if reservas_res.data:
-                cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data)
-            
+                cantidad_lote = sum(float(r['cantidad_reservada']) for r in reservas_res.data)
+
             item['cantidad_lote'] = cantidad_lote
-            item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
+            item['cantidad_produccion'] = max(0, float(item['cantidad']) - cantidad_lote)
 
-        pedido_data['todas_ops_completadas'] = todas_completadas
+        # 4. Determinar si el pedido está completo basado en las cantidades
+        total_cantidad_requerida = sum(Decimal(str(it.get('cantidad', '0'))) for it in items)
 
-        # 4. Obtener datos de despacho si existen (CORREGIDO)
+        # El pedido está completo si la producción asignada cubre la demanda total.
+        # Nota: Esto es una simplificación, idealmente se compara item por item.
+        pedido_data['todas_ops_completadas'] = total_cantidad_producida_asignada >= total_cantidad_requerida
+
+        # 5. Obtener datos de despacho
         pedido_data['despacho'] = None
         try:
-                       # Corrección: La relación es directa desde pedidos, no desde despacho_items
-            despacho_res = self.db.table('despachos').select('*, vehiculo:vehiculo_id(*)').eq('id_pedido', pedido_id).maybe_single().execute()
-            if despacho_res.data:
-                pedido_data['despacho'] = despacho_res.data
-
-        except APIError as e:
-            # Si la consulta a despachos falla (ej. RLS), no bloquear la carga del pedido.
-            logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {e.message}")
+            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
+            if item_despacho_res and item_despacho_res.data:
+                pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
+        except Exception as e: # Usamos Exception genérico si APIError no está importado
+            logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {str(e)}")
 
         return {'success': True, 'data': pedido_data}
 
@@ -208,7 +221,7 @@ class PedidoModel(BaseModel):
                             query = query.lte('fecha_solicitud', value)
                         else:
                             query = query.eq(key, value)
-            
+
             query = query.order("fecha_solicitud", desc=True).order("id", desc=True)
             result = query.execute()
             return {'success': True, 'data': result.data}
@@ -469,6 +482,54 @@ class PedidoModel(BaseModel):
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}
 
+    def find_all_items_with_pedido_info(self, filters: Optional[Dict] = None, order_by: Optional[str] = None) -> Dict:
+        """
+        Obtiene todos los items de pedido que coinciden con los filtros,
+        anidando la información completa del pedido padre.
+        AHORA SOPORTA ORDENAMIENTO.
+        """
+        try:
+            # Se especifica la clave foránea para resolver la ambigüedad en la relación.
+            query = self.db.table('pedido_items').select('*, pedido:pedidos!pedido_items_pedido_id_fkey!inner(*)')
+
+            if filters:
+                for key, value in filters.items():
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        if operator == 'in':
+                            query = query.in_(key, filter_value)
+                        else:
+                            query = query.eq(key, filter_value)
+                    else:
+                        query = query.eq(key, value)
+
+            if order_by:
+                # El formato es "tabla_relacionada.columna.direccion", ej: "pedido.created_at.asc"
+                parts = order_by.split('.')
+                if len(parts) == 3:
+                    foreign_table = parts[0]
+                    column_name = parts[1]
+                    ascending = parts[2].lower() == 'asc'
+                    
+                    # Usamos el método .order() con el argumento `foreign_table`
+                    query = query.order(column_name, desc=not ascending, foreign_table=foreign_table)
+
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+
+        except Exception as e:
+            logger.error(f"Error al obtener items de pedido con info de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
+    def update_items(self, item_ids: List[int], data: Dict) -> Dict:
+        """Actualiza una lista de items de pedido por sus IDs."""
+        try:
+            result = self.db.table('pedido_items').update(data).in_('id', item_ids).execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error actualizando items de pedido: {str(e)}")
+            return {'success': False, 'error': str(e)}
+
     def find_by_cliente(self, id_cliente: int):
         try:
             result = self.db.table(self.get_table_name()).select('*').eq('id_cliente', id_cliente).execute()
@@ -501,14 +562,14 @@ class PedidoModel(BaseModel):
         if not pedido_ids:
             return {'success': True, 'data': []}
 
-        try:            
+        try:
             # Consulta corregida para incluir relaciones que se usan en los templates
             result = self.db.table(self.get_table_name()).select(
                 '*, '
                 'cliente:clientes(email, nombre, cuit, razon_social), '
                 'direccion:id_direccion_entrega(*)'
             ).in_('id', pedido_ids).execute()
-            
+
             if result.data:
                 return {'success': True, 'data': result.data}
             else:
@@ -559,7 +620,7 @@ class PedidoModel(BaseModel):
                 if not item_data: continue
                 pedido_data = item_data.get('pedidos')
                 if not pedido_data: continue
-                    
+
                     # Usar el codigo_pedido si existe, sino un fallback con el ID
                 pedido_nombre = pedido_data.get('codigo_pedido') or f"Venta-{pedido_data.get('id')}"
                 pedidos.append({
@@ -598,7 +659,7 @@ class PedidoModel(BaseModel):
         try:
             # Paso 1: Obtener los IDs de los pedidos dentro del rango de fechas.
             pedidos_response = self.db.table(self.get_table_name()).select('id').gte('fecha_solicitud', start_date.isoformat()).lte('fecha_solicitud', end_date.isoformat()).execute()
-            
+
             if not pedidos_response.data:
                 return {'success': True, 'data': {}}
 
@@ -611,13 +672,13 @@ class PedidoModel(BaseModel):
 
             if not items_response.data:
                 return {'success': True, 'data': {}}
-            
+
             sales_data = {}
             for item in items_response.data:
                 # Asegurarse de que el producto no sea nulo
                 if not item.get('productos'):
                     continue
-                
+
                 nombre_producto = item['productos']['nombre']
                 cantidad = float(item['cantidad'])
 
@@ -625,7 +686,7 @@ class PedidoModel(BaseModel):
                     sales_data[nombre_producto] += cantidad
                 else:
                     sales_data[nombre_producto] = cantidad
-            
+
             return {'success': True, 'data': sales_data}
 
         except Exception as e:
@@ -642,7 +703,7 @@ class PedidoModel(BaseModel):
             query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
             query = query.lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
-            
+
             return {'success': True, 'count': result.count}
 
         except Exception as e:
@@ -659,7 +720,7 @@ class PedidoModel(BaseModel):
             query = query.gte('fecha_solicitud', fecha_inicio.isoformat())
             query = query.lte('fecha_solicitud', fecha_fin.isoformat())
             result = query.execute()
-            
+
             return {'success': True, 'count': result.count}
         except Exception as e:
             logger.error(f"Error contando pedidos por estados y rango de fecha: {str(e)}", exc_info=True)
@@ -691,7 +752,7 @@ class PedidoModel(BaseModel):
                     except (ValueError, TypeError):
                         # Ignorar si las fechas tienen un formato incorrecto
                         continue
-            
+
             return {'success': True, 'count': on_time_count}
 
         except Exception as e:

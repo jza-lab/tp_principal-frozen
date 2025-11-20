@@ -146,7 +146,14 @@ def aprobar(id):
     user = get_current_user()
     if hasattr(user, 'rol') and user.rol == 'ADMIN':
         flash('No tiene permisos para aprobar una orden de compra.', 'error')
-        return redirect(url_for('orden_compra.listar'))
+        return redirect(url_for('orden_compra.listar', 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
         
     controller = OrdenCompraController()
     usuario_id = get_jwt_identity()
@@ -158,7 +165,14 @@ def aprobar(id):
             f"Error al aprobar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    return redirect(url_for("orden_compra.listar"))
+    return redirect(url_for("orden_compra.listar", 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
 
 
 @orden_compra_bp.route("/<int:id>/editar", methods=["GET", "POST"])
@@ -198,7 +212,14 @@ def rechazar(id):
     user = get_current_user()
     if hasattr(user, 'rol') and user.rol == 'ADMIN':
         flash('No tiene permisos para rechazar una orden de compra.', 'error')
-        return redirect(url_for('orden_compra.listar'))
+        return redirect(url_for('orden_compra.listar', 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
         
     controller = OrdenCompraController()
     motivo = request.form.get("motivo", "No especificado")
@@ -210,7 +231,14 @@ def rechazar(id):
             f"Error al rechazar: {resultado.get('error', 'Error desconocido')}", "error"
         )
     
-    return redirect(url_for("orden_compra.listar"))
+    return redirect(url_for("orden_compra.listar", 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
 
 
 @orden_compra_bp.route("/<int:id>/marcar-en-recepcion", methods=["POST"])
@@ -226,7 +254,14 @@ def marcar_en_recepcion(id):
             "error",
         )
     
-    return redirect(url_for("orden_compra.listar"))
+    return redirect(url_for("orden_compra.listar", 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
 
 
 @orden_compra_bp.route("/<int:id>/marcar-en-transito", methods=["POST"])
@@ -242,7 +277,14 @@ def marcar_en_transito(id):
             "error",
         )
     
-    return redirect(url_for("orden_compra.listar"))
+    return redirect(url_for("orden_compra.listar", 
+            estado=request.args.get('estado'), 
+            op_id=request.args.get('op_id'),
+            filtro=request.args.get('filtro'),
+            rango_fecha=request.args.get('rango_fecha'),
+            op_codigo=request.args.get('op_codigo'),
+            search_term=request.args.get('search_term')
+        ))
 
 
 @orden_compra_bp.route("/recepcion/<int:orden_id>", methods=["POST"])
