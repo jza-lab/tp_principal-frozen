@@ -3,6 +3,8 @@ from app.models.orden_produccion import OrdenProduccionModel
 from app.models.control_calidad_producto import ControlCalidadProductoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
 from app.models.receta import RecetaModel
+from app.models.registro_paro_model import RegistroParoModel
+from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel
 from app.models.reclamo import ReclamoModel
 from app.models.pedido import PedidoModel
 from app.models.control_calidad_insumo import ControlCalidadInsumoModel
@@ -26,6 +28,8 @@ class IndicadoresController:
         self.control_calidad_producto_model = ControlCalidadProductoModel()
         self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
         self.receta_model = RecetaModel()
+        self.registro_paro_model = RegistroParoModel()
+        self.bloqueo_capacidad_model = BloqueoCapacidadModel()
         self.reclamo_model = ReclamoModel()
         self.pedido_model = PedidoModel()
         self.control_calidad_insumo_model = ControlCalidadInsumoModel()
@@ -282,42 +286,65 @@ class IndicadoresController:
     def _calcular_oee(self, fecha_inicio, fecha_fin):
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         ordenes_en_periodo = ordenes_res.get('data', [])
-        if not ordenes_en_periodo: return {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0}
+        if not ordenes_en_periodo:
+            return {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0}
 
-        # Optimización: Pre-cargar todas las operaciones de las recetas necesarias.
+        # 1. Tiempo de Producción Real (Tiempo de Carga)
+        tiempo_produccion_real = sum(
+            (datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds()
+            for op in ordenes_en_periodo if op.get('fecha_fin') and op.get('fecha_inicio')
+        )
+
+        # 2. Tiempo de Paradas
+        # Paradas de operario
+        paros_operario_res = self.registro_paro_model.find_all(filters=[('fecha_inicio', '>=', fecha_inicio), ('fecha_inicio', '<=', fecha_fin)])
+        tiempo_paradas_operario = 0
+        if paros_operario_res.get('success'):
+            for paro in paros_operario_res.get('data', []):
+                if paro.get('fecha_fin') and paro.get('fecha_inicio'):
+                    tiempo_paradas_operario += (datetime.fromisoformat(paro['fecha_fin']) - datetime.fromisoformat(paro['fecha_inicio'])).total_seconds()
+        
+        # Bloqueos de línea/capacidad
+        bloqueos_linea_res = self.bloqueo_capacidad_model.find_all(filters=[('fecha', '>=', fecha_inicio), ('fecha', '<=', fecha_fin)])
+        tiempo_paradas_linea_minutos = 0
+        if bloqueos_linea_res.get('success'):
+            tiempo_paradas_linea_minutos = sum(b.get('minutos_bloqueados', 0) for b in bloqueos_linea_res.get('data', []))
+        
+        tiempo_paradas_total = tiempo_paradas_operario + (tiempo_paradas_linea_minutos * 60)
+
+        # 3. Tiempo Operativo
+        tiempo_operativo = tiempo_produccion_real - tiempo_paradas_total
+
+        # 4. Tiempo Estándar (Ideal)
         receta_ids = [op['receta_id'] for op in ordenes_en_periodo if op.get('receta_id')]
         cache_operaciones = self._preparar_cache_operaciones(receta_ids)
+        tiempo_produccion_planificado = sum(
+            self._calcular_carga_op_con_cache(op, cache_operaciones) for op in ordenes_en_periodo
+        ) * 60  # a segundos
 
-        # Usar la caché para calcular el tiempo planificado sin consultas N+1.
-        tiempo_planificado = sum(self._calcular_carga_op_con_cache(op, cache_operaciones) for op in ordenes_en_periodo) * 60
-        
-        # Esta línea usa la función vieja, la comentamos y usamos la optimizada
-        # tiempo_produccion_planificado = sum([self._calcular_carga_op(op) for op in ordenes_en_periodo]) * 60 # a segundos
-        tiempo_produccion_planificado = tiempo_planificado # Usamos la versión con caché
+        # 5. Cálculo de Componentes OEE
+        # Disponibilidad = Tiempo Operando / Tiempo Total Disponible
+        disponibilidad = tiempo_operativo / tiempo_produccion_real if tiempo_produccion_real > 0 else 0
 
-        tiempo_produccion_real = sum([(datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() for op in ordenes_en_periodo if op.get('fecha_fin') and op.get('fecha_inicio')])
+        # Rendimiento = Tiempo Teórico / Tiempo que estuvo operando
+        rendimiento = float(tiempo_produccion_planificado) / tiempo_operativo if tiempo_operativo > 0 else 0
 
-        # Logging para depuración
-        logger.info(f"Cálculo de OEE para el período {fecha_inicio} a {fecha_fin}")
-        logger.info(f"Órdenes en período: {len(ordenes_en_periodo)}")
-        logger.info(f"Tiempo de Producción Planificado (segundos): {tiempo_produccion_planificado}")
-        logger.info(f"Tiempo de Producción Real (segundos): {tiempo_produccion_real}")
-
-        disponibilidad = float(tiempo_produccion_real) / float(tiempo_produccion_planificado) if tiempo_produccion_planificado > 0 else 0
-
-        produccion_real = sum([op.get('cantidad_producida', 0) for op in ordenes_en_periodo])
-        produccion_teorica = sum([op.get('cantidad_planificada', 0) for op in ordenes_en_periodo])
-        rendimiento = produccion_real / produccion_teorica if produccion_teorica > 0 else 0
-
+        # Calidad = Unidades Buenas / Total de Unidades Producidas
+        produccion_real = sum(op.get('cantidad_producida', 0) for op in ordenes_en_periodo)
         unidades_buenas_res = self.control_calidad_producto_model.get_total_unidades_aprobadas_en_periodo(fecha_inicio, fecha_fin)
-        unidades_buenas = 0
-        if unidades_buenas_res['success']:
-            unidades_buenas = unidades_buenas_res['total_unidades']
-            
+        unidades_buenas = unidades_buenas_res.get('total_unidades', 0) if unidades_buenas_res.get('success') else 0
+        
         calidad = unidades_buenas / produccion_real if produccion_real > 0 else 0
 
+        # 6. Cálculo Final OEE
         oee = disponibilidad * rendimiento * calidad * 100
-        return {"valor": round(oee, 2), "disponibilidad": round(disponibilidad, 2), "rendimiento": round(rendimiento, 2), "calidad": round(calidad, 2)}
+        
+        return {
+            "valor": round(oee, 2),
+            "disponibilidad": round(disponibilidad, 2),
+            "rendimiento": round(rendimiento, 2),
+            "calidad": round(calidad, 2)
+        }
         
     def _preparar_cache_costos_por_productos(self, producto_ids: list):
         if not producto_ids: return {}

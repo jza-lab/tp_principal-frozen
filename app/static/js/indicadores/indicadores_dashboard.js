@@ -1,134 +1,135 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tabElements = document.querySelectorAll('#kpiTab .nav-link');
-    const tabContentContainer = document.getElementById('kpiTabContent');
+    const dashboardState = {}; 
     let loadedTabs = new Set();
-    let chartInstances = {}; // Para almacenar instancias de ECharts
+    let chartInstances = {}; 
 
     // --- UTILS ---
-    function obtenerUrlApi(category) {
-        const filterComponent = document.getElementById(`interactive-filter-${category}`);
-        if (!filterComponent) {
-            return `/reportes/api/indicadores/${category}`; // Sin filtro
-        }
-        
-        const activeButton = filterComponent.querySelector('.filter-pill-group .btn-primary');
-        const periodType = activeButton ? activeButton.dataset.period : 'semana';
-        let params = '';
 
-        if (periodType === 'semana') {
-            const weekValue = filterComponent.querySelector('input[type="week"]').value;
-            if(weekValue) params = `semana=${weekValue}`;
-        } else if (periodType === 'mes') {
-            const monthValue = filterComponent.querySelector('input[type="month"]').value;
-            if(monthValue) params = `mes=${monthValue}`;
-        } else if (periodType === 'ano') {
-            const activeYearButton = filterComponent.querySelector('.year-btn.btn-primary');
-            if(activeYearButton) params = `ano=${activeYearButton.dataset.year}`;
-        }
-        
+    function obtenerUrlApi(category) {
+        const state = dashboardState[category] || { period: 'semana', value: '' };
+        let params = '';
+        if (state.value) params = `${state.period}=${state.value}`;
         return `/reportes/api/indicadores/${category}?${params}`;
     }
 
     function showLoading(tabPane) {
         tabPane.innerHTML = `
-            <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos...</p>
+            <div class="loading-placeholder text-center py-5">
+                <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                <p class="mt-2 text-muted small">Calculando indicadores...</p>
             </div>`;
     }
 
     function showError(tabPane, message) {
-        // --- MODIFICADO: Añadido console.log para debugging ---
-        console.log("Mostrando error en UI:", message); 
-        // --- MODIFICADO: Mensaje de error más claro ---
         tabPane.innerHTML = `
-            <div class="alert alert-danger text-center p-5" role="alert">
-                <strong>Error al cargar:</strong> ${message || 'No se pudieron cargar los datos.'}
+            <div class="alert alert-danger d-flex align-items-center m-3 p-2 small" role="alert">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2"></i>
+                <div>${message || 'Error de carga.'}</div>
             </div>`;
     }
     
-    // --- RENDER FUNCTIONS ---
+    // --- RENDER FUNCTIONS (COMPONENTES UI) ---
 
-    function createChart(containerId, options, category) {
+    function createChart(containerId, options) {
         const chartDom = document.getElementById(containerId);
         if (!chartDom) return;
+        if (chartInstances[containerId]) chartInstances[containerId].dispose();
 
-        // Limpiar instancia previa si existe
-        if (chartInstances[containerId]) {
-            chartInstances[containerId].dispose();
-        }
-
-        // --- NUEVA LÓGICA: Mostrar mensaje si no hay datos ---
-        const hasData = options.series && options.series.some(s => s.data && s.data.length > 0);
+        // Verificación especial para Gauges (que no usan 'series.data' convencional)
+        const isGauge = options.series && options.series[0] && options.series[0].type === 'gauge';
+        const hasData = isGauge || (options.series && options.series.some(s => s.data && s.data.length > 0));
         
         if (!hasData) {
-            chartDom.innerHTML = `<div class="d-flex justify-content-center align-items-center h-100 text-muted">No hay datos disponibles para el período seleccionado.</div>`;
-            return; // No inicializar ECharts
+            chartDom.innerHTML = `<div class="d-flex flex-column justify-content-center align-items-center h-100 text-muted opacity-50 small"><span>Sin datos</span></div>`;
+            return;
         }
-        // --- FIN NUEVA LÓGICA ---
 
         const chart = echarts.init(chartDom);
         chart.setOption(options);
         chartInstances[containerId] = chart;
+        window.addEventListener('resize', () => chart.resize());
     }
 
-    function renderKpiCard(title, value, subtitle, iconClass = 'bi-bar-chart-line') {
+    // TARJETA KPI CON TOOLTIP MEJORADA
+    function renderKpiCard(title, value, subtitle, iconClass = 'bi-bar-chart-line', tooltipInfo = null) {
+        // Tooltip HTML construction
+        const tooltipAttr = tooltipInfo 
+            ? `data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="${tooltipInfo}"` 
+            : '';
+        
+        const infoIcon = tooltipInfo
+            ? `<i class="bi bi-info-circle-fill text-muted ms-2" style="font-size: 0.8rem; cursor: help;" ${tooltipAttr}></i>`
+            : '';
+
         return `
-        <div class="col-md-4 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-header">${title}</div>
-                <div class="card-body">
-                    <i class="bi ${iconClass} fs-1 text-primary"></i>
-                    <h2 class="card-title my-2">${value}</h2>
-                    <p class="card-text text-muted">${subtitle}</p>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center">
+                            <h6 class="card-subtitle text-muted text-uppercase fw-bold mb-0" style="font-size: 0.75rem;">${title}</h6>
+                            ${infoIcon}
+                        </div>
+                        <div class="icon-box bg-primary bg-opacity-10 text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                            <i class="bi ${iconClass}" style="font-size: 1rem;"></i>
+                        </div>
+                    </div>
+                    <h3 class="card-title mb-1 fw-bold text-dark fs-3">${value}</h3>
+                    <small class="text-muted" style="font-size: 0.75rem;">${subtitle}</small>
                 </div>
             </div>
         </div>`;
     }
 
-    function renderChartCard(chartId, title, subtitle, tooltip, downloadId, chartHeight = '400px') {
+    function renderChartCard(chartId, title, subtitle, tooltip, downloadId, chartHeight = '300px') {
          return `
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-3 px-3 d-flex justify-content-between align-items-start">
                     <div>
-                        <h5 class="card-title mb-0">${title}</h5>
+                        <h6 class="fw-bold mb-0 text-dark">${title}</h6>
                         <small class="text-muted">${subtitle}</small>
                     </div>
-                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="${tooltip}"></i>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted p-0 no-arrow" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><button class="dropdown-item small" id="${downloadId}"><i class="bi bi-download me-2"></i>Descargar imagen</button></li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="${chartId}" style="height: ${chartHeight};"></div>
-                    <p id="${chartId}-descripcion" class="mt-2 text-center small"></p>
-                </div>
-                <div class="card-footer text-end">
-                    <button id="${downloadId}" class="btn btn-sm btn-outline-secondary">Descargar</button>
+                <div class="card-body px-3 pb-3 pt-0">
+                    <div id="${chartId}" style="height: ${chartHeight}; width: 100%;"></div>
                 </div>
             </div>`;
     }
-    
-    // --- DATA LOADING & RENDERING ---
+
+    // --- DATA LOADING ---
     
     async function loadTabData(category) {
         const tabPane = document.querySelector(`#${category}`);
         if (!tabPane) return;
-
-        // Previene recargas innecesarias al solo cambiar de pestaña
-        if (loadedTabs.has(category)) {
-            return;
-        }
+        if (loadedTabs.has(category)) return;
 
         showLoading(tabPane);
 
         try {
-            const response = await fetch(obtenerUrlApi(category));
-            if (!response.ok) {
-                throw new Error(`Error del servidor: ${response.statusText} (Status: ${response.status})`);
-            }
+            // Inyectar estilos personalizados
+            injectCustomStyles();
+
+            const url = obtenerUrlApi(category);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Error API: ${response.status}`);
             const data = await response.json();
 
-            tabPane.innerHTML = ''; // Limpiar el spinner
+            tabPane.innerHTML = ''; 
+
+            if (['comercial', 'inventario', 'produccion', 'calidad', 'financiera'].includes(category)) {
+                await renderizarFiltroInteractivo(tabPane, category);
+            }
+
+            const contentContainer = document.createElement('div');
+            contentContainer.id = `${category}-content`;
+            tabPane.appendChild(contentContainer);
 
             const renderFunctions = {
                 'produccion': renderProduccion,
@@ -139,269 +140,345 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             if (renderFunctions[category]) {
-                await renderFunctions[category](data); // Usar await para funciones asíncronas
-            } else {
-                showError(tabPane, `No hay una función de renderizado para '${category}'.`);
+                await renderFunctions[category](data, contentContainer);
             }
 
-            loadedTabs.add(category); // Marcar como cargado para evitar recargas
-
-            // Re-inicializar tooltips de Bootstrap después de renderizar
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            });
+            loadedTabs.add(category);
+            // Inicializar tooltips de Bootstrap
+            [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]')).map(el => new bootstrap.Tooltip(el));
 
         } catch (error) {
-            console.error(`Error detallado al cargar datos para ${category}:`, error);
+            console.error(error);
             showError(tabPane, error.message);
         }
     }
     
-    function renderProduccion(data) {
-        const container = document.getElementById('produccion');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('OEE', `${data.oee.valor.toFixed(2)}%`, `Disponibilidad: ${(data.oee.disponibilidad * 100).toFixed(1)}% | Rendimiento: ${(data.oee.rendimiento * 100).toFixed(1)}% | Calidad: ${(data.oee.calidad * 100).toFixed(1)}%`);
-        content += renderKpiCard('Cumplimiento del Plan', `${data.cumplimiento_plan.valor.toFixed(2)}%`, `${data.cumplimiento_plan.completadas_a_tiempo} de ${data.cumplimiento_plan.planificadas} órdenes a tiempo`);
+    // --- RENDER LOGIC: PRODUCCIÓN (CON GAUGE OEE) ---
+
+    function renderProduccion(data, container) {
+        // 1. Fila Superior: Visualización OEE y Cumplimiento
+        let content = `
+        <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+                <div class="card shadow-sm border-0 h-100">
+                    <div class="card-body position-relative p-2">
+                        <h6 class="text-center text-muted fw-bold text-uppercase mt-2 mb-0">OEE Global</h6>
+                        <div id="oee-gauge-chart" style="height: 250px;"></div>
+                        <div class="text-center position-absolute w-100" style="bottom: 15px;">
+                            <span class="badge bg-light text-dark border" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
+                                <i class="bi bi-info-circle me-1"></i> Eficiencia General de los Equipos
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="row g-3 h-100 align-content-center">
+                    ${renderKpiCard('Disponibilidad', `${(data.oee.disponibilidad * 100).toFixed(1)}%`, 'Tiempo Operativo vs Planificado', 'bi-clock-history', 
+                        '<b>Fórmula:</b> (Tiempo Operativo / Tiempo Planificado) <br>Mide las pérdidas por paradas no planificadas o averías.')}
+                    
+                    ${renderKpiCard('Rendimiento', `${(data.oee.rendimiento * 100).toFixed(1)}%`, 'Velocidad Real vs Teórica', 'bi-speedometer', 
+                        '<b>Fórmula:</b> (Tiempo Ganado / Tiempo Operativo) <br>Mide si la máquina está produciendo a su velocidad máxima teórica.')}
+                    
+                    ${renderKpiCard('Calidad', `${(data.oee.calidad * 100).toFixed(1)}%`, 'Piezas Buenas vs Totales', 'bi-check-circle', 
+                        '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).')}
+                    
+                    ${renderKpiCard('Cumplimiento Plan', `${data.cumplimiento_plan.valor.toFixed(1)}%`, `${data.cumplimiento_plan.completadas_a_tiempo} órdenes a tiempo`, 'bi-calendar-check', 
+                        'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.')}
+                </div>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-12">
+                 ${renderChartCard('gantt-produccion', 'Cronograma de Producción', 'Visualización de órdenes activas', 'Diagrama de Gantt de las próximas 15 órdenes.', 'dl-gantt', '250px')}
+            </div>
+        </div>
+        `;
+        
+        container.innerHTML = content;
+
+        // --- RENDERIZAR GAUGE OEE ---
+        const oeeVal = data.oee.valor.toFixed(1);
+        // Colores estándar industria: Rojo < 65, Amarillo < 85, Verde > 85
+        const colorPalo = [[0.65, '#dc3545'], [0.85, '#ffc107'], [1, '#198754']];
+
+        createChart('oee-gauge-chart', {
+            series: [{
+                type: 'gauge',
+                startAngle: 180,
+                endAngle: 0,
+                min: 0,
+                max: 100,
+                splitNumber: 5,
+                radius: '90%',
+                itemStyle: { color: '#58D9F9' },
+                progress: { show: true, width: 18 },
+                pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, offsetCenter: [0, '-60%'], itemStyle: { color: 'auto' } },
+                axisLine: { lineStyle: { width: 18, color: colorPalo } },
+                axisTick: { distance: -18, length: 8, lineStyle: { color: '#fff', width: 2 } },
+                splitLine: { distance: -18, length: 30, lineStyle: { color: '#fff', width: 3 } },
+                axisLabel: { color: 'auto', distance: 20, fontSize: 12 },
+                detail: { valueAnimation: true, formatter: '{value}%', color: 'auto', fontSize: 30, offsetCenter: [0, '20%'] },
+                data: [{ value: oeeVal }]
+            }]
+        });
+
+        // Renderizar Gantt (Placeholder simple para visualización)
+        if(data.ordenes_gantt && data.ordenes_gantt.length > 0){
+             const opNames = data.ordenes_gantt.map(o => `OP-${o.id_orden_produccion}`);
+             const opFechas = data.ordenes_gantt.map(o => {
+                 // Simplificado: Duración basada en fecha inicio y fin
+                 return [new Date(o.fecha_inicio_planificada).getTime(), new Date(o.fecha_fin_planificada).getTime()];
+             });
+             // Nota: Un Gantt real en ECharts requiere configuración compleja 'custom'. 
+             // Aquí usaremos un bar chart horizontal simple por ahora o texto si es muy complejo.
+             createChart('gantt-produccion', {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                xAxis: { type: 'value', scale: true, axisLabel: { formatter: (val) => new Date(val).toLocaleDateString() } },
+                yAxis: { type: 'category', data: opNames },
+                series: [{ 
+                    type: 'bar', 
+                    stack: 'total',
+                    itemStyle: { color: 'transparent' },
+                    data: data.ordenes_gantt.map(o => new Date(o.fecha_inicio_planificada).getTime()) // Offset transparente
+                }, {
+                    type: 'bar',
+                    stack: 'total',
+                    itemStyle: { color: '#3b82f6', borderRadius: 4 },
+                    data: data.ordenes_gantt.map(o => new Date(o.fecha_fin_planificada).getTime() - new Date(o.fecha_inicio_planificada).getTime()) // Duración real
+                }]
+             });
+        } else {
+            document.getElementById('gantt-produccion').innerHTML = '<div class="text-center pt-5 text-muted">No hay datos de Gantt</div>';
+        }
+    }
+
+    function renderCalidad(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} un. descartadas`, 'bi-x-circle',
+            'Porcentaje de productos detectados como defectuosos durante el proceso de producción interno, antes de salir de fábrica.');
+        
+        content += renderKpiCard('Reclamos', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos activos`, 'bi-emoji-frown',
+            'Porcentaje de pedidos entregados que resultaron en un reclamo formal por parte del cliente.');
+        
+        content += renderKpiCard('Rechazo Prov.', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} lotes`, 'bi-truck-flatbed',
+            'Porcentaje de lotes de materia prima rechazados en la recepción por no cumplir estándares de calidad.');
         content += '</div>';
         container.innerHTML = content;
     }
 
-    function renderCalidad(data) {
-        const container = document.getElementById('calidad');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} de ${data.tasa_rechazo_interno.inspeccionadas} unidades rechazadas`);
-        content += renderKpiCard('Reclamos de Clientes', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos en ${data.tasa_reclamos_clientes.pedidos_entregados} pedidos`);
-        content += renderKpiCard('Rechazo de Proveedores', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} de ${data.tasa_rechazo_proveedores.recibidos} lotes rechazados`);
-        content += '</div>';
-        container.innerHTML = content;
-    }
-
-    async function renderComercial(data) {
-        const container = document.getElementById('comercial');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Cumplimiento de Pedidos', `${data.kpis_comerciales.cumplimiento_pedidos.valor.toFixed(2)}%`, `${data.kpis_comerciales.cumplimiento_pedidos.completados} de ${data.kpis_comerciales.cumplimiento_pedidos.total} pedidos a tiempo`);
-        content += renderKpiCard('Valor Promedio Pedido', `$${data.kpis_comerciales.valor_promedio_pedido.valor.toFixed(2)}`, `Basado en ${data.kpis_comerciales.valor_promedio_pedido.num_pedidos} pedidos`);
-        content += '</div><div class="row mt-4"><div class="col-lg-6 mb-4">';
-        content += renderChartCard('top-productos-chart', 'Top 5 Productos Vendidos', 'Productos más vendidos por cantidad.', 'Suma de cantidades en pedidos completados.', 'download-top-productos');
-        content += '</div><div class="col-lg-6 mb-4">';
-        content += renderChartCard('top-clientes-chart', 'Top 5 Clientes', 'Clientes con mayor valor de compra.', 'Suma del total de pedidos completados.', 'download-top-clientes');
+    async function renderComercial(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        content += renderKpiCard('Cumplimiento', `${data.kpis_comerciales.cumplimiento_pedidos.valor.toFixed(1)}%`, `${data.kpis_comerciales.cumplimiento_pedidos.completados} completados`, 'bi-box-seam',
+            'Ratio de pedidos entregados exitosamente sobre el total de pedidos recibidos en el periodo.');
+        
+        content += renderKpiCard('Ticket Medio', `$${data.kpis_comerciales.valor_promedio_pedido.valor.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`, `${data.kpis_comerciales.valor_promedio_pedido.num_pedidos} pedidos`, 'bi-receipt',
+            'Valor monetario promedio de cada venta realizada. (Ingresos Totales / Número de Pedidos).');
+        content += '</div><div class="row g-3">';
+        
+        content += '<div class="col-lg-6">';
+        content += renderChartCard('top-productos-chart', 'Top Productos', 'Por cantidad vendida', 'Los productos más populares.', 'download-top-productos');
+        content += '</div><div class="col-lg-6">';
+        content += renderChartCard('top-clientes-chart', 'Top Clientes', 'Por facturación', 'Los clientes que más ingresos generan.', 'download-top-clientes');
         content += '</div></div>';
+        
         container.innerHTML = content;
-
-        await renderizarFiltroInteractivo('comercial', 'comercial');
 
         createChart('top-productos-chart', {
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            xAxis: { type: 'category', data: data.top_productos_vendidos.labels },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', data: data.top_productos_vendidos.labels, axisLabel: { interval: 0, rotate: 15, fontSize: 10 } },
             yAxis: { type: 'value' },
-            series: [{ data: data.top_productos_vendidos.data, type: 'bar' }]
+            series: [{ data: data.top_productos_vendidos.data, type: 'bar', itemStyle: { color: '#4e73df', borderRadius: [4, 4, 0, 0] }, barWidth: '40%' }]
         });
         
         createChart('top-clientes-chart', {
              tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', radius: '50%', data: data.top_clientes.labels.map((name, i) => ({value: data.top_clientes.data[i], name})) }]
+             legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: {fontSize: 10} },
+             series: [{ type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'], itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 }, label: { show: false }, data: data.top_clientes.labels.map((name, i) => ({value: data.top_clientes.data[i], name})) }]
         });
     }
 
-    function renderFinanciera(data) {
-        const container = document.getElementById('financiera');
-        let content = '<div class="row mt-4">';
-        // Aquí podrías renderizar KPIs financieros si los hubiera en el futuro.
-        // Por ahora, como no hay KPIs numéricos definidos para esta sección,
-        // podrías mostrar un mensaje o simplemente dejarlo vacío.
-        // Para este caso, mostraremos los KPIs que ya se calculan en el backend
-        // aunque no estuvieran visibles antes.
+    function renderFinanciera(data, container) {
+        let content = '<div class="row g-3 mb-3">';
         if (data.kpis_financieros) {
-            content += renderKpiCard(data.kpis_financieros.facturacion_total.etiqueta, `$${data.kpis_financieros.facturacion_total.valor.toFixed(2)}`, `Período seleccionado`);
-            content += renderKpiCard(data.kpis_financieros.costo_total.etiqueta, `$${data.kpis_financieros.costo_total.valor.toFixed(2)}`, `Costo de Ventas (COGS)`);
-            content += renderKpiCard(data.kpis_financieros.beneficio_bruto.etiqueta, `$${data.kpis_financieros.beneficio_bruto.valor.toFixed(2)}`, `Facturación - Costo Total`);
-            content += renderKpiCard(data.kpis_financieros.margen_beneficio.etiqueta, `${data.kpis_financieros.margen_beneficio.valor.toFixed(2)}%`, `(Beneficio / Facturación) * 100`);
+            content += renderKpiCard('Facturación', `$${data.kpis_financieros.facturacion_total.valor.toLocaleString(undefined, {maximumFractionDigits: 0})}`, `Ingresos`, 'bi-wallet2', 'Total facturado en ventas confirmadas durante el periodo seleccionado.');
+            content += renderKpiCard('Costos', `$${data.kpis_financieros.costo_total.valor.toLocaleString(undefined, {maximumFractionDigits: 0})}`, `Directos`, 'bi-cash', 'Estimación de costos directos de producción (MP + MO + GF estimados) asociados a las ventas.');
+            content += renderKpiCard('Margen', `${data.kpis_financieros.margen_beneficio.valor.toFixed(1)}%`, `Beneficio`, 'bi-percent', 'Porcentaje de ganancia bruta sobre la facturación. ((Ingresos - Costos) / Ingresos).');
+        } else {
+            content += '<div class="col-12"><div class="alert alert-light border text-center text-muted small">Sin datos financieros.</div></div>';
         }
         content += '</div>';
         container.innerHTML = content;
     }
     
-    function renderInventario(data) {
-        const container = document.getElementById('inventario');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Rotación de Inventario', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Basado en un COGS de $${data.kpis_inventario.rotacion_inventario.cogs.toFixed(0)} y stock valorizado de $${data.kpis_inventario.rotacion_inventario.inventario_valorizado.toFixed(0)}`);
-        content += '</div><div class="row mt-4"><div class="col-lg-6 mb-4">';
-        content += renderChartCard('antiguedad-insumos-chart', 'Antigüedad de Stock (Insumos)', 'Valor del inventario por antigüedad.', 'Basado en fecha de ingreso de lotes.', 'download-antiguedad-insumos');
-        content += '</div><div class="col-lg-6 mb-4">';
-        content += renderChartCard('antiguedad-productos-chart', 'Antigüedad de Stock (Productos)', 'Valor del inventario por antigüedad.', 'Basado en fecha de producción de lotes.', 'download-antiguedad-productos');
+    function renderInventario(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        content += renderKpiCard('Rotación', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Vueltas/Año`, 'bi-arrow-repeat', 
+            'Número de veces que el inventario se ha renovado en el último año. Una rotación alta indica ventas eficientes.');
+        
+        // Si tuvieras un KPI de Stock Bajo Mínimo, lo añadirías aquí
+        if (data.cobertura_stock) {
+             const cobVal = data.cobertura_stock.valor === 'Inf' ? '∞' : data.cobertura_stock.valor;
+             content += renderKpiCard('Cobertura', cobVal, `Días estimados`, 'bi-shield-check', 'Días estimados que durará el stock actual basado en el consumo promedio diario.');
+        }
+
+        content += '</div><div class="row g-3">';
+        content += '<div class="col-lg-6">';
+        content += renderChartCard('antiguedad-insumos-chart', 'Stock Insumos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los insumos almacenados.', 'download-antiguedad-insumos');
+        content += '</div><div class="col-lg-6">';
+        content += renderChartCard('antiguedad-productos-chart', 'Stock Productos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los productos terminados en almacén.', 'download-antiguedad-productos');
         content += '</div></div>';
+        
         container.innerHTML = content;
 
-        createChart('antiguedad-insumos-chart', {
+        const pieOptions = (labels, dataValues) => ({
              tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', data: data.antiguedad_stock_insumos.labels.map((name, i) => ({value: data.antiguedad_stock_insumos.data[i], name})) }]
+             legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: {fontSize: 10} },
+             series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'], itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 }, label: { show: false }, data: labels.map((name, i) => ({value: dataValues[i], name})) }]
         });
-        createChart('antiguedad-productos-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', data: data.antiguedad_stock_productos.labels.map((name, i) => ({value: data.antiguedad_stock_productos.data[i], name})) }]
-        });
+
+        createChart('antiguedad-insumos-chart', pieOptions(data.antiguedad_stock_insumos.labels, data.antiguedad_stock_insumos.data));
+        createChart('antiguedad-productos-chart', pieOptions(data.antiguedad_stock_productos.labels, data.antiguedad_stock_productos.data));
     }
 
-    async function renderizarFiltroInteractivo(containerId, category) {
-        // --- 1. Definir HTML y CSS para el nuevo filtro ---
-        const style = `
-            <style>
-                .filter-pill-group .btn {
-                    border-radius: 50rem; /* p-pill */
-                    margin-right: 0.5rem;
-                    font-size: 0.9rem;
-                }
-                .filter-selector-container {
-                    padding: 1rem;
-                    border: 1px solid #dee2e6;
-                    border-radius: 0.375rem;
-                    margin-top: 1rem;
-                    transition: all 0.3s ease-in-out;
-                    overflow: hidden;
-                }
-                .filter-selector-content {
-                    display: none;
-                    opacity: 0;
-                    transition: opacity 0.3s ease-in-out;
-                }
-                .filter-selector-content.active {
-                    display: block;
-                    opacity: 1;
-                }
-                .tab-pane.fade-out {
-                    opacity: 0;
-                    transition: opacity 0.15s ease-out;
-                }
-                .tab-pane.fade-in {
-                    opacity: 1;
-                    transition: opacity 0.15s ease-in;
-                }
-            </style>
-        `;
+    // --- FILTRO INTERACTIVO & ESTILOS ---
 
-        const filterHtml = `
-            <div id="interactive-filter-${category}" class="mb-4">
-                <div class="filter-pill-group" role="group">
-                    <button type="button" class="btn btn-primary" data-period="semana">Semana</button>
-                    <button type="button" class="btn btn-outline-secondary" data-period="mes">Mes</button>
-                    <button type="button" class="btn btn-outline-secondary" data-period="ano">Año</button>
+    async function renderizarFiltroInteractivo(container, category) {
+        // Lógica del filtro (igual que versión anterior)
+        if (!dashboardState[category]) dashboardState[category] = { period: 'semana', value: '' };
+        const currentState = dashboardState[category];
+
+        let yearOptionsHtml = '';
+        if (currentState.period === 'ano') {
+            try {
+                const res = await fetch('/reportes/api/indicadores/anos-disponibles');
+                const json = await res.json();
+                if (json.success) {
+                    yearOptionsHtml = json.data.map(year => 
+                        `<option value="${year}" ${currentState.value == year ? 'selected' : ''}>${year}</option>`
+                    ).join('');
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        const toolbar = document.createElement('div');
+        toolbar.className = 'compact-toolbar';
+        
+        const btns = {
+            semana: currentState.period === 'semana' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+            mes: currentState.period === 'mes' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+            ano: currentState.period === 'ano' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+        };
+
+        let inputHtml = '';
+        if (currentState.period === 'semana') inputHtml = `<input type="week" class="form-control form-control-sm bg-white border" value="${currentState.value}" data-type="semana">`;
+        else if (currentState.period === 'mes') inputHtml = `<input type="month" class="form-control form-control-sm bg-white border" value="${currentState.value}" data-type="mes">`;
+        else if (currentState.period === 'ano') inputHtml = `<select class="form-select form-select-sm bg-white border" data-type="ano"><option value="">Seleccionar</option>${yearOptionsHtml}</select>`;
+
+        toolbar.innerHTML = `
+            <div class="d-flex align-items-center">
+                <span class="label-text me-2"><i class="bi bi-funnel-fill text-secondary"></i> Filtrar:</span>
+                <div class="bg-white p-1 rounded border d-inline-flex">
+                    <button type="button" class="btn btn-sm ${btns.semana} px-3 rounded-2 period-btn" data-period="semana">Semana</button>
+                    <button type="button" class="btn btn-sm ${btns.mes} px-3 rounded-2 period-btn" data-period="mes">Mes</button>
+                    <button type="button" class="btn btn-sm ${btns.ano} px-3 rounded-2 period-btn" data-period="ano">Año</button>
                 </div>
-                <div class="filter-selector-container">
-                    <div id="semana-selector-${category}" class="filter-selector-content active">
-                        <!-- Contenido del selector de semana irá aquí -->
-                        <input type="week" class="form-control">
-                    </div>
-                    <div id="mes-selector-${category}" class="filter-selector-content">
-                        <!-- Contenido del selector de mes irá aquí -->
-                        <input type="month" class="form-control">
-                    </div>
-                    <div id="ano-selector-${category}" class="filter-selector-content">
-                        <!-- Contenido del selector de año irá aquí -->
-                    </div>
-                </div>
+            </div>
+            <div class="d-flex align-items-center ms-auto">
+                <span class="label-text me-2 text-muted fw-normal small">Período:</span>
+                ${inputHtml}
             </div>
         `;
 
-        // --- 2. Insertar en el DOM y añadir lógica ---
-        const container = document.getElementById(containerId);
-        if (container) {
-            // Insertar estilos si no existen
-            if (!document.head.querySelector('#filter-styles')) {
-                const styleSheet = document.createElement('style');
-                styleSheet.id = 'filter-styles';
-                styleSheet.innerText = style;
-                document.head.appendChild(styleSheet);
-            }
-            container.insertAdjacentHTML('afterbegin', filterHtml);
-
-            // --- 3. Lógica del componente ---
-            const filterComponent = document.getElementById(`interactive-filter-${category}`);
-            const pillButtons = filterComponent.querySelectorAll('.filter-pill-group .btn');
-            const contentDivs = filterComponent.querySelectorAll('.filter-selector-content');
-
-            pillButtons.forEach(button => {
-                button.addEventListener('click', (e) => {
-                    e.preventDefault(); // Evitar cualquier comportamiento por defecto
-
-                    // Actualizar estilo de botones
-                    pillButtons.forEach(btn => {
-                        btn.classList.remove('btn-primary');
-                        btn.classList.add('btn-outline-secondary');
-                    });
-                    button.classList.add('btn-primary');
-                    button.classList.remove('btn-outline-secondary');
-
-                    // Mostrar el contenido correcto
-                    const period = button.dataset.period;
-                    contentDivs.forEach(div => {
-                        div.classList.remove('active');
-                    });
-                    document.getElementById(`${period}-selector-${category}`).classList.add('active');
-                    
-                    // No recargar aquí, solo al cambiar el valor del input
-                });
-            });
-
-            // Lógica para poblar selector de año
-            const yearSelectorContent = document.getElementById(`ano-selector-${category}`);
-            fetch('/reportes/api/indicadores/anos-disponibles')
-                .then(res => res.json())
-                .then(result => {
-                    if (result.success && result.data.length > 0) {
-                        const yearButtonsHTML = result.data.map(year => 
-                            `<button type="button" class="btn btn-sm btn-outline-primary year-btn" data-year="${year}">${year}</button>`
-                        ).join('');
-                        yearSelectorContent.innerHTML = `<div class="btn-group">${yearButtonsHTML}</div>`;
-                        
-                        // Add listeners to new year buttons
-                        const yearButtons = yearSelectorContent.querySelectorAll('.year-btn');
-                        yearButtons.forEach(btn => {
-                            btn.addEventListener('click', (e) => {
-                                e.preventDefault();
-                                
-                                // Manage active state visually by swapping classes
-                                yearButtons.forEach(b => {
-                                    b.classList.remove('btn-primary');
-                                    b.classList.add('btn-outline-primary');
-                                });
-                                btn.classList.add('btn-primary');
-                                btn.classList.remove('btn-outline-primary');
-
-                                // Reload tab data with the new year
-                                loadedTabs.delete(category);
-                                chartInstances = {};
-                                loadTabData(category);
-                            });
-                        });
-                    }
-                });
-
-            // Listeners para los inputs de semana y mes
-            ['week', 'month'].forEach(type => {
-                const input = filterComponent.querySelector(`input[type="${type}"]`);
-                input.addEventListener('change', (e) => {
-                    e.preventDefault();
+        toolbar.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (dashboardState[category].period !== e.target.dataset.period) {
+                    dashboardState[category].period = e.target.dataset.period;
+                    dashboardState[category].value = ''; 
                     loadedTabs.delete(category);
                     chartInstances = {};
                     loadTabData(category);
-                });
+                }
+            });
+        });
+        const inputElement = toolbar.querySelector('input, select');
+        if (inputElement) {
+            inputElement.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    dashboardState[category].value = e.target.value;
+                    loadedTabs.delete(category);
+                    chartInstances = {};
+                    loadTabData(category);
+                }
             });
         }
+        container.appendChild(toolbar);
     }
 
-    // --- EVENT LISTENERS ---
+    function injectCustomStyles() {
+        if (document.getElementById('dashboard-custom-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'dashboard-custom-styles';
+        style.innerHTML = `
+            /* Pestañas estilo 'Pills' Modernas */
+            #kpiTab {
+                border-bottom: none;
+                gap: 0.5rem;
+                margin-bottom: 1.5rem;
+            }
+            #kpiTab .nav-link {
+                border: 1px solid transparent;
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border-radius: 50rem; /* Pill shape */
+                padding: 0.5rem 1.25rem;
+                font-weight: 500;
+                transition: all 0.2s ease-in-out;
+            }
+            #kpiTab .nav-link:hover {
+                background-color: #e9ecef;
+                color: #495057;
+            }
+            #kpiTab .nav-link.active {
+                background-color: var(--app-primary, #0d6efd);
+                color: #fff;
+                box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
+            }
+            
+            /* Toolbar Compacta */
+            .compact-toolbar {
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 0.5rem 1rem;
+                margin-bottom: 1.5rem;
+                border: 1px solid #e9ecef;
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            .label-text { font-size: 0.85rem; font-weight: 600; color: #555; }
+            
+            /* Ajustes de Tarjetas */
+            .stat-card { transition: transform 0.2s; }
+            .stat-card:hover { transform: translateY(-2px); }
+            .tooltip-inner { max-width: 300px; text-align: left; }
+        `;
+        document.head.appendChild(style);
+    }
 
+    // --- INIT ---
     tabElements.forEach(tab => {
         tab.addEventListener('shown.bs.tab', event => {
             const category = event.target.dataset.category;
+            setTimeout(() => Object.values(chartInstances).forEach(chart => chart.resize()), 150);
             loadTabData(category);
         });
     });
 
-    // Cargar la primera pestaña activa al inicio
     const initialActiveTab = document.querySelector('#kpiTab .nav-link.active');
-    if (initialActiveTab) {
-        loadTabData(initialActiveTab.dataset.category);
-    }
+    if (initialActiveTab) loadTabData(initialActiveTab.dataset.category);
 });
