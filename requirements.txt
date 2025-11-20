@@ -43,3 +43,5 @@ flask-wtf==1.1.1
 pytest
 opencv-python-headless
 qrcode[pil]
+xhtml2pdf
+reportlab
