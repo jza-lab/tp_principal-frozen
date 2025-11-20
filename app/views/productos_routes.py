@@ -90,38 +90,48 @@ def obtener_productos():
 @permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'produccion_consulta', 'almacen_consulta_stock')
 def obtener_producto_por_id(id_producto):
     try:
-        producto= producto_controller.obtener_producto_por_id(id_producto)
+        producto_resp = producto_controller.obtener_producto_por_id(id_producto)
+        if not producto_resp.get('success'):
+            flash(producto_resp.get('error', 'Producto no encontrado.'), 'error')
+            return redirect(url_for('productos.obtener_productos'))
+        
+        producto = producto_resp['data']
 
-        response_insumos, status_insumo = insumo_controller.obtener_insumos()
-        insumos = response_insumos.get("data", [])
-        roles = usuario_controller.obtener_todos_los_roles()
-
-        receta_items = []
         receta_completa = None
+        receta_items = []
         receta_response = receta_controller.model.db.table('recetas').select('id').eq('producto_id', id_producto).execute()
+        
         if receta_response.data:
             receta_id = receta_response.data[0]['id']
             receta_resp, _ = receta_controller.obtener_receta_con_ingredientes(receta_id)
             if receta_resp.get('success'):
                 receta_completa = receta_resp['data']
                 receta_items = receta_completa.get("ingredientes", [])
-
-        insumos_dict = {str(insumo['id']): insumo for insumo in insumos}
-
+                
+                # Enriquecer los nombres de los roles en las operaciones
+                roles_map = {rol['id']: rol['nombre'] for rol in usuario_controller.obtener_todos_los_roles()}
+                if 'operaciones' in receta_completa:
+                    for op in receta_completa['operaciones']:
+                        op['roles_nombres'] = [roles_map.get(rol_id, 'N/A') for rol_id in op.get('roles_asignados', [])]
+        
+        response_insumos, status_insumo = insumo_controller.obtener_insumos()
+        insumos = response_insumos.get("data", [])
+        insumos_dict = {str(insumo['id_insumo']): insumo for insumo in insumos}
         for item in receta_items:
             insumo = insumos_dict.get(str(item['id_insumo']))
             if insumo:
                 item['nombre_insumo'] = insumo.get('nombre', 'Insumo no encontrado')
                 item['precio_unitario'] = insumo.get('precio_unitario', 0)
-                item['unidad_medida'] = insumo.get('unidad_medida', '')
             else:
-                item['nombre_insumo'] = ''
+                item['nombre_insumo'] = 'Insumo no encontrado'
                 item['precio_unitario'] = 0
-                item['unidad_medida'] = ''
 
-        return render_template("productos/perfil_producto.html",  producto=producto, insumos=insumos, receta_items=receta_items)
+        # Pasar el producto y la receta (que contiene las operaciones) por separado
+        return render_template("productos/perfil_producto.html", producto=producto, receta=receta_completa, receta_items=receta_items)
+
     except Exception as e:
-        logger.error(f"Error inesperado en obtener_producto_por_id: {str(e)}")
+        logger.error(f"Error inesperado en obtener_producto_por_id: {e}", exc_info=True)
+        flash("Ocurrió un error al cargar el detalle del producto.", "error")
         return redirect(url_for("productos.obtener_productos"))
 
 @productos_bp.route(
@@ -145,8 +155,9 @@ def actualizar_producto(id_producto):
                     "iva": 'iva' in form_data,
                     "vida_util_dias": form_data.get('vida_util_dias'),
                     "receta_items": [],
-                    "mano_de_obra": []
+                    "operaciones": []
                 }
+                # Procesar ingredientes
                 insumo_ids = form_data.getlist('insumo_id[]')
                 cantidades = form_data.getlist('cantidad[]')
                 for i in range(len(insumo_ids)):
@@ -154,12 +165,22 @@ def actualizar_producto(id_producto):
                         'id_insumo': insumo_ids[i],
                         'cantidad': cantidades[i]
                     })
-                rol_ids = form_data.getlist('mano_obra_rol_id[]')
-                horas = form_data.getlist('mano_obra_horas[]')
-                for i in range(len(rol_ids)):
-                    datos_payload['mano_de_obra'].append({
-                        'rol_id': rol_ids[i],
-                        'horas_estimadas': horas[i]
+                
+                # Procesar operaciones
+                nombres_op = form_data.getlist('operacion_nombre[]')
+                preps_op = form_data.getlist('operacion_prep[]')
+                ejecs_op = form_data.getlist('operacion_ejec[]')
+                secuencias_op = form_data.getlist('operacion_secuencia[]')
+
+                for i in range(len(nombres_op)):
+                    secuencia = secuencias_op[i]
+                    roles = form_data.getlist(f'operacion_roles_{secuencia}[]')
+                    datos_payload['operaciones'].append({
+                        'nombre_operacion': nombres_op[i],
+                        'tiempo_preparacion': preps_op[i],
+                        'tiempo_ejecucion_unitario': ejecs_op[i],
+                        'secuencia': secuencia,
+                        'roles': roles
                     })
 
             if not datos_payload:
@@ -281,9 +302,9 @@ def buscar_productos_api():
 def recalcular_costos_api():
     try:
         data = request.get_json()
-        mano_de_obra_items = data.get('mano_de_obra', [])
+        operaciones_data = data.get('operaciones', [])
         
-        response, status = producto_controller.recalcular_costos_dinamicos(mano_de_obra_items)
+        response, status = producto_controller.recalcular_costos_dinamicos(operaciones_data)
         return jsonify(response), status
     except Exception as e:
         logger.error(f"Error inesperado en recalcular_costos_api: {str(e)}")

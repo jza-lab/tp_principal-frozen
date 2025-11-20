@@ -31,3 +31,4 @@ class RecetaSchema(Schema):
 
     # Campo para anidar los ingredientes al crear o actualizar una receta
     ingredientes = fields.List(fields.Nested(RecetaIngredienteSchema), required=False)
+    operaciones = fields.List(fields.Dict(), required=False)

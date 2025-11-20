@@ -86,9 +86,8 @@ class ProductoController(BaseController):
                 data['codigo'] = self._generar_codigo_producto(data.get('nombre', ''))
 
             receta_items = data.pop('receta_items', [])
-            mano_de_obra_items = data.pop('mano_de_obra', [])
+            operaciones_data = data.pop('operaciones', []) # Cambiado de mano_de_obra
             linea_compatible_str = data.pop('linea_compatible', '2')
-            pasos_receta_data = data.pop('pasos_receta', [])
 
             validated_data = self.schema.load(data)
 
@@ -117,9 +116,9 @@ class ProductoController(BaseController):
 
             if receta_items:
                 self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
-            
-            if mano_de_obra_items:
-                self.receta_controller.gestionar_mano_de_obra_para_receta(receta_id, mano_de_obra_items)
+
+            if operaciones_data:
+                self.receta_controller.gestionar_operaciones_para_receta(receta_id, operaciones_data)
 
             # Recalcular todos los costos
             self._recalcular_costos_producto(producto_id)
@@ -139,7 +138,7 @@ class ProductoController(BaseController):
         """Actualiza un producto existente y su receta."""
         try:
             receta_items = data.pop('receta_items', None)
-            mano_de_obra_items = data.pop('mano_de_obra', None)
+            operaciones_data = data.pop('operaciones', None) # Cambiado de mano_de_obra
             validated_data = self.schema.load(data, partial=True)
 
             if 'codigo' in validated_data and validated_data['codigo'] != self.model.find_by_id(producto_id, 'id')['data']['codigo']:
@@ -165,8 +164,8 @@ class ProductoController(BaseController):
             if receta_items is not None:
                 self.receta_controller.gestionar_ingredientes_para_receta(receta_id, receta_items)
 
-            if mano_de_obra_items is not None:
-                self.receta_controller.gestionar_mano_de_obra_para_receta(receta_id, mano_de_obra_items)
+            if operaciones_data is not None:
+                self.receta_controller.gestionar_operaciones_para_receta(receta_id, operaciones_data)
 
             # Siempre recalcular costos al final
             self._recalcular_costos_producto(producto_id)
@@ -243,24 +242,27 @@ class ProductoController(BaseController):
             costo_materia_prima_res = self.receta_controller.calcular_costo_total_receta(receta_id)
             costo_materia_prima = costo_materia_prima_res['data']['costo_total'] if costo_materia_prima_res.get('success') else 0
 
-            # 3. Calcular Costo de Mano de Obra
-            mano_obra_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
-            mano_de_obra_items = mano_obra_res.get('data', {}).get('mano_de_obra', [])
+            # 3. Calcular Costo de Mano de Obra basado en Operaciones
+            receta_detallada_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
+            operaciones = receta_detallada_res.get('data', {}).get('operaciones', [])
             
             roles_res, _ = self.rol_controller.get_all_roles()
-            # Corrección explícita: Asegurarse de que 'roles' es una lista de diccionarios
             roles_data = roles_res.get('data', [])
-            if not isinstance(roles_data, list):
-                roles_data = []
-            roles_costo_map = {rol['id']: rol.get('costo_por_hora', 0) for rol in roles_data if isinstance(rol, dict)}
-            
-            costo_mano_obra = 0
-            total_horas_mano_obra = 0
-            for item in mano_de_obra_items:
-                costo_por_hora = Decimal(roles_costo_map.get(item['rol_id'], 0) or 0)
-                horas = Decimal(item.get('horas_estimadas', 0))
-                costo_mano_obra += costo_por_hora * horas
-                total_horas_mano_obra += horas
+            roles_costo_map = {rol['id']: Decimal(rol.get('costo_por_hora', 0) or 0) for rol in roles_data}
+
+            costo_mano_obra = Decimal(0)
+            total_minutos_mano_obra = Decimal(0)
+
+            for op in operaciones:
+                costo_por_minuto_operacion = sum(roles_costo_map.get(rol_id, 0) for rol_id in op.get('roles_asignados', [])) / Decimal(60)
+                
+                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
+                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                
+                costo_mano_obra += (tiempo_prep + tiempo_ejec) * costo_por_minuto_operacion
+                total_minutos_mano_obra += tiempo_prep + tiempo_ejec
+
+            total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
 
             # 4. Calcular Costos Fijos
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
@@ -429,23 +431,29 @@ class ProductoController(BaseController):
             logger.error(f"Error en actualizar_cantidad_minima_produccion: {str(e)}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
 
-    def recalcular_costos_dinamicos(self, mano_de_obra_items: List[Dict]) -> tuple:
+    def recalcular_costos_dinamicos(self, operaciones_data: List[Dict]) -> tuple:
         """
         Calcula dinámicamente el costo de mano de obra y los costos fijos aplicados
-        basado en los datos de mano de obra proporcionados, sin guardarlos en la DB.
+        basado en los datos de las operaciones de producción, sin guardarlos en la DB.
         """
         try:
             # Calcular Costo de Mano de Obra
             roles_res, _ = self.rol_controller.get_all_roles()
-            roles_costo_map = {rol['id']: rol.get('costo_por_hora', 0) for rol in roles_res.get('data', [])}
+            roles_costo_map = {rol['id']: Decimal(rol.get('costo_por_hora', 0) or 0) for rol in roles_res.get('data', [])}
             
             costo_mano_obra = Decimal(0)
-            total_horas_mano_obra = Decimal(0)
-            for item in mano_de_obra_items:
-                costo_por_hora = Decimal(roles_costo_map.get(int(item['rol_id']), 0) or 0)
-                horas = Decimal(item.get('horas_estimadas', 0))
-                costo_mano_obra += costo_por_hora * horas
-                total_horas_mano_obra += horas
+            total_minutos_mano_obra = Decimal(0)
+
+            for op in operaciones_data:
+                costo_por_minuto_operacion = sum(roles_costo_map.get(rol_id, 0) for rol_id in op.get('roles', [])) / Decimal(60)
+                
+                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
+                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                
+                costo_mano_obra += (tiempo_prep + tiempo_ejec) * costo_por_minuto_operacion
+                total_minutos_mano_obra += tiempo_prep + tiempo_ejec
+            
+            total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
 
             # Calcular Costos Fijos
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})

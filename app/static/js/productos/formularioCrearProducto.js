@@ -19,52 +19,103 @@ document.addEventListener('DOMContentLoaded', function () {
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
     const rolesData = typeof ROLES_DATA !== 'undefined' && Array.isArray(ROLES_DATA) ? ROLES_DATA : [];
 
-    // --- LÓGICA DE MANO DE OBRA ---
-    const manoDeObraContainer = document.getElementById('mano-obra-container');
-    const addManoObraBtn = document.getElementById('add-mano-obra-btn');
+    // --- LÓGICA DE OPERACIONES (PASOS DE PRODUCCIÓN) ---
+    const operacionesContainer = document.getElementById('operaciones-container');
+    const addOperacionBtn = document.getElementById('add-operacion-btn');
 
-    function agregarFilaManoDeObra() {
+    function updateSecuencias() {
+        const rows = operacionesContainer.querySelectorAll('.operacion-row');
+        rows.forEach((row, index) => {
+            const secuencia = index + 1;
+            row.dataset.secuencia = secuencia;
+            row.querySelector('h6').firstChild.textContent = `Paso ${secuencia}: `;
+            row.querySelector('input[name="operacion_secuencia[]"]').value = secuencia;
+            // Actualizar el name del selector de roles para que sea único
+            const rolSelector = row.querySelector('select[name^="operacion_roles"]');
+            if (rolSelector) {
+                rolSelector.name = `operacion_roles_${secuencia}[]`;
+            }
+        });
+    }
+
+    function addOperacion() {
+        const newIndex = operacionesContainer.children.length + 1;
         const row = document.createElement('div');
-        row.className = 'row g-3 align-items-end item-row mb-2';
-        
-        let options = '<option value="">Seleccione un rol...</option>';
+        row.className = 'list-group-item operacion-row mb-3';
+        row.dataset.secuencia = newIndex;
+
+        let options = '';
         rolesData.forEach(rol => {
             options += `<option value="${rol.id}">${rol.nombre}</option>`;
         });
 
         row.innerHTML = `
-            <div class="col-md-5">
-                <label class="form-label">Rol</label>
-                <select class="form-select mano-obra-rol" name="mano_obra_rol_id[]" required>
-                    ${options}
-                </select>
+            <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">Paso ${newIndex}: <input type="text" class="form-control form-control-sm d-inline-block w-auto" name="operacion_nombre[]" placeholder="Nombre del Paso" required></h6>
+                <button type="button" class="btn-close" aria-label="Close"></button>
             </div>
-            <div class="col-md-4">
-                <label class="form-label">Horas Estimadas</label>
-                <input type="number" step="0.25" min="0.25" class="form-control mano-obra-horas" name="mano_obra_horas[]" required>
-            </div>
-            <div class="col-md-3">
-                <button type="button" class="btn btn-outline-danger remove-mano-obra-btn">Eliminar</button>
+            <div class="row g-2 mt-2">
+                <div class="col-md-3">
+                    <label class="form-label">Roles Asignados</label>
+                    <select class="form-select select2" name="operacion_roles_${newIndex}[]" multiple required>
+                        ${options}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">T. Preparación (min)</label>
+                    <input type="number" class="form-control" name="operacion_prep[]" value="0" min="0" step="1" required>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">T. Ejecución (min/u)</label>
+                    <input type="number" class="form-control" name="operacion_ejec[]" value="0" min="0" step="0.01" required>
+                </div>
+                <div class="col-md-3 align-self-end">
+                     <input type="hidden" name="operacion_secuencia[]" value="${newIndex}">
+                </div>
             </div>
         `;
-        manoDeObraContainer.appendChild(row);
+        operacionesContainer.appendChild(row);
+
+        // Inicializar Select2 en el nuevo elemento
+        const newSelect = row.querySelector('.select2');
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $(newSelect).select2({
+                placeholder: "Seleccionar roles...",
+                allowClear: true
+            });
+        }
+    }
+    
+    function removeOperacion(button) {
+        button.closest('.operacion-row').remove();
+        updateSecuencias();
+        actualizarCostosDinamicos();
     }
 
-    addManoObraBtn.addEventListener('click', agregarFilaManoDeObra);
+    addOperacionBtn.addEventListener('click', addOperacion);
 
-    manoDeObraContainer.addEventListener('click', function(e) {
-        if (e.target.closest('.remove-mano-obra-btn')) {
-            e.target.closest('.item-row').remove();
+    operacionesContainer.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-close')) {
+            removeOperacion(e.target);
+        }
+    });
+
+    // Listener para recalcular costos al cambiar tiempos o roles
+    operacionesContainer.addEventListener('change', function(e) {
+        if (e.target.matches('input[name="operacion_prep[]"]') || e.target.matches('input[name="operacion_ejec[]"]') || e.target.matches('select[name^="operacion_roles"]')) {
             actualizarCostosDinamicos();
         }
     });
 
-    manoDeObraContainer.addEventListener('input', function(e) {
-        if (e.target.classList.contains('mano-obra-horas') || e.target.classList.contains('mano-obra-rol')) {
-            actualizarCostosDinamicos();
+    // Inicializar Select2 en los elementos existentes al cargar la página
+    document.querySelectorAll('.operacion-row .select2').forEach(select => {
+        if (typeof $ !== 'undefined' && $.fn.select2) {
+            $(select).select2({
+                placeholder: "Seleccionar roles...",
+                allowClear: true
+            });
         }
     });
-
 
     // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
     const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
@@ -214,20 +265,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function actualizarCostosDinamicos() {
-        const manoDeObraItems = [];
-        manoDeObraContainer.querySelectorAll('.item-row').forEach(row => {
-            const rolId = row.querySelector('.mano-obra-rol').value;
-            const horas = row.querySelector('.mano-obra-horas').value;
-            if (rolId && horas) {
-                manoDeObraItems.push({ rol_id: rolId, horas_estimadas: horas });
+        const operaciones = [];
+        operacionesContainer.querySelectorAll('.operacion-row').forEach(row => {
+            const prep = row.querySelector('input[name="operacion_prep[]"]').value;
+            const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const roles = Array.from(rolesSelect.selectedOptions).map(opt => opt.value);
+            
+            if (prep && ejec && roles.length > 0) {
+                operaciones.push({
+                    tiempo_preparacion: parseFloat(prep),
+                    tiempo_ejecucion_unitario: parseFloat(ejec),
+                    roles: roles.map(Number) // Asegurarse de que los IDs de rol sean números
+                });
             }
         });
 
         try {
+            // Se asume que la API se actualizará para aceptar esta nueva estructura
             const response = await fetch('/api/catalogo/recalcular-costos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ mano_de_obra: manoDeObraItems })
+                body: JSON.stringify({ operaciones: operaciones })
             });
 
             if (response.ok) {
@@ -299,16 +358,24 @@ document.addEventListener('DOMContentLoaded', function () {
             precio_unitario: limpiarFormatoDinero(displayPrecioFinal.value) || 0,
             vida_util_dias: formData.get('vida_util_dias'),
             receta_items: [],
-            mano_de_obra: []
+            operaciones: []
         };
 
-        manoDeObraContainer.querySelectorAll('.item-row').forEach(row => {
-            const rolId = row.querySelector('.mano-obra-rol').value;
-            const horas = row.querySelector('.mano-obra-horas').value;
-            if (rolId && horas) {
-                productoData.mano_de_obra.push({
-                    rol_id: parseInt(rolId),
-                    horas_estimadas: parseFloat(horas)
+        operacionesContainer.querySelectorAll('.operacion-row').forEach(row => {
+            const nombre = row.querySelector('input[name="operacion_nombre[]"]').value;
+            const prep = row.querySelector('input[name="operacion_prep[]"]').value;
+            const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
+            const secuencia = row.querySelector('input[name="operacion_secuencia[]"]').value;
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const roles = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
+            
+            if (nombre && prep && ejec && secuencia && roles.length > 0) {
+                productoData.operaciones.push({
+                    nombre_operacion: nombre,
+                    tiempo_preparacion: parseFloat(prep),
+                    tiempo_ejecucion_unitario: parseFloat(ejec),
+                    secuencia: parseInt(secuencia),
+                    roles: roles
                 });
             }
         });

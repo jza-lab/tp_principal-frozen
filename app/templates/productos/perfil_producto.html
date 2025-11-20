@@ -67,15 +67,6 @@
                     <div class="row g-4 mt-0">
                         <div class="col-md-6">
                             <div class="d-flex align-items-center">
-                                <i class="bi bi-person-workspace fs-4 text-muted me-2"></i>
-                                <div>
-                                    <label class="form-label-sm fw-bold">Porcentaje Mano de Obra</label>
-                                    <p class="form-control-plaintext mb-0">{{ producto.porcentaje_mano_obra or '0' }}%</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center">
                                 <i class="bi bi-graph-up-arrow fs-4 text-muted me-2"></i>
                                 <div>
                                     <label class="form-label-sm fw-bold">Porcentaje Ganancia</label>
@@ -132,9 +123,9 @@
                                     {% for item in receta_items %}
                                     <tr class="align-middle">
                                         <td>{{ item.nombre_insumo or 'N/A' }}</td>
-                                        <td class="text-end fw-bold">{{ item.cantidad}} {{ item.unidad_medida }}</td>
-                                        <td>{{ item.precio_unitario }}</td>
-                                        <td>{{ item.precio_unitario * item.cantidad }}</td>
+                                        <td class="text-end fw-bold">{{ item.cantidad}} {{ item.get('unidad_medida', 'N/A') }}</td>
+                                        <td>{{ item.get('precio_unitario', 0) | round(2) }}</td>
+                                        <td>{{ (item.get('precio_unitario', 0) * item.cantidad) | round(2) }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -146,6 +137,35 @@
                                 No hay una receta para este producto en el inventario.
                             </div>
                         </div>
+                        {% endif %}
+                    </div>
+                </div>
+                 <div class="card mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-person-walking me-2"></i>Pasos de Producción</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if receta and receta.operaciones %}
+                            {% for operacion in receta.operaciones %}
+                                <div class="list-group-item">
+                                    <strong>Paso {{ loop.index }}: {{ operacion.nombre_operacion }}</strong>
+                                    <ul class="small text-muted">
+                                        <li>Tiempo de Preparación: {{ operacion.tiempo_preparacion }} min</li>
+                                        <li>Tiempo de Ejecución: {{ operacion.tiempo_ejecucion_unitario }} min/u</li>
+                                        <li>Roles Asignados: 
+                                            {% if operacion.roles_nombres %}
+                                                {{ operacion.roles_nombres|join(', ') }}
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </li>
+                                    </ul>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-light border-0 text-center mb-0">
+                                No hay pasos de producción definidos para este producto.
+                            </div>
                         {% endif %}
                     </div>
                 </div>
