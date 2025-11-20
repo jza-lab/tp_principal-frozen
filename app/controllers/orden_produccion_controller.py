@@ -1594,37 +1594,66 @@ class OrdenProduccionController(BaseController):
 
             # 4. Registrar avance (siempre se hace)
             update_data = {'cantidad_producida': cantidad_producida_actual + cantidad_buena}
+            nuevo_desperdicio_record = None
+            
             if cantidad_desperdicio > 0:
-                RegistroDesperdicioModel().create({
+                create_res = RegistroDesperdicioModel().create({
                     'orden_produccion_id': orden_id, 'motivo_desperdicio_id': int(motivo_desperdicio_id),
                     'cantidad': cantidad_desperdicio, 'usuario_id': usuario_id, 'fecha_registro': datetime.now().isoformat()
                 })
+                if create_res.get('success'):
+                    nuevo_desperdicio_record = create_res.get('data')
 
             # 5. Lógica de "Punto de Control"
             # Se recalcula el total procesado para saber si llegamos al punto de control.
-            desperdicios_anteriores = RegistroDesperdicioModel().find_all({'orden_produccion_id': orden_id}).get('data', [])
-            total_desperdicio_anterior = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_anteriores)
-            total_procesado_ahora = cantidad_producida_actual + total_desperdicio_anterior + cantidad_buena + cantidad_desperdicio
+            # Nota: find_all podría incluir o no el nuevo registro dependiendo de la consistencia de lectura inmediata.
+            # Para ser seguros, usamos la suma de la DB y le restamos el nuevo si está duplicado, o confiamos en el acumulado.
+            # Mejor enfoque: Consultar todo. Si el nuevo no aparece, sumarlo manualmente para la lógica.
+            
+            desperdicios_db = RegistroDesperdicioModel().find_all({'orden_produccion_id': orden_id}).get('data', [])
+            
+            # Verificar si el nuevo registro ya está en la lista de la DB (por ID)
+            nuevo_id = nuevo_desperdicio_record.get('id') if nuevo_desperdicio_record else None
+            ids_en_db = {d['id'] for d in desperdicios_db}
+            
+            if nuevo_desperdicio_record and nuevo_id not in ids_en_db:
+                desperdicios_db.append(nuevo_desperdicio_record)
+
+            total_desperdicio_acumulado = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_db)
+            
+            # El total procesado es: Lo que ya había producido + Lo nuevo bueno + Todo el desperdicio acumulado (que incluye el nuevo)
+            total_procesado_ahora = cantidad_producida_actual + cantidad_buena + total_desperdicio_acumulado
+
+            response_data = {}
+            response_message = "Avance reportado correctamente."
 
             if total_procesado_ahora >= cantidad_planificada:
-                desperdicio_total_final = total_desperdicio_anterior + cantidad_desperdicio
                 
-                if desperdicio_total_final > 0:
-                    # CASO 1: Se alcanzó la meta y HAY desperdicio. Gestionarlo.
-                    # El método hijo se encargará de finalizar la OP si es necesario.
-                    gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, desperdicio_total_final, usuario_id)
+                if total_desperdicio_acumulado > 0:
+                    # Gestionar desperdicio (Reponer o Hija)
+                    # Pasamos la lista completa de desperdicios (incluyendo el nuevo) para que el helper sepa qué reponer.
+                    gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, total_desperdicio_acumulado, usuario_id, desperdicios_db)
                     if not gestion_res.get('success'):
                         return self.error_response(gestion_res.get('error', 'Error al gestionar desperdicio.'), 500)
                     
-                    self.model.update(orden_id, update_data) # Guardar el último avance de cantidad buena
-                    return self.success_response(message=gestion_res.get('message'), data=gestion_res.get('data'))
-                else:
-                    # CASO 2: Se alcanzó la meta y NO HAY desperdicio. Finalizar la orden.
+                    response_data = gestion_res.get('data', {})
+                    response_message = gestion_res.get('message', response_message)
+                    
+                    if response_data.get('accion') == 'finalizar_op_crear_hija':
+                         # Ya se finalizó en el helper. Solo actualizamos cantidad producida.
+                         self.model.update(orden_id, update_data)
+                         return self.success_response(message=response_message, data=response_data)
+
+                # Si llegamos aquí, o no había desperdicio, o se repuso (accion='continuar').
+                # Verificamos si alcanzamos la meta de BUENAS.
+                nueva_cantidad_buena = update_data['cantidad_producida']
+                if nueva_cantidad_buena >= cantidad_planificada:
                     update_data['estado'] = 'CONTROL_DE_CALIDAD'
                     update_data['fecha_fin'] = datetime.now().isoformat()
-
-            # Si no se ha llegado al punto de control, simplemente se actualiza la cantidad producida.
+                    response_message += " Orden completada."
+                
             self.model.update(orden_id, update_data)
+            return self.success_response(message=response_message, data=response_data)
             
             detalle_log = f"Avance en OP {orden_actual.get('codigo')}. Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
             self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle_log)
@@ -1688,29 +1717,71 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico durante la distribución de producción para la Super OP {super_op_id}: {e}", exc_info=True)
 
-    def _gestionar_desperdicio_en_punto_de_control(self, orden_actual: Dict, desperdicio_total: Decimal, usuario_id: int) -> Dict:
+    def _gestionar_desperdicio_en_punto_de_control(self, orden_actual: Dict, desperdicio_total: Decimal, usuario_id: int, waste_list: Optional[List[Dict]] = None) -> Dict:
         """
         Lógica transaccional para gestionar el desperdicio al alcanzar el punto de control.
+        MODIFICADO: Ahora intenta reponer automáticamente sin preguntar al usuario.
+        Acepta waste_list opcional para evitar latencia de DB.
         """
         orden_id = orden_actual['id']
-        orden_simulada = {'receta_id': orden_actual['receta_id'], 'cantidad_planificada': float(desperdicio_total)}
+        desperdicio_model = RegistroDesperdicioModel()
+        
+        # 1. Calcular desperdicio NO repuesto
+        # Usamos la lista provista o consultamos la DB si no existe.
+        if waste_list is None:
+             waste_list = desperdicio_model.find_all({'orden_produccion_id': orden_id}).get('data', [])
+        
+        unreplenished_waste_items = []
+        cantidad_a_reponer = Decimal(0)
+        
+        for w in waste_list:
+            obs = w.get('observaciones') or ''
+            if '[REPUESTO]' not in obs:
+                unreplenished_waste_items.append(w)
+                cantidad_a_reponer += Decimal(w.get('cantidad', 0))
+        
+        if cantidad_a_reponer <= 0:
+             # Si todo está repuesto, permitimos continuar sin acción.
+             return {'success': True, 'message': 'Desperdicio ya cubierto previamente.', 'data': {'accion': 'continuar'}}
+
+        # 2. Verificar stock para la cantidad PENDIENTE de reponer
+        orden_simulada = {'receta_id': orden_actual['receta_id'], 'cantidad_planificada': float(cantidad_a_reponer)}
         stock_check = self.inventario_controller.verificar_stock_para_op(orden_simulada)
 
-        # --- CASO A: HAY STOCK SUFICIENTE ---
+        # --- CASO A: HAY STOCK SUFICIENTE -> REPONER AUTOMÁTICAMENTE ---
         if stock_check.get('success') and not stock_check['data']['insumos_faltantes']:
-            logger.info(f"Stock disponible para desperdicio en OP {orden_id}. Requiere confirmación del usuario.")
+            logger.info(f"Stock disponible para {cantidad_a_reponer} de desperdicio en OP {orden_id}. Reponiendo automáticamente.")
+            
+            consume_res = self.inventario_controller.consumir_stock_por_cantidad_producto(
+                receta_id=orden_actual['receta_id'],
+                cantidad_producto=float(cantidad_a_reponer),
+                op_id_referencia=orden_id,
+                motivo='REPOSICION_AUTOMATICA_DESPERDICIO'
+            )
+            
+            if not consume_res.get('success'):
+                return {'success': False, 'error': f"Error al consumir stock: {consume_res.get('error')}"}
+                
+            # Marcar como repuesto
+            for w in unreplenished_waste_items:
+                new_obs = (w.get('observaciones') or '') + ' [REPUESTO]'
+                desperdicio_model.update(w['id'], {'observaciones': new_obs})
+                
             return {
                 'success': True,
-                'message': f"Se ha alcanzado la cantidad planificada. Hay stock disponible para reponer los <b>{desperdicio_total:.2f} kg</b> de desperdicio y completar la orden. ¿Desea continuar?",
+                'message': f"Se repusieron insumos para <b>{cantidad_a_reponer:.2f}</b> unidades de desperdicio automáticamente.",
                 'data': {
-                    'accion': 'autorizar_reposicion',
-                    'cantidad_a_reponer': float(desperdicio_total)
+                    'accion': 'continuar', # Indica al frontend/controller que seguimos
+                    'cantidad_repuesta': float(cantidad_a_reponer)
                 }
             }
         
-        # --- CASO B: NO HAY STOCK SUFICIENTE ---
+        # --- CASO B: NO HAY STOCK SUFICIENTE -> CREAR OP HIJA ---
         else:
-            logger.warning(f"Stock insuficiente para desperdicio en OP {orden_id}. Intentando crear OP hija.")
+            logger.warning(f"Stock insuficiente para desperdicio en OP {orden_id}. Intentando crear OP hija para {cantidad_a_reponer}.")
+            
+            # Usamos la cantidad NO repuesta para la OP hija
+            desperdicio_total = cantidad_a_reponer # Actualizamos la variable para usarla abajo
             
             # --- INICIO DE LA NUEVA LÓGICA DE HERENCIA ---
             # 1. Buscar el pedido_id original a través de los items de la OP padre

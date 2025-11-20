@@ -309,8 +309,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // ===== REPORTAR AVANCE =====
     function actualizarRestanteModal() {
         const buenaReportada = parseFloat(document.getElementById('cantidad-buena').value) || 0;
-        const malaReportada = parseFloat(cantidadMalaInput.value) || 0;
-        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + estado.cantidadDesperdicio + buenaReportada + malaReportada);
+        // Modificado: El restante se calcula solo sobre la cantidad BUENA planificada vs producida.
+        // El desperdicio no resta de la meta si asumimos reposición infinita/automática.
+        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + buenaReportada);
         cantidadRestanteInfo.textContent = `Restante: ${formatNumber(Math.max(0, restante), 2)} kg`;
     }
 
@@ -457,7 +458,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     document.querySelector('.objetivo-cantidad').innerHTML = `${formatNumber(estado.cantidadPlanificada, 2)} <span class="objetivo-unidad">kg</span>`;
                     addActivityLog(`OP ampliada. Nueva meta: ${estado.cantidadPlanificada} kg.`, 'info');
 
+                } else if (data.data?.accion === 'continuar') {
+                    // --- LÓGICA DE REPOSICIÓN AUTOMÁTICA ---
+                    // El backend repuso stock y autorizó continuar. NO redireccionar.
+                    addActivityLog(`Desperdicio repuesto automáticamante. Continúe produciendo.`, 'success');
+                    showNotification('✅ Desperdicio cubierto con stock. La orden sigue abierta.', 'success');
+
                 } else if ((estado.cantidadProducida + estado.cantidadDesperdicio) >= estado.cantidadPlanificada) {
+                    // Solo redirigir si el backend NO devolvió 'continuar' y alcanzamos el tope.
+                    // (Aunque idealmente deberíamos confiar solo en el estado de la orden, esta lógica legacy se mantiene como fallback)
                     addActivityLog('Orden completada, pasando a C. Calidad', 'success');
                     stopTimer();
                     setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
