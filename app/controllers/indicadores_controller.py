@@ -90,7 +90,7 @@ class IndicadoresController:
         """
         return {}
 
-    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=10):
+    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=5):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
         # Determinar contexto para la evolución
@@ -386,11 +386,11 @@ class IndicadoresController:
             "tooltip": "Cantidad total de insumos reservados (consumidos) a lo largo del tiempo."
         }
 
-    def _obtener_top_insumos_wrapper(self, fecha_inicio, fecha_fin):
+    def _obtener_top_insumos_wrapper(self, fecha_inicio, fecha_fin, top_n=5):
         """
         Wrapper para obtener el Top Insumos usando ReporteProduccionController.
         """
-        res = self.reporte_produccion_controller.obtener_top_insumos(top_n=5) 
+        res = self.reporte_produccion_controller.obtener_top_insumos(top_n) 
         data = res.get('data', {}) if res.get('success') else {}
         
         # Transformar formato dict {nombre: cantidad} a listas para gráficas {labels: [], data: []}
@@ -453,7 +453,7 @@ class IndicadoresController:
         # 1. Cumplimiento de Pedidos: (Completados / Total Pedidos [incl. cancelados]) * 100
         estados_totales = [
             estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
-            estados.OV_COMPLETADO, estados.OV_CANCELADA
+            estados.OV_COMPLETADO, estados.OV_CANCELADA, estados.OV_EN_TRANSITO, estados.OV_ITEM_ALISTADO
         ]
         total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
         completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
@@ -466,18 +466,28 @@ class IndicadoresController:
         # 2. Ticket Medio: Total Valor (sin cancelados) / Num Pedidos (sin cancelados)
         # Obtenemos pedidos en estados válidos (no cancelados) para sumar su valor
                 # Use get_ingresos_en_periodo which already filters CANCELLED and calculates price if missing
-        ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio.isoformat(), fecha_fin.isoformat())
+        estados_activos = [
+            estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
+            estados.OV_COMPLETADO, estados.OV_EN_TRANSITO, estados.OV_ITEM_ALISTADO
+        ]
+        
+        ingresos_res = self.pedido_model.get_ingresos_en_periodo(
+            fecha_inicio.isoformat(), 
+            fecha_fin.isoformat(), 
+            estados_filtro=estados_activos
+        )
         data_p = ingresos_res.get('data', []) if ingresos_res.get('success') else []
         
-        total_valor = sum(float(p['precio_orden']) for p in data_p)
+        total_valor = sum(float(p['precio_orden'] or 0) for p in data_p)
         num_pedidos_validos = len(data_p)
             
         valor_promedio = total_valor / num_pedidos_validos if num_pedidos_validos > 0 else 0.0
 
         return {
             "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
-            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_validos}
-        }
+            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_validos},
+            "ingresos_totales": {"valor": round(total_valor, 2), "num_pedidos": num_pedidos_validos}        
+            }
 
     def _obtener_evolucion_ventas_comparativa(self, fecha_inicio, fecha_fin, contexto):
         estados_ventas = [
@@ -503,19 +513,18 @@ class IndicadoresController:
         def agregar_data(dataset, inicio):
             agregado = defaultdict(float)
             labels = []
+            end = inicio + delta_periodo
             
             if contexto == 'ano':
                 fmt = "%Y-%m"
                 # Generar keys para todos los meses
                 curr = inicio.replace(day=1)
-                end = curr.replace(year=curr.year+1) if contexto == 'ano' else (inicio + delta_periodo)
-                while curr <= end and curr <= datetime.now().date():
+                while curr <= end:
                     labels.append(curr.strftime(fmt))
                     curr = (curr.replace(day=28) + timedelta(days=4)).replace(day=1)
             else:
                 fmt = "%Y-%m-%d"
                 curr = inicio
-                end = inicio + delta_periodo
                 while curr <= end:
                     labels.append(curr.strftime(fmt))
                     curr += timedelta(days=1)
@@ -531,7 +540,7 @@ class IndicadoresController:
             # Ordenar y devolver solo valores alineados a los labels (o índice)
             # Para comparativa simple, devolvemos la lista de valores.
             # Nota: Las fechas no coincidirán, así que alineamos por índice (Día 1, Día 2...)
-            return [agregado[l] for l in sorted(agregado.keys())], sorted(agregado.keys())
+            return [agregado[l] for l in labels], labels
 
         # Como los periodos tienen fechas distintas, alineamos por "Día del periodo"
         vals_actual, keys_actual = agregar_data(data_actual, fecha_inicio)

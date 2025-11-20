@@ -22,6 +22,14 @@ window.renderComercial = async function(data, container, utils) {
         '<b>Fórmula:</b> (Ingresos Totales / Número de Pedidos Válidos).<br>Se excluyen los pedidos cancelados.'
     );
 
+    content += renderKpiCard(
+        'Ingresos Totales', 
+        `$${data.kpis_comerciales.ingresos_totales.valor.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`, 
+        `${data.kpis_comerciales.ingresos_totales.num_pedidos} pedidos generados`, 
+        'bi-cash-coin',
+        '<b>Fórmula:</b> Suma del valor de todos los pedidos generados en el periodo (excluyendo cancelados).'
+    );
+
     content += '</div>';
 
     // --- 2. Título Sección Gráficos ---

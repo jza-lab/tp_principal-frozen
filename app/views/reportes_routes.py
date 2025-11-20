@@ -177,7 +177,7 @@ def api_indicadores_por_categoria(categoria):
     
     # Argumentos específicos por categoría (para evitar errores de firma)
     if categoria == 'produccion':
-        kwargs['top_n'] = request.args.get('top_n', 10) # Default 10
+        kwargs['top_n'] = request.args.get('top_n', 5, type=int) # Default 10
         
     
     datos = funcion_controlador(**kwargs)
