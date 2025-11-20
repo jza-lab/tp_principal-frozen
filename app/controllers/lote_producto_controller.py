@@ -1222,25 +1222,29 @@ class LoteProductoController(BaseController):
             lote_creado = resultado_lote['data']
             message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_final}'."
 
-            # Crear reservas si la OP está vinculada a un pedido
-            items_a_surtir_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': orden_id})
+            # 1. Buscar items vinculados directamente a la OP actual, ordenados por antigüedad del pedido (FIFO).
+            items_a_surtir_res = pedido_model.find_all_items_with_pedido_info(
+                filters={'orden_produccion_id': orden_id},
+                order_by='pedido.created_at.asc' # <-- ¡CORRECCIÓN CLAVE PARA FIFO!
+            )
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
-            # Si no se encontraron items directos y es una OP hija, buscar los items de la OP padre.
+            # 2. Si no hay items directos Y es una OP hija, heredar los items de la OP padre.
+            #    Esto es clave para que la producción de la OP hija se asigne a los pedidos originales.
             if not items_vinculados and orden_produccion_data.get('id_op_padre'):
                 id_op_padre = orden_produccion_data['id_op_padre']
                 logger.info(f"OP {orden_id} es una hija. Buscando items de pedido asociados a la OP padre {id_op_padre}.")
-                items_padre_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': id_op_padre})
+                items_padre_res = pedido_model.find_all_items_with_pedido_info(
+                    filters={'orden_produccion_id': id_op_padre},
+                    order_by='pedido.created_at.asc' # <-- ¡CORRECCIÓN CLAVE PARA FIFO!
+                )
                 items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
 
             if items_vinculados:
-                # --- MEJORA FIFO Y VALIDACIÓN DE RESERVAS PREVIAS (VERSIÓN HEAD) ---
-
-                # 1. Ordenar por antigüedad del pedido (FIFO)
-                items_vinculados.sort(key=lambda x: x.get('pedido', {}).get('created_at', '9999-12-31'))
-
                 from app.controllers.pedido_controller import PedidoController # Importar aquí para evitar ciclo
                 pedido_controller = PedidoController()
+                from app.models.asignacion_pedido_model import AsignacionPedidoModel
+                asignacion_model = AsignacionPedidoModel()
 
                 cantidad_disponible_para_reservar = cantidad_actual_disponible
 
@@ -1251,8 +1255,10 @@ class LoteProductoController(BaseController):
                     pedido_item_id = item['id']
 
                     # 2. Calcular cuánto YA se reservó para este item (evita duplicar reservas)
-                    reservas_existentes = self.reserva_model.find_all(filters={'pedido_item_id': pedido_item_id, 'estado': 'RESERVADO'})
-                    cantidad_ya_reservada = sum(float(r['cantidad_reservada']) for r in reservas_existentes.get('data', []))
+                    #    MODIFICACIÓN: Ahora consultamos la tabla de asignaciones, que es la fuente de verdad.
+                    asignaciones_existentes = asignacion_model.find_all(filters={'pedido_item_id': pedido_item_id})
+                    cantidad_ya_reservada = sum(float(a['cantidad_asignada']) for a in asignaciones_existentes.get('data', []))
+
 
                     # 3. Calcular lo que falta por cubrir
                     cantidad_total_necesaria = float(item['cantidad'])
@@ -1274,6 +1280,13 @@ class LoteProductoController(BaseController):
                             'estado': 'RESERVADO'
                         }
                         self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+
+                        # Inmediatamente después de crear la reserva, creamos la asignación correspondiente.
+                        asignacion_model.create({
+                            'orden_produccion_id': orden_id,
+                            'pedido_item_id': pedido_item_id,
+                            'cantidad_asignada': cantidad_a_reservar_para_item
+                        })
 
                         # Se descuenta lo que acabamos de reservar de lo que queda disponible.
                         cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item

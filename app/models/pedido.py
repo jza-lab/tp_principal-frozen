@@ -482,10 +482,11 @@ class PedidoModel(BaseModel):
             logging.error(f"Error actualizando pedido_item {item_id}: {e}")
             return {'success': False, 'error': str(e)}
 
-    def find_all_items_with_pedido_info(self, filters: Optional[Dict] = None) -> Dict:
+    def find_all_items_with_pedido_info(self, filters: Optional[Dict] = None, order_by: Optional[str] = None) -> Dict:
         """
         Obtiene todos los items de pedido que coinciden con los filtros,
         anidando la información completa del pedido padre.
+        AHORA SOPORTA ORDENAMIENTO.
         """
         try:
             # Se especifica la clave foránea para resolver la ambigüedad en la relación.
@@ -493,7 +494,23 @@ class PedidoModel(BaseModel):
 
             if filters:
                 for key, value in filters.items():
-                    query = query.eq(key, value)
+                    if isinstance(value, tuple) and len(value) == 2:
+                        operator, filter_value = value
+                        if operator == 'in':
+                            query = query.in_(key, filter_value)
+                        else:
+                            query = query.eq(key, filter_value)
+                    else:
+                        query = query.eq(key, value)
+
+            if order_by:
+                # El formato es "tabla_relacionada.columna.direccion"
+                parts = order_by.split('.')
+                foreign_table = parts[0]
+                column_name = parts[1]
+                ascending = parts[2] == 'asc'
+                
+                query = query.order(column_name, desc=not ascending, foreign_table=foreign_table)
 
             result = query.execute()
             return {'success': True, 'data': result.data}

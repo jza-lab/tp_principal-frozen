@@ -284,7 +284,12 @@ class PedidoController(BaseController):
                 elif estado == 'PENDIENTE_PRODUCCION':
                     items_a_producir.append(item_creado)
                 elif estado == 'PARCIAL' and item_original:
-                    items_a_descontar.append({'id': item_creado['id'], 'producto_id': producto_id, 'cantidad': item_original['_cantidad_stock']})
+                    # Al descontar un item parcial, debemos usar la cantidad de stock calculada,
+                    # no la cantidad total del item.
+                    item_para_descuento = item_creado.copy()
+                    item_para_descuento['cantidad'] = item_original['_cantidad_stock']
+                    items_a_descontar.append(item_para_descuento)
+                    # Para producción, usamos la cantidad de producción calculada.
                     items_a_producir.append({'id': item_creado['id'], 'producto_id': producto_id, 'cantidad': item_original['_cantidad_produccion']})
 
             if accion_post_creacion in ['DESCONTAR_STOCK', 'DESCONTAR_Y_PRODUCIR'] and items_a_descontar:
@@ -893,67 +898,6 @@ class PedidoController(BaseController):
         except Exception as e:
             return self.error_response(f'Error interno del servidor: {str(e)}', 500)
 
-    def actualizar_estado_segun_items(self, pedido_id: int):
-        """
-        Verifica si todos los items de un pedido tienen cobertura total de stock
-        (ya sea por stock existente o producción finalizada).
-        Basado estrictamente en la tabla de reservas activas.
-        """
-        from decimal import Decimal
-        try:
-            pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
-            if not pedido_resp.get('success'):
-                logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado.")
-                return
-
-            logger.info(f"Verificando cobertura de reservas para el pedido {pedido_id}.")
-            pedido_data = pedido_resp.get('data')
-            todos_los_items = pedido_data.get('items', [])
-
-            if not todos_los_items:
-                return
-
-            # Flag maestro: Asumimos que todo está cubierto hasta que encontremos un fallo
-            todos_los_items_cubiertos = True
-
-            for item in todos_los_items:
-                cantidad_requerida_item = Decimal(item.get('cantidad', 0))
-
-                if cantidad_requerida_item <= 0:
-                    continue
-
-                # --- LÓGICA CLAVE DE TUS CAMBIOS ANTERIORES ---
-                # Consultamos la tabla de reservas para este item específico.
-                reservas_item_res = self.reserva_producto_model.find_all(filters={'pedido_item_id': item['id']})
-
-                # Sumamos SOLO las reservas válidas (ignoramos las robadas/canceladas)
-                total_reservado_para_item = sum(
-                    Decimal(r.get('cantidad_reservada', 0))
-                    for r in reservas_item_res.get('data', [])
-                    if r.get('estado') in ['RESERVADO', 'COMPLETADO']
-                )
-
-                logger.info(f"Item {item['id']} - Req: {cantidad_requerida_item} | Res: {total_reservado_para_item}")
-
-                # Verificamos cobertura con pequeña tolerancia decimal
-                if total_reservado_para_item < (cantidad_requerida_item - Decimal('0.01')):
-                    todos_los_items_cubiertos = False
-                    # No hacemos break para loguear el estado de todos los items (útil para debugging)
-                    # pero ya sabemos que el pedido no está listo.
-
-            # 3. Si y solo si TODOS los items tienen reserva completa...
-            if todos_los_items_cubiertos:
-                estado_actual = pedido_data.get('estado')
-                # Estados finales donde ya no deberíamos tocar nada
-                estados_bloqueados = ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']
-
-                if estado_actual not in estados_bloqueados:
-                    self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-                    logger.info(f"¡Éxito! Pedido {pedido_id} cubierto al 100%. Estado actualizado a 'LISTO PARA ENTREGAR'.")
-
-        except Exception as e:
-            logger.error(f"Error crítico actualizando estado pedido {pedido_id}: {e}", exc_info=True)
-
     def planificar_pedido(self, pedido_id: int) -> tuple:
         """
         Cambia el estado de un pedido a 'PLANIFICADA'.
@@ -1325,30 +1269,37 @@ class PedidoController(BaseController):
         Verifica si todos los items de un pedido han sido completamente asignados
         desde producción. Si es así, actualiza el estado del pedido.
         """
+        from decimal import Decimal
         try:
+            # 1. Obtener todos los items que componen el pedido.
             items_res = self.model.find_all_items({'pedido_id': pedido_id})
             if not items_res.get('success') or not items_res.get('data'):
                 logger.warning(f"No se encontraron items para el pedido {pedido_id} al verificar estado post-asignación.")
                 return
 
             todos_los_items = items_res.get('data', [])
-            if not todos_los_items:
-                return # No hay items, no hay nada que hacer.
+            if not todos_los_items: return
 
             from app.models.asignacion_pedido_model import AsignacionPedidoModel
             asignacion_model = AsignacionPedidoModel()
 
+            # 2. Asumimos que está completo hasta que se demuestre lo contrario.
             todos_completos = True
             for item in todos_los_items:
+                # Para cada item, sumar TODAS las asignaciones que ha recibido,
+                # sin importar de qué OP (padre, hija, etc.) provengan.
                 asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
                 total_asignado = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_res.get('data', []))
 
+                # Comparamos el total asignado con lo que el item realmente necesita.
                 if total_asignado < Decimal(item['cantidad']):
                     todos_completos = False
-                    break
+                    break # Si un solo item no está completo, todo el pedido no está listo.
 
+            # 3. Solo si TODOS los items están 100% asignados, procedemos a cambiar el estado.
             if todos_completos:
                 pedido_actual = self.model.find_by_id(pedido_id, 'id')['data']
+                # Verificación de seguridad para no cambiar estados finales (ej. si ya fue despachado).
                 if pedido_actual and pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
                     self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
                     logger.info(f"Todos los items del pedido {pedido_id} están completos. Estado actualizado a LISTO_PARA_ENTREGA.")

@@ -673,17 +673,6 @@ class OrdenProduccionController(BaseController):
                 op = result.get('data')
                 detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
-
-                # --- LÓGICA DE DISTRIBUCIÓN Y ACTUALIZACIÓN DE PEDIDOS ---
-                # Al completar una OP, distribuimos la producción para que los pedidos
-                # se actualicen correctamente, especialmente las OPs consolidadas.
-                cantidad_producida_en_lote = Decimal(lote_result.get('data', {}).get('cantidad_actual', '0'))
-                
-                if cantidad_producida_en_lote > 0:
-                    logger.info(f"OP {orden_id} completada. Distribuyendo {cantidad_producida_en_lote} unidades a los pedidos asociados.")
-                    self._distribuir_produccion_super_op(orden_id, cantidad_producida_en_lote)
-                else:
-                    logger.warning(f"OP {orden_id} completada, pero no se registró producción en el lote. No se distribuye nada.")
                 
                 return self.success_response(data=result.get('data'), message=message_to_use)
             else:
@@ -1674,13 +1663,16 @@ class OrdenProduccionController(BaseController):
         """
         try:
             # 1. Obtener todos los items de pedido asociados a esta Super OP
-            items_res = self.pedido_model.find_all_items_with_pedido_info({'orden_produccion_id': super_op_id})
+            # Ordenar por la fecha de creación del pedido asociado.
+            items_res = self.pedido_model.find_all_items_with_pedido_info(
+                filters={'orden_produccion_id': super_op_id},
+                order_by='pedido.created_at.asc'
+            )
             if not items_res.get('success') or not items_res.get('data'):
                 logger.info(f"No se encontraron items de pedido para la Super OP {super_op_id}. No se requiere distribución.")
                 return
 
-            items_asociados = sorted(items_res['data'], key=lambda item: item['pedido']['created_at'])
-            
+            items_asociados = items_res['data']
             unidades_a_distribuir = cantidad_producida
             pedido_controller = PedidoController()
 
@@ -1769,7 +1761,6 @@ class OrdenProduccionController(BaseController):
                 
             return {
                 'success': True,
-                'message': f"Se repusieron insumos para <b>{cantidad_a_reponer:.2f}</b> unidades de desperdicio automáticamente.",
                 'data': {
                     'accion': 'continuar', # Indica al frontend/controller que seguimos
                     'cantidad_repuesta': float(cantidad_a_reponer)
