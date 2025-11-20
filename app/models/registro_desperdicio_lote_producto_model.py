@@ -36,6 +36,7 @@ class RegistroDesperdicioLoteProductoModel(BaseModel):
             query = self._get_query_builder().select(
                 '*, motivo:motivos_desperdicio_lote(motivo)'
             )
+            # Corrección: Usar 'fecha_registro' según esquema real
             query = query.gte('created_at', fecha_inicio.isoformat())
             query = query.lte('created_at', fecha_fin.isoformat())
             result = query.execute()

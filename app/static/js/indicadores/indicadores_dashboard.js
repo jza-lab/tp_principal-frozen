@@ -48,8 +48,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const chart = echarts.init(chartDom);
         chart.setOption(options);
         chartInstances[containerId] = chart;
-        window.addEventListener('resize', () => chart.resize());
     }
+    
+    // Listener global para redimensionar todos los gráficos
+    window.addEventListener('resize', () => {
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.resize();
+        });
+    });
 
     // TARJETA KPI CON TOOLTIP MEJORADA
     function renderKpiCard(title, value, subtitle, iconClass = 'bi-bar-chart-line', tooltipInfo = null) {
@@ -103,6 +109,70 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>`;
     }
 
+    // NUEVO: Smart Card Component (HTML Generator)
+    function createSmartCardHTML(id, title, description, insight, helpText) {
+        return `
+        <div class="card shadow-sm border-0 h-100 smart-card-container">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">${title}</h6>
+                <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="left" 
+                   title="${helpText}" 
+                   style="cursor: help; font-size: 0.9rem;"></i>
+            </div>
+            <div class="card-body p-3 d-flex flex-column h-100 pt-0">
+                <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">${description}</p>
+                
+                <div class="flex-grow-1 position-relative" style="min-height: 250px;">
+                    <div id="${id}" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
+                </div>
+
+                <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb-fill text-primary me-2"></i>
+                        <span class="text-dark small fw-medium dynamic-insight">${insight}</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+    
+    // Componente para tarjeta dividida (Estados + Líneas)
+    function createSplitSmartCardHTML(idLeft, idRight, title, description, insight, helpText) {
+        return `
+        <div class="card shadow-sm border-0 h-100 smart-card-container">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">${title}</h6>
+                <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="left" 
+                   title="${helpText}" 
+                   style="cursor: help; font-size: 0.9rem;"></i>
+            </div>
+            <div class="card-body p-3 d-flex flex-column h-100 pt-0">
+                <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">${description}</p>
+                
+                <div class="row g-0 flex-grow-1" style="min-height: 250px;">
+                    <div class="col-6 position-relative">
+                        <h6 class="text-center text-muted small fw-bold position-absolute w-100" style="top: 0;">Estados</h6>
+                        <div id="${idLeft}" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    <div class="col-6 position-relative border-start">
+                        <h6 class="text-center text-muted small fw-bold position-absolute w-100" style="top: 0;">Líneas</h6>
+                        <div id="${idRight}" style="width: 100%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb-fill text-primary me-2"></i>
+                        <span class="text-dark small fw-medium dynamic-insight">${insight}</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
     // --- DATA LOADING ---
     
     async function loadTabData(category) {
@@ -153,12 +223,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
     
-    // --- RENDER LOGIC: PRODUCCIÓN (CON GAUGE OEE) ---
+    // --- RENDER LOGIC: PRODUCCIÓN (NUEVO: HIGH-VALUE INDICATORS) ---
 
     function renderProduccion(data, container) {
-        // 1. Fila Superior: Visualización OEE y Cumplimiento
+        // 1. Fila Superior: Visualización OEE y KPIs (Estilo Restaurado)
         let content = `
         <div class="row g-3 mb-4">
+            <!-- Left Column: OEE Gauge -->
             <div class="col-lg-5">
                 <div class="card shadow-sm border-0 h-100">
                     <div class="card-body position-relative p-2">
@@ -173,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             </div>
 
+            <!-- Right Column: 4 KPIs -->
             <div class="col-lg-7">
                 <div class="row g-3 h-100 align-content-center">
                     ${renderKpiCard('Disponibilidad', `${(data.oee.disponibilidad * 100).toFixed(1)}%`, 'Tiempo Operativo vs Planificado', 'bi-clock-history', 
@@ -189,18 +261,65 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             </div>
         </div>
-        <div class="row g-3">
-            <div class="col-12">
-                 ${renderChartCard('gantt-produccion', 'Cronograma de Producción', 'Visualización de órdenes activas', 'Diagrama de Gantt de las próximas 15 órdenes.', 'dl-gantt', '250px')}
-            </div>
+        
+        <div class="d-flex align-items-center mb-4">
+            <hr class="flex-grow-1">
+            <span class="px-3 text-muted small text-uppercase fw-bold">Análisis Gráfico Detallado</span>
+            <hr class="flex-grow-1">
         </div>
-        `;
+
+        <!-- 2. Fila Inferior: Gráficos Avanzados (Smart Cards) -->
+        <div class="row g-3 mb-4 align-items-stretch">
+            <!-- Gráfico 1: Panorama Estados (Dividido: Estados + Líneas) -->
+            <div class="col-lg-6 col-xl-6">
+                ${createSplitSmartCardHTML(
+                    'chart-panorama-states',
+                    'chart-panorama-lines',
+                    'Panorama General',
+                    'Distribución actual de órdenes en producción y uso de líneas.',
+                    data.panorama_estados.insight, 
+                    data.panorama_estados.tooltip
+                )}
+            </div>
+
+            <!-- Gráfico 2: Ranking Desperdicios -->
+            <div class="col-lg-6 col-xl-6">
+                ${createSmartCardHTML(
+                    'chart-ranking-desperdicios', 
+                    'Ranking Desperdicios', 
+                    'Principales motivos de pérdida de material.',
+                    data.ranking_desperdicios.insight, 
+                    data.ranking_desperdicios.tooltip
+                )}
+            </div>
+
+            <!-- Gráfico 3: Evolución Desperdicios -->
+            <div class="col-lg-6 col-xl-6">
+                ${createSmartCardHTML(
+                    'chart-evolucion-desperdicios', 
+                    'Evolución Desperdicios', 
+                    'Tendencia histórica de incidentes reportados.',
+                    data.evolucion_desperdicios.insight, 
+                    data.evolucion_desperdicios.tooltip
+                )}
+            </div>
+
+            <!-- Gráfico 4: Velocidad Producción -->
+            <div class="col-lg-6 col-xl-6">
+                ${createSmartCardHTML(
+                    'chart-velocidad', 
+                    'Velocidad Producción', 
+                    'Tiempo promedio de ciclo para órdenes completadas.',
+                    data.velocidad_produccion.insight, 
+                    data.velocidad_produccion.tooltip
+                )}
+            </div>
+        </div>`;
         
         container.innerHTML = content;
 
-        // --- RENDERIZAR GAUGE OEE ---
+        // --- CHART 0: OEE GAUGE (RESTAURADO) ---
         const oeeVal = data.oee.valor.toFixed(1);
-        // Colores estándar industria: Rojo < 65, Amarillo < 85, Verde > 85
         const colorPalo = [[0.65, '#dc3545'], [0.85, '#ffc107'], [1, '#198754']];
 
         createChart('oee-gauge-chart', {
@@ -224,35 +343,135 @@ document.addEventListener('DOMContentLoaded', function () {
             }]
         });
 
-        // Renderizar Gantt (Placeholder simple para visualización)
-        if(data.ordenes_gantt && data.ordenes_gantt.length > 0){
-             const opNames = data.ordenes_gantt.map(o => `OP-${o.id_orden_produccion}`);
-             const opFechas = data.ordenes_gantt.map(o => {
-                 // Simplificado: Duración basada en fecha inicio y fin
-                 return [new Date(o.fecha_inicio_planificada).getTime(), new Date(o.fecha_fin_planificada).getTime()];
-             });
-             // Nota: Un Gantt real en ECharts requiere configuración compleja 'custom'. 
-             // Aquí usaremos un bar chart horizontal simple por ahora o texto si es muy complejo.
-             createChart('gantt-produccion', {
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-                xAxis: { type: 'value', scale: true, axisLabel: { formatter: (val) => new Date(val).toLocaleDateString() } },
-                yAxis: { type: 'category', data: opNames },
-                series: [{ 
-                    type: 'bar', 
-                    stack: 'total',
-                    itemStyle: { color: 'transparent' },
-                    data: data.ordenes_gantt.map(o => new Date(o.fecha_inicio_planificada).getTime()) // Offset transparente
-                }, {
-                    type: 'bar',
-                    stack: 'total',
-                    itemStyle: { color: '#3b82f6', borderRadius: 4 },
-                    data: data.ordenes_gantt.map(o => new Date(o.fecha_fin_planificada).getTime() - new Date(o.fecha_inicio_planificada).getTime()) // Duración real
+        // --- CHART 1A: PANORAMA ESTADOS (DONUT IZQUIERDO) ---
+        createChart('chart-panorama-states', {
+            tooltip: { trigger: 'item' },
+            legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10}, type: 'scroll' },
+            series: [{
+                name: 'Estados',
+                type: 'pie',
+                radius: ['40%', '60%'],
+                center: ['50%', '40%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false, position: 'center' },
+                emphasis: { label: { show: true, fontSize: '10', fontWeight: 'bold' } },
+                labelLine: { show: false },
+                data: data.panorama_estados.states_data
+            }]
+        });
+
+        // --- CHART 1B: PANORAMA LÍNEAS (DONUT DERECHO) ---
+        createChart('chart-panorama-lines', {
+            tooltip: { trigger: 'item' },
+            legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
+            series: [{
+                name: 'Línea',
+                type: 'pie',
+                radius: ['40%', '60%'],
+                center: ['50%', '40%'],
+                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                data: data.panorama_estados.lines_data
+            }]
+        });
+
+        // --- CHART 2: RANKING DESPERDICIOS (DINÁMICO: PIE vs BAR) ---
+        const desperdiciosType = data.ranking_desperdicios.chart_type || 'bar'; // Fallback
+        let desperdiciosOption = {};
+
+        if (desperdiciosType === 'pie') {
+             // Opción Torta/Donut
+             const pieData = data.ranking_desperdicios.categories.map((cat, idx) => ({
+                 name: cat,
+                 value: data.ranking_desperdicios.values[idx]
+             }));
+
+             desperdiciosOption = {
+                tooltip: { trigger: 'item' },
+                legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
+                series: [{
+                    name: 'Motivos',
+                    type: 'pie',
+                    radius: '60%',
+                    center: ['50%', '45%'],
+                    data: pieData,
+                    itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 1 },
+                    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
                 }]
-             });
+             };
         } else {
-            document.getElementById('gantt-produccion').innerHTML = '<div class="text-center pt-5 text-muted">No hay datos de Gantt</div>';
+            // Opción Barras (Pareto)
+            desperdiciosOption = {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
+                xAxis: { type: 'value', show: false }, 
+                yAxis: { 
+                    type: 'category', 
+                    data: data.ranking_desperdicios.categories,
+                    axisTick: { show: false },
+                    axisLine: { show: false }
+                },
+                series: [{
+                    name: 'Frecuencia',
+                    type: 'bar',
+                    data: data.ranking_desperdicios.values,
+                    itemStyle: { color: '#dc3545', borderRadius: [0, 4, 4, 0] },
+                    label: { show: true, position: 'right' }
+                }]
+            };
         }
+        createChart('chart-ranking-desperdicios', desperdiciosOption);
+
+
+        // --- CHART 3: EVOLUCIÓN DESPERDICIOS (SMOOTH LINE) ---
+        createChart('chart-evolucion-desperdicios', {
+            tooltip: { trigger: 'axis' },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: data.evolucion_desperdicios.categories },
+            yAxis: { type: 'value' },
+            series: [{
+                name: 'Incidentes',
+                type: 'line',
+                smooth: true,
+                data: data.evolucion_desperdicios.values,
+                areaStyle: { opacity: 0.1, color: '#fd7e14' },
+                itemStyle: { color: '#fd7e14' },
+                lineStyle: { width: 3 }
+            }]
+        });
+
+        // --- CHART 4: VELOCIDAD PRODUCCIÓN (GAUGE SIMPLE) ---
+        const velocidadVal = data.velocidad_produccion.valor;
+        createChart('chart-velocidad', {
+            series: [{
+                type: 'gauge',
+                startAngle: 180,
+                endAngle: 0,
+                min: 0,
+                max: Math.max(velocidadVal * 1.5, 24), // Escala dinámica
+                splitNumber: 4,
+                radius: '100%',
+                center: ['50%', '70%'], // Semi-círculo inferior
+                itemStyle: { color: '#0d6efd' },
+                progress: { show: true, width: 15 },
+                pointer: { show: false }, // Gauge estilo "Medidor de Progreso"
+                axisLine: { lineStyle: { width: 15 } },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                title: { show: true, offsetCenter: [0, '-20%'], fontSize: 12, color: '#888' },
+                detail: { 
+                    valueAnimation: true, 
+                    formatter: '{value} h', 
+                    offsetCenter: [0, '0%'], 
+                    fontSize: 24,
+                    fontWeight: 'bold',
+                    color: '#333'
+                },
+                data: [{ value: velocidadVal, name: 'Ciclo Promedio' }]
+            }]
+        });
     }
 
     function renderCalidad(data, container) {

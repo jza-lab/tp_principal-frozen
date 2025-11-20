@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from app.models.orden_produccion import OrdenProduccionModel
 from app.models.control_calidad_producto import ControlCalidadProductoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
+from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.receta import RecetaModel
 from app.models.registro_paro_model import RegistroParoModel
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel
@@ -18,7 +19,7 @@ from decimal import Decimal
 from app.utils import estados
 import logging
 # Faltaba importar defaultdict
-from collections import defaultdict 
+from collections import defaultdict, Counter
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class IndicadoresController:
         self.orden_produccion_model = OrdenProduccionModel()
         self.control_calidad_producto_model = ControlCalidadProductoModel()
         self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
+        self.registro_desperdicio_insumo_model = RegistroDesperdicioModel()
         self.receta_model = RecetaModel()
         self.registro_paro_model = RegistroParoModel()
         self.bloqueo_capacidad_model = BloqueoCapacidadModel()
@@ -86,39 +88,277 @@ class IndicadoresController:
 
     def obtener_kpis_produccion(self, semana=None, mes=None, ano=None):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
-        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
-        fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
+        
+        # Determinar contexto para la evolución
+        contexto = 'mes' # Default
+        if semana: contexto = 'semana'
+        elif mes: contexto = 'mes'
+        elif ano: contexto = 'ano'
 
+        # --- Métodos de apoyo para fechas fijas ---
+        hoy_dt = datetime.now()
+        inicio_semana_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
+        inicio_semana_actual = inicio_semana_dt.date()
+        
+        inicio_mes_dt = hoy_dt.replace(day=1)
+        inicio_mes_actual = inicio_mes_dt.date()
+        
+        next_month = inicio_mes_dt.replace(day=28) + timedelta(days=4)
+        fin_mes_dt = next_month - timedelta(days=next_month.day)
+        fin_mes_actual = fin_mes_dt.date()
+
+        panorama_estados = self._obtener_panorama_estados(inicio_semana_actual)
+        ranking_desperdicios = self._obtener_ranking_desperdicios(inicio_mes_actual, fin_mes_actual)
+        
+        # Pasar el contexto y rango dinámico a la evolución
+        evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
+        
+        velocidad_produccion = self._obtener_velocidad_produccion(inicio_mes_actual, fin_mes_actual)
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
         cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
-        tasa_desperdicio = self._calcular_tasa_desperdicio(fecha_inicio, fecha_fin)
-        causas_desperdicio = self.obtener_causas_desperdicio_pareto(fecha_inicio_str, fecha_fin_str)
 
-        # --- NUEVOS GRÁFICOS ---
-        # Gráfico de Gantt de Órdenes de Producción
-        ordenes_gantt_res = self.orden_produccion_model.get_all_enriched(
-            filtros={'fecha_meta_desde': fecha_inicio.isoformat(), 'fecha_meta_hasta': fecha_fin.isoformat(), 'estado_neq': 'PENDIENTE'}
-        )
-        ordenes_gantt = sorted(ordenes_gantt_res.get('data', []), key=lambda x: x.get('fecha_inicio_planificada') or '', reverse=True)[:15]
-
-        # Volumen de Producción Diario
-        volumen_produccion_res = self.orden_produccion_model.obtener_volumen_produccion_por_fecha(fecha_inicio, fecha_fin)
-        volumen_produccion = volumen_produccion_res.get('data', [])
-
-        # Comparativa Plan vs. Real
-        comparativa_res = self.orden_produccion_model.obtener_comparativa_plan_vs_real(fecha_inicio, fecha_fin, limite=10)
-        comparativa_plan_real = comparativa_res.get('data', [])
-
-
-        # Se retorna una estructura defensiva que coincide con el frontend
         return {
+            "panorama_estados": panorama_estados,
+            "ranking_desperdicios": ranking_desperdicios,
+            "evolucion_desperdicios": evolucion_desperdicios,
+            "velocidad_produccion": velocidad_produccion,
             "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
-            "cumplimiento_plan": cumplimiento_plan if isinstance(cumplimiento_plan, dict) else {"valor": 0, "completadas_a_tiempo": 0, "planificadas": 0},
-            "tasa_desperdicio": tasa_desperdicio if isinstance(tasa_desperdicio, dict) else {"valor": 0, "desperdicio": 0, "total_utilizado": 0},
-            "causas_desperdicio_pareto": causas_desperdicio if isinstance(causas_desperdicio, dict) else {"labels": [], "data": [], "line_data": []},
-            "ordenes_gantt": ordenes_gantt,
-            "volumen_produccion_diario": volumen_produccion,
-            "comparativa_plan_real": comparativa_plan_real
+            "cumplimiento_plan": cumplimiento_plan
+        }
+
+    # --- IMPLEMENTACIÓN NUEVOS MÉTODOS PRIVADOS ---
+
+    def _obtener_panorama_estados(self, inicio_semana):
+        """
+        Obtiene el conteo de órdenes por estado.
+        Criterio: Todas las activas (independiente de fecha) + Completadas esta semana.
+        """
+        estados_activos = [
+            'EN ESPERA', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'LISTA PARA PRODUCIR', 'EN_EMPAQUETADO', 
+            'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'PAUSADA'
+        ]
+        
+        # 1. Activas
+        res_activas = self.orden_produccion_model.find_all(filters={'estado': estados_activos})
+        data_activas = res_activas.get('data', []) if res_activas.get('success') else []
+        
+        # 2. Completadas esta semana
+        res_completadas = self.orden_produccion_model.find_all(filters={
+            'estado': 'COMPLETADA',
+            'fecha_fin_gte': inicio_semana.isoformat() 
+        })
+        data_completadas = res_completadas.get('data', []) if res_completadas.get('success') else []
+
+        # Consolidar y contar
+        conteo_estados = Counter()
+        conteo_lineas = Counter()
+        total = 0
+        
+        ids_procesados = set()
+
+        for op in data_activas + data_completadas:
+            if op['id'] in ids_procesados: continue
+            ids_procesados.add(op['id'])
+            
+            estado_raw = op.get('estado', 'Desconocido')
+            estado_fmt = estado_raw.replace('_', ' ')
+            conteo_estados[estado_fmt] += 1
+            
+            # Conteo para líneas
+            if estado_raw == 'EN_LINEA_1':
+                conteo_lineas['Línea 1'] += 1
+            elif estado_raw == 'EN_LINEA_2':
+                conteo_lineas['Línea 2'] += 1
+                
+            total += 1
+
+        en_proceso = conteo_estados.get('EN PROCESO', 0) + conteo_estados.get('EN LINEA 1', 0) + conteo_estados.get('EN LINEA 2', 0)
+        insight = f"Actualmente hay {en_proceso} órdenes en piso de producción y un total de {total} órdenes activas o finalizadas recientemente."
+        
+        return {
+            "states_data": [{"name": k, "value": v} for k, v in conteo_estados.items()],
+            "lines_data": [{"name": k, "value": v} for k, v in conteo_lineas.items()],
+            "total": total,
+            "insight": insight,
+            "tooltip": "Distribución de órdenes activas (En Espera, Líneas, Calidad) y completadas esta semana."
+        }
+
+    def _obtener_ranking_desperdicios(self, fecha_inicio, fecha_fin):
+        """
+        Top 5 motivos de desperdicio más frecuentes en el periodo (count).
+        Combina desperdicios de productos y desperdicios de insumos.
+        """
+        # 1. Desperdicio de Productos
+        res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_prod = res_prod.get('data', []) if res_prod.get('success') else []
+
+        # 2. Desperdicio de Insumos (Nuevo)
+        res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
+        
+        conteo = Counter()
+        
+        # Procesar Productos
+        for d in data_prod:
+            # Motivo en 'motivo' dict o string
+            if isinstance(d.get('motivo'), dict):
+                motivo = d.get('motivo', {}).get('motivo', 'Sin motivo') 
+            else:
+                motivo = 'Sin motivo'
+            conteo[motivo] += 1 
+            
+        # Procesar Insumos (campo 'motivo_desperdicio' -> 'descripcion')
+        for d in data_insumo:
+            if isinstance(d.get('motivo_desperdicio'), dict):
+                motivo = d.get('motivo_desperdicio', {}).get('descripcion', 'Sin motivo')
+            else:
+                 # Fallback si no hay join o estructura diferente
+                motivo = 'Sin motivo (Insumo)'
+            conteo[motivo] += 1
+
+        top_5 = conteo.most_common(5)
+        total_incidentes = len(data_prod) + len(data_insumo)
+        
+        if top_5:
+            top_motivo = top_5[0][0]
+            porcentaje = (top_5[0][1] / total_incidentes * 100) if total_incidentes > 0 else 0
+            insight = f"El motivo principal de las mermas ha sido '{top_motivo}', representando el {porcentaje:.0f}% del total de incidencias registradas en el periodo."
+        else:
+            insight = "No se han registrado incidentes de desperdicio significativos durante este mes."
+
+        top_5_inv = top_5[::-1]
+
+        # --- Lógica Dinámica (Pie vs Bar) ---
+        chart_type = 'pie' if len(top_5) <= 6 else 'bar'
+        
+        return {
+            "categories": [x[0] for x in top_5_inv],
+            "values": [x[1] for x in top_5_inv],
+            "insight": insight,
+            "tooltip": "Los motivos más recurrentes por cantidad de incidentes (frecuencia).",
+            "chart_type": chart_type
+        }
+
+    def _obtener_evolucion_desperdicios(self, fecha_inicio, fecha_fin, contexto='mes'):
+        """
+        Evolución dinámica basada en el periodo seleccionado.
+        """
+        # Ampliar rango para asegurar datos en bordes si es necesario
+        res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_prod = res_prod.get('data', []) if res_prod.get('success') else []
+
+        res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
+        
+        data_agregada = defaultdict(int)
+        labels_ordenados = []
+        
+        # Definir formato de buckets
+        bucket_format = "%Y-%m-%d"
+        label_format = "%d/%m"
+        delta = timedelta(days=1)
+        
+        if contexto == 'ano':
+            bucket_format = "%Y-%m"
+            label_format = "%b %Y" # Ene 2024
+            # Iterar por meses
+            current = fecha_inicio.replace(day=1)
+            while current <= fecha_fin:
+                key = current.strftime(bucket_format)
+                labels_ordenados.append(key)
+                data_agregada[key] = 0
+                # Avanzar mes
+                next_month = current.replace(day=28) + timedelta(days=4)
+                current = next_month - timedelta(days=next_month.day - 1)
+        else:
+            # Iterar por días (semana o mes)
+            current = fecha_inicio
+            while current <= fecha_fin: # Corregido comparación
+                key = current.strftime(bucket_format)
+                labels_ordenados.append(key)
+                data_agregada[key] = 0
+                current += delta
+
+        def procesar_lista(lista_datos, fecha_key):
+            for d in lista_datos:
+                fecha_raw = d.get(fecha_key)
+                if not fecha_raw: continue
+                try:
+                    # Intentar parsear ISO completo
+                    dt = datetime.fromisoformat(fecha_raw)
+                except ValueError:
+                    try:
+                        # Intentar solo fecha
+                        dt = datetime.strptime(fecha_raw[:10], "%Y-%m-%d")
+                    except:
+                        continue
+                
+                key = dt.strftime(bucket_format)
+                if key in data_agregada:
+                    data_agregada[key] += 1
+                elif contexto == 'ano': # Fallback para año si las fechas no están alineadas al dia 1
+                     # Si el key generado por el dato está en el rango, sumarlo
+                     if key in data_agregada: 
+                         data_agregada[key] += 1
+
+        procesar_lista(data_prod, 'fecha_registro')
+        procesar_lista(data_insumo, 'created_at')
+
+        valores = [data_agregada[k] for k in labels_ordenados]
+        
+        # Formatear etiquetas para el frontend
+        labels_display = []
+        for k in labels_ordenados:
+             if contexto == 'ano':
+                 dt = datetime.strptime(k, "%Y-%m")
+                 labels_display.append(dt.strftime("%b")) # Nombre mes
+             else:
+                 dt = datetime.strptime(k, "%Y-%m-%d")
+                 labels_display.append(dt.strftime("%d/%m"))
+
+        promedio = sum(valores) / len(valores) if valores else 0
+        ultimo_valor = valores[-1] if valores else 0
+        trend_text = "estable"
+        if ultimo_valor > promedio * 1.1: trend_text = "al alza"
+        elif ultimo_valor < promedio * 0.9: trend_text = "a la baja"
+            
+        insight = f"La tendencia de incidentes se muestra {trend_text} comparada con el promedio del periodo ({promedio:.1f} incidentes/periodo)."
+
+        return {
+            "categories": labels_display,
+            "values": valores,
+            "insight": insight,
+            "tooltip": "Muestra la cantidad de reportes de desperdicio (tanto de producto como de insumos) registrados en cada periodo temporal."
+        }
+
+    def _obtener_velocidad_produccion(self, fecha_inicio, fecha_fin):
+        """
+        Tiempo promedio de ciclo (Cycle Time) para órdenes completadas en el periodo.
+        """
+        res = self.orden_produccion_model.find_all(filters={
+            'estado': 'COMPLETADA',
+            'fecha_fin_gte': fecha_inicio.isoformat(),
+            'fecha_fin_lte': fecha_fin.isoformat()
+        })
+        data = res.get('data', []) if res.get('success') else []
+        
+        tiempos = []
+        for op in data:
+            if op.get('fecha_inicio') and op.get('fecha_fin'):
+                inicio = datetime.fromisoformat(op['fecha_inicio'])
+                fin = datetime.fromisoformat(op['fecha_fin'])
+                delta_horas = (fin - inicio).total_seconds() / 3600
+                tiempos.append(delta_horas)
+                
+        promedio = sum(tiempos) / len(tiempos) if tiempos else 0
+        
+        insight = f"Se completaron {len(tiempos)} órdenes este mes, con un tiempo promedio de ejecución estable."
+        
+        return {
+            "valor": round(promedio, 1),
+            "unidad": "Horas",
+            "insight": insight,
+            "tooltip": "Tiempo promedio que toma completar una orden desde su inicio real hasta su fin."
         }
 
     # --- CATEGORÍA: CALIDAD ---
@@ -297,7 +537,10 @@ class IndicadoresController:
 
         # 2. Tiempo de Paradas
         # Paradas de operario
-        paros_operario_res = self.registro_paro_model.find_all(filters=[('fecha_inicio', '>=', fecha_inicio), ('fecha_inicio', '<=', fecha_fin)])
+        paros_operario_res = self.registro_paro_model.find_all(filters={
+            'fecha_inicio_gte': fecha_inicio.isoformat(), 
+            'fecha_inicio_lte': fecha_fin.isoformat()
+        })
         tiempo_paradas_operario = 0
         if paros_operario_res.get('success'):
             for paro in paros_operario_res.get('data', []):
@@ -305,7 +548,10 @@ class IndicadoresController:
                     tiempo_paradas_operario += (datetime.fromisoformat(paro['fecha_fin']) - datetime.fromisoformat(paro['fecha_inicio'])).total_seconds()
         
         # Bloqueos de línea/capacidad
-        bloqueos_linea_res = self.bloqueo_capacidad_model.find_all(filters=[('fecha', '>=', fecha_inicio), ('fecha', '<=', fecha_fin)])
+        bloqueos_linea_res = self.bloqueo_capacidad_model.find_all(filters={
+            'fecha_gte': fecha_inicio.isoformat(), 
+            'fecha_lte': fecha_fin.isoformat()
+        })
         tiempo_paradas_linea_minutos = 0
         if bloqueos_linea_res.get('success'):
             tiempo_paradas_linea_minutos = sum(b.get('minutos_bloqueados', 0) for b in bloqueos_linea_res.get('data', []))
