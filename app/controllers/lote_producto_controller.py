@@ -1520,3 +1520,19 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico en liberar_reserva_especifica: {e}", exc_info=True)
             return False
+
+
+    def devolver_stock_a_lote(self, lote_id: int, cantidad: float) -> bool:
+        """Devuelve stock físico a un lote sin tocar reservas."""
+        try:
+            lote = self.model.find_by_id(lote_id, 'id_lote').get('data')
+            if not lote: return False
+
+            nueva_cantidad = float(lote.get('cantidad_actual', 0)) + cantidad
+            estado = 'DISPONIBLE' if lote.get('estado') == 'AGOTADO' else lote.get('estado')
+
+            self.model.update(lote_id, {'cantidad_actual': nueva_cantidad, 'estado': estado}, 'id_lote')
+            return True
+        except Exception as e:
+            logger.error(f"Error devolviendo stock a lote {lote_id}: {e}")
+            return False
