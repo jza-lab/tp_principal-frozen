@@ -266,7 +266,9 @@ class OrdenProduccionController(BaseController):
             if errores:
                 return {'success': False, 'error': '; '.join(errores), 'data': {'creadas': ordenes_creadas}}
             
-            return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción.'}
+            codigos_ops = [op.get('codigo', f"ID {op.get('id')}") for op in ordenes_creadas]
+            msg_ops = ", ".join(codigos_ops) if codigos_ops else ""
+            return {'success': True, 'data': ordenes_creadas, 'message': f'Se crearon {len(ordenes_creadas)} órdenes de producción: {msg_ops}'}
 
         except Exception as e:
             logger.error(f"Error inesperado en crear_orden: {e}", exc_info=True)
