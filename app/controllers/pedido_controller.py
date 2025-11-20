@@ -200,7 +200,20 @@ class PedidoController(BaseController):
             auto_aprobar_produccion = True
 
             producto_ids_pedido = [item['producto_id'] for item in items_data]
-            stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(producto_ids_pedido)
+
+            # --- CAMBIO AQUÍ: Obtener fecha para filtrar stock ---
+            fecha_entrega_pedido = form_data.get('fecha_requerido')
+            fecha_obj_filtro = None
+            if fecha_entrega_pedido:
+                 fecha_obj_filtro = datetime.fromisoformat(fecha_entrega_pedido).date()
+
+            # Pasamos la fecha al controlador de lotes
+            stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(
+                producto_ids_pedido,
+                fecha_requisito=fecha_obj_filtro
+            )
+            # ----------------------------------------------------
+
             if not stock_global_resp.get('success'):
                 return self.error_response("No se pudo verificar el stock para los productos del pedido.", 500)
             stock_global_map = stock_global_resp.get('data', {})
