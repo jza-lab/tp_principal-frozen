@@ -1583,16 +1583,14 @@ class OrdenProduccionController(BaseController):
             orden_actual = orden_actual_res['data']
 
             # 3. Calcular totales y validar sobreproducción
-            cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
-            desperdicios_anteriores = RegistroDesperdicioModel().find_all({'orden_produccion_id': orden_id}).get('data', [])
-            total_desperdicio_anterior = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_anteriores)
-            total_procesado_anterior = cantidad_producida_actual + total_desperdicio_anterior
             cantidad_planificada = Decimal(orden_actual.get('cantidad_planificada', 0))
             cantidad_producida_actual = Decimal(orden_actual.get('cantidad_producida', 0))
-            cantidad_restante = cantidad_planificada - cantidad_producida_actual
 
-            if (total_procesado_anterior + cantidad_buena + cantidad_desperdicio) > cantidad_planificada:
-                 return self.error_response(f"El reporte excede la cantidad planificada de {cantidad_planificada}. No se puede registrar.", 400)
+            # La validación no debe ser sobre el total procesado, sino sobre la cantidad BUENA.
+            # Esto permite "sobre-procesar" para cubrir desperdicios.
+            cantidad_buena_proyectada = cantidad_producida_actual + cantidad_buena
+            if cantidad_buena_proyectada > cantidad_planificada:
+                 return self.error_response(f"El reporte de {cantidad_buena:.2f} unidades buenas excede la cantidad planificada de {cantidad_planificada}. La producción buena total sería {cantidad_buena_proyectada:.2f}.", 400)
 
             # 4. Registrar avance (siempre se hace)
             update_data = {'cantidad_producida': cantidad_producida_actual + cantidad_buena}
@@ -1603,32 +1601,29 @@ class OrdenProduccionController(BaseController):
                 })
 
             # 5. Lógica de "Punto de Control"
-            total_procesado_ahora = total_procesado_anterior + cantidad_buena + cantidad_desperdicio
-            if total_procesado_ahora == cantidad_planificada:
-                desperdicio_total_final = total_desperdicio_anterior + cantidad_desperdicio
-                if desperdicio_total_final > 0:
-                    # Se alcanzó la meta, ahora se gestiona el desperdicio
-                    gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, desperdicio_total_final, usuario_id)
-                    
-                    # --- INICIO DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
-                    # Verificar si la gestión del desperdicio falló antes de continuar.
-                    if not gestion_res.get('success'):
-                        # Si la creación de la OP hija falló, no debemos continuar.
-                        # Devolvemos el error que nos dio el método hijo.
-                        return self.error_response(gestion_res.get('error', 'Error no especificado al gestionar desperdicio.'), 500)
-                    # --- FIN DE LA CORRECCIÓN DE MANEJO DE ERRORES ---
-                    
-                    self.model.update(orden_id, update_data) # Guardar el último avance
-                    return self.success_response(message=gestion_res.get('message'), data=gestion_res.get('data'))
+            # Se recalcula el total procesado para saber si llegamos al punto de control.
+            desperdicios_anteriores = RegistroDesperdicioModel().find_all({'orden_produccion_id': orden_id}).get('data', [])
+            total_desperdicio_anterior = sum(Decimal(d.get('cantidad', '0')) for d in desperdicios_anteriores)
+            total_procesado_ahora = cantidad_producida_actual + total_desperdicio_anterior + cantidad_buena + cantidad_desperdicio
 
-            # 6. Si no se ha llegado al punto de control, es un reporte normal
-            # La orden se considera lista para QC cuando la suma de lo bueno y el desperdicio
-            # iguala o supera lo planificado.
             if total_procesado_ahora >= cantidad_planificada:
-                update_data['estado'] = 'CONTROL_DE_CALIDAD'
-                # También se debería registrar la fecha_fin
-                update_data['fecha_fin'] = datetime.now().isoformat()
-            
+                desperdicio_total_final = total_desperdicio_anterior + cantidad_desperdicio
+                
+                if desperdicio_total_final > 0:
+                    # CASO 1: Se alcanzó la meta y HAY desperdicio. Gestionarlo.
+                    # El método hijo se encargará de finalizar la OP si es necesario.
+                    gestion_res = self._gestionar_desperdicio_en_punto_de_control(orden_actual, desperdicio_total_final, usuario_id)
+                    if not gestion_res.get('success'):
+                        return self.error_response(gestion_res.get('error', 'Error al gestionar desperdicio.'), 500)
+                    
+                    self.model.update(orden_id, update_data) # Guardar el último avance de cantidad buena
+                    return self.success_response(message=gestion_res.get('message'), data=gestion_res.get('data'))
+                else:
+                    # CASO 2: Se alcanzó la meta y NO HAY desperdicio. Finalizar la orden.
+                    update_data['estado'] = 'CONTROL_DE_CALIDAD'
+                    update_data['fecha_fin'] = datetime.now().isoformat()
+
+            # Si no se ha llegado al punto de control, simplemente se actualiza la cantidad producida.
             self.model.update(orden_id, update_data)
             
             detalle_log = f"Avance en OP {orden_actual.get('codigo')}. Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
@@ -1705,10 +1700,11 @@ class OrdenProduccionController(BaseController):
         if stock_check.get('success') and not stock_check['data']['insumos_faltantes']:
             logger.info(f"Stock disponible para desperdicio en OP {orden_id}. Requiere confirmación del usuario.")
             return {
-                'message': f"Se ha alcanzado la cantidad planificada. Hay stock disponible para producir {desperdicio_total:.2f} kg adicionales y cubrir el desperdicio. ¿Desea continuar?",
+                'success': True,
+                'message': f"Se ha alcanzado la cantidad planificada. Hay stock disponible para reponer los <b>{desperdicio_total:.2f} kg</b> de desperdicio y completar la orden. ¿Desea continuar?",
                 'data': {
-                    'accion': 'confirmar_ampliacion',
-                    'desperdicio_a_cubrir': float(desperdicio_total)
+                    'accion': 'autorizar_reposicion',
+                    'cantidad_a_reponer': float(desperdicio_total)
                 }
             }
         
