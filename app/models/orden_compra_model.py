@@ -51,6 +51,7 @@ class OrdenCompra:
     complementa_a_orden_id: Optional[int] = None
     paso_recepcion: Optional[int] = None
     cantidad_verificada: Optional[int] = None
+    gestion_manual: Optional[bool] = False
 
 class OrdenCompraModel(BaseModel):
     """
@@ -143,7 +144,8 @@ class OrdenCompraModel(BaseModel):
                 'usuario_aprobador_id': 'usuario_aprobador_id',
                 'complementa_a_orden_id': 'complementa_a_orden_id',
                 'paso_recepcion': 'paso_recepcion',
-                'cantidad_verificada': 'cantidad_verificada'
+                'cantidad_verificada': 'cantidad_verificada',
+                'gestion_manual': 'gestion_manual'
             }
 
             for model_field, db_field in field_mapping.items():

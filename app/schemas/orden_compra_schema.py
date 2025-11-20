@@ -26,3 +26,4 @@ class OrdenCompraSchema(Schema):
     updated_at = fields.DateTime(dump_only=True)
     fecha_creacion = fields.DateTime(dump_only=True)
     complementa_a_orden_id = fields.Int(dump_only=True)
+    gestion_manual = fields.Boolean(dump_default=False)
