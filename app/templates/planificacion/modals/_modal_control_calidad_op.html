@@ -16,8 +16,7 @@
                     <div class="mb-3">
                         <label for="decision-inspeccion" class="form-label">Resultado de la Inspección</label>
                         <select class="form-select" id="decision-inspeccion" name="decision_inspeccion" required>
-                            <option value="" selected disabled>Seleccione un resultado...</option>
-                            <option value="APROBADO">Aprobar lote completo</option>
+                            <option value="APROBADO" selected>Aprobar lote completo</option>
                             <option value="RECHAZO_PARCIAL">Rechazar parcialmente</option>
                             <option value="CUARENTENA_PARCIAL">Poner en cuarentena parcialmente</option>
                             <option value="MIXTO">Decisión Mixta (Rechazo y Cuarentena)</option>
@@ -28,7 +27,7 @@
                     <div id="campos-cantidades" style="display: none;">
                         <div class="mb-3" id="campo-rechazar" style="display: none;">
                             <label for="cantidad-rechazada" class="form-label">Cantidad a Rechazar (kg)</label>
-                            <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="0.1" min="1">
+                            <input type="number" class="form-control" id="cantidad-rechazada" name="cantidad_rechazada" step="1" min="1">
                         </div>
 
                         <div class="mb-3" id="campo-cuarentena" style="display: none;">
@@ -37,8 +36,8 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="motivo-inspeccion" class="form-label">Motivo de la decisión (si aplica)</label>
+                    <div class="mb-3" id="container-motivo-inspeccion" style="display: none;">
+                        <label for="motivo-inspeccion" class="form-label">Motivo de la decisión</label>
                         <select class="form-select" id="motivo-inspeccion" name="motivo_inspeccion">
                             <option value="" selected disabled>Seleccione un motivo...</option>
                             <option value="Defecto de empaquetado">Defecto de empaquetado</option>
