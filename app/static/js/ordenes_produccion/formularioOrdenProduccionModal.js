@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', function () {
         searchFilterInput.focus();
     });
 
-    function agregarItemAOrden(producto) {
+    function agregarItemAOrden(producto, cantidad = null) {
         const template = itemTemplate.innerHTML.replace(/__prefix__/g, itemIndex);
         const newRow = document.createElement('tr');
         newRow.innerHTML = template;
@@ -59,6 +59,10 @@ document.addEventListener('DOMContentLoaded', function () {
         newRow.querySelector('.product-name').textContent = producto.nombre;
         newRow.querySelector('.unidad-display').textContent = format_product_units(producto);
         
+        if (cantidad) {
+            newRow.querySelector('.cantidad').value = cantidad;
+        }
+
         itemsContainer.appendChild(newRow);
         itemIndex++;
         updateUI();
@@ -76,6 +80,17 @@ document.addEventListener('DOMContentLoaded', function () {
     // Función para actualizar la UI (mensaje de "sin ítems")
     function updateUI() {
         noItemsMsg.style.display = itemsContainer.children.length > 0 ? 'none' : 'block';
+    }
+    
+    // --- PRE-LLENADO DE DATOS (SI EXISTEN) ---
+    if (typeof PRE_PRODUCTO_ID !== 'undefined' && PRE_PRODUCTO_ID && PRE_CANTIDAD) {
+        const productoEncontrado = productosData.find(p => p.id == PRE_PRODUCTO_ID);
+        if (productoEncontrado) {
+            // Retrasar ligeramente para asegurar que el DOM esté listo
+            setTimeout(() => {
+                agregarItemAOrden(productoEncontrado, PRE_CANTIDAD);
+            }, 100);
+        }
     }
 
     // --- LÓGICA DE ENVÍO DEL FORMULARIO CON FETCH ---
@@ -96,7 +111,7 @@ document.addEventListener('DOMContentLoaded', function () {
             itemRows.forEach((row, index) => {
                 const id = row.querySelector('.product-id').value;
                 const cantidadInput = row.querySelector('.cantidad');
-                const cantidad = parseInt(cantidadInput.value, 10);
+                const cantidad = parseFloat(cantidadInput.value); // Changed to parseFloat to support decimals if needed, though input type is number
 
                 if (isNaN(cantidad) || cantidad <= 0) {
                     cantidadInput.classList.add('is-invalid');

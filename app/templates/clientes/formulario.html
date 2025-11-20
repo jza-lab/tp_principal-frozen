@@ -253,7 +253,7 @@ Agregar nuevo cliente
                                             value="{{ (cliente.get('direccion') or {}).get('codigo_postal', '') if cliente and cliente.direccion }}"
                                             required>
                                         <label for="codigo_postal">
-                                            <i class="bi bi-mailbox me-1"></i>Código Postal
+                                            <i class="bi bi-mailbox me-1"></i>Código Postal <span class="text-danger">*</span>
                                         </label>
                                     </div>
                                 </div>

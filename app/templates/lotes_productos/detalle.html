@@ -446,6 +446,28 @@
         </div>
     </div>
 </div>
+
+<!-- Modal Sugerencia Reabastecimiento (NUEVO) -->
+<div class="modal fade" id="modalSugerenciaReabastecimiento" tabindex="-1" aria-labelledby="modalSugerenciaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalSugerenciaLabel"><i class="bi bi-recycle me-2"></i> Reponer Stock Desperdiciado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Ha registrado un desperdicio exitosamente.</p>
+                <p>¿Desea crear una <strong>Orden de Producción</strong> inmediata para reponer las <strong><span id="spanCantidadReabastecer"></span> unidades</strong> desperdiciadas?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, cerrar</button>
+                <a href="#" id="btnCrearOPReabastecer" class="btn btn-primary">
+                    <i class="bi bi-plus-circle-dotted me-1"></i> Crear OPs para reabastecer
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -467,6 +489,26 @@ document.addEventListener('DOMContentLoaded', function () {
         var modalImage = imageModal.querySelector('#modalImage');
         modalImage.src = imageUrl;
     });
+
+    // Lógica para mostrar el modal de reabastecimiento si viene el parametro
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('desperdicio_registrado') === 'True') {
+        const cantidad = urlParams.get('cantidad_desperdiciada');
+        document.getElementById('spanCantidadReabastecer').textContent = cantidad;
+        
+        // Configurar el enlace al formulario de nueva OP
+        // Pasamos producto_id y cantidad como parametros
+        const productoId = "{{ lote.producto_id }}"; // Asumiendo que existe en el objeto lote
+        const nuevaOPUrl = "{{ url_for('orden_produccion.nueva') }}" + 
+                           "?pre_producto_id=" + productoId + 
+                           "&pre_cantidad=" + cantidad +
+                           "&observaciones=Reposición por desperdicio del Lote {{ lote.numero_lote }}";
+        
+        document.getElementById('btnCrearOPReabastecer').href = nuevaOPUrl;
+
+        var modalReabastecer = new bootstrap.Modal(document.getElementById('modalSugerenciaReabastecimiento'));
+        modalReabastecer.show();
+    }
 });
 </script>
 {% endblock %}

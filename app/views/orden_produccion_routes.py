@@ -108,8 +108,19 @@ def nueva():
     fecha_hoy = date.today().isoformat() # Obtener YYYY-MM-DD
     # --------------------------
 
+    # Obtener parametros de pre-llenado si existen
+    pre_producto_id = request.args.get('pre_producto_id')
+    pre_cantidad = request.args.get('pre_cantidad')
+    observaciones = request.args.get('observaciones')
+
     return render_template(
-        "ordenes_produccion/formulario.html", productos=productos, supervisores=supervisores, fecha_hoy=fecha_hoy
+        "ordenes_produccion/formulario.html", 
+        productos=productos, 
+        supervisores=supervisores, 
+        fecha_hoy=fecha_hoy,
+        pre_producto_id=pre_producto_id,
+        pre_cantidad=pre_cantidad,
+        observaciones=observaciones
     )
 
 

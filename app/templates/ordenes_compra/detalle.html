@@ -353,6 +353,7 @@
                         {# --- INICIO DE LA MODIFICACIÓN: PASO 2 RE-ESTILIZADO CON TODOS LOS CAMPOS --- #}
                         <form id="calidadForm" action="{{ url_for('orden_compra.procesar_recepcion', orden_id=orden.id) }}" method="POST" enctype="multipart/form-data">
                             <input type="hidden" name="paso" value="2">
+                            <input type="hidden" name="modo_oc" id="modo_oc_input" value="auto">
                              {{ csrf_form.csrf_token }}
                             <div class="card mt-4">
                                 <div class="card-header bg-info-soft">
@@ -362,7 +363,9 @@
                                     <p>Inspeccione cada ítem recibido. Las cantidades aprobadas se ingresarán al stock, mientras que las de cuarentena o rechazadas generarán un reclamo.</p>
                                     
                                     {% for item in orden['items'] %}
-                                    <div class="card mb-3 shadow-sm item-calidad-row" data-total-recibido="{{ item.cantidad_recibida | default(0) }}">
+                                    <div class="card mb-3 shadow-sm item-calidad-row" 
+                                        data-total-recibido="{{ item.cantidad_recibida | default(0) }}"
+                                        data-cantidad-solicitada="{{ item.cantidad_solicitada }}">
                                         <div class="card-body">
                                             <input type="hidden" name="item_id[]" value="{{ item.id }}">
                                             
@@ -800,42 +803,84 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     // --- FIN MODIFICACIÓN JS ---
 
-    // --- Lógica para el modal de confirmación de rechazo ---
+    // --- Lógica para el modal de confirmación y Modo OC ---
     const calidadForm = document.getElementById('calidadForm');
+    
     if (calidadForm) {
-        const rechazoModal = new bootstrap.Modal(document.getElementById('confirmacionRechazoModal'));
-        const confirmarRechazoBtn = document.getElementById('confirmarRechazoBtn');
+        // Referencias al Modal de Recepción Parcial (el que tiene el checkbox)
+        const modalParcial = new bootstrap.Modal(document.getElementById('confirmacionRecepcionParcialModal'));
+        const btnConfirmarRecepcion = document.getElementById('confirmarRecepcionBtn');
+        const checkboxOcHija = document.getElementById('crearOcHijaCheckbox');
+        const inputModoOc = document.getElementById('modo_oc_input');
+
+        // Referencia al Modal de Rechazo Simple (por si lo usas para otros casos, aunque el de arriba es mejor)
+        const modalRechazoSimple = new bootstrap.Modal(document.getElementById('confirmacionRechazoModal'));
+        const btnConfirmarRechazo = document.getElementById('confirmarRechazoBtn');
+
+        let formSubmitIntentado = false; // Para evitar bucles
 
         calidadForm.addEventListener('submit', function(event) {
-            event.preventDefault(); // Detener el envío del formulario siempre al principio
+            if (formSubmitIntentado) return; // Si ya confirmamos, dejar pasar el submit
 
-            let necesitaConfirmacion = false;
-            // Solo necesitamos verificar si la OC está vinculada a una OP
-            {% if orden.orden_produccion_id %}
-                document.querySelectorAll('.item-calidad-row').forEach(row => {
-                    const cuarentenaInput = row.querySelector('.cantidad-cuarentena');
-                    const rechazadaInput = row.querySelector('.cantidad-rechazada');
-                    const cuarentenaVal = parseFloat(cuarentenaInput.value) || 0;
-                    const rechazadaVal = parseFloat(rechazadaInput.value) || 0;
+            let hayProblemas = false; // Si hay rechazos, cuarentena o FALTANTES
 
-                    if (cuarentenaVal > 0 || rechazadaVal > 0) {
-                        necesitaConfirmacion = true;
-                    }
-                });
-            {% endif %}
+            // Recorrer todas las filas
+            document.querySelectorAll('.item-calidad-row').forEach(row => {
+                // 1. Obtener valores
+                const cuarentenaInput = row.querySelector('.cantidad-cuarentena');
+                const rechazadaInput = row.querySelector('.cantidad-rechazada');
+                const aprobadaInput = row.querySelector('.cantidad-aprobada');
+                
+                const cVal = parseFloat(cuarentenaInput.value) || 0;
+                const rVal = parseFloat(rechazadaInput.value) || 0;
+                const aprobadaVal = parseFloat(aprobadaInput.value) || 0;
+                
+                // Leer lo que se pidió originalmente (del HTML que modificamos arriba)
+                const solicitadoVal = parseFloat(row.dataset.cantidadSolicitada) || 0;
 
-            if (necesitaConfirmacion) {
-                rechazoModal.show();
-            } else {
-                // Si no se necesita confirmación, enviar el formulario directamente
-                calidadForm.submit();
-            }
+                // 2. Detectar Problemas de Calidad (Cuarentena o Rechazo)
+                if (cVal > 0 || rVal > 0) {
+                    hayProblemas = true;
+                }
+
+                // 3. ✅ Detectar Discrepancia de Cantidad (Faltantes)
+                // Si lo que estoy aprobando es MENOR a lo que pedí originalmente, 
+                // significa que falta mercadería (ya sea porque no llegó o porque se rechazó).
+                // Usamos una pequeña tolerancia (0.01) para errores de punto flotante.
+                if (aprobadaVal < (solicitadoVal - 0.01)) {
+                    hayProblemas = true;
+                }
+            });
+            
+            // Si hay CUALQUIER problema (calidad o cantidad), mostrar el modal
+            if (hayProblemas) {
+                event.preventDefault(); // Detener envío automático
+                modalParcial.show();    // Mostrar el modal con el Checkbox
+            } 
+            // Si todo está perfecto (Aprobado == Solicitado), se envía directo (modo 'auto')
         });
 
-        confirmarRechazoBtn.addEventListener('click', function() {
-            // Cuando el usuario confirma, ahora sí se envía el formulario
+        // Lógica del Botón "Sí, continuar" en el Modal
+        btnConfirmarRecepcion.addEventListener('click', function() {
+            // 1. Leer el estado del checkbox
+            if (checkboxOcHija.checked) {
+                inputModoOc.value = 'auto';   // Crear OC hija automáticamente
+            } else {
+                inputModoOc.value = 'manual'; // Gestionar manualmente (OP vuelve a Pendiente)
+            }
+
+            // 2. Enviar formulario
+            formSubmitIntentado = true; // Flag para saltar la validación del listener
             calidadForm.submit();
         });
+
+        // (Opcional) Mantener lógica del botón del otro modal por compatibilidad si se llegara a abrir
+        if(btnConfirmarRechazo) {
+            btnConfirmarRechazo.addEventListener('click', function() {
+                formSubmitIntentado = true;
+                calidadForm.submit();
+            });
+        }
     }
 
 

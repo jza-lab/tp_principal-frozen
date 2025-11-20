@@ -157,6 +157,22 @@ def api_reanudar_produccion(op_id):
     response, status_code = controller.reanudar_produccion(op_id, usuario_id)
     return jsonify(response), status_code
 
+
+@produccion_kanban_bp.route('/api/op/<int:op_id>/confirmar-ampliacion', methods=['POST'])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def api_confirmar_ampliacion(op_id):
+    """
+    Endpoint para que el usuario confirme la ampliación de la OP (usando stock disponible)
+    para cubrir el desperdicio reportado.
+    """
+    data = request.get_json()
+    usuario_id = get_jwt_identity()
+    controller = OrdenProduccionController()
+    response, status_code = controller.confirmar_ampliacion_op_por_desperdicio(op_id, data, usuario_id)
+    return jsonify(response), status_code
+
+
 # --- Rutas para Traspaso de Turno ---
 
 @produccion_kanban_bp.route('/api/op/<int:op_id>/traspaso', methods=['POST'])
