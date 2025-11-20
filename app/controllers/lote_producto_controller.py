@@ -1248,40 +1248,65 @@ class LoteProductoController(BaseController):
             message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_final}'."
 
             # Crear reservas si la OP está vinculada a un pedido
-            items_a_surtir_res = pedido_model.find_all_items(filters={'orden_produccion_id': orden_id})
+            items_a_surtir_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': orden_id})
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
             # Si no se encontraron items directos y es una OP hija, buscar los items de la OP padre.
             if not items_vinculados and orden_produccion_data.get('id_op_padre'):
                 id_op_padre = orden_produccion_data['id_op_padre']
                 logger.info(f"OP {orden_id} es una hija. Buscando items de pedido asociados a la OP padre {id_op_padre}.")
-                items_padre_res = pedido_model.find_all_items(filters={'orden_produccion_id': id_op_padre})
+                items_padre_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': id_op_padre})
                 items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
 
             if items_vinculados:
+                # --- MEJORA FIFO Y VALIDACIÓN DE RESERVAS PREVIAS ---
+                # 1. Ordenar por antigüedad del pedido (FIFO)
+                items_vinculados.sort(key=lambda x: x.get('pedido', {}).get('created_at', '9999-12-31'))
+
+                from app.controllers.pedido_controller import PedidoController # Importar aquí para evitar ciclo
+                pedido_controller = PedidoController()
+                
                 cantidad_disponible_para_reservar = cantidad_actual_disponible
+                
                 for item in items_vinculados:
                     if cantidad_disponible_para_reservar <= 0:
                         break # No hay más stock para reservar.
 
-                    # La cantidad original que el item del pedido necesitaba.
-                    cantidad_necesaria_item = float(item['cantidad'])
+                    pedido_item_id = item['id']
                     
-                    # Se reserva lo que se necesita o lo que queda disponible, lo que sea menor.
-                    cantidad_a_reservar_para_item = min(cantidad_necesaria_item, cantidad_disponible_para_reservar)
+                    # 2. Calcular cuánto YA se reservó para este item
+                    reservas_existentes = self.reserva_model.find_all(filters={'pedido_item_id': pedido_item_id, 'estado': 'RESERVADO'})
+                    cantidad_ya_reservada = sum(float(r['cantidad_reservada']) for r in reservas_existentes.get('data', []))
+                    
+                    # 3. Calcular lo que falta por cubrir
+                    cantidad_total_necesaria = float(item['cantidad'])
+                    cantidad_pendiente = cantidad_total_necesaria - cantidad_ya_reservada
+                    
+                    if cantidad_pendiente <= 0:
+                        continue # Este item ya está cubierto, pasar al siguiente (FIFO)
 
-                    datos_reserva = {
-                        'lote_producto_id': lote_creado['id_lote'],
-                        'pedido_id': item['pedido_id'],
-                        'pedido_item_id': item['id'],
-                        'cantidad_reservada': cantidad_a_reservar_para_item,
-                        'usuario_reserva_id': usuario_id,
-                        'estado': 'RESERVADO'
-                    }
-                    self.reserva_model.create(self.reserva_schema.load(datos_reserva))
-                    
-                    # Se descuenta lo que acabamos de reservar de lo que queda disponible.
-                    cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item
+                    # 4. Reservar solo lo necesario o lo disponible
+                    cantidad_a_reservar_para_item = min(cantidad_pendiente, cantidad_disponible_para_reservar)
+
+                    if cantidad_a_reservar_para_item > 0:
+                        datos_reserva = {
+                            'lote_producto_id': lote_creado['id_lote'],
+                            'pedido_id': item['pedido_id'],
+                            'pedido_item_id': pedido_item_id,
+                            'cantidad_reservada': cantidad_a_reservar_para_item,
+                            'usuario_reserva_id': usuario_id,
+                            'estado': 'RESERVADO'
+                        }
+                        self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                        
+                        # Se descuenta lo que acabamos de reservar de lo que queda disponible.
+                        cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item
+                        
+                        # 5. Intentar actualizar el estado del pedido a LISTO_PARA_ENTREGAR si corresponde
+                        try:
+                            pedido_controller.actualizar_estado_segun_items(item['pedido_id'])
+                        except Exception as e:
+                            logger.error(f"Error al intentar actualizar estado del pedido {item['pedido_id']}: {e}")
 
                 logger.info(f"Registros de reserva creados para el lote {lote_creado['numero_lote']}.")
                 message_to_use += " y vinculado a los pedidos correspondientes."

@@ -5,6 +5,7 @@ from postgrest.exceptions import APIError
 from datetime import date, timedelta, datetime
 from app.utils import estados
 
+from decimal import Decimal # Importar Decimal
 logger = logging.getLogger(__name__)
 
 class PedidoModel(BaseModel):
@@ -37,33 +38,32 @@ class PedidoModel(BaseModel):
             pedido_data['todas_ops_completadas'] = True
             return {'success': True, 'data': pedido_data}
 
-        # 1. Recolectar todos los IDs de OPs de todas las fuentes
+        # 1. Para cada item del pedido, recolectar las OPs directamente asignadas
         all_op_ids = set()
-        item_ids = []
-        for item in items:
-            item_ids.append(item['id'])
-            if op_id := item.get('orden_produccion_id'):
-                all_op_ids.add(op_id)
+        ops_por_item = defaultdict(set)
+        item_ids = [item['id'] for item in items]
 
-        # Buscar OPs hijas/adicionales en la tabla de asignaciones
+        # Buscar en la tabla de asignaciones, que es la fuente de verdad
         asignacion_model = AsignacionPedidoModel()
         asignaciones_res = asignacion_model.find_all(filters={'pedido_item_id': ('in', item_ids)})
-        
-        # Mapear item_id -> {op_id, op_id, ...}
-        ops_por_item = defaultdict(set)
+
         if asignaciones_res.get('success') and asignaciones_res.get('data'):
             for asignacion in asignaciones_res['data']:
-                all_op_ids.add(asignacion['orden_produccion_id'])
-                ops_por_item[asignacion['pedido_item_id']].add(asignacion['orden_produccion_id'])
+                op_id = asignacion['orden_produccion_id']
+                item_id = asignacion['pedido_item_id']
+                all_op_ids.add(op_id)
+                ops_por_item[item_id].add(op_id)
 
-        # Asegurar que la OP padre (directa) también esté en el mapa
+        # Asegurar que la OP padre (directa del item) también esté, por si no hay asignación explícita
         for item in items:
             if op_id := item.get('orden_produccion_id'):
+                all_op_ids.add(op_id)
                 ops_por_item[item['id']].add(op_id)
 
-        # 2. Si hay OPs, obtener sus datos completos
-        todas_completadas = True
+        # 2. Si hay OPs, obtener sus datos completos y calcular la producción total asignada
         ops_data_map = {}
+        total_cantidad_producida_asignada = Decimal('0') # Para la lógica de 'todas_ops_completadas'
+
         if all_op_ids:
             op_model = OrdenProduccionModel()
             ops_result = op_model.find_by_ids(list(all_op_ids))
@@ -71,8 +71,11 @@ class PedidoModel(BaseModel):
             if ops_result.get('success'):
                 for op in ops_result['data']:
                     ops_data_map[op['id']] = op
-                    if op.get('estado') != 'COMPLETADA':
-                        todas_completadas = False
+                    # Sumar solo si la OP está completada para la lógica de 'todas_ops_completadas'
+                    if op.get('estado') == 'COMPLETADA':
+                         total_cantidad_producida_asignada += Decimal(op.get('cantidad_producida', '0'))
+                    elif op.get('estado') == 'CONSOLIDADA': # Las consolidadas no producen, sus hijas sí
+                         pass
             else:
                 return {'success': False, 'error': f"Error al obtener datos de OPs vinculadas: {ops_result.get('error')}"}
         
@@ -86,8 +89,11 @@ class PedidoModel(BaseModel):
             cantidad_lote = sum(r['cantidad_reservada'] for r in reservas_res.data) if reservas_res.data else 0
             item['cantidad_lote'] = cantidad_lote
             item['cantidad_produccion'] = item['cantidad'] - cantidad_lote
-            
-        pedido_data['todas_ops_completadas'] = todas_completadas
+        
+        # 4. Determinar si el pedido está completo basado en las cantidades
+        total_cantidad_requerida = sum(Decimal(it.get('cantidad', '0')) for it in items)
+        # El pedido está completo si la producción asignada cubre la demanda total.
+        pedido_data['todas_ops_completadas'] = total_cantidad_producida_asignada >= total_cantidad_requerida
 
         # (Lógica de despacho se mantiene)
         pedido_data['despacho'] = None
@@ -468,7 +474,8 @@ class PedidoModel(BaseModel):
         anidando la información completa del pedido padre.
         """
         try:
-            query = self.db.table('pedido_items').select('*, pedido:pedidos!inner(*)')
+            # Se especifica la clave foránea para resolver la ambigüedad en la relación.
+            query = self.db.table('pedido_items').select('*, pedido:pedidos!pedido_items_pedido_id_fkey!inner(*)')
 
             if filters:
                 for key, value in filters.items():
