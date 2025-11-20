@@ -27,6 +27,7 @@ from marshmallow import ValidationError
 from app.config import Config
 from app.models.reserva_producto import ReservaProductoModel # <--- AGREGAR ESTO
 import time
+from app.models.orden_produccion import OrdenProduccionModel # <--- IMPORTANTE
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class PedidoController(BaseController):
         # -----------------------
         self.registro_controller = RegistroController()
         self.reserva_producto_model = ReservaProductoModel()
+        self.op_model = OrdenProduccionModel()
 
     def _consolidar_items(self, items_data: list) -> list:
         """
@@ -538,7 +540,7 @@ class PedidoController(BaseController):
                     return self.error_response("El cliente no tiene una dirección principal. Por favor, marque la opción 'Enviar a una dirección de entrega distinta' y complete los campos.", 400)
 
             pedido_data['id_direccion_entrega'] = direccion_id
-            
+
             # --- CALCULAR COSTO DE ENVÍO ---
             direccion_info = self.direccion_model.find_by_id(direccion_id)
             if direccion_info.get('success') and direccion_info.get('data'):
@@ -845,7 +847,7 @@ class PedidoController(BaseController):
         try:
             from app.models.asignacion_pedido_model import AsignacionPedidoModel
             asignacion_model = AsignacionPedidoModel()
-            
+
             pedido_ids = set()
 
             # 1. Búsqueda Directa (para OPs simples)
@@ -866,7 +868,7 @@ class PedidoController(BaseController):
 
             # 3. Obtener los detalles de los pedidos encontrados
             result = self.model.find_by_id_list(list(pedido_ids))
-            
+
             if result.get('success'):
                 return self.success_response(data=result.get('data', []))
             else:
@@ -893,51 +895,64 @@ class PedidoController(BaseController):
 
     def actualizar_estado_segun_items(self, pedido_id: int):
         """
-        Verifica si todos los items de un pedido han sido completamente asignados
-        desde producción o stock. Si es así, actualiza el estado del pedido.
+        Verifica si todos los items de un pedido tienen cobertura total de stock
+        (ya sea por stock existente o producción finalizada).
+        Basado estrictamente en la tabla de reservas activas.
         """
         from decimal import Decimal
-
         try:
             pedido_resp, _ = self.obtener_pedido_por_id(pedido_id)
             if not pedido_resp.get('success'):
                 logger.error(f"No se pudo encontrar el pedido {pedido_id} para actualizar estado.")
                 return
 
-            logger.info(f"Verificando estado de asignación de stock/producción para el pedido {pedido_id}.")
+            logger.info(f"Verificando cobertura de reservas para el pedido {pedido_id}.")
             pedido_data = pedido_resp.get('data')
             todos_los_items = pedido_data.get('items', [])
 
             if not todos_los_items:
-                logger.info(f"El pedido {pedido_id} no tiene ítems. No se cambia el estado.")
                 return
-            
-            # 2. Verificar si CADA item está completamente cubierto.
+
+            # Flag maestro: Asumimos que todo está cubierto hasta que encontremos un fallo
             todos_los_items_cubiertos = True
+
             for item in todos_los_items:
                 cantidad_requerida_item = Decimal(item.get('cantidad', 0))
+
                 if cantidad_requerida_item <= 0:
-                    continue # Ignorar items sin cantidad
-                
-                # Sumar todas las reservas (de stock o producción) para este item
+                    continue
+
+                # --- LÓGICA CLAVE DE TUS CAMBIOS ANTERIORES ---
+                # Consultamos la tabla de reservas para este item específico.
                 reservas_item_res = self.reserva_producto_model.find_all(filters={'pedido_item_id': item['id']})
-                total_reservado_para_item = sum(Decimal(r.get('cantidad_reservada', 0)) for r in reservas_item_res.get('data', []))
-                
-                logger.info(f"Item {item['id']} (Pedido {pedido_id}): Requerido={cantidad_requerida_item}, Reservado={total_reservado_para_item}")
-                
-                # Si lo reservado es menor a lo requerido, el item no está cubierto.
-                if total_reservado_para_item < cantidad_requerida_item:
+
+                # Sumamos SOLO las reservas válidas (ignoramos las robadas/canceladas)
+                total_reservado_para_item = sum(
+                    Decimal(r.get('cantidad_reservada', 0))
+                    for r in reservas_item_res.get('data', [])
+                    if r.get('estado') in ['RESERVADO', 'COMPLETADO']
+                )
+
+                logger.info(f"Item {item['id']} - Req: {cantidad_requerida_item} | Res: {total_reservado_para_item}")
+
+                # Verificamos cobertura con pequeña tolerancia decimal
+                if total_reservado_para_item < (cantidad_requerida_item - Decimal('0.01')):
                     todos_los_items_cubiertos = False
-                    logger.warning(f"Item {item['id']} NO está cubierto. El pedido {pedido_id} no puede pasar a 'LISTO PARA ENTREGAR'.")
-                    break # Salir del bucle, ya sabemos que el pedido no está listo.
-            
-            # 3. Si todos los items están cubiertos, actualizamos el estado del pedido.
+                    # No hacemos break para loguear el estado de todos los items (útil para debugging)
+                    # pero ya sabemos que el pedido no está listo.
+
+            # 3. Si y solo si TODOS los items tienen reserva completa...
             if todos_los_items_cubiertos:
-                if pedido_data.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                estado_actual = pedido_data.get('estado')
+                # Estados finales donde ya no deberíamos tocar nada
+                estados_bloqueados = ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']
+
+                if estado_actual not in estados_bloqueados:
                     self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-                    logger.info(f"¡Éxito! Todos los items del pedido {pedido_id} están cubiertos. Estado actualizado a 'LISTO PARA ENTREGAR'.")
+                    logger.info(f"¡Éxito! Pedido {pedido_id} cubierto al 100%. Estado actualizado a 'LISTO PARA ENTREGAR'.")
+
         except Exception as e:
-            logger.error(f"Error crítico actualizando el estado del pedido {pedido_id} según sus items: {e}", exc_info=True)
+            logger.error(f"Error crítico actualizando estado pedido {pedido_id}: {e}", exc_info=True)
 
     def planificar_pedido(self, pedido_id: int) -> tuple:
         """
@@ -1304,23 +1319,58 @@ class PedidoController(BaseController):
             logger.error(f"Error interno en enviar_qr_por_email para pedido {pedido_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
 
+
+    def actualizar_estado_segun_items(self, pedido_id: int):
+        """
+        Verifica si todos los items de un pedido han sido completamente asignados
+        desde producción. Si es así, actualiza el estado del pedido.
+        """
+        try:
+            items_res = self.model.find_all_items({'pedido_id': pedido_id})
+            if not items_res.get('success') or not items_res.get('data'):
+                logger.warning(f"No se encontraron items para el pedido {pedido_id} al verificar estado post-asignación.")
+                return
+
+            todos_los_items = items_res.get('data', [])
+            if not todos_los_items:
+                return # No hay items, no hay nada que hacer.
+
+            from app.models.asignacion_pedido_model import AsignacionPedidoModel
+            asignacion_model = AsignacionPedidoModel()
+
+            todos_completos = True
+            for item in todos_los_items:
+                asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
+                total_asignado = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_res.get('data', []))
+
+                if total_asignado < Decimal(item['cantidad']):
+                    todos_completos = False
+                    break
+
+            if todos_completos:
+                pedido_actual = self.model.find_by_id(pedido_id, 'id')['data']
+                if pedido_actual and pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                    self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                    logger.info(f"Todos los items del pedido {pedido_id} están completos. Estado actualizado a LISTO_PARA_ENTREGA.")
+
+        except Exception as e:
+            logger.error(f"Error al actualizar estado del pedido {pedido_id} según items: {e}", exc_info=True)
+
     def _intentar_reasignar_stock(self, producto_id: int, cantidad_necesaria: int, fecha_limite_urgente: date) -> int:
         """
         Intenta liberar stock de pedidos menos urgentes.
+        Si la víctima ya tiene una OP, actualiza esa OP.
+        Si no tiene OP (estaba ALISTADO), crea una nueva OP y pasa a EN_PRODUCCION.
         """
         cantidad_recuperada = 0
         fecha_limite_str = fecha_limite_urgente.isoformat()
 
         logger.info("="*50)
         logger.info(f"[ARBITRAJE] INICIO para Producto ID: {producto_id}")
-        logger.info(f"[ARBITRAJE] Objetivo: Recuperar {cantidad_necesaria} unidades.")
-        logger.info(f"[ARBITRAJE] Condición: Robar a pedidos con fecha de entrega > {fecha_limite_str}")
 
         reservas_candidatas = []
 
         try:
-            # Consulta directa a la base de datos
-            # Buscamos reservas ACTIVAS (RESERVADO) de pedidos FUTUROS
             response = self.reserva_producto_model.db.table('reservas_productos') \
                 .select('id, cantidad_reservada, pedido_id, pedido_item_id, lotes_productos!inner(producto_id), pedidos!inner(id, fecha_requerido)') \
                 .eq('lotes_productos.producto_id', producto_id) \
@@ -1328,66 +1378,114 @@ class PedidoController(BaseController):
                 .gt('pedidos.fecha_requerido', fecha_limite_str) \
                 .order('fecha_requerido', desc=True, foreign_table='pedidos') \
                 .execute()
-
             reservas_candidatas = response.data if response.data else []
-            logger.info(f"[ARBITRAJE] Consulta DB Exitosa. Candidatos encontrados: {len(reservas_candidatas)}")
-
         except Exception as e:
-            logger.error(f"[ARBITRAJE] ERROR CRÍTICO en la consulta DB: {e}", exc_info=True)
+            logger.error(f"[ARBITRAJE] Error consulta DB: {e}")
             return 0
 
         if not reservas_candidatas:
-            logger.warning("[ARBITRAJE] No hay víctimas disponibles (nadie tiene fecha posterior a la urgente).")
             return 0
 
-        # Iteramos las reservas encontradas
+        # Importación diferida para evitar ciclos y Controller
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+        op_ctrl = OrdenProduccionController()
+
         for i, reserva in enumerate(reservas_candidatas):
-            logger.info(f"--- Procesando Candidato #{i+1} ---")
-            logger.info(f"Datos Reserva: {reserva}")
-
-            # 1. Verificar si ya tenemos suficiente
             if cantidad_recuperada >= cantidad_necesaria:
-                logger.info(f"[ARBITRAJE] Meta alcanzada ({cantidad_recuperada} >= {cantidad_necesaria}). Deteniendo robo.")
                 break
-
-            # --- CORRECCIÓN DE IDENTACIÓN AQUÍ ---
-            # El código a continuación estaba dentro del 'if', por eso no se ejecutaba.
 
             cantidad_a_liberar = float(reserva.get('cantidad_reservada', 0))
             pedido_afectado_id = reserva.get('pedido_id')
             item_afectado_id = reserva.get('pedido_item_id')
             reserva_id = reserva.get('id')
 
-            logger.info(f"[ARBITRAJE] Intentando quitar {cantidad_a_liberar} u. al Pedido {pedido_afectado_id} (Item {item_afectado_id})")
+            logger.info(f"[ARBITRAJE] Procesando víctima: Pedido {pedido_afectado_id}, Item {item_afectado_id}")
 
-            # 2. Liberar la reserva
+            # 1. Liberar la reserva
             exito_liberacion = self.lote_producto_controller.liberar_reserva_especifica(reserva_id)
 
             if exito_liberacion:
                 cantidad_recuperada += cantidad_a_liberar
-                logger.info(f"[ARBITRAJE] Liberación exitosa. Acumulado recuperado: {cantidad_recuperada}")
 
-                # 3. Actualizar el pedido afectado (La Víctima)
+                # 2. Actualizar la Víctima
                 if item_afectado_id:
                     try:
-                        # CORRECCIÓN BASADA EN TU SCHEMA:
-                        # Tu tabla 'pedido_items' no tiene columnas para cantidades divididas.
-                        # Solo cambiamos el estado. Al pasar a 'PENDIENTE_PRODUCCION',
-                        # el sistema entenderá que la 'cantidad' total debe producirse (o buscarse de nuevo).
+                        # Estado por defecto: PENDIENTE (Así, si falla la OP, no se queda en ALISTADO)
+                        nuevo_estado_item = 'PENDIENTE'
+                        op_id_final = None
 
-                        update_payload = {
-                            'estado': 'PENDIENTE_PRODUCCION'
-                        }
+                        # Obtener datos del item
+                        item_victima_res = self.model.db.table('pedido_items').select('*').eq('id', item_afectado_id).single().execute()
+                        item_victima = item_victima_res.data if item_victima_res.data else None
 
-                        self.model.update_item(item_afectado_id, update_payload)
-                        logger.info(f"[ARBITRAJE] VICTIMA ACTUALIZADA: Item {item_afectado_id} pasado a PENDIENTE_PRODUCCION.")
+                        if item_victima:
+                            # CASO A: Ya tenía OP -> Actualizarla
+                            if item_victima.get('orden_produccion_id'):
+                                op_id = item_victima['orden_produccion_id']
+                                op_actual_res = self.op_model.find_by_id(op_id)
+                                if op_actual_res.get('success'):
+                                    op_data = op_actual_res['data']
+                                    nueva_cantidad = float(op_data.get('cantidad_planificada', 0)) + cantidad_a_liberar
+                                    self.op_model.update(op_id, {'cantidad_planificada': nueva_cantidad}, 'id')
+                                    nuevo_estado_item = 'EN_PRODUCCION'
+                                    logger.info(f"[ARBITRAJE] OP {op_id} actualizada a {nueva_cantidad}")
+
+                            # CASO B: NO tenía OP (estaba ALISTADO) -> CREAR NUEVA OP
+                            else:
+                                try:
+                                    # 1. Buscar Receta Activa (CRITICO: Sin esto falla crear_orden)
+                                    receta_res = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+                                    receta_id = receta_res['data'][0]['id'] if receta_res.get('success') and receta_res.get('data') else None
+
+                                    if receta_id:
+                                        pedido_padre = self.model.find_by_id(pedido_afectado_id).get('data', {})
+
+                                        datos_op = {
+                                            'producto_id': producto_id,
+                                            'receta_id': receta_id,
+                                            'cantidad': cantidad_a_liberar,
+                                            'fecha_planificada': date.today().isoformat(),
+                                            'prioridad': 'ALTA',
+                                            'fecha_meta': pedido_padre.get('fecha_requerido'),
+                                            'productos': [
+                                                {
+                                                    'id': producto_id,
+                                                    'cantidad': cantidad_a_liberar
+                                                }
+                                            ]
+                                        }
+
+                                        # Crear OP
+                                        op_resp = op_ctrl.crear_orden(datos_op, 1) # Usuario sistema 1
+                                        resultado = op_resp[0] if isinstance(op_resp, tuple) else op_resp
+
+                                        if resultado.get('success') and resultado.get('data'):
+                                            op_creada = resultado['data'][0]
+                                            op_id_final = op_creada['id']
+                                            nuevo_estado_item = 'EN_PRODUCCION'
+                                            logger.info(f"[ARBITRAJE] Nueva OP {op_id_final} creada.")
+                                        else:
+                                            logger.error(f"[ARBITRAJE] Fallo creando OP: {resultado.get('error')}")
+                                    else:
+                                        logger.warning(f"[ARBITRAJE] No hay receta activa para Prod {producto_id}. Item quedará PENDIENTE.")
+
+                                except Exception as e_op:
+                                    logger.error(f"[ARBITRAJE] Excepción creando OP: {e_op}")
+                                    # Si falla, nuevo_estado_item sigue siendo 'PENDIENTE', lo cual es seguro.
+
+                        # C) Actualizar Item (ESTO DEBE CORRER SIEMPRE)
+                        update_data = {'estado': nuevo_estado_item}
+                        if op_id_final:
+                            update_data['orden_produccion_id'] = op_id_final
+
+                        # Si estaba ALISTADO y falló la OP, esto lo fuerza a PENDIENTE, corrigiendo el error visual.
+                        self.model.update_item(item_afectado_id, update_data)
+
+                        # D) Recalcular estado global
+                        self.model.actualizar_estado_agregado(pedido_afectado_id)
 
                     except Exception as update_error:
-                         logger.error(f"[ARBITRAJE] Error actualizando item víctima {item_afectado_id}: {update_error}")
-            else:
-                logger.error(f"[ARBITRAJE] Falló la liberación de la reserva {reserva_id} en LoteProductoController.")
+                         logger.error(f"[ARBITRAJE] Error actualizando víctima {item_afectado_id}: {update_error}")
 
-        logger.info(f"[ARBITRAJE] FIN DEL PROCESO. Total recuperado: {cantidad_recuperada}")
-        logger.info("="*50)
-
+        logger.info(f"[ARBITRAJE] FIN. Recuperado: {cantidad_recuperada}")
         return cantidad_recuperada
