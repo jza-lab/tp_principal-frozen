@@ -672,32 +672,17 @@ class OrdenProduccionController(BaseController):
                 detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
 
-                from app.controllers.pedido_controller import PedidoController
-                pedido_controller = PedidoController()
-
-                # 1. Intentar encontrar el pedido directamente
-                items_asociados_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
-
-                pedido_ids_a_verificar = set()
-
-                if items_asociados_res.get('success') and items_asociados_res.get('data'):
-                    # Vínculo directo encontrado (OP Padre o OP simple)
-                    pedido_ids_a_verificar.update(item['pedido_id'] for item in items_asociados_res['data'])
+                # --- LÓGICA DE DISTRIBUCIÓN Y ACTUALIZACIÓN DE PEDIDOS ---
+                # Al completar una OP, distribuimos la producción para que los pedidos
+                # se actualicen correctamente, especialmente las OPs consolidadas.
+                cantidad_producida_en_lote = Decimal(lote_result.get('data', {}).get('cantidad_actual', '0'))
+                
+                if cantidad_producida_en_lote > 0:
+                    logger.info(f"OP {orden_id} completada. Distribuyendo {cantidad_producida_en_lote} unidades a los pedidos asociados.")
+                    self._distribuir_produccion_super_op(orden_id, cantidad_producida_en_lote)
                 else:
-                    # 2. Si no hay vínculo directo, buscar a través de la OP padre (caso OP Hija)
-                    op_padre_id = orden_produccion.get('id_op_padre')
-                    if op_padre_id:
-                        logger.info(f"OP Hija {orden_produccion.get('codigo')} completada. Buscando pedido a través de OP Padre ID: {op_padre_id}.")
-                        items_padre_res = self.pedido_model.find_all_items({'orden_produccion_id': op_padre_id})
-                        if items_padre_res.get('success') and items_padre_res.get('data'):
-                            pedido_ids_a_verificar.update(item['pedido_id'] for item in items_padre_res['data'])
-
-                # 3. Si se encontraron pedidos por cualquiera de las vías, actualizarlos
-                if pedido_ids_a_verificar:
-                    for pedido_id in pedido_ids_a_verificar:
-                        logger.info(f"Disparando actualización de estado para el pedido ID: {pedido_id}...")
-                        pedido_controller.actualizar_estado_segun_ops(pedido_id)
-
+                    logger.warning(f"OP {orden_id} completada, pero no se registró producción en el lote. No se distribuye nada.")
+                
                 return self.success_response(data=result.get('data'), message=message_to_use)
             else:
                 return self.error_response(result.get('error', 'Error al cambiar el estado.'), 500)
@@ -806,12 +791,12 @@ class OrdenProduccionController(BaseController):
 
             nueva_super_op = resultado_creacion['data']
 
-            relink_result = self._relinkear_items_pedido(op_ids, nueva_super_op['id'])
+            relink_result = self._relinkear_items_pedido(op_ids, nueva_super_op[0]['id'])
             if not relink_result.get('success'):
                 # NOTA: En un sistema real, aquí se debería intentar revertir la creación de la Super OP.
                 return relink_result
 
-            self._actualizar_ops_originales(op_ids, nueva_super_op['id'])
+            self._actualizar_ops_originales(op_ids, nueva_super_op[0]['id'])
 
             return {'success': True, 'data': nueva_super_op}
         except Exception as e:
@@ -1402,8 +1387,10 @@ class OrdenProduccionController(BaseController):
         fecha_meta_mas_temprana = min(fechas_meta_originales) if fechas_meta_originales else None
 
         return {
-            'producto_id': primera_op['producto_id'],
-            'cantidad_planificada': str(cantidad_total),
+            'productos': [{
+                'id': primera_op['producto_id'],
+                'cantidad': str(cantidad_total)
+            }],
             'fecha_planificada': primera_op.get('fecha_planificada'),
             'receta_id': primera_op['receta_id'],
             'fecha_meta': fecha_meta_mas_temprana.isoformat() if fecha_meta_mas_temprana else None,
@@ -1794,8 +1781,9 @@ class OrdenProduccionController(BaseController):
 
     def _heredar_asignaciones_pedido_a_op_hija(self, op_padre: Dict, op_hija: Dict):
         """
-        [LÓGICA CORREGIDA] Hereda la asociación de pedidos de una OP padre a su OP hija,
-        prorrateando la cantidad de la OP hija (desperdicio) entre los pedidos originales.
+        Hereda la asociación de pedidos de una OP padre a su hija, asignando la
+        cantidad de la OP hija (desperdicio) solo a los ítems de pedido que
+        aún no han sido completamente satisfechos por la OP padre.
         """
         try:
             op_padre_id = op_padre['id']
@@ -1803,63 +1791,52 @@ class OrdenProduccionController(BaseController):
             cantidad_op_hija = Decimal(op_hija.get('cantidad_planificada', '0'))
 
             if cantidad_op_hija <= 0:
-                logger.info(f"La OP hija {op_hija_id} tiene cantidad cero. No se asignará a pedidos.")
+                logger.info(f"OP hija {op_hija_id} con cantidad cero. No se asignará a pedidos.")
                 return
 
-            # 1. Recolectar todos los IDs de pedido_items vinculados a la OP padre.
-            linked_item_ids = set()
-            # Primero, intentar vía la tabla de asignaciones explícitas (para OPs consolidadas/Super OPs)
-            asignaciones_padre_res = self.asignacion_pedido_model.find_all({'orden_produccion_id': op_padre_id})
-            if asignaciones_padre_res.get('success') and asignaciones_padre_res.get('data'):
-                logger.info(f"Heredando de OP consolidada {op_padre_id} vía 'asignaciones_pedidos'.")
-                for asignacion in asignaciones_padre_res['data']:
-                    linked_item_ids.add(asignacion['pedido_item_id'])
-            else:
-                # Si no hay asignaciones, buscar un vínculo directo (para OPs simples)
-                items_vinculados_res = self.pedido_model.find_all_items({'orden_produccion_id': op_padre_id})
-                if items_vinculados_res.get('success') and items_vinculados_res.get('data'):
-                    logger.info(f"Heredando de OP simple {op_padre_id} vía 'pedido_items'.")
-                    for item in items_vinculados_res['data']:
-                        linked_item_ids.add(item['id'])
-
-            if not linked_item_ids:
-                logger.warning(f"La OP padre {op_padre_id} no tenía ninguna asociación de pedido detectable. La OP hija {op_hija_id} queda sin asignación.")
+            # 1. Obtener todos los ítems de pedido asociados a la OP padre.
+            items_res = self.pedido_model.find_all_items_with_pedido_info({'orden_produccion_id': op_padre_id})
+            if not items_res.get('success') or not items_res.get('data'):
+                logger.warning(f"OP padre {op_padre_id} sin asociación a pedidos. La OP hija {op_hija_id} queda sin asignación.")
                 return
+            items_asociados = items_res['data']
 
-            # 2. Obtener los datos de los items para poder prorratear.
-            items_data_res = self.pedido_model.find_all_items(filters={'id': ('in', list(linked_item_ids))})
-            if not items_data_res.get('success') or not items_data_res.get('data'):
-                logger.error(f"No se pudieron obtener los datos de los pedido_items {linked_item_ids} para la herencia. La OP hija {op_hija_id} no se asignará.")
-                return
-
-            items_data = items_data_res['data']
-            total_qty_pedidos = sum(Decimal(item.get('cantidad', '0')) for item in items_data)
-
-            if total_qty_pedidos <= 0:
-                logger.warning(f"La suma de las cantidades de los pedidos asociados a la OP {op_padre_id} es cero. No se puede prorratear el desperdicio.")
-                return
-
-            # 3. Calcular la asignación prorrateada para cada item y crear los nuevos registros.
-            nuevas_asignaciones = []
-            for item in items_data:
-                item_qty = Decimal(item.get('cantidad', '0'))
-                proportion = item_qty / total_qty_pedidos
-                cantidad_asignada_hija = cantidad_op_hija * proportion
+            # 2. Calcular el faltante para cada ítem.
+            items_con_faltante = []
+            for item in items_asociados:
+                cantidad_requerida = Decimal(item['cantidad'])
+                asignaciones_res = self.asignacion_pedido_model.find_all({'pedido_item_id': item['id']})
+                total_asignado = sum(Decimal(a.get('cantidad_asignada', '0')) for a in asignaciones_res.get('data', []))
                 
-                # Crear un nuevo registro de asignación para la OP hija
+                faltante = cantidad_requerida - total_asignado
+                if faltante > 0:
+                    items_con_faltante.append({'item_id': item['id'], 'faltante': faltante})
+
+            if not items_con_faltante:
+                logger.warning(f"No se encontraron ítems con faltante para la OP padre {op_padre_id}. La OP hija {op_hija_id} no se asignará.")
+                return
+
+            # 3. Distribuir la cantidad de la OP hija entre los ítems con faltante.
+            cantidad_a_distribuir = cantidad_op_hija
+            nuevas_asignaciones = []
+            for item_faltante in items_con_faltante:
+                if cantidad_a_distribuir <= 0:
+                    break
+                
+                cantidad_a_asignar = min(cantidad_a_distribuir, item_faltante['faltante'])
+                
                 nuevas_asignaciones.append({
                     'orden_produccion_id': op_hija_id,
-                    'pedido_item_id': item['id'],
-                    'cantidad_asignada': float(round(cantidad_asignada_hija, 4)) # Redondear y convertir a float
+                    'pedido_item_id': item_faltante['item_id'],
+                    'cantidad_asignada': float(cantidad_a_asignar)
                 })
-
-            # 4. Insertar las nuevas asignaciones en la base de datos.
-            if nuevas_asignaciones:
-                logger.info(f"Creando {len(nuevas_asignaciones)} nueva(s) asignacion(es) prorrateadas para la OP hija {op_hija_id}.")
-                self.asignacion_pedido_model.db.table('asignaciones_pedidos').insert(
-                    nuevas_asignaciones
-                ).execute()
+                cantidad_a_distribuir -= cantidad_a_asignar
             
+            # 4. Insertar las nuevas asignaciones.
+            if nuevas_asignaciones:
+                logger.info(f"Creando {len(nuevas_asignaciones)} nueva(s) asignacion(es) para la OP hija {op_hija_id}, cubriendo los faltantes.")
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos').insert(nuevas_asignaciones).execute()
+
         except Exception as e:
             logger.error(f"Error crítico al heredar asignaciones a la OP hija {op_hija_id}: {e}", exc_info=True)
 

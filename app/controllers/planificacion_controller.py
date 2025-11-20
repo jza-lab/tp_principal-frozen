@@ -684,7 +684,7 @@ class PlanificacionController(BaseController):
                         logger.error(f"Fallo al consolidar el grupo {op_id} durante la aprobación final: {resultado_consol.get('error')}")
                         return self.error_response(f"Error al consolidar grupo: {resultado_consol.get('error')}", 500)
 
-                    op_id_real_a_planificar = resultado_consol.get('data', {}).get('id')
+                    op_id_real_a_planificar = resultado_consol.get('data')[0].get('id')
                     if not op_id_real_a_planificar:
                          return self.error_response("La consolidación fue exitosa pero no devolvió un ID.", 500)
                     logger.info(f"[Aprobación] Grupo consolidado en nueva Super OP: {op_id_real_a_planificar}")
