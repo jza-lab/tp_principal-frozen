@@ -1643,71 +1643,10 @@ class OrdenProduccionController(BaseController):
                 
             self.model.update(orden_id, update_data)
             return self.success_response(message=response_message, data=response_data)
-            
-            detalle_log = f"Avance en OP {orden_actual.get('codigo')}. Buena: {cantidad_buena:.2f}, Desperdicio: {cantidad_desperdicio:.2f}."
-            self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Reporte de Avance', detalle_log)
-
-            if cantidad_buena > 0 and orden_actual.get('es_consolidada'):
-                self._distribuir_produccion_super_op(orden_id, cantidad_buena)
-
-            return self.success_response(message="Avance reportado correctamente.")
 
         except Exception as e:
             logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
-
-    def _distribuir_produccion_super_op(self, super_op_id: int, cantidad_producida: Decimal):
-        """
-        Distribuye la cantidad recién producida de una Super OP entre sus pedidos de cliente
-        asociados, siguiendo un criterio de antigüedad.
-        """
-        try:
-            # 1. Obtener todos los items de pedido asociados a esta Super OP
-            # Ordenar por la fecha de creación del pedido asociado.
-            items_res = self.pedido_model.find_all_items_with_pedido_info(
-                filters={'orden_produccion_id': super_op_id},
-                order_by='pedido.created_at.asc'
-            )
-            if not items_res.get('success') or not items_res.get('data'):
-                logger.info(f"No se encontraron items de pedido para la Super OP {super_op_id}. No se requiere distribución.")
-                return
-
-            items_asociados = items_res['data']
-            unidades_a_distribuir = cantidad_producida
-            pedido_controller = PedidoController()
-
-            for item in items_asociados:
-                if unidades_a_distribuir <= 0:
-                    break
-
-                item_id = item['id']
-                cantidad_requerida = Decimal(item['cantidad'])
-                
-                # Calcular cuánto se ha asignado previamente a este item
-                asignaciones_previas_res = self.asignacion_pedido_model.find_all({'pedido_item_id': item_id})
-                total_asignado_previo = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_previas_res.get('data', []))
-                
-                faltante_para_item = cantidad_requerida - total_asignado_previo
-
-                if faltante_para_item > 0:
-                    cantidad_a_asignar = min(unidades_a_distribuir, faltante_para_item)
-                    
-                    # Crear el registro de la asignación
-                    self.asignacion_pedido_model.create({
-                        'orden_produccion_id': super_op_id,
-                        'pedido_item_id': item_id,
-                        'cantidad_asignada': cantidad_a_asignar
-                    })
-                    
-                    unidades_a_distribuir -= cantidad_a_asignar
-                    
-                    # Verificar si el pedido padre de este item se ha completado
-                    pedido_controller.actualizar_estado_segun_items(item['pedido_id'])
-
-            logger.info(f"Distribución de {cantidad_producida} unidades para la OP {super_op_id} completada.")
-
-        except Exception as e:
-            logger.error(f"Error crítico durante la distribución de producción para la Super OP {super_op_id}: {e}", exc_info=True)
 
     def _gestionar_desperdicio_en_punto_de_control(self, orden_actual: Dict, desperdicio_total: Decimal, usuario_id: int, waste_list: Optional[List[Dict]] = None) -> Dict:
         """

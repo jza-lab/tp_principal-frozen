@@ -504,13 +504,15 @@ class PedidoModel(BaseModel):
                         query = query.eq(key, value)
 
             if order_by:
-                # El formato es "tabla_relacionada.columna.direccion"
+                # El formato es "tabla_relacionada.columna.direccion", ej: "pedido.created_at.asc"
                 parts = order_by.split('.')
-                foreign_table = parts[0]
-                column_name = parts[1]
-                ascending = parts[2] == 'asc'
-                
-                query = query.order(column_name, desc=not ascending, foreign_table=foreign_table)
+                if len(parts) == 3:
+                    foreign_table = parts[0]
+                    column_name = parts[1]
+                    ascending = parts[2].lower() == 'asc'
+                    
+                    # Usamos el método .order() con el argumento `foreign_table`
+                    query = query.order(column_name, desc=not ascending, foreign_table=foreign_table)
 
             result = query.execute()
             return {'success': True, 'data': result.data}

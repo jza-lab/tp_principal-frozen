@@ -691,6 +691,10 @@ class LoteProductoController(BaseController):
                     cantidad_a_tomar_de_lote = min(stock_fisico_en_lote, cantidad_restante_a_descontar)
                     if cantidad_a_tomar_de_lote <= 0: continue
 
+                    # Nunca permitir que se reserve más de lo que hay físicamente en el lote.
+                    if cantidad_a_tomar_de_lote > stock_fisico_en_lote:
+                        raise Exception(f"Intento de sobre-reserva en lote {lote['id_lote']}. Solicitado: {cantidad_a_tomar_de_lote}, Disponible: {stock_fisico_en_lote}.")
+
                     # 1. Descontar stock del lote
                     nueva_cantidad_lote = stock_fisico_en_lote - cantidad_a_tomar_de_lote
                     update_data = {'cantidad_actual': nueva_cantidad_lote}
