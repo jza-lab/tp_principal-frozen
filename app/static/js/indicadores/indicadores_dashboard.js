@@ -270,16 +270,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
         <!-- 2. Fila Inferior: Gráficos Avanzados (Smart Cards) -->
         <div class="row g-3 mb-4 align-items-stretch">
-            <!-- Gráfico 1: Panorama Estados (Dividido: Estados + Líneas) -->
+            <!-- Gráfico 1: Panorama Estados -->
             <div class="col-lg-6 col-xl-6">
-                ${createSplitSmartCardHTML(
-                    'chart-panorama-states',
-                    'chart-panorama-lines',
-                    'Panorama General',
-                    'Distribución actual de órdenes en producción y uso de líneas.',
-                    data.panorama_estados.insight, 
-                    data.panorama_estados.tooltip
-                )}
+                ${(function() {
+                    // Verificar si hay datos en lineas
+                    const hasLinesData = data.panorama_estados.lines_data && 
+                                       data.panorama_estados.lines_data.some(d => d.value > 0);
+                    
+                    if (hasLinesData) {
+                        return createSplitSmartCardHTML(
+                            'chart-panorama-states',
+                            'chart-panorama-lines',
+                            'Panorama General',
+                            'Distribución actual de órdenes en producción y uso de líneas.',
+                            data.panorama_estados.insight, 
+                            data.panorama_estados.tooltip
+                        );
+                    } else {
+                        return createSmartCardHTML(
+                            'chart-panorama-states',
+                            'Panorama General',
+                            'Distribución actual de órdenes en producción.',
+                            data.panorama_estados.insight,
+                            data.panorama_estados.tooltip
+                        );
+                    }
+                })()}
             </div>
 
             <!-- Gráfico 2: Ranking Desperdicios -->
@@ -298,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${createSmartCardHTML(
                     'chart-evolucion-desperdicios', 
                     'Evolución Desperdicios', 
-                    'Tendencia histórica de incidentes reportados.',
+                    'Tendencia histórica del costo de desperdicios.',
                     data.evolucion_desperdicios.insight, 
                     data.evolucion_desperdicios.tooltip
                 )}
@@ -361,20 +377,22 @@ document.addEventListener('DOMContentLoaded', function () {
             }]
         });
 
-        // --- CHART 1B: PANORAMA LÍNEAS (DONUT DERECHO) ---
-        createChart('chart-panorama-lines', {
-            tooltip: { trigger: 'item' },
-            legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
-            series: [{
-                name: 'Línea',
-                type: 'pie',
-                radius: ['40%', '60%'],
-                center: ['50%', '40%'],
-                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
-                label: { show: false },
-                data: data.panorama_estados.lines_data
-            }]
-        });
+        // --- CHART 1B: PANORAMA LÍNEAS (Si aplica) ---
+        if (data.panorama_estados.lines_data && data.panorama_estados.lines_data.some(d => d.value > 0)) {
+            createChart('chart-panorama-lines', {
+                tooltip: { trigger: 'item' },
+                legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
+                series: [{
+                    name: 'Línea',
+                    type: 'pie',
+                    radius: ['40%', '60%'],
+                    center: ['50%', '40%'],
+                    itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                    label: { show: false },
+                    data: data.panorama_estados.lines_data
+                }]
+            });
+        }
 
         // --- CHART 2: RANKING DESPERDICIOS (DINÁMICO: PIE vs BAR) ---
         const desperdiciosType = data.ranking_desperdicios.chart_type || 'bar'; // Fallback
@@ -431,13 +449,14 @@ document.addEventListener('DOMContentLoaded', function () {
             xAxis: { type: 'category', boundaryGap: false, data: data.evolucion_desperdicios.categories },
             yAxis: { type: 'value' },
             series: [{
-                name: 'Incidentes',
+                name: 'Costo Desperdicio ($)',
                 type: 'line',
                 smooth: true,
                 data: data.evolucion_desperdicios.values,
                 areaStyle: { opacity: 0.1, color: '#fd7e14' },
                 itemStyle: { color: '#fd7e14' },
-                lineStyle: { width: 3 }
+                lineStyle: { width: 3 },
+                tooltip: { valueFormatter: value => '$' + value.toLocaleString() }
             }]
         });
 

@@ -241,7 +241,7 @@ class IndicadoresController:
 
     def _obtener_evolucion_desperdicios(self, fecha_inicio, fecha_fin, contexto='mes'):
         """
-        Evolución dinámica basada en el periodo seleccionado.
+        Evolución dinámica basada en el costo ($) del desperdicio en el periodo seleccionado.
         """
         # Ampliar rango para asegurar datos en bordes si es necesario
         res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
@@ -250,7 +250,57 @@ class IndicadoresController:
         res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
         
-        data_agregada = defaultdict(int)
+        # --- Obtener Costos para Valorización ---
+        
+        # 1. Costos de Lotes de Producto
+        lote_prod_ids = list(set(d['lote_producto_id'] for d in data_prod if d.get('lote_producto_id')))
+        mapa_costos_producto = {}
+        if lote_prod_ids:
+            lotes_res = self.lote_producto_model.find_all(filters={'id_lote': lote_prod_ids})
+            lotes_data = lotes_res.get('data', []) if lotes_res.get('success') else []
+            
+            # Obtener Recetas para calcular costo estándar
+            prod_ids_para_costo = list(set(l['producto_id'] for l in lotes_data if l.get('producto_id')))
+            costos_receta_cache = {} # producto_id -> costo
+            
+            # Obtener Precios de Productos
+            precios_producto_cache = {} # producto_id -> precio_unitario
+            if prod_ids_para_costo:
+                 productos_res = self.producto_model.find_all(filters={'id': prod_ids_para_costo})
+                 if productos_res.get('success'):
+                     for p in productos_res.get('data', []):
+                         precios_producto_cache[p['id']] = float(p.get('precio_unitario') or 0)
+
+            # Pre-calcular costos de receta
+            for pid in prod_ids_para_costo:
+                costos_receta_cache[pid] = self.receta_model.get_costo_produccion(pid)
+            
+            for lote in lotes_data:
+                # Prioridad: Costo estimado en lote > Precio Producto > Costo estándar de receta
+                costo = float(lote.get('costo_unitario_estimado') or 0)
+                producto_id = lote.get('producto_id')
+
+                if costo == 0 and producto_id:
+                     # Intentar usar precio de venta del producto como aproximación si no hay costo
+                     if producto_id in precios_producto_cache and precios_producto_cache[producto_id] > 0:
+                         costo = precios_producto_cache[producto_id]
+                     # Fallback a costo de receta
+                     elif producto_id in costos_receta_cache:
+                         costo = float(costos_receta_cache[producto_id])
+                         
+                mapa_costos_producto[lote['id_lote']] = costo
+
+        # 2. Costos de Insumos
+        insumo_ids = list(set(d['insumo_id'] for d in data_insumo if d.get('insumo_id')))
+        mapa_costos_insumo = {}
+        if insumo_ids:
+            insumos_res = self.insumo_model.find_all(filters={'id_insumo': insumo_ids})
+            insumos_data = insumos_res.get('data', []) if insumos_res.get('success') else []
+            for ins in insumos_data:
+                mapa_costos_insumo[ins['id_insumo']] = float(ins.get('precio_unitario') or 0)
+
+
+        data_agregada = defaultdict(float)
         labels_ordenados = []
         
         # Definir formato de buckets
@@ -266,52 +316,63 @@ class IndicadoresController:
             while current <= fecha_fin:
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
-                data_agregada[key] = 0
+                data_agregada[key] = 0.0
                 # Avanzar mes
                 next_month = current.replace(day=28) + timedelta(days=4)
                 current = next_month - timedelta(days=next_month.day - 1)
         else:
             # Iterar por días (semana o mes)
             current = fecha_inicio
-            while current <= fecha_fin: # Corregido comparación
+            while current <= fecha_fin: 
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
-                data_agregada[key] = 0
+                data_agregada[key] = 0.0
                 current += delta
 
-        def procesar_lista(lista_datos, fecha_key):
+        def procesar_lista(lista_datos, fecha_key, tipo='producto'):
             for d in lista_datos:
                 fecha_raw = d.get(fecha_key)
                 if not fecha_raw: continue
                 try:
-                    # Intentar parsear ISO completo
                     dt = datetime.fromisoformat(fecha_raw)
                 except ValueError:
                     try:
-                        # Intentar solo fecha
                         dt = datetime.strptime(fecha_raw[:10], "%Y-%m-%d")
                     except:
                         continue
                 
                 key = dt.strftime(bucket_format)
+                
+                # Calcular Costo del registro
+                cantidad = float(d.get('cantidad') or 0)
+                costo_unitario = 0.0
+                
+                if tipo == 'producto':
+                    lote_id = d.get('lote_producto_id')
+                    costo_unitario = mapa_costos_producto.get(lote_id, 0.0)
+                else: # insumo
+                    insumo_id = d.get('insumo_id')
+                    costo_unitario = mapa_costos_insumo.get(insumo_id, 0.0)
+                
+                valor_desperdicio = cantidad * costo_unitario
+
                 if key in data_agregada:
-                    data_agregada[key] += 1
-                elif contexto == 'ano': # Fallback para año si las fechas no están alineadas al dia 1
-                     # Si el key generado por el dato está en el rango, sumarlo
+                    data_agregada[key] += valor_desperdicio
+                elif contexto == 'ano': 
                      if key in data_agregada: 
-                         data_agregada[key] += 1
+                         data_agregada[key] += valor_desperdicio
 
-        procesar_lista(data_prod, 'fecha_registro')
-        procesar_lista(data_insumo, 'created_at')
+        procesar_lista(data_prod, 'created_at', 'producto')
+        procesar_lista(data_insumo, 'fecha_registro', 'insumo')
 
-        valores = [data_agregada[k] for k in labels_ordenados]
+        valores = [round(data_agregada[k], 2) for k in labels_ordenados]
         
         # Formatear etiquetas para el frontend
         labels_display = []
         for k in labels_ordenados:
              if contexto == 'ano':
                  dt = datetime.strptime(k, "%Y-%m")
-                 labels_display.append(dt.strftime("%b")) # Nombre mes
+                 labels_display.append(dt.strftime("%b")) 
              else:
                  dt = datetime.strptime(k, "%Y-%m-%d")
                  labels_display.append(dt.strftime("%d/%m"))
@@ -322,13 +383,13 @@ class IndicadoresController:
         if ultimo_valor > promedio * 1.1: trend_text = "al alza"
         elif ultimo_valor < promedio * 0.9: trend_text = "a la baja"
             
-        insight = f"La tendencia de incidentes se muestra {trend_text} comparada con el promedio del periodo ({promedio:.1f} incidentes/periodo)."
+        insight = f"El costo del desperdicio se muestra {trend_text} comparado con el promedio del periodo (${promedio:,.2f} / periodo)."
 
         return {
             "categories": labels_display,
             "values": valores,
             "insight": insight,
-            "tooltip": "Muestra la cantidad de reportes de desperdicio (tanto de producto como de insumos) registrados en cada periodo temporal."
+            "tooltip": "Valor monetario total ($) de los desperdicios de insumos y productos registrados."
         }
 
     def _obtener_velocidad_produccion(self, fecha_inicio, fecha_fin):
