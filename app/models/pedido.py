@@ -635,9 +635,16 @@ class PedidoModel(BaseModel):
             logger.error(f"Error buscando pedidos por lote de producto {id_lote_producto}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin):
+    def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin, estados_filtro=None):
         try:
-            result = self.db.table(self.get_table_name()).select('fecha_solicitud, precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
+            query = self.db.table(self.get_table_name()).select('fecha_solicitud, precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin)
+            
+            if estados_filtro:
+                query = query.in_('estado', estados_filtro)
+            else:
+                query = query.eq('estado', 'COMPLETADO')
+            
+            result = query.execute()            
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error obteniendo ingresos: {str(e)}")

@@ -480,15 +480,23 @@ class IndicadoresController:
         }
 
     def _obtener_evolucion_ventas_comparativa(self, fecha_inicio, fecha_fin, contexto):
+        estados_ventas = [
+            estados.OV_COMPLETADO, 
+            estados.OV_PENDIENTE, 
+            estados.OV_EN_PROCESO, 
+            estados.OV_LISTO_PARA_ENTREGA,
+            estados.OV_ITEM_ALISTADO, # Por si acaso
+            estados.OV_EN_TRANSITO
+        ]
         # Periodo Actual
-        pedidos_actuales = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin)
+        pedidos_actuales = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin, estados_filtro=estados_ventas)
         data_actual = pedidos_actuales.get('data', []) if pedidos_actuales.get('success') else []
         
         # Periodo Anterior (Simple logic: mismo delta de tiempo hacia atrás)
         delta_periodo = fecha_fin - fecha_inicio
         fecha_fin_prev = fecha_inicio - timedelta(days=1)
         fecha_inicio_prev = fecha_fin_prev - delta_periodo
-        pedidos_previos = self.pedido_model.get_ingresos_en_periodo(fecha_inicio_prev, fecha_fin_prev)
+        pedidos_previos = self.pedido_model.get_ingresos_en_periodo(fecha_inicio_prev, fecha_fin_prev, estados_filtro=estados_ventas)
         data_previo = pedidos_previos.get('data', []) if pedidos_previos.get('success') else []
         
         # Agregación
