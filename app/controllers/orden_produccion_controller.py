@@ -656,10 +656,9 @@ class OrdenProduccionController(BaseController):
                 usuario_id_actual = get_jwt_identity()
                 update_data['aprobador_calidad_id'] = usuario_id_actual
 
-                # --- PUNTO CLAVE: Pasar qc_data al crear el lote ---
                 lote_result, lote_status = self.lote_producto_controller.crear_lote_y_reservas_desde_op(
                     orden_produccion_data=orden_produccion,
-                    usuario_id=orden_produccion.get('usuario_creador_id', 1),
+                    usuario_id=usuario_id_actual,
                     qc_data=qc_data
                 )
 

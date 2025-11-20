@@ -1166,6 +1166,7 @@ class LoteProductoController(BaseController):
         """
         from app.models.pedido import PedidoModel
         pedido_model = PedidoModel()
+        from app.models.asignacion_pedido_model import AsignacionPedidoModel
         orden_id = orden_produccion_data['id']
 
         try:
@@ -1247,8 +1248,7 @@ class LoteProductoController(BaseController):
             if items_vinculados:
                 from app.controllers.pedido_controller import PedidoController # Importar aquí para evitar ciclo
                 pedido_controller = PedidoController()
-                from app.models.asignacion_pedido_model import AsignacionPedidoModel
-                asignacion_model = AsignacionPedidoModel()
+                asignacion_model = AsignacionPedidoModel() # Ya importado arriba
 
                 cantidad_disponible_para_reservar = cantidad_actual_disponible
 
@@ -1259,10 +1259,8 @@ class LoteProductoController(BaseController):
                     pedido_item_id = item['id']
 
                     # 2. Calcular cuánto YA se reservó para este item (evita duplicar reservas)
-                    #    MODIFICACIÓN: Ahora consultamos la tabla de asignaciones, que es la fuente de verdad.
                     asignaciones_existentes = asignacion_model.find_all(filters={'pedido_item_id': pedido_item_id})
                     cantidad_ya_reservada = sum(float(a['cantidad_asignada']) for a in asignaciones_existentes.get('data', []))
-
 
                     # 3. Calcular lo que falta por cubrir
                     cantidad_total_necesaria = float(item['cantidad'])
@@ -1283,17 +1281,27 @@ class LoteProductoController(BaseController):
                             'usuario_reserva_id': usuario_id,
                             'estado': 'RESERVADO'
                         }
-                        self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                        reserva_res = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
+                        if not reserva_res.get('success'):
+                            logger.error(f"Fallo al crear registro de reserva para item {pedido_item_id}. Se omite asignación.")
+                            continue
 
                         # Inmediatamente después de crear la reserva, creamos la asignación correspondiente.
-                        asignacion_model.create({
+                        asignacion_res = asignacion_model.create({
                             'orden_produccion_id': orden_id,
                             'pedido_item_id': pedido_item_id,
                             'cantidad_asignada': cantidad_a_reservar_para_item
                         })
+                        if not asignacion_res.get('success'):
+                            logger.error(f"Fallo al crear registro de asignación para item {pedido_item_id}. La reserva podría quedar inconsistente.")
+                            # En un sistema transaccional, aquí se revertiría la reserva.
+                            continue
 
                         # Se descuenta lo que acabamos de reservar de lo que queda disponible.
                         cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item
+
+                        # --- LÓGICA DE DESCUENTO FÍSICO ---
+                        self.model.update(lote_creado['id_lote'], {'cantidad_actual': cantidad_disponible_para_reservar}, 'id_lote')
 
                         # 5. Intentar actualizar el estado del pedido a LISTO_PARA_ENTREGAR si corresponde
                         try:

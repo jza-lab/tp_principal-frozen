@@ -1339,6 +1339,7 @@ class PedidoController(BaseController):
 
         # Importación diferida para evitar ciclos y Controller
         from app.controllers.orden_produccion_controller import OrdenProduccionController
+        from app.models.receta import RecetaModel
         op_ctrl = OrdenProduccionController()
 
         for i, reserva in enumerate(reservas_candidatas):
@@ -1385,12 +1386,12 @@ class PedidoController(BaseController):
                             else:
                                 try:
                                     # 1. Buscar Receta Activa (CRITICO: Sin esto falla crear_orden)
-                                    receta_res = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+                                    receta_res = RecetaModel().find_all({'producto_id': producto_id, 'activa': True}, limit=1)
                                     receta_id = receta_res['data'][0]['id'] if receta_res.get('success') and receta_res.get('data') else None
 
                                     if receta_id:
                                         pedido_padre = self.model.find_by_id(pedido_afectado_id).get('data', {})
-
+                                        
                                         datos_op = {
                                             'producto_id': producto_id,
                                             'receta_id': receta_id,
