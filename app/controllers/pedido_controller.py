@@ -1280,29 +1280,40 @@ class PedidoController(BaseController):
             todos_los_items = items_res.get('data', [])
             if not todos_los_items: return
 
-            from app.models.asignacion_pedido_model import AsignacionPedidoModel
-            asignacion_model = AsignacionPedidoModel()
-
             # 2. Asumimos que está completo hasta que se demuestre lo contrario.
             todos_completos = True
             for item in todos_los_items:
-                # Para cada item, sumar TODAS las asignaciones que ha recibido,
-                # sin importar de qué OP (padre, hija, etc.) provengan.
-                asignaciones_res = asignacion_model.find_all({'pedido_item_id': item['id']})
-                total_asignado = sum(Decimal(a['cantidad_asignada']) for a in asignaciones_res.get('data', []))
+                # CAMBIO CRITICO: Usar 'reservas_productos' como fuente de verdad para la disponibilidad.
+                # Esto cubre tanto stock reservado desde almacén como desde OPs completadas.
+                reservas_res = self.reserva_producto_model.find_all({
+                    'pedido_item_id': item['id'],
+                    'estado': 'RESERVADO'
+                })
+                
+                # Defensa contra tipos de datos incorrectos
+                try:
+                    total_reservado = sum(Decimal(str(r.get('cantidad_reservada', 0))) for r in reservas_res.get('data', []))
+                    cantidad_requerida = Decimal(str(item.get('cantidad', 0)))
+                except Exception as e:
+                    logger.error(f"Error de conversión Decimal en item {item.get('id')}: {e}")
+                    todos_completos = False
+                    break
 
-                # Comparamos el total asignado con lo que el item realmente necesita.
-                if total_asignado < Decimal(item['cantidad']):
+                # Log detallado para depuración si los números están cerca
+                if total_reservado < cantidad_requerida:
+                    logger.info(f"Item {item['id']} incompleto: Reservado {total_reservado} < Requerido {cantidad_requerida} (Faltan {cantidad_requerida - total_reservado})")
                     todos_completos = False
                     break # Si un solo item no está completo, todo el pedido no está listo.
 
             # 3. Solo si TODOS los items están 100% asignados, procedemos a cambiar el estado.
             if todos_completos:
-                pedido_actual = self.model.find_by_id(pedido_id, 'id')['data']
-                # Verificación de seguridad para no cambiar estados finales (ej. si ya fue despachado).
-                if pedido_actual and pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
-                    self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
-                    logger.info(f"Todos los items del pedido {pedido_id} están completos. Estado actualizado a LISTO_PARA_ENTREGA.")
+                # Doble chequeo del estado actual para evitar condiciones de carrera
+                pedido_actual_res = self.model.find_by_id(pedido_id, 'id')
+                if pedido_actual_res.get('success'):
+                    pedido_actual = pedido_actual_res['data']
+                    if pedido_actual.get('estado') not in ['LISTO_PARA_ENTREGA', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO']:
+                        self.model.cambiar_estado(pedido_id, 'LISTO_PARA_ENTREGA')
+                        logger.info(f"Todos los items del pedido {pedido_id} están completos. Estado actualizado a LISTO_PARA_ENTREGA.")
 
         except Exception as e:
             logger.error(f"Error al actualizar estado del pedido {pedido_id} según items: {e}", exc_info=True)

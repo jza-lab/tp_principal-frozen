@@ -1228,24 +1228,33 @@ class LoteProductoController(BaseController):
             message_to_use = f"Lote N° {lote_creado['numero_lote']} creado como '{estado_lote_final}'."
 
             # 1. Buscar items vinculados directamente a la OP actual, ordenados por antigüedad del pedido (FIFO).
+            #    El 'order_by' en base de datos es la defensa principal.
             items_a_surtir_res = pedido_model.find_all_items_with_pedido_info(
                 filters={'orden_produccion_id': orden_id},
-                order_by='pedido.created_at.asc' # <-- ¡CORRECCIÓN CLAVE PARA FIFO!
+                order_by='pedido.created_at.asc'
             )
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
             # 2. Si no hay items directos Y es una OP hija, heredar los items de la OP padre.
-            #    Esto es clave para que la producción de la OP hija se asigne a los pedidos originales.
             if not items_vinculados and orden_produccion_data.get('id_op_padre'):
                 id_op_padre = orden_produccion_data['id_op_padre']
                 logger.info(f"OP {orden_id} es una hija. Buscando items de pedido asociados a la OP padre {id_op_padre}.")
                 items_padre_res = pedido_model.find_all_items_with_pedido_info(
                     filters={'orden_produccion_id': id_op_padre},
-                    order_by='pedido.created_at.asc' # <-- ¡CORRECCIÓN CLAVE PARA FIFO!
+                    order_by='pedido.created_at.asc'
                 )
                 items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
 
             if items_vinculados:
+                # --- CORRECCIÓN CRÍTICA PARA FIFO ---
+                # Ordenamos explícitamente en Python como respaldo, manejando posibles nulos en created_at
+                # Si created_at es nulo, usamos una fecha futura para que se procese al final.
+                def safe_sort_key(x):
+                    val = x.get('pedido', {}).get('created_at')
+                    return val if val else '9999-12-31'
+                
+                items_vinculados.sort(key=safe_sort_key)
+
                 from app.controllers.pedido_controller import PedidoController # Importar aquí para evitar ciclo
                 pedido_controller = PedidoController()
                 asignacion_model = AsignacionPedidoModel() # Ya importado arriba
