@@ -309,8 +309,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // ===== REPORTAR AVANCE =====
     function actualizarRestanteModal() {
         const buenaReportada = parseFloat(document.getElementById('cantidad-buena').value) || 0;
-        const malaReportada = parseFloat(cantidadMalaInput.value) || 0;
-        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + estado.cantidadDesperdicio + buenaReportada + malaReportada);
+        // Modificado: El restante se calcula solo sobre la cantidad BUENA planificada vs producida.
+        // El desperdicio no resta de la meta si asumimos reposición infinita/automática.
+        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + buenaReportada);
         cantidadRestanteInfo.textContent = `Restante: ${formatNumber(Math.max(0, restante), 2)} kg`;
     }
 
@@ -375,6 +376,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     const btnOk = document.getElementById('btnConfirmacionHijaOk');
                     
                     modalBody.textContent = data.message;
+
+                    // Asegurar limpieza de botones previos
+                    const btnCancel = modalElem.querySelector('.btn-secondary');
+                    if (btnCancel) btnCancel.style.display = 'none';
+                    btnOk.textContent = 'Aceptar';
                     
                     const modalInstance = new bootstrap.Modal(modalElem);
                     
@@ -386,13 +392,81 @@ document.addEventListener('DOMContentLoaded', function () {
                     modalInstance.show();
                     stopTimer();
 
+                } else if (data.data?.accion === 'confirmar_ampliacion') {
+                    // --- CASO: HAY STOCK Y SE REQUIERE CONFIRMACIÓN ---
+                    const modalElem = document.getElementById('modalConfirmacionHija'); // Reusamos el modal genérico
+                    const modalBody = document.getElementById('modalConfirmacionHijaBody');
+                    const btnOk = document.getElementById('btnConfirmacionHijaOk');
+                    
+                    // Personalizamos el modal para confirmación (Aceptar/Cancelar)
+                    modalBody.textContent = data.message;
+                    btnOk.textContent = 'Sí, ampliar orden';
+                    
+                    // Clonar el botón para eliminar event listeners previos y limpiar comportamiento
+                    const newBtnOk = btnOk.cloneNode(true);
+                    btnOk.parentNode.replaceChild(newBtnOk, btnOk);
+                    
+                    // Añadir botón de cancelar si no existe
+                    let btnCancel = modalElem.querySelector('.btn-secondary');
+                    if (!btnCancel) {
+                        btnCancel = document.createElement('button');
+                        btnCancel.type = 'button';
+                        btnCancel.className = 'btn btn-secondary me-2';
+                        btnCancel.textContent = 'Cancelar';
+                        // Insertar antes del botón OK
+                        newBtnOk.parentNode.insertBefore(btnCancel, newBtnOk);
+                    }
+                    // Mostrar el botón cancelar (por si estaba oculto o reusado)
+                    btnCancel.style.display = 'inline-block';
+                    btnCancel.onclick = () => {
+                         bootstrap.Modal.getInstance(modalElem).hide();
+                    };
+
+                    const modalInstance = new bootstrap.Modal(modalElem);
+                    
+                    newBtnOk.onclick = async () => {
+                        modalInstance.hide();
+                        try {
+                            const respConfirm = await fetch(`/produccion/kanban/api/op/${ordenId}/confirmar-ampliacion`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ desperdicio_a_cubrir: data.data.desperdicio_a_cubrir })
+                            });
+                            const dataConfirm = await respConfirm.json();
+                            
+                            if (dataConfirm.success) {
+                                showNotification(dataConfirm.message, 'success');
+                                // Actualizar la meta visualmente
+                                estado.cantidadPlanificada = dataConfirm.data.nueva_cantidad_planificada;
+                                document.querySelector('.objetivo-cantidad').innerHTML = `${formatNumber(estado.cantidadPlanificada, 2)} <span class="objetivo-unidad">kg</span>`;
+                                addActivityLog(`OP ampliada por desperdicio. Nueva meta: ${estado.cantidadPlanificada} kg.`, 'success');
+                                // Recalcular progreso con la nueva meta
+                                actualizarProduccion(0, 0);
+                            } else {
+                                showNotification(`Error: ${dataConfirm.error}`, 'error');
+                            }
+                        } catch (err) {
+                            showNotification('Error de red al confirmar ampliación.', 'error');
+                        }
+                    };
+                    
+                    modalInstance.show();
+
                 } else if (data.data?.accion === 'ampliar_op') {
                     // --- LÓGICA EXISTENTE ---
                     estado.cantidadPlanificada = data.data.nueva_cantidad_planificada;
                     document.querySelector('.objetivo-cantidad').innerHTML = `${formatNumber(estado.cantidadPlanificada, 2)} <span class="objetivo-unidad">kg</span>`;
                     addActivityLog(`OP ampliada. Nueva meta: ${estado.cantidadPlanificada} kg.`, 'info');
 
-                } else if ((estado.cantidadProducida) >= estado.cantidadPlanificada) {
+                } else if (data.data?.accion === 'continuar') {
+                    // --- LÓGICA DE REPOSICIÓN AUTOMÁTICA ---
+                    // El backend repuso stock y autorizó continuar. NO redireccionar.
+                    addActivityLog(`Desperdicio repuesto automáticamante. Continúe produciendo.`, 'success');
+                    showNotification('✅ Desperdicio cubierto con stock. La orden sigue abierta.', 'success');
+
+                } else if ((estado.cantidadProducida + estado.cantidadDesperdicio) >= estado.cantidadPlanificada) {
+                    // Solo redirigir si el backend NO devolvió 'continuar' y alcanzamos el tope.
+                    // (Aunque idealmente deberíamos confiar solo en el estado de la orden, esta lógica legacy se mantiene como fallback)
                     addActivityLog('Orden completada, pasando a C. Calidad', 'success');
                     stopTimer();
                     setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
@@ -447,7 +521,8 @@ document.addEventListener('DOMContentLoaded', function () {
         cantidadDesperdicioDisplay.innerHTML = `${formatNumber(estado.cantidadDesperdicio)} <span class="progreso-unit">kg</span>`;
         
         // Actualizar progreso
-        const progreso = ((estado.cantidadProducida + estado.cantidadDesperdicio) / estado.cantidadPlanificada) * 100;
+        // Modificado: Solo la cantidad producida (OK) afecta la barra de progreso visual, según requerimiento
+        const progreso = (estado.cantidadProducida / estado.cantidadPlanificada) * 100;
         progressBar.style.width = `${Math.min(progreso, 100)}%`;
         porcentajeProgreso.textContent = `${formatNumber(progreso, 0)}%`;
         
