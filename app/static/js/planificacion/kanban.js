@@ -67,6 +67,37 @@ document.addEventListener('DOMContentLoaded', function () {
         saveColumnStates();
     });
 
+    // ===== EVENTOS DE COLAPSO BOOTSTRAP =====
+    // Sincronizar el colapso manual (clic en header) con el wrapper y los toggles
+    const collapseElements = document.querySelectorAll('.kanban-column .collapse');
+    collapseElements.forEach(collapseEl => {
+        const columnKey = collapseEl.id.replace('collapse-', '');
+        
+        collapseEl.addEventListener('hide.bs.collapse', function () {
+            // Cuando se oculta el contenido, comprimimos la columna
+            updateColumnState(columnKey, false);
+            
+            // Actualizar el toggle correspondiente sin disparar su evento change
+            const toggle = document.getElementById(`toggle-${columnKey}`);
+            if (toggle) toggle.checked = false;
+            
+            updateToggleAllState();
+            saveColumnStates();
+        });
+
+        collapseEl.addEventListener('show.bs.collapse', function () {
+            // Cuando se muestra el contenido, expandimos la columna
+            updateColumnState(columnKey, true);
+            
+            // Actualizar el toggle correspondiente
+            const toggle = document.getElementById(`toggle-${columnKey}`);
+            if (toggle) toggle.checked = true;
+            
+            updateToggleAllState();
+            saveColumnStates();
+        });
+    });
+
     // Cargar estados al iniciar
     loadColumnStates();
     
