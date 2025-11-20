@@ -8,6 +8,20 @@
 
 {% block app_content %}
 
+{# --- Alerta de Gestión Manual --- #}
+{% if orden.gestion_manual and orden.estado == 'RECEPCION_INCOMPLETA' and not orden.continuada_por_orden %}
+<div class="alert alert-warning d-flex align-items-center shadow-sm mb-4" role="alert">
+    <i class="bi bi-exclamation-circle-fill fs-4 me-2"></i>
+    <div class="flex-grow-1">
+        <strong>Recordatorio:</strong> Esta orden tiene faltantes pendientes de gestión. 
+        Puede crear una Orden de Compra Hija automáticamente.
+    </div>
+    <button type="button" class="btn btn-warning btn-sm fw-bold" data-bs-toggle="modal" data-bs-target="#modalCrearOcHija">
+        <i class="bi bi-plus-circle me-1"></i> Crear OC Hija
+    </button>
+</div>
+{% endif %}
+
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-4 border-bottom">
     <div>
         <h1 class="h2 mb-1">
@@ -553,13 +567,19 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">No, gestionar manualmente</button>
+                    {# Botón modificado para enviar formulario de gestión manual #}
+                    <button type="button" class="btn btn-secondary" onclick="submitGestionManual()">No, gestionar manualmente</button>
                     <button type="submit" class="btn btn-primary">Sí, crear OC Hija ahora</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+{# Formulario oculto para establecer gestión manual #}
+<form id="formGestionManual" action="{{ url_for('orden_compra.establecer_gestion_manual', id=orden.id) }}" method="POST" style="display: none;">
+    {{ csrf_form.csrf_token }}
+</form>
 
 <div class="modal fade" id="confirmacionRechazoModal" tabindex="-1" aria-labelledby="confirmacionRechazoModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -612,6 +632,10 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 <script>
+function submitGestionManual() {
+    document.getElementById('formGestionManual').submit();
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     // Variable global para que el JS de trazabilidad pueda acceder al ID
     window.ORDEN_COMPRA_ID = {{ orden.id|tojson }};
@@ -815,8 +839,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
 
-    // --- Lógica para Modal OC Hija (sin cambios) ---
-    {% if orden.estado == 'RECEPCION_INCOMPLETA' and not orden.continuada_por_orden %}
+    // --- Lógica para Modal OC Hija (MODIFICADO) ---
+    // Se añade la comprobación de 'gestion_manual'
+    {% if orden.estado == 'RECEPCION_INCOMPLETA' and not orden.continuada_por_orden and not orden.gestion_manual %}
         setTimeout(() => {
             var ocHijaModal = new bootstrap.Modal(document.getElementById('modalCrearOcHija'), {
                 keyboard: false, 

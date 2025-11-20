@@ -335,16 +335,16 @@ document.addEventListener('DOMContentLoaded', function () {
     calcularTotales();
     actualizarCostosDinamicos();
 
-    form.addEventListener('submit', async function (event) {
+    formulario.addEventListener('submit', async function (event) {
         event.preventDefault();
         event.stopPropagation();
         
-        if (!form.checkValidity()) {
-            form.classList.add('was-validated');
+        if (!formulario.checkValidity()) {
+            formulario.classList.add('was-validated');
             return;
         }
 
-        const formData = new FormData(form);
+        const formData = new FormData(formulario);
         const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked')?.value || '2';
 
         const productoData = {
