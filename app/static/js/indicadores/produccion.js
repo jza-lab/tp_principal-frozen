@@ -90,13 +90,38 @@ window.renderProduccionTab = function(data, container) {
 
         <!-- Gráfico 2: Top Insumos (NUEVO) -->
         <div class="col-lg-6 col-xl-6">
-            ${window.createSmartCardHTML(
-                'chart-top-insumos', 
-                'Top Insumos Utilizados', 
-                'Insumos con mayor cantidad reservada para producción.',
-                topInsumos.insight, 
-                topInsumos.tooltip
-            )}
+             <!-- Custom Smart Card con Selector -->
+            <div class="card shadow-sm border-0 h-100 smart-card-container">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+                    <div class="d-flex align-items-center gap-2">
+                        <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">Top Insumos Utilizados</h6>
+                        <select class="form-select form-select-sm py-0 px-2" style="width: auto; height: 24px; font-size: 0.75rem;" onchange="window.updateCategoryParam('produccion', 'top_n', this.value)">
+                            <option value="5" ${data.meta?.top_n == 5 ? 'selected' : ''}>Top 5</option>
+                            <option value="10" ${!data.meta?.top_n || data.meta?.top_n == 10 ? 'selected' : ''}>Top 10</option>
+                            <option value="20" ${data.meta?.top_n == 20 ? 'selected' : ''}>Top 20</option>
+                        </select>
+                    </div>
+                    <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                       data-bs-toggle="tooltip" 
+                       data-bs-placement="left" 
+                       title="${topInsumos.tooltip}" 
+                       style="cursor: help; font-size: 0.9rem;"></i>
+                </div>
+                <div class="card-body p-3 d-flex flex-column h-100 pt-0">
+                    <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">Insumos con mayor cantidad reservada para producción.</p>
+                    
+                    <div class="flex-grow-1 position-relative" style="min-height: 250px;">
+                        <div id="chart-top-insumos" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
+                    </div>
+
+                    <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-lightbulb-fill text-primary me-2"></i>
+                            <span class="text-dark small fw-medium dynamic-insight">${topInsumos.insight}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Gráfico 3: Ranking Desperdicios -->

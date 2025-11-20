@@ -168,13 +168,19 @@ def api_indicadores_por_categoria(categoria):
 
     # Llama a la función correspondiente y devuelve los datos
     funcion_controlador = mapa_funciones[categoria]
+        # Preparamos argumentos comunes
+    kwargs = {
+        'semana': request.args.get('semana'),
+        'mes': request.args.get('mes'),
+        'ano': request.args.get('ano')
+    }
     
-    # El controlador ahora recibe 'periodo' en lugar de fechas
-    datos = funcion_controlador(
-        semana=request.args.get('semana'),
-        mes=request.args.get('mes'),
-        ano=request.args.get('ano')
-    )
+    # Argumentos específicos por categoría (para evitar errores de firma)
+    if categoria == 'produccion':
+        kwargs['top_n'] = request.args.get('top_n', 10) # Default 10
+        
+    
+    datos = funcion_controlador(**kwargs)
     return jsonify(datos)
 
 @reportes_bp.route('/api/indicadores/anos-disponibles')

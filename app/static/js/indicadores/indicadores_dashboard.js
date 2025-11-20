@@ -1,16 +1,36 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tabElements = document.querySelectorAll('#kpiTab .nav-link');
-    const dashboardState = {}; 
+    const dashboardState = {};
     let loadedTabs = new Set();
-    let chartInstances = {}; 
+    let chartInstances = {};
 
     // --- UTILS ---
 
     function obtenerUrlApi(category) {
         const state = dashboardState[category] || { period: 'semana', value: '' };
-        let params = '';
-        if (state.value) params = `${state.period}=${state.value}`;
-        return `/reportes/api/indicadores/${category}?${params}`;
+        let params = [];
+        if (state.value) params.push(`${state.period}=${state.value}`);
+
+        // Añadir otros parámetros del estado (como top_n)
+        Object.keys(state).forEach(key => {
+            if (key !== 'period' && key !== 'value' && state[key]) {
+                params.push(`${key}=${state[key]}`);
+            }
+        });
+
+        return `/reportes/api/indicadores/${category}?${params.join('&')}`;
+    }
+
+    // Permite actualizar parámetros específicos del estado y recargar la pestaña
+    window.updateCategoryParam = function (category, key, value) {
+        if (!dashboardState[category]) dashboardState[category] = { period: 'semana', value: '' };
+        dashboardState[category][key] = value;
+
+        // Forzar recarga
+        loadedTabs.delete(category);
+        // Limpiar instancias de charts antiguos si es necesario (se hace en loadTabData indirectamente al limpiar HTML)
+
+        loadTabData(category);
     }
 
     function showLoading(tabPane) {
@@ -28,11 +48,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <div>${message || 'Error de carga.'}</div>
             </div>`;
     }
-    
+
     // --- RENDER FUNCTIONS (COMPONENTES UI) ---
 
     // EXPOSE FUNCTIONS GLOBALLY
-    window.createChart = function(containerId, options) {
+    window.createChart = function (containerId, options) {
         const chartDom = document.getElementById(containerId);
         if (!chartDom) return;
         if (chartInstances[containerId]) chartInstances[containerId].dispose();
@@ -40,7 +60,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Verificación especial para Gauges (que no usan 'series.data' convencional)
         const isGauge = options.series && options.series[0] && options.series[0].type === 'gauge';
         const hasData = isGauge || (options.series && options.series.some(s => s.data && s.data.length > 0));
-        
+
         if (!hasData) {
             chartDom.innerHTML = `<div class="d-flex flex-column justify-content-center align-items-center h-100 text-muted opacity-50 small"><span>Sin datos</span></div>`;
             return;
@@ -50,7 +70,7 @@ document.addEventListener('DOMContentLoaded', function () {
         chart.setOption(options);
         chartInstances[containerId] = chart;
     }
-    
+
     // Listener global para redimensionar todos los gráficos
     window.addEventListener('resize', () => {
         Object.values(chartInstances).forEach(chart => {
@@ -59,12 +79,12 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // TARJETA KPI CON TOOLTIP MEJORADA
-    window.renderKpiCard = function(title, value, subtitle, iconClass = 'bi-bar-chart-line', tooltipInfo = null) {
+    window.renderKpiCard = function (title, value, subtitle, iconClass = 'bi-bar-chart-line', tooltipInfo = null) {
         // Tooltip HTML construction
-        const tooltipAttr = tooltipInfo 
-            ? `data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="${tooltipInfo}"` 
+        const tooltipAttr = tooltipInfo
+            ? `data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="${tooltipInfo}"`
             : '';
-        
+
         const infoIcon = tooltipInfo
             ? `<i class="bi bi-info-circle-fill text-muted ms-2" style="font-size: 0.8rem; cursor: help;" ${tooltipAttr}></i>`
             : '';
@@ -89,8 +109,8 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
 
-    window.renderChartCard = function(chartId, title, subtitle, tooltip, downloadId, chartHeight = '300px') {
-         return `
+    window.renderChartCard = function (chartId, title, subtitle, tooltip, downloadId, chartHeight = '300px') {
+        return `
             <div class="card shadow-sm border-0 h-100">
                 <div class="card-header bg-white border-bottom-0 pt-3 px-3 d-flex justify-content-between align-items-start">
                     <div>
@@ -111,7 +131,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // NUEVO: Smart Card Component (HTML Generator)
-    window.createSmartCardHTML = function(id, title, description, insight, helpText) {
+    window.createSmartCardHTML = function (id, title, description, insight, helpText) {
         return `
         <div class="card shadow-sm border-0 h-100 smart-card-container">
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
@@ -138,9 +158,9 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         </div>`;
     }
-    
+
     // Componente para tarjeta dividida (Estados + Líneas)
-    window.createSplitSmartCardHTML = function(idLeft, idRight, title, description, insight, helpText) {
+    window.createSplitSmartCardHTML = function (idLeft, idRight, title, description, insight, helpText) {
         return `
         <div class="card shadow-sm border-0 h-100 smart-card-container">
             <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
@@ -175,7 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>`;
     }
     // --- DATA LOADING ---
-    
+
     async function loadTabData(category) {
         const tabPane = document.querySelector(`#${category}`);
         if (!tabPane) return;
@@ -192,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!response.ok) throw new Error(`Error API: ${response.status}`);
             const data = await response.json();
 
-            tabPane.innerHTML = ''; 
+            tabPane.innerHTML = '';
 
             if (['comercial', 'inventario', 'produccion', 'calidad', 'financiera'].includes(category)) {
                 await renderizarFiltroInteractivo(tabPane, category);
@@ -211,13 +231,13 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             if (renderFunctions[category]) {
-                 if (category === 'comercial') {
+                if (category === 'comercial') {
                     // Pass utils to renderComercial
                     await renderFunctions[category](data, contentContainer, {
                         renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
                     });
                 } else {
-                await renderFunctions[category](data, contentContainer);
+                    await renderFunctions[category](data, contentContainer);
                 }
             }
 
@@ -230,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
             showError(tabPane, error.message);
         }
     }
-    
+
     // --- RENDER LOGIC: PRODUCCIÓN ---
 
     function renderProduccion(data, container) {
@@ -247,10 +267,10 @@ document.addEventListener('DOMContentLoaded', function () {
         let content = '<div class="row g-3 mb-3">';
         content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} un. descartadas`, 'bi-x-circle',
             'Porcentaje de productos detectados como defectuosos durante el proceso de producción interno, antes de salir de fábrica.');
-        
+
         content += renderKpiCard('Reclamos', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos activos`, 'bi-emoji-frown',
             'Porcentaje de pedidos entregados que resultaron en un reclamo formal por parte del cliente.');
-        
+
         content += renderKpiCard('Rechazo Prov.', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} lotes`, 'bi-truck-flatbed',
             'Porcentaje de lotes de materia prima rechazados en la recepción por no cumplir estándares de calidad.');
         content += '</div>';
@@ -260,8 +280,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderFinanciera(data, container) {
         let content = '<div class="row g-3 mb-3">';
         if (data.kpis_financieros) {
-            content += renderKpiCard('Facturación', `$${data.kpis_financieros.facturacion_total.valor.toLocaleString(undefined, {maximumFractionDigits: 0})}`, `Ingresos`, 'bi-wallet2', 'Total facturado en ventas confirmadas durante el periodo seleccionado.');
-            content += renderKpiCard('Costos', `$${data.kpis_financieros.costo_total.valor.toLocaleString(undefined, {maximumFractionDigits: 0})}`, `Directos`, 'bi-cash', 'Estimación de costos directos de producción (MP + MO + GF estimados) asociados a las ventas.');
+            content += renderKpiCard('Facturación', `$${data.kpis_financieros.facturacion_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Ingresos`, 'bi-wallet2', 'Total facturado en ventas confirmadas durante el periodo seleccionado.');
+            content += renderKpiCard('Costos', `$${data.kpis_financieros.costo_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Directos`, 'bi-cash', 'Estimación de costos directos de producción (MP + MO + GF estimados) asociados a las ventas.');
             content += renderKpiCard('Margen', `${data.kpis_financieros.margen_beneficio.valor.toFixed(1)}%`, `Beneficio`, 'bi-percent', 'Porcentaje de ganancia bruta sobre la facturación. ((Ingresos - Costos) / Ingresos).');
         } else {
             content += '<div class="col-12"><div class="alert alert-light border text-center text-muted small">Sin datos financieros.</div></div>';
@@ -269,16 +289,16 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div>';
         container.innerHTML = content;
     }
-    
+
     function renderInventario(data, container) {
         let content = '<div class="row g-3 mb-3">';
-        content += renderKpiCard('Rotación', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Vueltas/Año`, 'bi-arrow-repeat', 
+        content += renderKpiCard('Rotación', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Vueltas/Año`, 'bi-arrow-repeat',
             'Número de veces que el inventario se ha renovado en el último año. Una rotación alta indica ventas eficientes.');
-        
+
         // Si tuvieras un KPI de Stock Bajo Mínimo, lo añadirías aquí
         if (data.cobertura_stock) {
-             const cobVal = data.cobertura_stock.valor === 'Inf' ? '∞' : data.cobertura_stock.valor;
-             content += renderKpiCard('Cobertura', cobVal, `Días estimados`, 'bi-shield-check', 'Días estimados que durará el stock actual basado en el consumo promedio diario.');
+            const cobVal = data.cobertura_stock.valor === 'Inf' ? '∞' : data.cobertura_stock.valor;
+            content += renderKpiCard('Cobertura', cobVal, `Días estimados`, 'bi-shield-check', 'Días estimados que durará el stock actual basado en el consumo promedio diario.');
         }
 
         content += '</div><div class="row g-3">';
@@ -287,13 +307,13 @@ document.addEventListener('DOMContentLoaded', function () {
         content += '</div><div class="col-lg-6">';
         content += renderChartCard('antiguedad-productos-chart', 'Stock Productos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los productos terminados en almacén.', 'download-antiguedad-productos');
         content += '</div></div>';
-        
+
         container.innerHTML = content;
 
         const pieOptions = (labels, dataValues) => ({
-             tooltip: { trigger: 'item' },
-             legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: {fontSize: 10} },
-             series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'], itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 }, label: { show: false }, data: labels.map((name, i) => ({value: dataValues[i], name})) }]
+            tooltip: { trigger: 'item' },
+            legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10 } },
+            series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'], itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 }, label: { show: false }, data: labels.map((name, i) => ({ value: dataValues[i], name })) }]
         });
 
         createChart('antiguedad-insumos-chart', pieOptions(data.antiguedad_stock_insumos.labels, data.antiguedad_stock_insumos.data));
@@ -313,7 +333,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const res = await fetch('/reportes/api/indicadores/anos-disponibles');
                 const json = await res.json();
                 if (json.success) {
-                    yearOptionsHtml = json.data.map(year => 
+                    yearOptionsHtml = json.data.map(year =>
                         `<option value="${year}" ${currentState.value == year ? 'selected' : ''}>${year}</option>`
                     ).join('');
                 }
@@ -322,7 +342,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const toolbar = document.createElement('div');
         toolbar.className = 'compact-toolbar';
-        
+
         const btns = {
             semana: currentState.period === 'semana' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
             mes: currentState.period === 'mes' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
@@ -353,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.addEventListener('click', (e) => {
                 if (dashboardState[category].period !== e.target.dataset.period) {
                     dashboardState[category].period = e.target.dataset.period;
-                    dashboardState[category].value = ''; 
+                    dashboardState[category].value = '';
                     loadedTabs.delete(category);
                     chartInstances = {};
                     loadTabData(category);

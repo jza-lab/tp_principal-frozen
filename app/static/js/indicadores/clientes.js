@@ -121,24 +121,45 @@ window.renderComercial = async function(data, container, utils) {
         }]
     });
 
-    // Chart 3: Top Clientes (Bar)
-    createChart('chart-top-clientes', {
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-        grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
-        xAxis: { type: 'value' },
-        yAxis: { 
-            type: 'category', 
-            data: data.top_clientes.categories,
-            axisLabel: { width: 100, overflow: 'truncate' } 
-        },
-        series: [{
-            name: 'Gasto Total',
-            type: 'bar',
-            data: data.top_clientes.values,
-            itemStyle: { color: '#5470C6', borderRadius: [0, 4, 4, 0] },
-            label: { show: true, position: 'right', formatter: '${c}' }
-        }]
-    });
+    // Chart 3: Top Clientes (Dynamic: Pie if <= 5, Bar if > 5)
+    let topClientesOption = {};
+    if (data.top_clientes.categories.length <= 5) {
+        const pieData = data.top_clientes.categories.map((cat, i) => ({
+            name: cat,
+            value: data.top_clientes.values[i]
+        }));
+        topClientesOption = {
+            tooltip: { trigger: 'item', formatter: '{b}: ${c} ({d}%)' },
+            legend: { bottom: 0, left: 'center' },
+            series: [{
+                name: 'Gasto Total',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                center: ['50%', '45%'],
+                data: pieData,
+                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 }
+            }]
+        };
+    } else {
+        topClientesOption = {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '5%', containLabel: true },
+            xAxis: { type: 'value' },
+            yAxis: { 
+                type: 'category', 
+                data: data.top_clientes.categories,
+                axisLabel: { width: 100, overflow: 'truncate' } 
+            },
+            series: [{
+                name: 'Gasto Total',
+                type: 'bar',
+                data: data.top_clientes.values,
+                itemStyle: { color: '#5470C6', borderRadius: [0, 4, 4, 0] },
+                label: { show: true, position: 'right', formatter: '${c}' }
+            }]
+        };
+    }
+    createChart('chart-top-clientes', topClientesOption);
 
     // Chart 4: Motivos Notas Crédito
     const ncData = data.motivos_notas_credito;

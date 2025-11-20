@@ -90,7 +90,7 @@ class IndicadoresController:
         """
         return {}
 
-    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None):
+    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=10):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
         # Determinar contexto para la evolución
@@ -118,7 +118,7 @@ class IndicadoresController:
         evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
         
         velocidad_produccion = self._obtener_velocidad_produccion(inicio_mes_actual, fin_mes_actual)
-        top_insumos = self._obtener_top_insumos_wrapper(fecha_inicio, fecha_fin)
+        top_insumos = self._obtener_top_insumos_wrapper(fecha_inicio, fecha_fin, top_n=top_n)
         # Nuevo gráfico de insumos
         evolucion_consumo_insumos = self._obtener_evolucion_consumo_insumos(fecha_inicio, fecha_fin, contexto)
 
@@ -126,6 +126,7 @@ class IndicadoresController:
         cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
 
         return {
+            "meta": {"top_n": top_n},
             "panorama_estados": panorama_estados,
             "ranking_desperdicios": ranking_desperdicios,
             "evolucion_desperdicios": evolucion_desperdicios,
@@ -631,7 +632,7 @@ class IndicadoresController:
             if not cid: continue
             
             cname = p.get('cliente', {}).get('nombre') or f"Cliente {cid}"
-            val = float(p.get('monto_total', 0) or 0)
+            val = float(p.get('precio_orden', 0) or 0)
             clientes_spend[cname] += val
             
         top_5 = sorted(clientes_spend.items(), key=lambda x: x[1], reverse=True)[:5]
