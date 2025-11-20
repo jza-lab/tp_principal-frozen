@@ -266,9 +266,13 @@ document.addEventListener('DOMContentLoaded', function () {
         form.reset();
         form.classList.remove('was-validated');
 
-        document.getElementById('campos-cantidades').style.display = 'none';
-        document.getElementById('campo-rechazar').style.display = 'none';
-        document.getElementById('campo-cuarentena').style.display = 'none';
+        // Disparar el evento change manualmente para aplicar la lógica inicial (ocultar/mostrar campos)
+        // ya que "Aprobar lote completo" está preseleccionado.
+        const event = new Event('change');
+        const decisionSelect = document.getElementById('decision-inspeccion');
+        if (decisionSelect) {
+             decisionSelect.dispatchEvent(event);
+        }
 
         modal.show();
     }
@@ -282,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const inputRechazar = document.getElementById('cantidad-rechazada');
             const campoCuarentena = document.getElementById('campo-cuarentena');
             const inputCuarentena = document.getElementById('cantidad-cuarentena');
+            const containerMotivo = document.getElementById('container-motivo-inspeccion');
 
             // Resetear todo
             camposCantidades.style.display = 'none';
@@ -291,26 +296,41 @@ document.addEventListener('DOMContentLoaded', function () {
             inputRechazar.min = '';
             inputCuarentena.required = false;
             inputCuarentena.min = '';
+            
+            if (containerMotivo) {
+                containerMotivo.style.display = 'none';
+            }
 
             // Configurar según la decisión
-            if (decision === 'RECHAZO_PARCIAL') {
-                camposCantidades.style.display = 'block';
-                campoRechazar.style.display = 'block';
-                inputRechazar.required = true;
-                inputRechazar.min = '0.01';
-            } else if (decision === 'CUARENTENA_PARCIAL') {
-                camposCantidades.style.display = 'block';
-                campoCuarentena.style.display = 'block';
-                inputCuarentena.required = true;
-                inputCuarentena.min = '0.01';
-            } else if (decision === 'MIXTO') {
-                camposCantidades.style.display = 'block';
-                campoRechazar.style.display = 'block';
-                campoCuarentena.style.display = 'block';
-                inputRechazar.required = true;
-                inputRechazar.min = '0.01';
-                inputCuarentena.required = true;
-                inputCuarentena.min = '0.01';
+            if (decision === 'APROBADO') {
+                // No hacer nada, ya se ocultó todo arriba
+            } else {
+                // Mostrar motivo para cualquier opción que no sea APROBADO
+                if (containerMotivo) {
+                    containerMotivo.style.display = 'block';
+                }
+
+                if (decision === 'RECHAZO_PARCIAL') {
+                    camposCantidades.style.display = 'block';
+                    campoRechazar.style.display = 'block';
+                    inputRechazar.required = true;
+                    inputRechazar.min = '1';
+                    inputRechazar.step = '1';
+                } else if (decision === 'CUARENTENA_PARCIAL') {
+                    camposCantidades.style.display = 'block';
+                    campoCuarentena.style.display = 'block';
+                    inputCuarentena.required = true;
+                    inputCuarentena.min = '0.01';
+                } else if (decision === 'MIXTO') {
+                    camposCantidades.style.display = 'block';
+                    campoRechazar.style.display = 'block';
+                    campoCuarentena.style.display = 'block';
+                    inputRechazar.required = true;
+                    inputRechazar.min = '1';
+                    inputRechazar.step = '1';
+                    inputCuarentena.required = true;
+                    inputCuarentena.min = '0.01';
+                }
             }
         });
     }

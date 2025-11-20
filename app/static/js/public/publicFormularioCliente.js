@@ -213,7 +213,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (response.ok && verificationResult.success) {
                 setAddressValidationState(true);
-                await enviarDatos();
+                
+                // Extraer coordenadas
+                let latitud = null;
+                let longitud = null;
+                if (verificationResult.data && verificationResult.data.ubicacion) {
+                    latitud = verificationResult.data.ubicacion.lat;
+                    longitud = verificationResult.data.ubicacion.lon;
+                }
+
+                await enviarDatos(latitud, longitud);
             } else {
                 let errorMessage = 'Dirección no válida o error de verificación.';
                 if (verificationResult && verificationResult.error) {
@@ -228,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function enviarDatos() {
+    async function enviarDatos(latitud = null, longitud = null) {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             showNotificationModal('Formulario Incompleto', 'Por favor, complete todos los campos requeridos.');
@@ -273,7 +282,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 provincia: formData.get('provincia'),
                 codigo_postal: formData.get('codigo_postal'),
                 piso: formData.get('piso') || null,
-                depto: formData.get('depto') || null
+                depto: formData.get('depto') || null,
+                latitud: latitud,
+                longitud: longitud
             }
         };
 

@@ -175,7 +175,60 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    async function enviarDatos() {
+    async function verifyAddress() {
+        if (!validateNonAddressFields()) {
+            return;
+        }
+        const calleInput = document.getElementById('calle');
+        const alturaInput = document.getElementById('altura');
+        const provinciaSelect = document.getElementById('provincia');
+        const localidadInput = document.getElementById('localidad');
+
+        try {
+            const response = await fetch('/api/validar/direccion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+
+                body: JSON.stringify({
+                    calle: calleInput.value,
+                    altura: alturaInput.value,
+                    localidad: localidadInput.value,
+                    provincia: provinciaSelect.value
+                })
+            });
+
+            const verificationResult = await response.json();
+
+            if (response.ok && verificationResult.success) {
+                setAddressValidationState(true);
+                
+                // Extraer coordenadas
+                let latitud = null;
+                let longitud = null;
+                if (verificationResult.data && verificationResult.data.ubicacion) {
+                    latitud = verificationResult.data.ubicacion.lat;
+                    longitud = verificationResult.data.ubicacion.lon;
+                }
+
+                await enviarDatos(latitud, longitud);
+            } else {
+                let errorMessage = 'Dirección no válida o error de verificación.';
+                if (verificationResult && verificationResult.error) {
+                    errorMessage = verificationResult.error;
+                }
+                showNotificationModal(errorMessage, 'No se pudo validar la dirección.');
+                setAddressValidationState(false);
+            }
+        } catch (error) {
+            console.error('Error de red al verificar la direccion:', error);
+            showNotificationModal('No se pudo conectar con el servidor de verificación.', 'error');
+        }
+    }
+
+    async function enviarDatos(latitud = null, longitud = null) {
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
@@ -217,7 +270,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 provincia: formData.get('provincia'),
                 codigo_postal: formData.get('codigo_postal'),
                 piso: formData.get('piso') || null,
-                depto: formData.get('depto') || null
+                depto: formData.get('depto') || null,
+                latitud: latitud,
+                longitud: longitud
             }
         };
 
@@ -266,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function () {
             razonSocialInput.classList.remove('is-invalid');
         }
 
-        await enviarDatos();
+        await verifyAddress();
     });
     if (ID_cliente && isEditBoolean) { // Se usa ID_cliente para ser más explícito en Flask
         // Ejecutamos el evento 'input' de cualquiera de las partes para forzar la validación
