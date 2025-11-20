@@ -82,7 +82,7 @@
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-chat-dots"></i></span>
                                 <textarea class="form-control" name="observaciones" id="observaciones"
-                                    rows="3">{{ orden.observaciones if orden else '' }}</textarea>
+                                    rows="3">{{ observaciones if observaciones else (orden.observaciones if orden else '') }}</textarea>
                             </div>
                             <div class="form-text">Opcional - Ingrese detalles adicionales.</div>
                         </div>
@@ -156,6 +156,10 @@
     const productos = {{ productos|tojson }};
     const LISTA_URL = "{{ url_for('orden_produccion.listar') }}";
     const CREAR_URL = "{{ url_for('orden_produccion.crear') }}";
+    
+    // Variables para pre-llenado
+    const PRE_PRODUCTO_ID = "{{ pre_producto_id|default('') }}";
+    const PRE_CANTIDAD = "{{ pre_cantidad|default('') }}";
 </script>
 <script src="{{ url_for('static', filename='js/ordenes_produccion/formularioOrdenProduccionModal.js') }}"></script>
 

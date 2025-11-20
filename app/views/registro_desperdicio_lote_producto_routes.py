@@ -17,6 +17,11 @@ def registrar_desperdicio(lote_id):
 
     if response.get('success'):
         flash(response.get('message'), 'success')
+        # Parametros para sugerir reabastecimiento
+        return redirect(url_for('lote_producto.detalle_lote', 
+                                id_lote=lote_id, 
+                                desperdicio_registrado=True, 
+                                cantidad_desperdiciada=request.form.get('cantidad')))
     else:
         flash(response.get('error'), 'danger')
 
