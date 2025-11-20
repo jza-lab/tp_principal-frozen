@@ -17,10 +17,45 @@ class ClienteController(BaseController):
 
     def __init__(self):
         super().__init__()
+        from app.controllers.direccion_controller import GeorefController
         self.model = ClienteModel()
         self.schema = ClienteSchema()
         self.pedido_controller=PedidoController()
         self.registro_controller = RegistroController()
+        self.usuario_direccion_controller = GeorefController()
+
+    def _normalizar_y_preparar_direccion(self, direccion_data: Dict) -> Optional[Dict]:
+        """Helper para normalizar una dirección usando un servicio externo."""
+        if not all(direccion_data.get(k) for k in ['calle', 'altura', 'localidad', 'provincia']):
+            return direccion_data
+
+        full_street = f"{direccion_data['calle']} {direccion_data['altura']}"
+        if direccion_data.get('piso'):
+            full_street += f", Piso {direccion_data.get('piso')}"
+        if direccion_data.get('depto'):
+            full_street += f", Depto {direccion_data.get('depto')}"
+
+        norm_result = self.usuario_direccion_controller.normalizar_direccion(
+            direccion=full_street,
+            localidad=direccion_data['localidad'],
+            provincia=direccion_data['provincia']
+        )
+
+        if not norm_result.get('success'):
+            return direccion_data
+
+        norm_data = norm_result['data']
+        return {
+            "calle": norm_data['calle']['nombre'],
+            "altura": norm_data['altura']['valor'],
+            "piso": direccion_data.get('piso'),
+            "depto": direccion_data.get('depto'),
+            "codigo_postal": norm_data.get('codigo_postal', direccion_data.get('codigo_postal')),
+            "localidad": norm_data['localidad_censal']['nombre'],
+            "provincia": norm_data['provincia']['nombre'],
+            "latitud": norm_data['ubicacion']['lat'],
+            "longitud": norm_data['ubicacion']['lon']
+        }
 
     def obtener_clientes_activos(self) -> tuple:
         """Obtener lista de Clientes activos"""
@@ -189,6 +224,11 @@ class ClienteController(BaseController):
                             400
                         )
             data['estado_aprobacion'] = 'pendiente'
+            
+            # Normalizar la dirección antes de crearla
+            if direccion_data:
+                direccion_data = self._normalizar_y_preparar_direccion(direccion_data)
+
             direccion_id = self._get_or_create_direccion(direccion_data)
             if direccion_id:
                 data['direccion_id'] = direccion_id
@@ -232,6 +272,9 @@ class ClienteController(BaseController):
                     return self.error_response('El CUIT/CUIL ya está registrado para otro cliente', 400)
 
             if direccion_data:
+                # Normalizar la dirección antes de actualizarla o crearla
+                direccion_data = self._normalizar_y_preparar_direccion(direccion_data)
+                
                 id_direccion_vieja = existing['data'].get('direccion_id')
                 
                 if id_direccion_vieja:
