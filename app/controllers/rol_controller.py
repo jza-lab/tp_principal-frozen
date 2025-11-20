@@ -41,9 +41,9 @@ class RolController(BaseController):
         """
         Actualiza un rol existente.
         """
-        # Asegurarse de que el campo 'costo_hora' se maneje correctamente.
-        if 'costo_hora' in data and data['costo_hora'] == '':
-            data['costo_hora'] = None
+        # Asegurarse de que el campo 'costo_por_hora' se maneje correctamente.
+        if 'costo_por_hora' in data and data['costo_por_hora'] == '':
+            data['costo_por_hora'] = None
         
         result = self.model.update(rol_id, data)
         if result.get('success'):

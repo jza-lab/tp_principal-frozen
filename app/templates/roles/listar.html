@@ -24,7 +24,7 @@
                     <tr>
                         <td>{{ rol.nombre }}</td>
                         <td>{{ rol.descripcion or 'N/A' }}</td>
-                        <td>${{ "%.2f"|format(rol.costo_hora) if rol.costo_hora else 'No asignado' }}</td>
+                        <td>${{ "%.2f"|format(rol.costo_por_hora) if rol.costo_por_hora else 'No asignado' }}</td>
                         <td>
                             <a href="{{ url_for('rol.editar', id=rol.id) }}" class="btn btn-sm btn-outline-primary">
                                 <i class="bi bi-pencil-square"></i> Editar Costo
