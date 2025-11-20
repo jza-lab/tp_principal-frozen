@@ -17,6 +17,7 @@ def listar():
 def nuevo():
     if request.method == 'POST':
         data = request.form.to_dict()
+        data.pop('csrf_token', None)
         controller = CostoFijoController()
         _, status_code = controller.create_costo_fijo(data)
         if status_code == 201:
@@ -33,6 +34,7 @@ def editar(id):
     controller = CostoFijoController()
     if request.method == 'POST':
         data = request.form.to_dict()
+        data.pop('csrf_token', None)
         _, status_code = controller.update_costo_fijo(id, data)
         if status_code == 200:
             flash('Costo fijo actualizado exitosamente.', 'success')
@@ -57,4 +59,17 @@ def eliminar(id):
         flash('Costo fijo desactivado exitosamente.', 'success')
     else:
         flash('Error al desactivar el costo fijo.', 'error')
+    return redirect(url_for('costos_fijos.listar'))
+
+@costos_fijos_bp.route('/<int:id>/reactivar', methods=['POST'])
+@permission_required('admin_configuracion_sistema')
+def reactivar(id):
+    controller = CostoFijoController()
+    _, status_code = controller.reactivate_costo_fijo(id)
+    
+    if status_code == 200:
+        flash('Costo fijo reactivado exitosamente.', 'success')
+    else:
+        flash('Error al reactivar el costo fijo.', 'error')
+        
     return redirect(url_for('costos_fijos.listar'))

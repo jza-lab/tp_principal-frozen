@@ -181,40 +181,30 @@ class RentabilidadController(BaseController):
 
     def _calcular_costo_producto(self, producto: Dict) -> Dict:
         """
-        Calcula el costo desglosado de un producto (materia prima, mano de obra, total).
-        Recibe el diccionario del producto para evitar consultas repetidas.
+        Calcula el costo desglosado de un producto (materia prima, mano de obra, costos fijos, total).
+        Utiliza los valores almacenados en la base de datos.
         """
-        default_cost = {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_total': 0.0}
+        default_cost = {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_fijos': 0.0, 'costo_total': 0.0}
         if not producto:
             return default_cost
             
         try:
-            producto_id = producto['id']
-            porcentaje_mano_obra = (producto.get('porcentaje_mano_obra', 0.0) or 0.0) / 100
-
-            costo_materia_prima = 0.0
-            receta_result = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+            # Obtener los costos almacenados en el producto
+            costo_total = float(producto.get('costo_total_produccion') or 0.0)
+            costo_mano_obra = float(producto.get('costo_mano_obra') or 0.0)
+            costo_fijos = float(producto.get('costo_fijos') or 0.0)
             
-            if receta_result.get('success') and receta_result.get('data'):
-                receta = receta_result.get('data', [])[0]
-                ingredientes_result = self.receta_model.get_ingredientes(receta['id'])
-                if ingredientes_result.get('success'):
-                    for ingrediente in ingredientes_result.get('data', []):
-                        insumo_id = ingrediente.get('id_insumo')
-                        if not insumo_id: continue
-                        
-                        insumo_result = self.insumo_model.find_by_id(insumo_id)
-                        if insumo_result.get('success') and insumo_result.get('data'):
-                            costo_insumo = insumo_result.get('data', {}).get('precio_unitario', 0.0)
-                            cantidad = ingrediente.get('cantidad', 0.0)
-                            costo_materia_prima += (costo_insumo or 0.0) * (cantidad or 0.0)
+            # Calcular costo materia prima por diferencia para asegurar consistencia con el total
+            costo_materia_prima = costo_total - costo_mano_obra - costo_fijos
             
-            costo_mano_obra = costo_materia_prima * porcentaje_mano_obra
-            costo_total = costo_materia_prima + costo_mano_obra
+            # Asegurar que no sea negativo por inconsistencias de redondeo o datos antiguos
+            if costo_materia_prima < 0:
+                costo_materia_prima = 0.0
             
             return {
                 'costo_materia_prima': round(costo_materia_prima, 2),
                 'costo_mano_obra': round(costo_mano_obra, 2),
+                'costo_fijos': round(costo_fijos, 2),
                 'costo_total': round(costo_total, 2)
             }
         except Exception as e:
@@ -225,7 +215,7 @@ class RentabilidadController(BaseController):
         """
         Calcula el margen de ganancia a partir de un diccionario de producto.
         """
-        default_margen = {'nombre': 'N/A', 'margen_porcentual': 0.0, 'margen_absoluto': 0.0, 'costos': {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_total': 0.0}, 'precio_venta': 0}
+        default_margen = {'nombre': 'N/A', 'margen_porcentual': 0.0, 'margen_absoluto': 0.0, 'costos': {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_fijos': 0.0, 'costo_total': 0.0}, 'precio_venta': 0}
         if not producto:
             return default_margen
 

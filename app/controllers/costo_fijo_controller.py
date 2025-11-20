@@ -54,3 +54,13 @@ class CostoFijoController(BaseController):
         if result.get('success'):
             return self.success_response(message="Costo fijo desactivado exitosamente.")
         return self.error_response(result.get('error', 'No se pudo desactivar el costo fijo.'))
+    def reactivate_costo_fijo(self, costo_fijo_id):
+            """
+            Reactiva un costo fijo (undo soft delete).
+            """
+            # Forzamos el update del campo 'activo' a True
+            result = self.model.update(costo_fijo_id, {'activo': True})
+            
+            if result.get('success'):
+                return self.success_response(message="Costo fijo reactivado exitosamente.")
+            return self.error_response(result.get('error', 'No se pudo reactivar el costo fijo.'))

@@ -38,19 +38,36 @@
                             {% endif %}
                         </td>
                         <td>
-                            <a href="{{ url_for('costos_fijos.editar', id=costo.id) }}" class="btn btn-sm btn-outline-primary me-2">
-                                <i class="bi bi-pencil-square"></i> Editar
-                            </a>
-                            <form action="{{ url_for('costos_fijos.eliminar', id=costo.id) }}" method="POST" class="d-inline confirm-form" data-message="¿Estás seguro de que quieres desactivar este costo?">
-                                <button type="submit" class="btn btn-sm btn-outline-danger">
-                                    <i class="bi bi-trash"></i> Desactivar
-                                </button>
-                            </form>
+                            {% if costo.activo %}
+                                <a href="{{ url_for('costos_fijos.editar', id=costo.id) }}" class="btn btn-sm btn-outline-primary me-2" title="Editar">
+                                    <i class="bi bi-pencil-square"></i> Editar
+                                </a>
+                                
+                                <form action="{{ url_for('costos_fijos.eliminar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Estás seguro de que quieres desactivar este costo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar">
+                                        <i class="bi bi-trash"></i> Desactivar
+                                    </button>
+                                </form>
+
+                            {% else %}
+                                <form action="{{ url_for('costos_fijos.reactivar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Deseas reactivar este costo fijo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Reactivar
+                                    </button>
+                                </form>
+                            {% endif %}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center">No hay costos fijos registrados.</td>
+                        <td colspan="4" class="text-center p-4">
+                            <div class="text-muted">
+                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                No hay costos fijos registrados.
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

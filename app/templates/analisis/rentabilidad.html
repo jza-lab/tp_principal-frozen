@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const option = {
             tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            legend: { data: ['Materia Prima', 'Mano de Obra'] },
+            legend: { data: ['Materia Prima', 'Mano de Obra', 'Costos Fijos'] },
             grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
             xAxis: { type: 'value' },
             yAxis: {
@@ -390,6 +390,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     label: { show: true, formatter: (p) => formatCurrency(p.value) },
                     emphasis: { focus: 'series' },
                     data: sortedByRentabilidad.map(p => p.costos_unitarios.costo_mano_obra).reverse()
+                },
+                {
+                    name: 'Costos Fijos',
+                    type: 'bar',
+                    stack: 'total',
+                    label: { show: true, formatter: (p) => formatCurrency(p.value) },
+                    emphasis: { focus: 'series' },
+                    data: sortedByRentabilidad.map(p => p.costos_unitarios.costo_fijos).reverse()
                 }
             ]
         };
@@ -530,6 +538,7 @@ document.addEventListener('DOMContentLoaded', function () {
             { label: 'Costo Total de Ventas', key: 'costo_total', format: 'currency' },
             { label: 'Costo Unit. Materia Prima', key: 'costos_unitarios.costo_materia_prima', format: 'currency' },
             { label: 'Costo Unit. Mano de Obra', key: 'costos_unitarios.costo_mano_obra', format: 'currency' },
+            { label: 'Costos Fijos Unit.', key: 'costos_unitarios.costo_fijos', format: 'currency' },
         ];
 
         metrics.forEach(metric => {
@@ -626,6 +635,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="d-flex justify-content-around text-center">
                             <div><p class="mb-0 text-muted">Materia Prima</p><p class="h5">${formatCurrency(d.costos.costo_materia_prima)}</p></div>
                             <div><p class="mb-0 text-muted">Mano de Obra</p><p class="h5">${formatCurrency(d.costos.costo_mano_obra)}</p></div>
+                            <div><p class="mb-0 text-muted">Costos Fijos</p><p class="h5">${formatCurrency(d.costos.costo_fijos)}</p></div>
                             <div><p class="mb-0 text-muted">Costo Total</p><p class="h5"><strong>${formatCurrency(d.costos.costo_total)}</strong></p></div>
                         </div></div></div>`;
                 }
