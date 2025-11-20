@@ -1,59 +1,318 @@
-const produccionColors = ['#EE6666', '#FAC858', '#5470C6', '#91CC75', '#73C0DE'];
+// app/static/js/indicadores/produccion.js
 
-updateParetoChart = () => {
-    const paretoChartDom = document.getElementById('pareto-desperdicio-chart');
-    if (!paretoChartDom) return;
+/**
+ * Renderiza el contenido de la pestaña de Producción.
+ * Esta función es llamada desde indicadores_dashboard.js
+ * @param {Object} data - Datos devueltos por la API de indicadores/produccion
+ * @param {HTMLElement} container - Contenedor donde se inyectará el HTML
+ */
+window.renderProduccionTab = function(data, container) {
+    // Defensive checks
+    const topInsumos = data.top_insumos || { insight: 'N/A', tooltip: '', labels: [], data: [] };
+    const velocidad = data.velocidad_produccion || { insight: 'N/A', tooltip: '', valor: 0 };
+    const oeeData = data.oee || { disponibilidad: 0, rendimiento: 0, calidad: 0, valor: 0 };
+    const cumplimiento = data.cumplimiento_plan || { valor: 0, completadas_a_tiempo: 0 };
+    const panorama = data.panorama_estados || { insight: 'N/A', tooltip: '', states_data: [], lines_data: [] };
+    const ranking = data.ranking_desperdicios || { insight: 'N/A', tooltip: '', categories: [], values: [] };
+    const evolucion = data.evolucion_desperdicios || { insight: 'N/A', tooltip: '', categories: [], values: [] };
 
-    const paretoChart = echarts.getInstanceByDom(paretoChartDom) || echarts.init(paretoChartDom);
-    const downloadBtn = document.getElementById('download-pareto-desperdicio');
+    // --- 1. Fila Superior: Visualización OEE y KPIs ---
+    let content = `
+    <div class="row g-3 mb-4">
+        <!-- Left Column: OEE Gauge -->
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body position-relative p-2">
+                    <h6 class="text-center text-muted fw-bold text-uppercase mt-2 mb-0">OEE Global</h6>
+                    <div id="oee-gauge-chart" style="height: 250px;"></div>
+                    <div class="text-center position-absolute w-100" style="bottom: 15px;">
+                        <span class="badge bg-light text-dark border" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
+                            <i class="bi bi-info-circle me-1"></i> Eficiencia General de los Equipos
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-    const fechaInicio = document.getElementById('fecha_inicio').value;
-    const fechaFin = document.getElementById('fecha_fin').value;
+        <!-- Right Column: 4 KPIs -->
+        <div class="col-lg-7">
+            <div class="row g-3 h-100 align-content-center">
+                ${window.renderKpiCard('Disponibilidad', `${(oeeData.disponibilidad * 100).toFixed(1)}%`, 'Tiempo Operativo vs Planificado', 'bi-clock-history', 
+                    '<b>Fórmula:</b> (Tiempo Operativo / Tiempo Planificado) <br>Mide las pérdidas por paradas no planificadas o averías.')}
+                
+                ${window.renderKpiCard('Rendimiento', `${(oeeData.rendimiento * 100).toFixed(1)}%`, 'Velocidad Real vs Teórica', 'bi-speedometer', 
+                    '<b>Fórmula:</b> (Tiempo Ganado / Tiempo Operativo) <br>Mide si la máquina está produciendo a su velocidad máxima teórica.')}
+                
+                ${window.renderKpiCard('Calidad', `${(oeeData.calidad * 100).toFixed(1)}%`, 'Piezas Buenas vs Totales', 'bi-check-circle', 
+                    '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).')}
+                
+                ${window.renderKpiCard('Cumplimiento Plan', `${cumplimiento.valor.toFixed(1)}%`, `${cumplimiento.completadas_a_tiempo} órdenes a tiempo`, 'bi-calendar-check', 
+                    'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.')}
+            </div>
+        </div>
+    </div>
     
-    paretoChart.showLoading();
-    fetch(`/reportes/api/produccion/causas_desperdicio?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`)
-        .then(response => response.json())
-        .then(data => {
-            paretoChart.hideLoading();
-            if (data.error || data.labels.length === 0) {
-                paretoChart.setOption({
-                    title: { text: 'No se encontraron datos', left: 'center', top: 'center' },
-                    series: []
-                }, true);
-                console.warn(data.error || "No data for Pareto chart");
-                document.getElementById('pareto-desperdicio-descripcion').textContent = 'No se registraron desperdicios en el período seleccionado.';
-                return;
-            }
+    <div class="d-flex align-items-center mb-4">
+        <hr class="flex-grow-1">
+        <span class="px-3 text-muted small text-uppercase fw-bold">Análisis Gráfico Detallado</span>
+        <hr class="flex-grow-1">
+    </div>
 
-            const option = {
-                tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-                grid: { containLabel: true },
-                xAxis: [{ type: 'category', data: data.labels, axisLabel: { interval: 0, rotate: 30 } }],
-                yAxis: [
-                    { type: 'value', name: 'Cantidad (kg)' },
-                    { type: 'value', name: 'Acumulado (%)', min: 0, max: 100, interval: 20, axisLabel: { formatter: '{value}%' } }
-                ],
-                series: [
-                    { name: 'Desperdicio', type: 'bar', data: data.data, itemStyle: { color: produccionColors[0] } },
-                    { name: 'Acumulado', type: 'line', yAxisIndex: 1, data: data.line_data, smooth: true, itemStyle: { color: produccionColors[2] } }
-                ]
-            };
-            paretoChart.setOption(option, true);
-            
-            const descripcionEl = document.getElementById('pareto-desperdicio-descripcion');
-            const causaPrincipal = data.labels[0];
-            const porcentajeCausaPrincipal = data.line_data[0];
-            descripcionEl.textContent = `La causa principal de desperdicio es "${causaPrincipal}", responsable del ${porcentajeCausaPrincipal}% del total.`;
-        });
+    <!-- 2. Fila Inferior: Gráficos Avanzados (Smart Cards) -->
+    <div class="row g-3 mb-4 align-items-stretch">
+        <!-- Gráfico 1: Panorama Estados (Dividido: Estados + Líneas) -->
+        <div class="col-lg-6 col-xl-6">
+            ${(function() {
+                // Comprobar si existen datos para líneas
+                const hasLinesData = panorama.lines_data && panorama.lines_data.length > 0 && panorama.lines_data.some(d => d.value > 0);
+                
+                if (hasLinesData) {
+                    return window.createSplitSmartCardHTML(
+                        'chart-panorama-states',
+                        'chart-panorama-lines',
+                        'Panorama General',
+                        'Distribución actual de órdenes en producción y uso de líneas.',
+                        panorama.insight, 
+                        panorama.tooltip
+                    );
+                } else {
+                    // Si no hay datos de líneas, mostrar solo Estados en tarjeta simple
+                    return window.createSmartCardHTML(
+                        'chart-panorama-states',
+                        'Panorama General',
+                        'Distribución actual de órdenes en producción.',
+                        panorama.insight, 
+                        panorama.tooltip
+                    );
+                }
+            })()}
+        </div>
 
-    if (downloadBtn && !downloadBtn.hasAttribute('data-initialized')) {
-        downloadBtn.addEventListener('click', () => {
-             const url = paretoChart.getConnectedDataURL({ pixelRatio: 2, backgroundColor: '#fff' });
-             const a = document.createElement('a');
-             a.href = url;
-             a.download = 'pareto_desperdicios.png';
-             a.click();
+        <!-- Gráfico 2: Top Insumos (NUEVO) -->
+        <div class="col-lg-6 col-xl-6">
+            ${window.createSmartCardHTML(
+                'chart-top-insumos', 
+                'Top Insumos Utilizados', 
+                'Insumos con mayor cantidad reservada para producción.',
+                topInsumos.insight, 
+                topInsumos.tooltip
+            )}
+        </div>
+
+        <!-- Gráfico 3: Ranking Desperdicios -->
+        <div class="col-lg-6 col-xl-6">
+            ${window.createSmartCardHTML(
+                'chart-ranking-desperdicios', 
+                'Ranking Desperdicios', 
+                'Principales motivos de pérdida de material.',
+                ranking.insight, 
+                ranking.tooltip
+            )}
+        </div>
+
+        <!-- Gráfico 4: Evolución Desperdicios -->
+        <div class="col-lg-6 col-xl-6">
+            ${window.createSmartCardHTML(
+                'chart-evolucion-desperdicios', 
+                'Evolución Desperdicios', 
+                'Tendencia histórica de incidentes reportados.',
+                evolucion.insight, 
+                evolucion.tooltip
+            )}
+        </div>
+
+        <!-- Gráfico 5: Velocidad Producción (ACTUALIZADO) -->
+        <div class="col-lg-6 col-xl-6">
+            ${window.createSmartCardHTML(
+                'chart-velocidad', 
+                'Tiempo Promedio de Ciclo', 
+                'Tiempo promedio desde inicio real hasta finalización de orden.',
+                velocidad.insight, 
+                velocidad.tooltip
+            )}
+        </div>
+    </div>`;
+    
+    container.innerHTML = content;
+
+    // --- RENDERING CHARTS ---
+
+    // --- CHART 0: OEE GAUGE ---
+    const oeeVal = oeeData.valor.toFixed(1);
+    const colorPalo = [[0.65, '#dc3545'], [0.85, '#ffc107'], [1, '#198754']];
+
+    window.createChart('oee-gauge-chart', {
+        series: [{
+            type: 'gauge',
+            startAngle: 180,
+            endAngle: 0,
+            min: 0,
+            max: 100,
+            splitNumber: 5,
+            radius: '90%',
+            itemStyle: { color: '#58D9F9' },
+            progress: { show: true, width: 18 },
+            pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, offsetCenter: [0, '-60%'], itemStyle: { color: 'auto' } },
+            axisLine: { lineStyle: { width: 18, color: colorPalo } },
+            axisTick: { distance: -18, length: 8, lineStyle: { color: '#fff', width: 2 } },
+            splitLine: { distance: -18, length: 30, lineStyle: { color: '#fff', width: 3 } },
+            axisLabel: { color: 'auto', distance: 20, fontSize: 12 },
+            detail: { valueAnimation: true, formatter: '{value}%', color: 'auto', fontSize: 30, offsetCenter: [0, '20%'] },
+            data: [{ value: oeeVal }]
+        }]
+    });
+
+    // --- CHART 1A: PANORAMA ESTADOS ---
+    window.createChart('chart-panorama-states', {
+        tooltip: { trigger: 'item' },
+        legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10}, type: 'scroll' },
+        series: [{
+            name: 'Estados',
+            type: 'pie',
+            radius: ['40%', '60%'],
+            center: ['50%', '40%'],
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+            label: { show: false, position: 'center' },
+            emphasis: { label: { show: true, fontSize: '10', fontWeight: 'bold' } },
+            labelLine: { show: false },
+            data: panorama.states_data
+        }]
+    });
+
+    // --- CHART 1B: PANORAMA LÍNEAS ---
+    // Solo intentar renderizar si el contenedor existe (es decir, si se usó createSplitSmartCardHTML)
+    if (document.getElementById('chart-panorama-lines')) {
+        window.createChart('chart-panorama-lines', {
+            tooltip: { trigger: 'item' },
+            legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
+            series: [{
+                name: 'Línea',
+                type: 'pie',
+                radius: ['40%', '60%'],
+                center: ['50%', '40%'],
+                itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                data: panorama.lines_data
+            }]
         });
-        downloadBtn.setAttribute('data-initialized', 'true');
     }
-};
+
+    // --- CHART 2: TOP INSUMOS (NUEVO) ---
+    window.createChart('chart-top-insumos', {
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+        grid: { left: '3%', right: '10%', bottom: '3%', top: '5%', containLabel: true },
+        xAxis: { type: 'value', boundaryGap: [0, 0.01] },
+        yAxis: { 
+            type: 'category', 
+            data: topInsumos.labels.slice().reverse(),
+            axisLabel: { interval: 0, width: 80, overflow: 'truncate' }
+        },
+        series: [{
+            name: 'Cantidad',
+            type: 'bar',
+            data: topInsumos.data.slice().reverse(),
+            itemStyle: { color: '#36b9cc', borderRadius: [0, 4, 4, 0] },
+            label: { show: true, position: 'right' }
+        }]
+    });
+
+    // --- CHART 3: RANKING DESPERDICIOS ---
+    const desperdiciosType = ranking.chart_type || 'bar';
+    let desperdiciosOption = {};
+
+    if (desperdiciosType === 'pie') {
+         const pieData = ranking.categories.map((cat, idx) => ({
+             name: cat,
+             value: ranking.values[idx]
+         }));
+
+         desperdiciosOption = {
+            tooltip: { trigger: 'item' },
+            legend: { bottom: 0, left: 'center', itemWidth: 8, itemHeight: 8, textStyle: {fontSize: 10} },
+            series: [{
+                name: 'Motivos',
+                type: 'pie',
+                radius: '60%',
+                center: ['50%', '45%'],
+                data: pieData,
+                itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 1 },
+                emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+            }]
+         };
+    } else {
+        desperdiciosOption = {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '10%', bottom: '3%', top: '5%', containLabel: true },
+            xAxis: { type: 'value', show: false }, 
+            yAxis: { 
+                type: 'category', 
+                data: ranking.categories,
+                axisTick: { show: false },
+                axisLine: { show: false },
+                axisLabel: { width: 100, overflow: 'truncate' } 
+            },
+            series: [{
+                name: 'Frecuencia',
+                type: 'bar',
+                data: ranking.values,
+                itemStyle: { color: '#dc3545', borderRadius: [0, 4, 4, 0] },
+                label: { show: true, position: 'right' }
+            }]
+        };
+    }
+    window.createChart('chart-ranking-desperdicios', desperdiciosOption);
+
+
+    // --- CHART 4: EVOLUCIÓN DESPERDICIOS ---
+    window.createChart('chart-evolucion-desperdicios', {
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: evolucion.categories },
+        yAxis: { type: 'value' },
+        series: [{
+            name: 'Incidentes',
+            type: 'line',
+            smooth: true,
+            data: evolucion.values,
+            areaStyle: { opacity: 0.1, color: '#fd7e14' },
+            itemStyle: { color: '#fd7e14' },
+            lineStyle: { width: 3 }
+        }]
+    });
+
+    // --- CHART 5: VELOCIDAD PRODUCCIÓN (GAUGE SIMPLE) - Usando datos nuevos ---
+    const velocidadVal = velocidad.valor;
+    // Escala dinámica: si el valor es mayor a 24h, ajustamos el máximo
+    const gaugeMax = Math.max(Math.ceil(velocidadVal * 1.25), 24);
+    
+    window.createChart('chart-velocidad', {
+        series: [{
+            type: 'gauge',
+            startAngle: 180,
+            endAngle: 0,
+            min: 0,
+            max: gaugeMax,
+            splitNumber: 6,
+            radius: '100%',
+            center: ['50%', '70%'],
+            itemStyle: { color: '#0d6efd' },
+            progress: { show: true, width: 15 },
+            pointer: { show: false },
+            axisLine: { lineStyle: { width: 15 } },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: false },
+            title: { show: true, offsetCenter: [0, '-20%'], fontSize: 12, color: '#888' },
+            detail: { 
+                valueAnimation: true, 
+                formatter: '{value} h', 
+                offsetCenter: [0, '0%'], 
+                fontSize: 24,
+                fontWeight: 'bold',
+                color: '#333'
+            },
+            data: [{ value: velocidadVal, name: 'Ciclo Promedio' }]
+        }]
+    });
+}
