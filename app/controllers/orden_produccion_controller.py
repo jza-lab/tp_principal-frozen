@@ -672,13 +672,30 @@ class OrdenProduccionController(BaseController):
                 detalle = f"La orden de producción {op.get('codigo')} cambió de estado a {nuevo_estado}."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de produccion', 'Cambio de Estado', detalle)
 
-                # Verificar si el pedido asociado debe cambiar de estado
                 from app.controllers.pedido_controller import PedidoController
                 pedido_controller = PedidoController()
+
+                # 1. Intentar encontrar el pedido directamente
                 items_asociados_res = self.pedido_model.find_all_items({'orden_produccion_id': orden_id})
+
+                pedido_ids_a_verificar = set()
+
                 if items_asociados_res.get('success') and items_asociados_res.get('data'):
-                    pedido_ids_a_verificar = {item['pedido_id'] for item in items_asociados_res['data']}
+                    # Vínculo directo encontrado (OP Padre o OP simple)
+                    pedido_ids_a_verificar.update(item['pedido_id'] for item in items_asociados_res['data'])
+                else:
+                    # 2. Si no hay vínculo directo, buscar a través de la OP padre (caso OP Hija)
+                    op_padre_id = orden_produccion.get('id_op_padre')
+                    if op_padre_id:
+                        logger.info(f"OP Hija {orden_produccion.get('codigo')} completada. Buscando pedido a través de OP Padre ID: {op_padre_id}.")
+                        items_padre_res = self.pedido_model.find_all_items({'orden_produccion_id': op_padre_id})
+                        if items_padre_res.get('success') and items_padre_res.get('data'):
+                            pedido_ids_a_verificar.update(item['pedido_id'] for item in items_padre_res['data'])
+
+                # 3. Si se encontraron pedidos por cualquiera de las vías, actualizarlos
+                if pedido_ids_a_verificar:
                     for pedido_id in pedido_ids_a_verificar:
+                        logger.info(f"Disparando actualización de estado para el pedido ID: {pedido_id}...")
                         pedido_controller.actualizar_estado_segun_ops(pedido_id)
 
                 return self.success_response(data=result.get('data'), message=message_to_use)

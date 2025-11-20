@@ -1251,6 +1251,13 @@ class LoteProductoController(BaseController):
             items_a_surtir_res = pedido_model.find_all_items(filters={'orden_produccion_id': orden_id})
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
+            # Si no se encontraron items directos y es una OP hija, buscar los items de la OP padre.
+            if not items_vinculados and orden_produccion_data.get('id_op_padre'):
+                id_op_padre = orden_produccion_data['id_op_padre']
+                logger.info(f"OP {orden_id} es una hija. Buscando items de pedido asociados a la OP padre {id_op_padre}.")
+                items_padre_res = pedido_model.find_all_items(filters={'orden_produccion_id': id_op_padre})
+                items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
+
             if items_vinculados:
                 cantidad_disponible_para_reservar = cantidad_actual_disponible
                 for item in items_vinculados:
