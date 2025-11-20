@@ -10,6 +10,7 @@ from app.utils.decorators import permission_required, permission_any_of
 from datetime import datetime
 # --- MODIFICACIÓN: Se re-importa ESTADOS_INSPECCION ---
 from app.utils.estados import OC_FILTROS_UI, OC_MAP_STRING_TO_INT, ESTADOS_INSPECCION
+from flask_wtf import FlaskForm
 
 orden_compra_bp = Blueprint("orden_compra", __name__, url_prefix="/compras")
 
@@ -108,8 +109,6 @@ def nueva():
         today=today,
     )
 
-
-from flask_wtf import FlaskForm
 
 @orden_compra_bp.route("/detalle/<int:id>")
 @permission_required(accion='consultar_ordenes_de_compra')
@@ -306,10 +305,8 @@ def procesar_recepcion(orden_id):
     
     if resultado.get("success"):
         if resultado.get("partial"):
-            flash(
-                resultado.get("message", "Recepción parcial completada. Items faltantes."),
-                "warning", 
-            )
+            # Se ha eliminado el flash message para evitar doble notificación
+            pass
         else:
             flash(
                 resultado.get("message", "Recepción de la orden procesada exitosamente."),
@@ -344,6 +341,18 @@ def crear_oc_hija(id_padre):
     else:
         flash(f"Error al crear OC hija: {resultado.get('error', 'Error desconocido')}", "error")
         return redirect(url_for("orden_compra.detalle", id=id_padre))
+
+@orden_compra_bp.route("/<int:id>/gestion-manual", methods=["POST"])
+@jwt_required()
+@permission_required(accion='editar_orden_de_compra') # Ajustar el permiso si es necesario
+def establecer_gestion_manual(id):
+    controller = OrdenCompraController()
+    resultado = controller.establecer_gestion_manual(id)
+    if resultado.get("success"):
+        flash("Se ha establecido la gestión manual para esta orden.", "success")
+    else:
+        flash(f"Error al establecer gestión manual: {resultado.get('error', 'Error desconocido')}", "error")
+    return redirect(url_for("orden_compra.detalle", id=id))
 
 @orden_compra_bp.route("/<int:orden_id>/reclamo/nuevo", methods=["GET", "POST"])
 @jwt_required()

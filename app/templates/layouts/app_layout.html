@@ -307,6 +307,29 @@
                             </a>
                         </li>
                         {% endif %}
+
+                        {% if 'admin_configuracion_sistema' is has_permission %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item {% if request.endpoint.startswith('costos_fijos') %}active{% endif %}"
+                                href="{{ url_for('costos_fijos.listar') }}">
+                                <i class="bi bi-cash-stack me-2"></i> Costos Fijos
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.endpoint.startswith('configuracion_produccion') %}active{% endif %}"
+                                href="{{ url_for('configuracion_produccion.gestionar_configuracion') }}">
+                                <i class="bi bi-clock-history me-2"></i> Horas de Producción
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.endpoint.startswith('rol') %}active{% endif %}"
+                                href="{{ url_for('rol.listar') }}">
+                                <i class="bi bi-person-badge me-2"></i> Roles y Costos
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% if can_ver_registros or can_consultar_logs_o_auditoria %}
                         <li>
                             <hr class="dropdown-divider">

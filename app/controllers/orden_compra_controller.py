@@ -1067,3 +1067,20 @@ class OrdenCompraController:
             'total': round(total, 2)
         })
         return self.crear_orden(nueva_orden_data, items_para_nueva_orden, usuario_id)
+
+    def establecer_gestion_manual(self, orden_id):
+        """Establece la bandera de gestión manual a True para una orden."""
+        try:
+            update_data = {
+                'gestion_manual': True,
+                'updated_at': datetime.now().isoformat()
+            }
+            result = self.model.update(orden_id, update_data)
+            if result.get('success'):
+                oc = result.get('data')
+                detalle = f"Se estableció gestión manual para la OC {oc.get('codigo_oc')}."
+                self.registro_controller.crear_registro(get_current_user(), 'Ordenes de compra', 'Actualización', detalle)
+            return result
+        except Exception as e:
+            logger.error(f"Error estableciendo gestión manual para orden {orden_id}: {e}")
+            return {'success': False, 'error': str(e)}

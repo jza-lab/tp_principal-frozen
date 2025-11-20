@@ -1,46 +1,69 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tabElements = document.querySelectorAll('#kpiTab .nav-link');
-    const filterForm = document.getElementById('filter-form');
-    const tabContentContainer = document.getElementById('kpiTabContent');
+    const dashboardState = {};
     let loadedTabs = new Set();
-    let chartInstances = {}; // Para almacenar instancias de ECharts
+    let chartInstances = {};
 
     // --- UTILS ---
-    function getApiUrl(category) {
-        const startDate = document.getElementById('fecha_inicio').value;
-        const endDate = document.getElementById('fecha_fin').value;
-        return `/reportes/api/indicadores/${category}?fecha_inicio=${startDate}&fecha_fin=${endDate}`;
+
+    function obtenerUrlApi(category) {
+        const state = dashboardState[category] || { period: 'semana', value: '' };
+        let params = [];
+        if (state.value) params.push(`${state.period}=${state.value}`);
+
+        // Añadir otros parámetros del estado (como top_n)
+        Object.keys(state).forEach(key => {
+            if (key !== 'period' && key !== 'value' && state[key]) {
+                params.push(`${key}=${state[key]}`);
+            }
+        });
+
+        return `/reportes/api/indicadores/${category}?${params.join('&')}`;
+    }
+
+    // Permite actualizar parámetros específicos del estado y recargar la pestaña
+    window.updateCategoryParam = function (category, key, value) {
+        if (!dashboardState[category]) dashboardState[category] = { period: 'semana', value: '' };
+        dashboardState[category][key] = value;
+
+        // Forzar recarga
+        loadedTabs.delete(category);
+        // Limpiar instancias de charts antiguos si es necesario (se hace en loadTabData indirectamente al limpiar HTML)
+
+        loadTabData(category);
     }
 
     function showLoading(tabPane) {
         tabPane.innerHTML = `
-            <div class="loading-placeholder text-center p-5">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Cargando...</span>
-                </div>
-                <p class="mt-2">Cargando datos...</p>
+            <div class="loading-placeholder text-center py-5">
+                <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                <p class="mt-2 text-muted small">Calculando indicadores...</p>
             </div>`;
     }
 
     function showError(tabPane, message) {
-        // --- MODIFICADO: Añadido console.log para debugging ---
-        console.log("Mostrando error en UI:", message); 
-        // --- MODIFICADO: Mensaje de error más claro ---
         tabPane.innerHTML = `
-            <div class="alert alert-danger text-center p-5" role="alert">
-                <strong>Error al cargar:</strong> ${message || 'No se pudieron cargar los datos.'}
+            <div class="alert alert-danger d-flex align-items-center m-3 p-2 small" role="alert">
+                <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2"></i>
+                <div>${message || 'Error de carga.'}</div>
             </div>`;
     }
-    
-    // --- RENDER FUNCTIONS ---
 
-    function createChart(containerId, options, category) {
+    // --- RENDER FUNCTIONS (COMPONENTES UI) ---
+
+    // EXPOSE FUNCTIONS GLOBALLY
+    window.createChart = function (containerId, options) {
         const chartDom = document.getElementById(containerId);
         if (!chartDom) return;
+        if (chartInstances[containerId]) chartInstances[containerId].dispose();
 
-        // Limpiar instancia previa si existe
-        if (chartInstances[containerId]) {
-            chartInstances[containerId].dispose();
+        // Verificación especial para Gauges (que no usan 'series.data' convencional)
+        const isGauge = options.series && options.series[0] && options.series[0].type === 'gauge';
+        const hasData = isGauge || (options.series && options.series.some(s => s.data && s.data.length > 0));
+
+        if (!hasData) {
+            chartDom.innerHTML = `<div class="d-flex flex-column justify-content-center align-items-center h-100 text-muted opacity-50 small"><span>Sin datos</span></div>`;
+            return;
         }
 
         const chart = echarts.init(chartDom);
@@ -48,403 +71,390 @@ document.addEventListener('DOMContentLoaded', function () {
         chartInstances[containerId] = chart;
     }
 
-    function renderKpiCard(title, value, subtitle, iconClass = 'bi-bar-chart-line') {
+    // Listener global para redimensionar todos los gráficos
+    window.addEventListener('resize', () => {
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.resize();
+        });
+    });
+
+    // TARJETA KPI CON TOOLTIP MEJORADA
+    window.renderKpiCard = function (title, value, subtitle, iconClass = 'bi-bar-chart-line', tooltipInfo = null) {
+        // Tooltip HTML construction
+        const tooltipAttr = tooltipInfo
+            ? `data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="${tooltipInfo}"`
+            : '';
+
+        const infoIcon = tooltipInfo
+            ? `<i class="bi bi-info-circle-fill text-muted ms-2" style="font-size: 0.8rem; cursor: help;" ${tooltipAttr}></i>`
+            : '';
+
         return `
-        <div class="col-md-4 mb-4">
-            <div class="card text-center h-100">
-                <div class="card-header">${title}</div>
-                <div class="card-body">
-                    <i class="bi ${iconClass} fs-1 text-primary"></i>
-                    <h2 class="card-title my-2">${value}</h2>
-                    <p class="card-text text-muted">${subtitle}</p>
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card h-100 border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center">
+                            <h6 class="card-subtitle text-muted text-uppercase fw-bold mb-0" style="font-size: 0.75rem;">${title}</h6>
+                            ${infoIcon}
+                        </div>
+                        <div class="icon-box bg-primary bg-opacity-10 text-primary rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px;">
+                            <i class="bi ${iconClass}" style="font-size: 1rem;"></i>
+                        </div>
+                    </div>
+                    <h3 class="card-title mb-1 fw-bold text-dark fs-3">${value}</h3>
+                    <small class="text-muted" style="font-size: 0.75rem;">${subtitle}</small>
                 </div>
             </div>
         </div>`;
     }
 
-    function renderChartCard(chartId, title, subtitle, tooltip, downloadId, chartHeight = '400px') {
-         return `
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
+    window.renderChartCard = function (chartId, title, subtitle, tooltip, downloadId, chartHeight = '300px') {
+        return `
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white border-bottom-0 pt-3 px-3 d-flex justify-content-between align-items-start">
                     <div>
-                        <h5 class="card-title mb-0">${title}</h5>
+                        <h6 class="fw-bold mb-0 text-dark">${title}</h6>
                         <small class="text-muted">${subtitle}</small>
                     </div>
-                    <i class="bi bi-info-circle" data-bs-toggle="tooltip" title="${tooltip}"></i>
+                    <div class="dropdown">
+                        <button class="btn btn-link text-muted p-0 no-arrow" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><button class="dropdown-item small" id="${downloadId}"><i class="bi bi-download me-2"></i>Descargar imagen</button></li>
+                        </ul>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="${chartId}" style="height: ${chartHeight};"></div>
-                    <p id="${chartId}-descripcion" class="mt-2 text-center small"></p>
-                </div>
-                <div class="card-footer text-end">
-                    <button id="${downloadId}" class="btn btn-sm btn-outline-secondary">Descargar</button>
+                <div class="card-body px-3 pb-3 pt-0">
+                    <div id="${chartId}" style="height: ${chartHeight}; width: 100%;"></div>
                 </div>
             </div>`;
     }
-    
-    // --- DATA LOADING & RENDERING ---
-    
+
+    // NUEVO: Smart Card Component (HTML Generator)
+    window.createSmartCardHTML = function (id, title, description, insight, helpText) {
+        return `
+        <div class="card shadow-sm border-0 h-100 smart-card-container">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">${title}</h6>
+                <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="left" 
+                   title="${helpText}" 
+                   style="cursor: help; font-size: 0.9rem;"></i>
+            </div>
+            <div class="card-body p-3 d-flex flex-column h-100 pt-0">
+                <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">${description}</p>
+                
+                <div class="flex-grow-1 position-relative" style="min-height: 250px;">
+                    <div id="${id}" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
+                </div>
+
+                <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb-fill text-primary me-2"></i>
+                        <span class="text-dark small fw-medium dynamic-insight">${insight}</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Componente para tarjeta dividida (Estados + Líneas)
+    window.createSplitSmartCardHTML = function (idLeft, idRight, title, description, insight, helpText) {
+        return `
+        <div class="card shadow-sm border-0 h-100 smart-card-container">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+                <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">${title}</h6>
+                <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="left" 
+                   title="${helpText}" 
+                   style="cursor: help; font-size: 0.9rem;"></i>
+            </div>
+            <div class="card-body p-3 d-flex flex-column h-100 pt-0">
+                <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">${description}</p>
+                
+                <div class="row g-0 flex-grow-1" style="min-height: 250px;">
+                    <div class="col-6 position-relative">
+                        <h6 class="text-center text-muted small fw-bold position-absolute w-100" style="top: 0;">Estados</h6>
+                        <div id="${idLeft}" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    <div class="col-6 position-relative border-start">
+                        <h6 class="text-center text-muted small fw-bold position-absolute w-100" style="top: 0;">Líneas</h6>
+                        <div id="${idRight}" style="width: 100%; height: 100%;"></div>
+                    </div>
+                </div>
+
+                <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-lightbulb-fill text-primary me-2"></i>
+                        <span class="text-dark small fw-medium dynamic-insight">${insight}</span>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+    // --- DATA LOADING ---
+
     async function loadTabData(category) {
         const tabPane = document.querySelector(`#${category}`);
-        if (!tabPane || loadedTabs.has(category)) {
-            return; // Ya cargado o no encontrado
-        }
-        
+        if (!tabPane) return;
+        if (loadedTabs.has(category)) return;
+
         showLoading(tabPane);
-        
+
         try {
-            const response = await fetch(getApiUrl(category));
-            if (!response.ok) {
-                throw new Error(`Error del servidor: ${response.statusText} (Status: ${response.status})`);
-            }
+            // Inyectar estilos personalizados
+            injectCustomStyles();
+
+            const url = obtenerUrlApi(category);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Error API: ${response.status}`);
             const data = await response.json();
-            
-            // Limpiar contenido de carga y renderizar
+
             tabPane.innerHTML = '';
-            
-            // Mapeo para llamar a la función de renderizado correcta
+
+            if (['comercial', 'inventario', 'produccion', 'calidad', 'financiera'].includes(category)) {
+                await renderizarFiltroInteractivo(tabPane, category);
+            }
+
+            const contentContainer = document.createElement('div');
+            contentContainer.id = `${category}-content`;
+            tabPane.appendChild(contentContainer);
+
             const renderFunctions = {
                 'produccion': renderProduccion,
                 'calidad': renderCalidad,
-                'comercial': renderComercial,
+                'comercial': window.renderComercial,
                 'financiera': renderFinanciera,
                 'inventario': renderInventario,
             };
 
             if (renderFunctions[category]) {
-                renderFunctions[category](data);
-            } else {
-                 showError(tabPane, `No hay una función de renderizado para '${category}'.`);
+                if (category === 'comercial') {
+                    // Pass utils to renderComercial
+                    await renderFunctions[category](data, contentContainer, {
+                        renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
+                    });
+                } else {
+                    await renderFunctions[category](data, contentContainer);
+                }
             }
-            
-            loadedTabs.add(category); // Marcar como cargado
-            
-            // Re-inicializar tooltips de Bootstrap
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl)
-            });
+
+            loadedTabs.add(category);
+            // Inicializar tooltips de Bootstrap
+            [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]')).map(el => new bootstrap.Tooltip(el));
 
         } catch (error) {
-            // --- MODIFICADO: Añadido console.error para debugging ---
-            console.error(`Error detallado al cargar datos para ${category}:`, error);
+            console.error(error);
             showError(tabPane, error.message);
         }
     }
-    
-    function renderProduccion(data) {
-        const container = document.getElementById('produccion');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('OEE', `${data.oee.valor.toFixed(2)}%`, `Disponibilidad: ${(data.oee.disponibilidad * 100).toFixed(1)}% | Rendimiento: ${(data.oee.rendimiento * 100).toFixed(1)}% | Calidad: ${(data.oee.calidad * 100).toFixed(1)}%`);
-        content += renderKpiCard('Cumplimiento del Plan', `${data.cumplimiento_plan.valor.toFixed(2)}%`, `${data.cumplimiento_plan.completadas_a_tiempo} de ${data.cumplimiento_plan.planificadas} órdenes a tiempo`);
-        content += '</div>';
 
-        // --- NUEVOS GRÁFICOS ---
-        // Fila 1: Gantt
-        content += '<div class="row mt-4"><div class="col-12 mb-4">';
-        content += renderChartCard('gantt-produccion-chart', 'Diagrama de Gantt de Órdenes de Producción (Últimas 15)', 'Visualiza la planificación y duración de las órdenes de producción.', 'Muestra las fechas planificadas y reales de inicio y fin. Las barras se colorean según el estado actual de la orden.', 'download-gantt', '500px');
-        content += '</div></div>';
-        
-        // --- INICIO: GRÁFICO DE DEMOSTRACIÓN ---
-        content += '<div class="row mt-4"><div class="col-12 mb-4">';
-        content += renderChartCard('gantt-demo-chart', 'Diagrama de Gantt de Demostración (Datos de Ejemplo)', 'Este es un ejemplo visual con datos de prueba.', 'Las barras muestran la duración planificada para órdenes de ejemplo con diferentes estados.', 'download-gantt-demo', '500px');
-        content += '</div></div>';
-        // --- FIN: GRÁFICO DE DEMOSTRACIÓN ---
+    // --- RENDER LOGIC: PRODUCCIÓN ---
 
-        // Fila 2: Volumen y Comparativa
-        content += '<div class="row mt-4">';
-        content += '<div class="col-lg-7 mb-4">';
-        content += renderChartCard('volumen-produccion-chart', 'Volumen de Producción Diario', 'Muestra la cantidad total de unidades producidas cada día.', 'Suma de la `cantidad_producida` de todas las órdenes completadas en una fecha específica.', 'download-volumen');
-        content += '</div>';
-        content += '<div class="col-lg-5 mb-4">';
-        content += renderChartCard('plan-vs-real-chart', 'Comparativa Plan vs. Real (Últimas 10 OPs)', 'Compara la cantidad planificada contra la producida.', 'Idealmente, las barras deben tener una altura similar, indicando que la planificación es precisa.', 'download-plan-real');
-        content += '</div>';
-        content += '</div>';
+    function renderProduccion(data, container) {
+        // Delega la renderización al archivo produccion.js
+        if (typeof window.renderProduccionTab === 'function') {
+            window.renderProduccionTab(data, container);
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error: El módulo de gráficos de producción no se ha cargado correctamente.</div>';
+            console.error("renderProduccionTab no está definido. Verifica que produccion.js esté incluido.");
+        }
+    }
 
-        // Fila 3: Pareto (existente)
-        content += '<div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('pareto-desperdicio-chart', 'Análisis de Causas de Desperdicio (Pareto)', 'Identifica las causas más significativas de desperdicio.', 'Regla 80/20 para encontrar las causas vitales.', 'download-pareto');
+    function renderCalidad(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} un. descartadas`, 'bi-x-circle',
+            'Porcentaje de productos detectados como defectuosos durante el proceso de producción interno, antes de salir de fábrica.');
+
+        content += renderKpiCard('Reclamos', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos activos`, 'bi-emoji-frown',
+            'Porcentaje de pedidos entregados que resultaron en un reclamo formal por parte del cliente.');
+
+        content += renderKpiCard('Rechazo Prov.', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} lotes`, 'bi-truck-flatbed',
+            'Porcentaje de lotes de materia prima rechazados en la recepción por no cumplir estándares de calidad.');
+        content += '</div>';
+        container.innerHTML = content;
+    }
+
+    function renderFinanciera(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        if (data.kpis_financieros) {
+            content += renderKpiCard('Facturación', `$${data.kpis_financieros.facturacion_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Ingresos`, 'bi-wallet2', 'Total facturado en ventas confirmadas durante el periodo seleccionado.');
+            content += renderKpiCard('Costos', `$${data.kpis_financieros.costo_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Directos`, 'bi-cash', 'Estimación de costos directos de producción (MP + MO + GF estimados) asociados a las ventas.');
+            content += renderKpiCard('Margen', `${data.kpis_financieros.margen_beneficio.valor.toFixed(1)}%`, `Beneficio`, 'bi-percent', 'Porcentaje de ganancia bruta sobre la facturación. ((Ingresos - Costos) / Ingresos).');
+        } else {
+            content += '<div class="col-12"><div class="alert alert-light border text-center text-muted small">Sin datos financieros.</div></div>';
+        }
+        content += '</div>';
+        container.innerHTML = content;
+    }
+
+    function renderInventario(data, container) {
+        let content = '<div class="row g-3 mb-3">';
+        content += renderKpiCard('Rotación', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Vueltas/Año`, 'bi-arrow-repeat',
+            'Número de veces que el inventario se ha renovado en el último año. Una rotación alta indica ventas eficientes.');
+
+        // Si tuvieras un KPI de Stock Bajo Mínimo, lo añadirías aquí
+        if (data.cobertura_stock) {
+            const cobVal = data.cobertura_stock.valor === 'Inf' ? '∞' : data.cobertura_stock.valor;
+            content += renderKpiCard('Cobertura', cobVal, `Días estimados`, 'bi-shield-check', 'Días estimados que durará el stock actual basado en el consumo promedio diario.');
+        }
+
+        content += '</div><div class="row g-3">';
+        content += '<div class="col-lg-6">';
+        content += renderChartCard('antiguedad-insumos-chart', 'Stock Insumos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los insumos almacenados.', 'download-antiguedad-insumos');
+        content += '</div><div class="col-lg-6">';
+        content += renderChartCard('antiguedad-productos-chart', 'Stock Productos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los productos terminados en almacén.', 'download-antiguedad-productos');
         content += '</div></div>';
 
         container.innerHTML = content;
-        
-        // --- INICIALIZACIÓN DE GRÁFICOS ---
 
-        // Gráfico de Pareto (existente)
-        createChart('pareto-desperdicio-chart', {
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'category', data: data.causas_desperdicio_pareto.labels },
-            yAxis: [ { type: 'value', name: 'Cantidad' }, { type: 'value', name: 'Porcentaje Acumulado', axisLabel: { formatter: '{value}%' } } ],
-            series: [
-                { name: 'Cantidad', type: 'bar', data: data.causas_desperdicio_pareto.data },
-                { name: 'Acumulado', type: 'line', yAxisIndex: 1, data: data.causas_desperdicio_pareto.line_data }
-            ]
+        const pieOptions = (labels, dataValues) => ({
+            tooltip: { trigger: 'item' },
+            legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10 } },
+            series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'], itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 }, label: { show: false }, data: labels.map((name, i) => ({ value: dataValues[i], name })) }]
         });
 
-        // Nuevo: Gráfico de Gantt
-        const ganttData = data.ordenes_gantt
-            .filter(op => {
-                if (!op.fecha_inicio_planificada || !op.fecha_meta) return false;
-                const startTime = new Date(op.fecha_inicio_planificada).getTime();
-                const endTime = new Date(op.fecha_meta).getTime();
-                return !isNaN(startTime) && !isNaN(endTime) && startTime <= endTime;
-            })
-            .map((op, index) => {
-            const estadoColores = {
-                'EN ESPERA': '#6c757d', 'LISTA PARA PRODUCIR': '#ffc107',
-                'EN_LINEA_1': '#17a2b8', 'EN_LINEA_2': '#17a2b8',
-                'EN_EMPAQUETADO': '#007bff', 'CONTROL_DE_CALIDAD': '#fd7e14',
-                'COMPLETADA': '#28a745', 'PAUSADA': '#dc3545'
-            };
-            return {
-                name: `OP-${op.id} ${op.producto_nombre}`,
-                value: [
-                    index,
-                    new Date(op.fecha_inicio_planificada).getTime(),
-                    new Date(op.fecha_meta).getTime(),
-                    op.estado
-                ],
-                itemStyle: { color: estadoColores[op.estado] || '#6c757d' }
-            };
-        });
+        createChart('antiguedad-insumos-chart', pieOptions(data.antiguedad_stock_insumos.labels, data.antiguedad_stock_insumos.data));
+        createChart('antiguedad-productos-chart', pieOptions(data.antiguedad_stock_productos.labels, data.antiguedad_stock_productos.data));
+    }
 
-        createChart('gantt-produccion-chart', {
-            tooltip: {
-                formatter: function (params) {
-                    const op = data.ordenes_gantt[params.value[0]];
-                    return `<b>${params.name}</b><br/>
-                            Estado: ${op.estado}<br/>
-                            Inicio Plan.: ${new Date(params.value[1]).toLocaleDateString()}<br/>
-                            Fin Plan.: ${new Date(params.value[2]).toLocaleDateString()}`;
+    // --- FILTRO INTERACTIVO & ESTILOS ---
+
+    async function renderizarFiltroInteractivo(container, category) {
+        // Lógica del filtro (igual que versión anterior)
+        if (!dashboardState[category]) dashboardState[category] = { period: 'semana', value: '' };
+        const currentState = dashboardState[category];
+
+        let yearOptionsHtml = '';
+        if (currentState.period === 'ano') {
+            try {
+                const res = await fetch('/reportes/api/indicadores/anos-disponibles');
+                const json = await res.json();
+                if (json.success) {
+                    yearOptionsHtml = json.data.map(year =>
+                        `<option value="${year}" ${currentState.value == year ? 'selected' : ''}>${year}</option>`
+                    ).join('');
                 }
-            },
-            xAxis: { type: 'time' },
-            yAxis: {
-                type: 'category',
-                data: ganttData.map(d => d.name),
-                axisLabel: { interval: 0 } // Mostrar todas las etiquetas
-            },
-            series: [{
-                type: 'custom',
-                renderItem: function (params, api) {
-                    const categoryIndex = api.value(0);
-                    const start = api.coord([api.value(1), categoryIndex]);
-                    const end = api.coord([api.value(2), categoryIndex]);
-                    const height = api.size([0, 1])[1] * 0.6;
-                    const rectShape = echarts.graphic.clipRectByRect({
-                        x: start[0], y: start[1] - height / 2,
-                        width: end[0] - start[0], height: height
-                    }, {
-                        x: params.coordSys.x, y: params.coordSys.y,
-                        width: params.coordSys.width, height: params.coordSys.height
-                    });
-                    return rectShape && { type: 'rect', shape: rectShape, style: api.style() };
-                },
-                encode: { x: [1, 2], y: 0 },
-                data: ganttData
-            }],
-            grid: { containLabel: true },
-            dataZoom: [{ type: 'inside', yAxisIndex: 0, filterMode: 'none' }, { type: 'slider', yAxisIndex: 0, filterMode: 'none' }] // Scroll para Y
-        });
-        
-        // --- INICIO: LÓGICA GRÁFICO DE DEMOSTRACIÓN ---
-        const mockGanttData = [
-            { id: 1, producto_nombre: "Producto A", fecha_inicio_planificada: "2025-11-10T08:00:00", fecha_meta: "2025-11-12T17:00:00", estado: "COMPLETADA" },
-            { id: 2, producto_nombre: "Producto B", fecha_inicio_planificada: "2025-11-11T09:00:00", fecha_meta: "2025-11-14T18:00:00", estado: "EN_LINEA_1" },
-            { id: 3, producto_nombre: "Producto C", fecha_inicio_planificada: "2025-11-15T10:00:00", fecha_meta: "2025-11-18T12:00:00", estado: "LISTA PARA PRODUCIR" },
-            { id: 4, producto_nombre: "Producto D", fecha_inicio_planificada: "2025-11-18T14:00:00", fecha_meta: "2025-11-20T16:00:00", estado: "EN ESPERA" }
-        ].map((op, index) => {
-            const estadoColores = {
-                'EN ESPERA': '#6c757d', 'LISTA PARA PRODUCIR': '#ffc107', 'EN_LINEA_1': '#17a2b8',
-                'COMPLETADA': '#28a745'
-            };
-            return {
-                name: `OP-${op.id} ${op.producto_nombre}`,
-                value: [index, new Date(op.fecha_inicio_planificada).getTime(), new Date(op.fecha_meta).getTime()],
-                itemStyle: { color: estadoColores[op.estado] || '#6c757d' }
-            };
-        });
+            } catch (e) { console.error(e); }
+        }
 
-        createChart('gantt-demo-chart', {
-            tooltip: { formatter: params => `<b>${params.name}</b>` },
-            xAxis: { type: 'time' },
-            yAxis: { type: 'category', data: mockGanttData.map(d => d.name) },
-            series: [{
-                type: 'custom',
-                renderItem: function (params, api) {
-                    const categoryIndex = api.value(0);
-                    const start = api.coord([api.value(1), categoryIndex]);
-                    const end = api.coord([api.value(2), categoryIndex]);
-                    const height = api.size([0, 1])[1] * 0.6;
-                    return {
-                        type: 'rect',
-                        shape: echarts.graphic.clipRectByRect({ x: start[0], y: start[1] - height / 2, width: end[0] - start[0], height: height }, { x: params.coordSys.x, y: params.coordSys.y, width: params.coordSys.width, height: params.coordSys.height }),
-                        style: api.style()
-                    };
-                },
-                encode: { x: [1, 2], y: 0 },
-                data: mockGanttData
-            }],
-            grid: { containLabel: true }
-        });
-        // --- FIN: LÓGICA GRÁFICO DE DEMOSTRACIÓN ---
+        const toolbar = document.createElement('div');
+        toolbar.className = 'compact-toolbar';
 
-        // Nuevo: Gráfico de Volumen de Producción
-        createChart('volumen-produccion-chart', {
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'category', data: data.volumen_produccion_diario.map(d => d.fecha) },
-            yAxis: { type: 'value' },
-            series: [{
-                name: 'Volumen',
-                type: 'line',
-                smooth: true,
-                data: data.volumen_produccion_diario.map(d => d.volumen)
-            }]
-        });
+        const btns = {
+            semana: currentState.period === 'semana' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+            mes: currentState.period === 'mes' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+            ano: currentState.period === 'ano' ? 'btn-white text-primary border shadow-sm fw-bold' : 'btn-outline-secondary border-0',
+        };
 
-        // Nuevo: Gráfico Comparativa Plan vs. Real
-        createChart('plan-vs-real-chart', {
-            tooltip: { trigger: 'axis' },
-            legend: { data: ['Planificado', 'Producido'] },
-            xAxis: {
-                type: 'category',
-                data: data.comparativa_plan_real.map(d => `OP-${d.id} (${d.productos.nombre})`),
-                axisLabel: { rotate: 45 }
-            },
-            yAxis: { type: 'value' },
-            series: [
-                { name: 'Planificado', type: 'bar', data: data.comparativa_plan_real.map(d => d.cantidad_planificada) },
-                { name: 'Producido', type: 'bar', data: data.comparativa_plan_real.map(d => d.cantidad_producida) }
-            ],
-            grid: { containLabel: true }
+        let inputHtml = '';
+        if (currentState.period === 'semana') inputHtml = `<input type="week" class="form-control form-control-sm bg-white border" value="${currentState.value}" data-type="semana">`;
+        else if (currentState.period === 'mes') inputHtml = `<input type="month" class="form-control form-control-sm bg-white border" value="${currentState.value}" data-type="mes">`;
+        else if (currentState.period === 'ano') inputHtml = `<select class="form-select form-select-sm bg-white border" data-type="ano"><option value="">Seleccionar</option>${yearOptionsHtml}</select>`;
+
+        toolbar.innerHTML = `
+            <div class="d-flex align-items-center">
+                <span class="label-text me-2"><i class="bi bi-funnel-fill text-secondary"></i> Filtrar:</span>
+                <div class="bg-white p-1 rounded border d-inline-flex">
+                    <button type="button" class="btn btn-sm ${btns.semana} px-3 rounded-2 period-btn" data-period="semana">Semana</button>
+                    <button type="button" class="btn btn-sm ${btns.mes} px-3 rounded-2 period-btn" data-period="mes">Mes</button>
+                    <button type="button" class="btn btn-sm ${btns.ano} px-3 rounded-2 period-btn" data-period="ano">Año</button>
+                </div>
+            </div>
+            <div class="d-flex align-items-center ms-auto">
+                <span class="label-text me-2 text-muted fw-normal small">Período:</span>
+                ${inputHtml}
+            </div>
+        `;
+
+        toolbar.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                if (dashboardState[category].period !== e.target.dataset.period) {
+                    dashboardState[category].period = e.target.dataset.period;
+                    dashboardState[category].value = '';
+                    loadedTabs.delete(category);
+                    chartInstances = {};
+                    loadTabData(category);
+                }
+            });
         });
+        const inputElement = toolbar.querySelector('input, select');
+        if (inputElement) {
+            inputElement.addEventListener('change', (e) => {
+                if (e.target.value) {
+                    dashboardState[category].value = e.target.value;
+                    loadedTabs.delete(category);
+                    chartInstances = {};
+                    loadTabData(category);
+                }
+            });
+        }
+        container.appendChild(toolbar);
     }
 
-    function renderCalidad(data) {
-        const container = document.getElementById('calidad');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} de ${data.tasa_rechazo_interno.inspeccionadas} unidades rechazadas`);
-        content += renderKpiCard('Reclamos de Clientes', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos en ${data.tasa_reclamos_clientes.pedidos_entregados} pedidos`);
-        content += renderKpiCard('Rechazo de Proveedores', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} de ${data.tasa_rechazo_proveedores.recibidos} lotes rechazados`);
-        content += '</div>';
-        container.innerHTML = content;
+    function injectCustomStyles() {
+        if (document.getElementById('dashboard-custom-styles')) return;
+        const style = document.createElement('style');
+        style.id = 'dashboard-custom-styles';
+        style.innerHTML = `
+            /* Pestañas estilo 'Pills' Modernas */
+            #kpiTab {
+                border-bottom: none;
+                gap: 0.5rem;
+                margin-bottom: 1.5rem;
+            }
+            #kpiTab .nav-link {
+                border: 1px solid transparent;
+                background-color: #f8f9fa;
+                color: #6c757d;
+                border-radius: 50rem; /* Pill shape */
+                padding: 0.5rem 1.25rem;
+                font-weight: 500;
+                transition: all 0.2s ease-in-out;
+            }
+            #kpiTab .nav-link:hover {
+                background-color: #e9ecef;
+                color: #495057;
+            }
+            #kpiTab .nav-link.active {
+                background-color: var(--app-primary, #0d6efd);
+                color: #fff;
+                box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
+            }
+            
+            /* Toolbar Compacta */
+            .compact-toolbar {
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 0.5rem 1rem;
+                margin-bottom: 1.5rem;
+                border: 1px solid #e9ecef;
+                display: flex;
+                align-items: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            .label-text { font-size: 0.85rem; font-weight: 600; color: #555; }
+            
+            /* Ajustes de Tarjetas */
+            .stat-card { transition: transform 0.2s; }
+            .stat-card:hover { transform: translateY(-2px); }
+            .tooltip-inner { max-width: 300px; text-align: left; }
+        `;
+        document.head.appendChild(style);
     }
 
-    function renderComercial(data) {
-        const container = document.getElementById('comercial');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Cumplimiento de Pedidos', `${data.kpis_comerciales.cumplimiento_pedidos.valor.toFixed(2)}%`, `${data.kpis_comerciales.cumplimiento_pedidos.completados} de ${data.kpis_comerciales.cumplimiento_pedidos.total} pedidos a tiempo`);
-        content += renderKpiCard('Valor Promedio Pedido', `$${data.kpis_comerciales.valor_promedio_pedido.valor.toFixed(2)}`, `Basado en ${data.kpis_comerciales.valor_promedio_pedido.num_pedidos} pedidos`);
-        content += '</div><div class="row mt-4"><div class="col-lg-6 mb-4">';
-        content += renderChartCard('top-productos-chart', 'Top 5 Productos Vendidos', 'Productos más vendidos por cantidad.', 'Suma de cantidades en pedidos completados.', 'download-top-productos');
-        content += '</div><div class="col-lg-6 mb-4">';
-        content += renderChartCard('top-clientes-chart', 'Top 5 Clientes', 'Clientes con mayor valor de compra.', 'Suma del total de pedidos completados.', 'download-top-clientes');
-        content += '</div></div>';
-        container.innerHTML = content;
-
-        createChart('top-productos-chart', {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            xAxis: { type: 'category', data: data.top_productos_vendidos.labels },
-            yAxis: { type: 'value' },
-            series: [{ data: data.top_productos_vendidos.data, type: 'bar' }]
-        });
-        
-        createChart('top-clientes-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', radius: '50%', data: data.top_clientes.labels.map((name, i) => ({value: data.top_clientes.data[i], name})) }]
-        });
-    }
-
-    function renderFinanciera(data) {
-        const container = document.getElementById('financiera');
-        let content = '<div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('facturacion-chart', 'Facturación en el Tiempo', 'Evolución de ingresos por ventas.', 'Suma del valor de pedidos completados.', 'download-facturacion');
-        content += '</div></div><div class="row mt-4"><div class="col-lg-7 mb-4">';
-        content += renderChartCard('costo-ganancia-chart', 'Costos vs. Ingresos', 'Costos de producción vs. ingresos por ventas.', 'Estimación de costos de materia prima.', 'download-costo-ganancia');
-        content += '</div><div class="col-lg-5 mb-4">';
-        content += renderChartCard('descomposicion-costos-chart', 'Descomposición de Costos', 'Distribución de costos operativos.', 'Mano de obra y gastos fijos son estimados.', 'download-descomposicion');
-        content += '</div></div><div class="row mt-4"><div class="col-lg-12 mb-4">';
-        content += renderChartCard('rentabilidad-productos-chart', 'Rentabilidad por Producto (Top 5)', "Ingresos vs. costos de los productos más vendidos. <br><a href='/analisis/rentabilidad' class='text-warning fw-bold text-decoration-underline'><i class='bi bi-exclamation-triangle-fill me-1'></i>Aviso: Esta es una vista general. Para un análisis detallado, haga clic aquí.</a>", 'Basado en recetas activas y precios de catálogo.', 'download-rentabilidad');
-        content += '</div></div>';
-        container.innerHTML = content;
-
-        createChart('facturacion-chart', {
-             tooltip: { trigger: 'axis' },
-             xAxis: { type: 'category', data: data.facturacion_periodo.labels },
-             yAxis: { type: 'value' },
-             series: [{ data: data.facturacion_periodo.data, type: 'line', smooth: true }]
-        });
-        createChart('costo-ganancia-chart', {
-             tooltip: { trigger: 'axis' },
-             legend: { data: ['Ingresos', 'Costos'] },
-             xAxis: { type: 'category', data: data.costo_vs_ganancia.labels },
-             yAxis: { type: 'value' },
-             series: [
-                { name: 'Ingresos', type: 'line', data: data.costo_vs_ganancia.ingresos, smooth: true },
-                { name: 'Costos', type: 'line', data: data.costo_vs_ganancia.costos, smooth: true, lineStyle: { type: 'dashed' } }
-             ]
-        });
-        createChart('descomposicion-costos-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', radius: ['40%', '70%'], data: data.descomposicion_costos.labels.map((name, i) => ({value: data.descomposicion_costos.data[i], name})) }]
-        });
-        createChart('rentabilidad-productos-chart', {
-            tooltip: { trigger: 'axis' },
-            legend: { data: ['Ingresos', 'Costos', 'Rentabilidad Neta'] },
-            xAxis: { type: 'category', data: data.rentabilidad_productos.labels },
-            yAxis: { type: 'value' },
-            series: [
-                { name: 'Ingresos', type: 'bar', data: data.rentabilidad_productos.ingresos },
-                { name: 'Costos', type: 'bar', data: data.rentabilidad_productos.costos },
-                { name: 'Rentabilidad Neta', type: 'line', data: data.rentabilidad_productos.rentabilidad_neta }
-            ]
-        });
-    }
-    
-    function renderInventario(data) {
-        const container = document.getElementById('inventario');
-        let content = '<div class="row mt-4">';
-        content += renderKpiCard('Rotación de Inventario', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Basado en un COGS de $${data.kpis_inventario.rotacion_inventario.cogs.toFixed(0)} y stock valorizado de $${data.kpis_inventario.rotacion_inventario.inventario_valorizado.toFixed(0)}`);
-        content += '</div><div class="row mt-4"><div class="col-lg-6 mb-4">';
-        content += renderChartCard('antiguedad-insumos-chart', 'Antigüedad de Stock (Insumos)', 'Valor del inventario por antigüedad.', 'Basado en fecha de ingreso de lotes.', 'download-antiguedad-insumos');
-        content += '</div><div class="col-lg-6 mb-4">';
-        content += renderChartCard('antiguedad-productos-chart', 'Antigüedad de Stock (Productos)', 'Valor del inventario por antigüedad.', 'Basado en fecha de producción de lotes.', 'download-antiguedad-productos');
-        content += '</div></div>';
-        container.innerHTML = content;
-
-        createChart('antiguedad-insumos-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', data: data.antiguedad_stock_insumos.labels.map((name, i) => ({value: data.antiguedad_stock_insumos.data[i], name})) }]
-        });
-        createChart('antiguedad-productos-chart', {
-             tooltip: { trigger: 'item' },
-             series: [{ type: 'pie', data: data.antiguedad_stock_productos.labels.map((name, i) => ({value: data.antiguedad_stock_productos.data[i], name})) }]
-        });
-    }
-
-    // --- EVENT LISTENERS ---
-
+    // --- INIT ---
     tabElements.forEach(tab => {
         tab.addEventListener('shown.bs.tab', event => {
             const category = event.target.dataset.category;
+            setTimeout(() => Object.values(chartInstances).forEach(chart => chart.resize()), 150);
             loadTabData(category);
         });
     });
 
-    filterForm.addEventListener('submit', event => {
-        event.preventDefault();
-        const activeTab = document.querySelector('#kpiTab .nav-link.active');
-        if (activeTab) {
-            const category = activeTab.dataset.category;
-            loadedTabs.clear(); // Forzar recarga de todas las pestañas
-            chartInstances = {}; // Limpiar instancias de gráficos
-            loadTabData(category);
-        }
-    });
-
-    // Cargar la primera pestaña activa al inicio
     const initialActiveTab = document.querySelector('#kpiTab .nav-link.active');
-    if (initialActiveTab) {
-        loadTabData(initialActiveTab.dataset.category);
-    }
+    if (initialActiveTab) loadTabData(initialActiveTab.dataset.category);
 });

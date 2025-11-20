@@ -44,11 +44,10 @@ class ProductoSchema(Schema):
         error_messages={"required": "El precio es obligatorio."}
     )
 
-    porcentaje_mano_obra = fields.Float(
-        required=False,
-        allow_none=True,
-        load_default=0
-    )
+    
+    # Campos que se reciben del formulario pero no se guardan directamente en el modelo Producto
+    linea_compatible = fields.Str(load_only=True, required=False)
+    pasos_receta = fields.List(fields.Dict(), load_only=True, required=False)
     porcentaje_ganancia = fields.Float(
         required=False,
         allow_none=True,

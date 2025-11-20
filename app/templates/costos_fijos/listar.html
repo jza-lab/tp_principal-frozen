@@ -1,0 +1,80 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Gestión de Costos Fijos - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center pb-2 mb-3 border-bottom">
+        <h1 class="h2">Gestión de Costos Fijos</h1>
+        <div class="btn-toolbar mb-2 mb-md-0">
+            <a href="{{ url_for('costos_fijos.nuevo') }}" class="btn btn-primary">
+                <i class="bi bi-plus-lg me-2"></i>
+                Nuevo Costo Fijo
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">Nombre del Costo</th>
+                        <th scope="col">Monto Mensual</th>
+                        <th scope="col">Estado</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for costo in costos %}
+                    <tr class="{{ 'table-secondary' if not costo.activo else '' }}">
+                        <td>{{ costo.nombre_costo }}</td>
+                        <td>${{ "%.2f"|format(costo.monto_mensual) }}</td>
+                        <td>
+                            {% if costo.activo %}
+                                <span class="badge bg-success">Activo</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if costo.activo %}
+                                <a href="{{ url_for('costos_fijos.editar', id=costo.id) }}" class="btn btn-sm btn-outline-primary me-2" title="Editar">
+                                    <i class="bi bi-pencil-square"></i> Editar
+                                </a>
+                                
+                                <form action="{{ url_for('costos_fijos.eliminar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Estás seguro de que quieres desactivar este costo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar">
+                                        <i class="bi bi-trash"></i> Desactivar
+                                    </button>
+                                </form>
+
+                            {% else %}
+                                <form action="{{ url_for('costos_fijos.reactivar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Deseas reactivar este costo fijo?');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                    <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Reactivar
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center p-4">
+                            <div class="text-muted">
+                                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                                No hay costos fijos registrados.
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir un modal de confirmación genérico si no existe en el layout base -->
+{% endblock %}

@@ -635,9 +635,16 @@ class PedidoModel(BaseModel):
             logger.error(f"Error buscando pedidos por lote de producto {id_lote_producto}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin):
+    def get_ingresos_en_periodo(self, fecha_inicio, fecha_fin, estados_filtro=None):
         try:
-            result = self.db.table(self.get_table_name()).select('fecha_solicitud, precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin).eq('estado', 'COMPLETADO').execute()
+            query = self.db.table(self.get_table_name()).select('fecha_solicitud, precio_orden').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin)
+            
+            if estados_filtro:
+                query = query.in_('estado', estados_filtro)
+            else:
+                query = query.eq('estado', 'COMPLETADO')
+            
+            result = query.execute()            
             return {'success': True, 'data': result.data}
         except Exception as e:
             logger.error(f"Error obteniendo ingresos: {str(e)}")
@@ -784,6 +791,35 @@ class PedidoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo reservas para el item {item_id}: {e}")
             return []
+
+
+    def obtener_anos_distintos(self) -> Dict:
+        """
+        Obtiene los años únicos en los que se crearon pedidos.
+        Implementación en Python para evitar la dependencia de una RPC.
+        """
+        try:
+            # Selecciona solo la columna de fecha para minimizar la transferencia de datos.
+            response = self.db.table(self.get_table_name()).select('fecha_solicitud').execute()
+            
+            if response.data:
+                # Usa un set para obtener años únicos eficientemente.
+                years = {
+                    datetime.fromisoformat(item['fecha_solicitud']).year 
+                    for item in response.data 
+                    if item.get('fecha_solicitud')
+                }
+                # Devuelve una lista ordenada de años.
+                return {'success': True, 'data': sorted(list(years), reverse=True)}
+            
+            # Si no hay datos, devuelve una lista vacía.
+            return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error obteniendo años distintos de pedidos (implementación Python): {str(e)}")
+            # Fallback en caso de error: devolver el año actual.
+            return {'success': True, 'data': [datetime.now().year]}
+
 class PedidoItemModel(BaseModel):
     """Modelo para la tabla pedido_items"""
 

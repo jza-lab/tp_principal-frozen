@@ -17,9 +17,10 @@ class ReservaInsumoModel(BaseModel):
         """
         try:
             # Consulta mejorada para ser más explícita con los nombres de las tablas.
+            # AHORA INCLUYE FECHAS DE LA ORDEN DE PRODUCCION
             result = self.db.table(self.get_table_name()).select(
                 '*, '
-                'orden_produccion:ordenes_produccion(id, codigo), '
+                'orden_produccion:ordenes_produccion(id, codigo, fecha_inicio, fecha_fin, estado), '
                 'lote_inventario:insumos_inventario(id_lote, numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
             ).order('created_at', desc=True).execute()
 
@@ -28,6 +29,9 @@ class ReservaInsumoModel(BaseModel):
                 if item.get('orden_produccion'):
                     item['orden_produccion_codigo'] = item['orden_produccion'].get('codigo')
                     item['orden_produccion_id'] = item['orden_produccion'].get('id')
+                    item['orden_produccion_fecha_inicio'] = item['orden_produccion'].get('fecha_inicio')
+                    item['orden_produccion_fecha_fin'] = item['orden_produccion'].get('fecha_fin')
+                    item['orden_produccion_estado'] = item['orden_produccion'].get('estado')
 
                 if item.get('lote_inventario'):
                     item['lote_inventario_codigo'] = item['lote_inventario'].get('numero_lote_proveedor')
@@ -42,6 +46,40 @@ class ReservaInsumoModel(BaseModel):
             return {'success': True, 'data': flat_data}
         except Exception as e:
             logger.error(f"Error obteniendo detalles de reservas de insumos: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_all_with_details_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:
+        """
+        Obtiene todas las reservas de insumos con detalles en un rango de fechas.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, '
+                'orden_produccion:ordenes_produccion(id, codigo), '
+                'lote_inventario:insumos_inventario(id_lote, numero_lote_proveedor, insumo:insumos_catalogo(nombre))'
+            ).gte('created_at', fecha_inicio.isoformat()).lte('created_at', fecha_fin.isoformat()).order('created_at', desc=True)
+            
+            result = query.execute()
+
+            flat_data = []
+            for item in result.data:
+                if item.get('orden_produccion'):
+                    item['orden_produccion_codigo'] = item['orden_produccion'].get('codigo')
+                    item['orden_produccion_id'] = item['orden_produccion'].get('id')
+
+                if item.get('lote_inventario'):
+                    item['lote_inventario_codigo'] = item['lote_inventario'].get('numero_lote_proveedor')
+                    if item['lote_inventario'].get('insumo'):
+                        item['insumo_nombre'] = item['lote_inventario']['insumo'].get('nombre')
+
+                # Limpiar datos anidados
+                item.pop('orden_produccion', None)
+                item.pop('lote_inventario', None)
+                flat_data.append(item)
+
+            return {'success': True, 'data': flat_data}
+        except Exception as e:
+            logger.error(f"Error obteniendo detalles de reservas de insumos en rango: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
         
     def get_consumo_total_valorizado_en_periodo(self, fecha_inicio: datetime, fecha_fin: datetime) -> Dict:

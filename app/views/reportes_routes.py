@@ -142,41 +142,17 @@ def api_stock_productos_cobertura():
 
 @reportes_bp.route('/indicadores')
 def indicadores():
-    fecha_inicio_str = request.args.get('fecha_inicio')
-    fecha_fin_str = request.args.get('fecha_fin')
-
-    # Si no se proveen fechas, usar los últimos 30 días por defecto
-    if not fecha_inicio_str:
-        fecha_inicio = datetime.now() - timedelta(days=30)
-        fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
-    else:
-        fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
-
-    if not fecha_fin_str:
-        fecha_fin = datetime.now()
-        fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
-    else:
-        fecha_fin = datetime.strptime(fecha_fin_str, '%Y-%m-%d')
-
-    # Recopilar todos los KPIs de las diferentes categorías
-    kpis = {
-        'produccion': indicadores_controller.obtener_kpis_produccion(fecha_inicio_str, fecha_fin_str),
-        'calidad': indicadores_controller.obtener_datos_calidad(fecha_inicio_str, fecha_fin_str),
-        'comercial': indicadores_controller.obtener_datos_comercial(fecha_inicio_str, fecha_fin_str),
-        'financiera': indicadores_controller.obtener_datos_financieros(fecha_inicio_str, fecha_fin_str),
-        'inventario': indicadores_controller.obtener_datos_inventario(fecha_inicio_str, fecha_fin_str)
-    }
-    
-    # Renderizar la plantilla con los datos para la carga inicial
-    return render_template('indicadores/dashboard.html', kpis=kpis, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin)
+    return render_template('indicadores/dashboard.html')
 
 @reportes_bp.route('/api/indicadores/<categoria>')
 def api_indicadores_por_categoria(categoria):
     """
     Endpoint genérico de la API para obtener los datos de una categoría de indicador específica.
     """
-    fecha_inicio = request.args.get('fecha_inicio')
-    fecha_fin = request.args.get('fecha_fin')
+    # Recoge los nuevos parámetros de la solicitud.
+    semana = request.args.get('semana')
+    mes = request.args.get('mes')
+    ano = request.args.get('ano')
 
     # Mapeo de categorías a las nuevas funciones del controlador
     mapa_funciones = {
@@ -192,8 +168,26 @@ def api_indicadores_por_categoria(categoria):
 
     # Llama a la función correspondiente y devuelve los datos
     funcion_controlador = mapa_funciones[categoria]
-    datos = funcion_controlador(fecha_inicio, fecha_fin)
+        # Preparamos argumentos comunes
+    kwargs = {
+        'semana': request.args.get('semana'),
+        'mes': request.args.get('mes'),
+        'ano': request.args.get('ano')
+    }
+    
+    # Argumentos específicos por categoría (para evitar errores de firma)
+    if categoria == 'produccion':
+        kwargs['top_n'] = request.args.get('top_n', 5, type=int) # Default 10
+        
+    
+    datos = funcion_controlador(**kwargs)
     return jsonify(datos)
+
+@reportes_bp.route('/api/indicadores/anos-disponibles')
+def api_anos_disponibles():
+    """Devuelve los años en los que hay registros de pedidos."""
+    anos = indicadores_controller.obtener_anos_disponibles()
+    return jsonify(anos)
 
 @reportes_bp.route('/api/ventas/facturacion')
 def api_ventas_facturacion():
