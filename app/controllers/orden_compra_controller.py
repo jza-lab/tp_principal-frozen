@@ -14,6 +14,7 @@ import time
 import math
 import requests  # <-- AÑADIR
 import threading # <-- AÑADIR
+from app.models.control_calidad_insumo import ControlCalidadInsumoModel
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class OrdenCompraController:
         self.usuario_controller = UsuarioController()
         self.registro_controller = RegistroController()
         self.reclamo_proveedor_controller = ReclamoProveedorController()
+        self.control_calidad_insumo_model = ControlCalidadInsumoModel()
 
 
     def _parse_form_data(self, form_data):
