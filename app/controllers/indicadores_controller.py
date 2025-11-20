@@ -465,31 +465,12 @@ class IndicadoresController:
 
         # 2. Ticket Medio: Total Valor (sin cancelados) / Num Pedidos (sin cancelados)
         # Obtenemos pedidos en estados válidos (no cancelados) para sumar su valor
-        estados_validos = [
-            estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
-            estados.OV_COMPLETADO
-        ]
-        pedidos_validos_res = self.pedido_model.find_all_items(filters={
-            'fecha_solicitud': ('gte', fecha_inicio.isoformat()),
-            'estado': ('in', estados_validos)
-        })
+                # Use get_ingresos_en_periodo which already filters CANCELLED and calculates price if missing
+        ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio.isoformat(), fecha_fin.isoformat())
+        data_p = ingresos_res.get('data', []) if ingresos_res.get('success') else []
         
-        # Nota: find_all_items devuelve items, necesitamos pedidos. Usamos 'get_all_with_items' filtrado
-        # O mejor, una consulta directa de 'precio_orden'
-        total_valor = 0.0
-        num_pedidos_validos = 0
-        
-        # Usamos una consulta cruda o iteramos si no hay un helper específico
-        pedidos_query = self.pedido_model.find_all(filters={
-            'fecha_solicitud_gte': fecha_inicio.isoformat(),
-            'fecha_solicitud_lte': fecha_fin.isoformat(),
-            'estado': estados_validos
-        })
-        
-        if pedidos_query.get('success'):
-            data_p = pedidos_query.get('data', [])
-            total_valor = sum(float(p.get('precio_orden', 0) or 0) for p in data_p)
-            num_pedidos_validos = len(data_p)
+        total_valor = sum(float(p['precio_orden']) for p in data_p)
+        num_pedidos_validos = len(data_p)
             
         valor_promedio = total_valor / num_pedidos_validos if num_pedidos_validos > 0 else 0.0
 
@@ -633,6 +614,16 @@ class IndicadoresController:
             
             cname = p.get('cliente', {}).get('nombre') or f"Cliente {cid}"
             val = float(p.get('precio_orden', 0) or 0)
+            # Fallback calculation if price is 0
+            if val == 0:
+                for item in p.get('pedido_items', []):
+                    qty = float(item.get('cantidad') or 0)
+                    # Check correct nesting from get_all_with_items
+                    prod = item.get('producto_nombre') 
+                    # producto_nombre is enriched with name and precio_unitario from model update
+                    price = float(prod.get('precio_unitario') or 0) if isinstance(prod, dict) else 0
+                    val += qty * price
+            
             clientes_spend[cname] += val
             
         top_5 = sorted(clientes_spend.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -1004,31 +995,31 @@ class IndicadoresController:
         return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_recibidos}
 
 
-    def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
-        # 1. Cumplimiento de Pedidos
-        # CORRECCIÓN: Usar el método correcto 'count_by_estados_in_date_range' para el total
-        estados_totales = [
-            estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
-            estados.OV_COMPLETADO, estados.OV_CANCELADA
-        ]
-        total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
-        completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
+    # def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
+    #     # 1. Cumplimiento de Pedidos
+    #     # CORRECCIÓN: Usar el método correcto 'count_by_estados_in_date_range' para el total
+    #     estados_totales = [
+    #         estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
+    #         estados.OV_COMPLETADO, estados.OV_CANCELADA
+    #     ]
+    #     total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
+    #     completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
         
-        total_pedidos = total_pedidos_res.get('count', 0)
-        num_pedidos_completados = completados_res.get('count', 0)
+    #     total_pedidos = total_pedidos_res.get('count', 0)
+    #     num_pedidos_completados = completados_res.get('count', 0)
         
-        cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
+    #     cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
 
-        # 2. Valor Promedio de Pedido
-        total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-        total_valor = total_valor_res.get('total_valor', 0.0)
+    #     # 2. Valor Promedio de Pedido
+    #     total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
+    #     total_valor = total_valor_res.get('total_valor', 0.0)
         
-        valor_promedio = total_valor / num_pedidos_completados if num_pedidos_completados > 0 else 0.0
+    #     valor_promedio = total_valor / num_pedidos_completados if num_pedidos_completados > 0 else 0.0
 
-        return {
-            "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
-            "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_completados}
-        }
+    #     return {
+    #         "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
+    #         "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_completados}
+    #     }
 
     def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
         try:
