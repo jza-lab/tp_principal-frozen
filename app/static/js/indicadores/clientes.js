@@ -15,7 +15,7 @@ window.renderComercial = async function(data, container, utils) {
     );
     
     content += renderKpiCard(
-        'Ticket Medio', 
+        'Pedido Promedio', 
         `$${data.kpis_comerciales.valor_promedio_pedido.valor.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`, 
         `${data.kpis_comerciales.valor_promedio_pedido.num_pedidos} pedidos válidos`, 
         'bi-receipt',
