@@ -1231,13 +1231,26 @@ class LoteProductoController(BaseController):
             items_a_surtir_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': orden_id}, order_by='pedido.created_at.asc')
             items_vinculados = items_a_surtir_res.get('data', []) if items_a_surtir_res.get('success') else []
 
-            # 2. Si no hay items directos Y es una OP hija, heredar los items de la OP padre.
-            #    Esto es clave para que la producción de la OP hija se asigne a los pedidos originales.
+            # 2. Si no hay items directos Y es una OP hija, buscar en la tabla de asignaciones (vinculo por herencia).
+            #    Esto es clave para que la OP Hija encuentre los items que le fueron asignados al nacer.
             if not items_vinculados and orden_produccion_data.get('id_op_padre'):
-                id_op_padre = orden_produccion_data['id_op_padre']
-                logger.info(f"OP {orden_id} es una hija. Buscando items de pedido asociados a la OP padre {id_op_padre}.")
-                items_padre_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': id_op_padre}, order_by='pedido.created_at.asc')
-                items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
+                logger.info(f"OP {orden_id} es una hija. Buscando asignaciones heredadas.")
+                asignaciones_res = AsignacionPedidoModel().find_all_with_pedido_id(filters={'orden_produccion_id': orden_id})
+                
+                if asignaciones_res.get('success') and asignaciones_res.get('data'):
+                     items_ids = [a['pedido_item_id'] for a in asignaciones_res['data']]
+                     if items_ids:
+                         items_vinculados_res = pedido_model.find_all_items_with_pedido_info(filters={'id': ('in', items_ids)}, order_by='pedido.created_at.asc')
+                         if items_vinculados_res.get('success'):
+                             items_vinculados = items_vinculados_res.get('data', [])
+            
+            # Si aún así no hay items (caso raro), intentar fallback a la OP Padre como último recurso
+            if not items_vinculados and orden_produccion_data.get('id_op_padre'):
+                 id_op_padre = orden_produccion_data['id_op_padre']
+                 logger.warning(f"OP {orden_id} (Hija) sin asignaciones propias. Intentando buscar items de la OP Padre {id_op_padre}.")
+                 items_padre_res = pedido_model.find_all_items_with_pedido_info(filters={'orden_produccion_id': id_op_padre}, order_by='pedido.created_at.asc')
+                 items_vinculados = items_padre_res.get('data', []) if items_padre_res.get('success') else []
+
 
             if items_vinculados:
                 from app.controllers.pedido_controller import PedidoController # Importar aquí para evitar ciclo
@@ -1245,26 +1258,44 @@ class LoteProductoController(BaseController):
                 asignacion_model = AsignacionPedidoModel() # Ya importado arriba
 
                 cantidad_disponible_para_reservar = cantidad_actual_disponible
+                
+                # --- CORRECCIÓN FIFO: ORDENAMIENTO PYTHON EXPLÍCITO ---
+                # Para garantizar que se surte primero al pedido más antiguo, ordenamos la lista en Python.
+                # Esto evita posibles fallos en la capa de base de datos/ORM.
+                try:
+                    items_vinculados.sort(key=lambda x: x.get('pedido', {}).get('created_at', '9999-12-31'))
+                except Exception as e:
+                    logger.warning(f"Fallo al ordenar items por fecha para FIFO: {e}")
+
+                logger.info(f"Procesando {len(items_vinculados)} items vinculados para asignación de stock.")
 
                 for item in items_vinculados:
                     if cantidad_disponible_para_reservar <= 0:
+                        logger.info("Se agotó el stock disponible para reservar.")
                         break # No hay más stock para reservar.
 
                     pedido_item_id = item['id']
+                    logger.info(f"Analizando Item {pedido_item_id} (Pedido {item.get('pedido_id')})...")
 
-                    # 2. Calcular cuánto YA se reservó para este item (evita duplicar reservas)
-                    asignaciones_existentes = asignacion_model.find_all(filters={'pedido_item_id': pedido_item_id})
-                    cantidad_ya_reservada = sum(float(a['cantidad_asignada']) for a in asignaciones_existentes.get('data', []))
+                    # 2. Calcular cuánto YA se reservó FÍSICAMENTE para este item.
+                    #    CORRECCIÓN CRÍTICA: Usamos la tabla reservas_productos en lugar de asignaciones_pedidos.
+                    #    Esto evita que la asignación heredada (que es solo un plan) cuente como stock ya entregado.
+                    reservas_fisicas_existentes = self.reserva_model.find_all(filters={'pedido_item_id': pedido_item_id, 'estado': 'RESERVADO'})
+                    cantidad_ya_reservada = sum(float(r['cantidad_reservada']) for r in reservas_fisicas_existentes.get('data', []))
 
                     # 3. Calcular lo que falta por cubrir
                     cantidad_total_necesaria = float(item['cantidad'])
                     cantidad_pendiente = cantidad_total_necesaria - cantidad_ya_reservada
+                    
+                    logger.info(f"Item {pedido_item_id}: Necesario {cantidad_total_necesaria}, Ya Reservado {cantidad_ya_reservada}, Pendiente {cantidad_pendiente}.")
 
-                    if cantidad_pendiente <= 0:
+                    if cantidad_pendiente <= 0.01: # Usar tolerancia pequeña para floats
+                        logger.info(f"Item {pedido_item_id} ya cubierto. Saltando.")
                         continue # Este item ya está cubierto, pasar al siguiente (FIFO)
 
                     # 4. Reservar solo lo necesario o lo disponible
                     cantidad_a_reservar_para_item = min(cantidad_pendiente, cantidad_disponible_para_reservar)
+                    logger.info(f"Intentando reservar {cantidad_a_reservar_para_item} para Item {pedido_item_id}. Disponible restante: {cantidad_disponible_para_reservar}.")
 
                     if cantidad_a_reservar_para_item > 0:
                         datos_reserva = {
@@ -1280,16 +1311,26 @@ class LoteProductoController(BaseController):
                             logger.error(f"Fallo al crear registro de reserva para item {pedido_item_id}. Se omite asignación.")
                             continue
 
-                        # Inmediatamente después de crear la reserva, creamos la asignación correspondiente.
-                        asignacion_res = asignacion_model.create({
+                        # Inmediatamente después de crear la reserva, verificamos/creamos la asignación.
+                        # CORRECCIÓN: Verificar si ya existe la asignación para no duplicarla (caso OP Hija heredada)
+                        existe_asignacion = asignacion_model.find_all(filters={
                             'orden_produccion_id': orden_id,
-                            'pedido_item_id': pedido_item_id,
-                            'cantidad_asignada': cantidad_a_reservar_para_item
+                            'pedido_item_id': pedido_item_id
                         })
-                        if not asignacion_res.get('success'):
-                            logger.error(f"Fallo al crear registro de asignación para item {pedido_item_id}. La reserva podría quedar inconsistente.")
-                            # En un sistema transaccional, aquí se revertiría la reserva.
-                            continue
+                        
+                        if existe_asignacion.get('success') and existe_asignacion.get('data'):
+                            # Si ya existe (ej. creada por herencia), actualizamos la cantidad si es necesario o no hacemos nada.
+                            # En este flujo, asumimos que la asignación heredada tenía la intención correcta.
+                            # Podríamos sumar la cantidad si fuera acumulativa, pero por ahora solo registramos.
+                            logger.info(f"La asignación para OP {orden_id} e Item {pedido_item_id} ya existía. No se duplica.")
+                        else:
+                            asignacion_res = asignacion_model.create({
+                                'orden_produccion_id': orden_id,
+                                'pedido_item_id': pedido_item_id,
+                                'cantidad_asignada': cantidad_a_reservar_para_item
+                            })
+                            if not asignacion_res.get('success'):
+                                logger.error(f"Fallo al crear registro de asignación para item {pedido_item_id}. La reserva podría quedar inconsistente.")
 
                         # Se descuenta lo que acabamos de reservar de lo que queda disponible.
                         cantidad_disponible_para_reservar -= cantidad_a_reservar_para_item

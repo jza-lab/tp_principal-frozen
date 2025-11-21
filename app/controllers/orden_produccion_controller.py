@@ -1799,33 +1799,66 @@ class OrdenProduccionController(BaseController):
                 return
             items_asociados = items_res['data']
 
-            # 2. Calcular el faltante para cada ítem.
-            items_con_faltante = []
+            # 2. Simular la distribución del stock bueno de la OP Padre (FIFO)
+            #    Esto es crucial porque en este punto la OP Padre aún no ha reservado stock físicamente,
+            #    pero sabemos que producirá una cierta cantidad "Buena" que cubrirá a los primeros pedidos.
+            
+            # Calcular stock bueno estimado del padre (Planificado - Desperdicio reportado en la hija)
+            cantidad_planificada_padre = Decimal(str(op_padre.get('cantidad_planificada', '0')))
+            stock_bueno_estimado_padre = cantidad_planificada_padre - cantidad_op_hija
+            
+            logger.info(f"Simulando asignación FIFO para OP Padre {op_padre_id}. Stock Bueno Est: {stock_bueno_estimado_padre}. Desperdicio (OP Hija): {cantidad_op_hija}")
+
+            # Ordenar items por antigüedad del pedido (FIFO)
+            try:
+                items_asociados.sort(key=lambda x: x.get('pedido', {}).get('created_at', '9999-12-31'))
+            except Exception as e:
+                logger.warning(f"Fallo al ordenar items por fecha para simulación FIFO: {e}")
+
+            items_para_op_hija = []
+            stock_padre_remanente = stock_bueno_estimado_padre
+
             for item in items_asociados:
-                # Usamos la tabla de reservas como fuente de verdad para saber cuánto se ha cubierto.
-                reservas_res = self.lote_producto_controller.reserva_model.find_all({'pedido_item_id': item['id'], 'estado': 'RESERVADO'})
-                total_reservado = sum(Decimal(r.get('cantidad_reservada', '0')) for r in reservas_res.get('data', []))
-
                 cantidad_requerida = Decimal(str(item.get('cantidad', '0')))
-                faltante = cantidad_requerida - total_reservado
+                
+                # 1. Verificar cuánto YA estaba reservado previamente (por si acaso hubo entregas parciales anteriores)
+                reservas_previas_res = self.lote_producto_controller.reserva_model.find_all({'pedido_item_id': item['id'], 'estado': 'RESERVADO'})
+                cantidad_ya_entregada = sum(Decimal(r.get('cantidad_reservada', '0')) for r in reservas_previas_res.get('data', []))
+                
+                pendiente_real = cantidad_requerida - cantidad_ya_entregada
+                
+                if pendiente_real <= 0:
+                    continue
 
-                if faltante > 0.01: # Usar una pequeña tolerancia para evitar errores de punto flotante
-                    items_con_faltante.append({'item_id': item['id'], 'faltante': faltante, 'pedido_id': item.get('pedido_id')})
+                # 2. Simular cuánto cubre el Padre
+                cubierto_por_padre = min(pendiente_real, stock_padre_remanente)
+                stock_padre_remanente -= cubierto_por_padre
+                
+                # 3. Calcular qué falta y debe cubrir la Hija
+                falta_para_hija = pendiente_real - cubierto_por_padre
+                
+                logger.info(f"Item {item['id']} (Req: {cantidad_requerida}): Cubierto por Padre: {cubierto_por_padre}. Falta: {falta_para_hija}.")
 
-            if not items_con_faltante:
-                logger.warning(f"No se encontraron ítems con faltante para la OP padre {op_padre_id}. La OP hija {op_hija_id} no se asignará.")
+                if falta_para_hija > 0.01:
+                    items_para_op_hija.append({
+                        'item_id': item['id'],
+                        'faltante': falta_para_hija,
+                        'pedido_id': item.get('pedido_id') # Guardamos para referencia
+                    })
+
+            if not items_para_op_hija:
+                logger.warning(f"Simulación completada: El stock bueno del padre cubre toda la demanda pendiente. La OP hija {op_hija_id} no se asignará.")
                 return
 
-            # 3. Distribuir la cantidad de la OP hija entre los ítems con faltante.
-            # Ordenar por ID de pedido para mantener consistencia FIFO si hubiera múltiples faltantes.
-            items_con_faltante.sort(key=lambda x: x['pedido_id'])
+            # 3. Distribuir la cantidad de la OP hija
             cantidad_a_distribuir = cantidad_op_hija
             nuevas_asignaciones = []
-            for item_faltante in items_con_faltante:
+            
+            for item_faltante in items_para_op_hija:
                 if cantidad_a_distribuir <= 0:
                     break
                 
-                cantidad_a_asignar = min(cantidad_a_distribuir, item_faltante.get('faltante', Decimal(0)))
+                cantidad_a_asignar = min(cantidad_a_distribuir, item_faltante['faltante'])
                 
                 nuevas_asignaciones.append({
                     'orden_produccion_id': op_hija_id,
