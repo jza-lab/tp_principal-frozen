@@ -1,44 +1,79 @@
 {% extends "layouts/app_layout.html" %}
 
 {% block app_content %}
-<div class="container-fluid">
-    <h1 class="mb-4">Dashboard de Indicadores</h1>
+<div class="container-fluid px-4 py-4">
+    
+    <!-- Header / Command Center Card -->
+    <div id="dashboard-header-card" class="card border-0 shadow rounded-4 overflow-hidden mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); transition: all 0.5s ease;">
+        <div class="card-header border-bottom-0 pt-4 pb-0 px-4 position-relative" style="background: transparent; z-index: 1;">
+            
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 position-relative z-2">
+                <div class="d-flex align-items-center mb-3 mb-md-0">
+                    <div class="icon-box bg-white text-primary rounded-4 p-3 me-3 shadow-sm border hover-lift transition-transform">
+                        <i class="bi bi-speedometer2 fs-3"></i>
+                    </div>
+                    <div>
+                        <h4 class="fw-bold text-dark mb-1 tracking-tight">Dashboard de Indicadores</h4>
+                        <p class="text-muted small mb-0 d-flex align-items-center">
+                            <span class="badge bg-success-subtle text-success rounded-pill me-2 px-2 pulse-badge">En vivo</span>
+                            Monitoreo en tiempo real de métricas clave
+                        </p>
+                    </div>
+                </div>
+                <!-- Breadcrumb / Info Area -->
+                <div class="d-none d-md-block text-end">
+                   <nav aria-label="breadcrumb">
+                      <ol class="breadcrumb mb-0 justify-content-end small">
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}" class="text-decoration-none text-muted">Inicio</a></li>
+                        <li class="breadcrumb-item active fw-semibold text-primary" aria-current="page">Indicadores</li>
+                      </ol>
+                   </nav>
+                   <small class="text-muted font-monospace" style="font-size: 0.75rem;">
+                       <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
+                   </small>
+                </div>
+            </div>
 
+            <!-- Tabs Integrated in Header -->
+            <ul class="nav nav-tabs nav-tabs-custom border-bottom-0 mt-2 position-relative z-2" id="kpiTab" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true" data-category="produccion">
+                        <i class="bi bi-gear-wide-connected me-2"></i>Producción
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false" data-category="comercial">
+                        <i class="bi bi-people me-2"></i>Comercial
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="financiera-tab" data-bs-toggle="tab" data-bs-target="#financiera" type="button" role="tab" aria-controls="financiera" aria-selected="false" data-category="financiera">
+                        <i class="bi bi-cash-coin me-2"></i>Financiera
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false" data-category="calidad">
+                        <i class="bi bi-check-circle me-2"></i>Calidad
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false" data-category="inventario">
+                        <i class="bi bi-box-seam me-2"></i>Inventario
+                    </button>
+                </li>
+            </ul>
+        </div>
 
-    <ul class="nav nav-tabs" id="kpiTab" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true" data-category="produccion">Producción</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="comercial-tab" data-bs-toggle="tab" data-bs-target="#comercial" type="button" role="tab" aria-controls="comercial" aria-selected="false" data-category="comercial">Comercial</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="financiera-tab" data-bs-toggle="tab" data-bs-target="#financiera" type="button" role="tab" aria-controls="financiera" aria-selected="false" data-category="financiera">Financiera</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="calidad-tab" data-bs-toggle="tab" data-bs-target="#calidad" type="button" role="tab" aria-controls="calidad" aria-selected="false" data-category="calidad">Calidad</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false" data-category="inventario">Inventario</button>
-        </li>
-    </ul>
-
-    <div class="tab-content" id="kpiTabContent">
-        <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
+        <!-- Main Content Area -->
+        <div class="card-body p-4" style="background-color: #f4f6f9;">
+            <div class="tab-content" id="kpiTabContent">
+                <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab"></div>
+                <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab"></div>
+                <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab"></div>
+                <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab"></div>
+                <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab"></div>
             </div>
-        
-        <div class="tab-pane fade" id="calidad" role="tabpanel" aria-labelledby="calidad-tab">
-            </div>
-        
-        <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
-            </div>
-        
-        <div class="tab-pane fade" id="comercial" role="tabpanel" aria-labelledby="comercial-tab">
-            </div>
-        
-        <div class="tab-pane fade" id="financiera" role="tabpanel" aria-labelledby="financiera-tab">
-            </div>
-        
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -49,4 +84,9 @@
 <script src="{{ url_for('static', filename='js/indicadores/clientes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/indicadores/produccion.js') }}"></script>
 <script src="{{ url_for('static', filename='js/indicadores/inventario.js') }}"></script>
+<script>
+    // Simple script to show date with time
+    const now = new Date();
+    document.getElementById('last-updated').textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+</script>
 {% endblock %}

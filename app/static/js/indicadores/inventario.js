@@ -1,4 +1,4 @@
-const inventarioColors = ['#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC', '#91CC75', '#EE6666'];
+const inventarioColors = ['#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC', '#91CC75', '#EE6666', '#999999'];
 
 // --- HELPERS ---
 
@@ -34,6 +34,9 @@ window.renderInventario = function(data, container, utils) {
     // Helper to check valid data
     const hasData = (dataset) => dataset && dataset.data && dataset.data.some(v => v > 0);
 
+    // Helper to get insight safely
+    const getInsight = (chartName) => data[`${chartName}_chart`] ? data[`${chartName}_chart`].insight : (data[chartName] && data[chartName].insight ? data[chartName].insight : 'Sin análisis disponible.');
+
     // --- SECCIÓN: INSUMOS ---
     
     const sectionInsumos = document.createElement('div');
@@ -47,15 +50,17 @@ window.renderInventario = function(data, container, utils) {
         'Insumos Críticos', 
         data.kpis_inventario.insumos_criticos, 
         'Bajo stock mín.', 
-        'bi-exclamation-triangle-fill text-warning', 
-        'Insumos con stock actual inferior al mínimo configurado.'
+        'bi-exclamation-triangle-fill', 
+        'Insumos con stock actual inferior al mínimo configurado.',
+        'warning'
     );
     kpisInsumos += renderKpiCard(
         'Ins. Vencimiento', 
         data.kpis_inventario.insumos_proximos_vencimiento, 
         'Próximos a vencer', 
-        'bi-alarm-fill text-danger', 
-        'Lotes que han consumido >85% de su vida útil.'
+        'bi-alarm-fill', 
+        'Lotes que han consumido >85% de su vida útil.',
+        'danger'
     );
     kpisInsumos += '</div>';
     sectionInsumos.innerHTML += kpisInsumos;
@@ -65,27 +70,27 @@ window.renderInventario = function(data, container, utils) {
     
     // Antigüedad (Donut)
     chartsInsumos += '<div class="col-lg-4 col-md-6">';
-    chartsInsumos += createSmartCardHTML('antiguedad-insumos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', 'Permite identificar lotes inmovilizados.', 'Porcentaje de lotes en cada rango de antigüedad.');
+    chartsInsumos += createSmartCardHTML('antiguedad-insumos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', data.antiguedad_stock_insumos.insight, 'Porcentaje de lotes en cada rango de antigüedad.');
     chartsInsumos += '</div>';
 
     // Composición (Pie)
     chartsInsumos += '<div class="col-lg-4 col-md-6">';
-    chartsInsumos += createSmartCardHTML('composicion-insumos-chart', 'Composición por Categoría', 'Volumen de inventario.', 'Panorama de los tipos de insumos.', 'Cantidad de stock agrupada por categoría.');
+    chartsInsumos += createSmartCardHTML('composicion-insumos-chart', 'Composición por Categoría', 'Volumen de inventario.', getInsight('composicion_stock_insumos'), 'Cantidad de stock agrupada por categoría.');
     chartsInsumos += '</div>';
 
     // Valor Stock (Bar - Top N)
     chartsInsumos += '<div class="col-lg-4 col-md-12">';
-    chartsInsumos += createSmartCardHTML('valor-stock-insumos-chart', 'Valor Stock Insumos', 'Mayor inversión inmovilizada.', 'Foco en insumos de alto valor.', 'Stock Actual * Precio Unitario.');
+    chartsInsumos += createSmartCardHTML('valor-stock-insumos-chart', 'Valor Stock Insumos', 'Mayor inversión inmovilizada.', getInsight('valor_stock_insumos'), 'Stock Actual * Precio Unitario.');
     chartsInsumos += '</div>';
 
     // Stock Crítico (Bar Comparison)
     chartsInsumos += '<div class="col-lg-6">';
-    chartsInsumos += createSmartCardHTML('stock-critico-chart', 'Insumos Críticos (Top)', 'Comparativa Actual vs Mínimo.', 'Requieren reabastecimiento urgente.', 'Diferencia entre stock actual y punto de pedido.');
+    chartsInsumos += createSmartCardHTML('stock-critico-chart', 'Insumos Críticos (Top)', 'Comparativa Actual vs Mínimo.', getInsight('stock_critico'), 'Diferencia entre stock actual y punto de pedido.');
     chartsInsumos += '</div>';
 
     // Vencimiento (Bar Days)
     chartsInsumos += '<div class="col-lg-6">';
-    chartsInsumos += createSmartCardHTML('insumos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', 'Priorizar uso de estos lotes.', 'Lotes ordenados por fecha de vencimiento más cercana.');
+    chartsInsumos += createSmartCardHTML('insumos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', getInsight('insumos_vencimiento'), 'Lotes ordenados por fecha de vencimiento más cercana.');
     chartsInsumos += '</div>';
 
     chartsInsumos += '</div>';
@@ -104,15 +109,17 @@ window.renderInventario = function(data, container, utils) {
         'Sin Stock', 
         data.kpis_inventario.productos_cero, 
         'Productos agotados', 
-        'bi-dash-circle-fill text-danger', 
-        'Productos terminados con stock 0.'
+        'bi-dash-circle-fill', 
+        'Productos terminados con stock 0.',
+        'danger'
     );
     kpisProductos += renderKpiCard(
         'Prod. Vencimiento', 
         data.kpis_inventario.productos_proximos_vencimiento, 
         'Próximos a vencer', 
-        'bi-calendar-x-fill text-warning', 
-        'Lotes que han consumido >85% de su vida útil.'
+        'bi-calendar-x-fill', 
+        'Lotes que han consumido >85% de su vida útil.',
+        'warning'
     );
     kpisProductos += '</div>';
     sectionProductos.innerHTML += kpisProductos;
@@ -122,27 +129,27 @@ window.renderInventario = function(data, container, utils) {
 
     // Antigüedad (Donut)
     chartsProductos += '<div class="col-lg-4 col-md-6">';
-    chartsProductos += createSmartCardHTML('antiguedad-productos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', 'Detecta productos de baja rotación.', 'Porcentaje de lotes en cada rango.');
+    chartsProductos += createSmartCardHTML('antiguedad-productos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', data.antiguedad_stock_productos.insight, 'Porcentaje de lotes en cada rango.');
     chartsProductos += '</div>';
 
     // Distribución Estado (Pie)
     chartsProductos += '<div class="col-lg-4 col-md-6">';
-    chartsProductos += createSmartCardHTML('dist-estado-productos-chart', 'Estado del Stock', 'Disponibilidad de inventario.', 'Stock disponible vs reservado.', 'Proporción de lotes por estado.');
+    chartsProductos += createSmartCardHTML('dist-estado-productos-chart', 'Estado del Stock', 'Disponibilidad de inventario.', getInsight('distribucion_estado_productos'), 'Proporción de lotes por estado.');
     chartsProductos += '</div>';
 
     // Valor Stock (Bar - Top N)
     chartsProductos += '<div class="col-lg-4 col-md-12">';
-    chartsProductos += createSmartCardHTML('valor-stock-productos-chart', 'Valor Stock Productos', 'Productos con mayor valoración.', 'Capital en productos terminados.', 'Stock * Precio Venta.');
+    chartsProductos += createSmartCardHTML('valor-stock-productos-chart', 'Valor Stock Productos', 'Productos con mayor valoración.', getInsight('valor_stock_productos'), 'Stock * Precio Venta.');
     chartsProductos += '</div>';
 
     // Cobertura (Horizontal Bar)
     chartsProductos += '<div class="col-lg-6">';
-    chartsProductos += createSmartCardHTML('cobertura-productos-chart', 'Cobertura Estimada', 'Días de venta cubiertos.', 'Riesgo de quiebre de stock.', 'Stock / Venta Promedia Diaria.');
+    chartsProductos += createSmartCardHTML('cobertura-productos-chart', 'Cobertura Estimada', 'Días de venta cubiertos.', getInsight('cobertura'), 'Stock / Venta Promedia Diaria.');
     chartsProductos += '</div>';
 
     // Vencimiento (Bar Days)
     chartsProductos += '<div class="col-lg-6">';
-    chartsProductos += createSmartCardHTML('productos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', 'Priorizar despacho/promoción.', 'Lotes ordenados por fecha de vencimiento.');
+    chartsProductos += createSmartCardHTML('productos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', getInsight('productos_vencimiento'), 'Lotes ordenados por fecha de vencimiento.');
     chartsProductos += '</div>';
 
     chartsProductos += '</div>';
@@ -177,15 +184,27 @@ window.renderInventario = function(data, container, utils) {
     const renderAntiguedad = (id, dataset, color) => {
         if (hasData(dataset)) {
             createChart(id, {
-                tooltip: { trigger: 'item', formatter: '{b}: <b>{c} Lotes</b> ({d}%)' },
-                legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10 },
-                color: [color, '#fac858', '#ee6666', '#91cc75'], // Custom palette
+                tooltip: { 
+                    trigger: 'item', 
+                    formatter: (params) => {
+                        const qty = params.data.quantity != null ? params.data.quantity : 0;
+                        // Asumimos que la cantidad puede ser float, mostramos 2 decimales si es necesario
+                        const qtyStr = Number(qty).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+                        return `${params.name}<br/><b>${params.value} Lotes</b> (${params.percent}%)<br/>Cant: ${qtyStr}`;
+                    }
+                },
+                legend: { orient: 'vertical', right: 10, top: 'center', show: true },
+                color: [color, '#fac858', '#ee6666', '#91cc75', '#999999'], // Custom palette incl. grey for 'Sin fecha'
                 series: [{ 
                     type: 'pie', 
                     radius: ['40%', '70%'],
-                    center: ['50%', '45%'],
+                    center: ['40%', '50%'], // Shifted left to accommodate legend
                     itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
-                    data: dataset.labels.map((l, i) => ({ value: dataset.data[i], name: l }))
+                    data: dataset.labels.map((l, i) => ({ 
+                        value: dataset.data[i], 
+                        name: l,
+                        quantity: dataset.quantities ? dataset.quantities[i] : 0
+                    }))
                 }]
             });
         } else {
@@ -210,7 +229,16 @@ window.renderInventario = function(data, container, utils) {
                 data: dataset.labels, 
                 axisLabel: { interval: 0, rotate: 30, fontSize: 10, width: 80, overflow: 'truncate' } 
             },
-            yAxis: { type: 'value', axisLabel: { formatter: (val) => `$${(val/1000).toFixed(0)}k` } },
+            yAxis: { 
+                type: 'value', 
+                axisLabel: { 
+                    formatter: (val) => {
+                        if (val >= 1000000) return `$${(val/1000000).toFixed(1)}M`;
+                        if (val >= 1000) return `$${(val/1000).toFixed(0)}k`;
+                        return `$${val}`;
+                    } 
+                } 
+            },
             series: [{ 
                 type: 'bar', 
                 data: dataset.data, 
@@ -227,20 +255,21 @@ window.renderInventario = function(data, container, utils) {
     // 3. Composición (Pie)
     createChart('composicion-insumos-chart', {
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { orient: 'vertical', right: 10, top: 'center', show: true },
         series: [{ 
-            type: 'pie', radius: '70%', center: ['50%', '50%'],
+            type: 'pie', radius: '70%', center: ['40%', '50%'],
             data: data.composicion_stock_insumos_chart.labels.map((l, i) => ({ value: data.composicion_stock_insumos_chart.data[i], name: l })),
             itemStyle: { borderRadius: 5 },
-            label: { show: false } // Hide labels to avoid clutter, rely on tooltip/legend
+            label: { show: false }
         }]
     });
 
     // 4. Distribución Estado (Donut)
     createChart('dist-estado-productos-chart', {
         tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-        legend: { bottom: 0 },
+        legend: { orient: 'vertical', right: 10, top: 'center', show: true },
         series: [{ 
-            type: 'pie', radius: ['40%', '70%'], center: ['50%', '45%'],
+            type: 'pie', radius: ['40%', '70%'], center: ['40%', '50%'],
             data: data.distribucion_estado_productos_chart.labels.map((l, i) => ({ value: data.distribucion_estado_productos_chart.data[i], name: l })),
             itemStyle: { borderRadius: 5 },
             label: { show: false }

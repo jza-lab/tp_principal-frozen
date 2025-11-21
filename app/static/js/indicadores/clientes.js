@@ -11,7 +11,8 @@ window.renderComercial = async function(data, container, utils) {
         `${data.kpis_comerciales.cumplimiento_pedidos.valor.toFixed(1)}%`, 
         `${data.kpis_comerciales.cumplimiento_pedidos.completados} / ${data.kpis_comerciales.cumplimiento_pedidos.total} total`, 
         'bi-box-seam',
-        '<b>Fórmula:</b> (Pedidos Completados / Total Pedidos).<br>Incluye pedidos cancelados en el total.'
+        '<b>Fórmula:</b> (Pedidos Completados / Total Pedidos).<br>Incluye pedidos cancelados en el total.',
+        'primary' // Color variant
     );
     
     content += renderKpiCard(
@@ -19,7 +20,8 @@ window.renderComercial = async function(data, container, utils) {
         `$${data.kpis_comerciales.valor_promedio_pedido.valor.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`, 
         `${data.kpis_comerciales.valor_promedio_pedido.num_pedidos} pedidos válidos`, 
         'bi-receipt',
-        '<b>Fórmula:</b> (Ingresos Totales / Número de Pedidos Válidos).<br>Se excluyen los pedidos cancelados.'
+        '<b>Fórmula:</b> (Ingresos Totales / Número de Pedidos Válidos).<br>Se excluyen los pedidos cancelados.',
+        'info' // Color variant
     );
 
     content += renderKpiCard(
@@ -27,7 +29,8 @@ window.renderComercial = async function(data, container, utils) {
         `$${data.kpis_comerciales.ingresos_totales.valor.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}`, 
         `${data.kpis_comerciales.ingresos_totales.num_pedidos} pedidos generados`, 
         'bi-cash-coin',
-        '<b>Fórmula:</b> Suma del valor de todos los pedidos generados en el periodo (excluyendo cancelados).'
+        '<b>Fórmula:</b> Suma del valor de todos los pedidos generados en el periodo (excluyendo cancelados).',
+        'success' // Color variant
     );
 
     content += '</div>';
@@ -35,9 +38,9 @@ window.renderComercial = async function(data, container, utils) {
     // --- 2. Título Sección Gráficos ---
     content += `
     <div class="d-flex align-items-center mb-4">
-        <hr class="flex-grow-1">
-        <span class="px-3 text-muted small text-uppercase fw-bold">Análisis de Ventas y Clientes</span>
-        <hr class="flex-grow-1">
+        <hr class="flex-grow-1 border-secondary opacity-25">
+        <span class="px-3 text-muted small text-uppercase fw-bold" style="letter-spacing: 1px;">Análisis de Ventas y Clientes</span>
+        <hr class="flex-grow-1 border-secondary opacity-25">
     </div>`;
 
     // --- 3. Gráficos (Smart Cards) ---
