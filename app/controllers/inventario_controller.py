@@ -223,11 +223,13 @@ class InventarioController(BaseController):
             logger.error(f"Error crítico al liberar stock para OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def consumir_stock_por_cantidad_producto(self, receta_id: int, cantidad_producto: float, op_id_referencia: int, motivo: str) -> dict:
+    def consumir_stock_por_cantidad_producto(self, receta_id: int, cantidad_producto: float, op_id_referencia: int, motivo: str, usuario_id: int = None) -> dict:
         """
         Calcula los insumos necesarios para una cantidad de producto y los consume del inventario.
         Esta función realiza una verificación (dry run) primero y solo consume si todos los
         materiales están disponibles.
+        
+        Crea registros de trazabilidad (reservas con estado 'CONSUMIDO') para cada consumo.
         """
         receta_model = RecetaModel()
         try:
@@ -283,7 +285,24 @@ class InventarioController(BaseController):
                         if nueva_cantidad_lote <= 0:
                             update_data['estado'] = 'agotado'
                         
+                        # Actualizar el lote físico
                         self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+                        
+                        # Crear registro de trazabilidad (Reserva CONSUMIDA)
+                        try:
+                            if usuario_id:
+                                datos_reserva_consumida = {
+                                    'orden_produccion_id': op_id_referencia,
+                                    'lote_inventario_id': lote['id_lote'],
+                                    'insumo_id': insumo['insumo_id'],
+                                    'cantidad_reservada': cantidad_a_consumir_de_lote,
+                                    'usuario_reserva_id': usuario_id,
+                                    'estado': 'CONSUMIDO'
+                                }
+                                self.reserva_insumo_model.create(datos_reserva_consumida)
+                        except Exception as e_trazabilidad:
+                            logger.error(f"Error creando registro de trazabilidad para consumo en OP {op_id_referencia}: {e_trazabilidad}")
+
                         cantidad_restante_a_consumir -= cantidad_a_consumir_de_lote
 
             # 4. Actualizar stock general
