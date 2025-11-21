@@ -1802,26 +1802,30 @@ class OrdenProduccionController(BaseController):
             # 2. Calcular el faltante para cada ítem.
             items_con_faltante = []
             for item in items_asociados:
-                cantidad_requerida = Decimal(item['cantidad'])
-                asignaciones_res = self.asignacion_pedido_model.find_all({'pedido_item_id': item['id']})
-                total_asignado = sum(Decimal(a.get('cantidad_asignada', '0')) for a in asignaciones_res.get('data', []))
-                
-                faltante = cantidad_requerida - total_asignado
-                if faltante > 0:
-                    items_con_faltante.append({'item_id': item['id'], 'faltante': faltante})
+                # Usamos la tabla de reservas como fuente de verdad para saber cuánto se ha cubierto.
+                reservas_res = self.lote_producto_controller.reserva_model.find_all({'pedido_item_id': item['id'], 'estado': 'RESERVADO'})
+                total_reservado = sum(Decimal(r.get('cantidad_reservada', '0')) for r in reservas_res.get('data', []))
+
+                cantidad_requerida = Decimal(str(item.get('cantidad', '0')))
+                faltante = cantidad_requerida - total_reservado
+
+                if faltante > 0.01: # Usar una pequeña tolerancia para evitar errores de punto flotante
+                    items_con_faltante.append({'item_id': item['id'], 'faltante': faltante, 'pedido_id': item.get('pedido_id')})
 
             if not items_con_faltante:
                 logger.warning(f"No se encontraron ítems con faltante para la OP padre {op_padre_id}. La OP hija {op_hija_id} no se asignará.")
                 return
 
             # 3. Distribuir la cantidad de la OP hija entre los ítems con faltante.
+            # Ordenar por ID de pedido para mantener consistencia FIFO si hubiera múltiples faltantes.
+            items_con_faltante.sort(key=lambda x: x['pedido_id'])
             cantidad_a_distribuir = cantidad_op_hija
             nuevas_asignaciones = []
             for item_faltante in items_con_faltante:
                 if cantidad_a_distribuir <= 0:
                     break
                 
-                cantidad_a_asignar = min(cantidad_a_distribuir, item_faltante['faltante'])
+                cantidad_a_asignar = min(cantidad_a_distribuir, item_faltante.get('faltante', Decimal(0)))
                 
                 nuevas_asignaciones.append({
                     'orden_produccion_id': op_hija_id,
@@ -1829,6 +1833,7 @@ class OrdenProduccionController(BaseController):
                     'cantidad_asignada': float(cantidad_a_asignar)
                 })
                 cantidad_a_distribuir -= cantidad_a_asignar
+                logger.info(f"Herencia de asignación: Se asignarán {cantidad_a_asignar} unidades de la OP hija {op_hija_id} al item {item_faltante['item_id']}.")
             
             # 4. Insertar las nuevas asignaciones.
             if nuevas_asignaciones:
