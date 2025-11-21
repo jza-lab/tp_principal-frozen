@@ -25,7 +25,7 @@ window.renderProduccionTab = function(data, container) {
                 <div class="card-body position-relative p-2">
                     <h6 class="text-center text-muted fw-bold text-uppercase mt-3 mb-0" style="letter-spacing: 1px;">OEE Global</h6>
                     <div id="oee-gauge-chart" style="height: 250px;"></div>
-                    <div class="text-center position-absolute w-100" style="bottom: 20px;">
+                    <div class="text-center position-absolute w-100 start-0" style="bottom: 20px;">
                         <span class="badge bg-light text-dark border shadow-sm py-2 px-3 rounded-pill" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
                             <i class="bi bi-info-circle me-1 text-primary"></i> Eficiencia General
                         </span>
