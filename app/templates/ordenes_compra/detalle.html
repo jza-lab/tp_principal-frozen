@@ -551,33 +551,7 @@
 
 {# --- Modal 'modal-inspeccion-accion' eliminado --- #}
 
-<div class="modal fade" id="modalCrearOcHija" tabindex="-1" aria-labelledby="modalOcHijaLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form action="{{ url_for('orden_compra.crear_oc_hija', id_padre=orden.id) }}" method="POST">
-                {{ csrf_form.csrf_token }}
-                <div class="modal-header bg-warning">
-                    <h5 class="modal-title text-dark" id="modalOcHijaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Acción Requerida: Items Faltantes</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <p>La recepción de esta orden (<code class="text-muted">{{ orden.codigo_oc }}</code>) se completó, pero <strong>faltaron insumos</strong>.</p>
-                    <p>Los lotes de los insumos recibidos ya fueron creados y la OP asociada está "En Espera".</p>
-                    <p class="fw-bold">¿Desea crear una nueva Orden de Compra (OC Hija) para reponer los items faltantes?</p>
-                    
-                    <div class="alert alert-info small">
-                        <strong>Nota:</strong> Si no crea una OC Hija ahora, la Orden de Producción seguirá "En Espera" y deberá gestionar la compra de los insumos faltantes manualmente.
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    {# Botón modificado para enviar formulario de gestión manual #}
-                    <button type="button" class="btn btn-secondary" onclick="submitGestionManual()">No, gestionar manualmente</button>
-                    <button type="submit" class="btn btn-primary">Sí, crear OC Hija ahora</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
+
 
 {# Formulario oculto para establecer gestión manual #}
 <form id="formGestionManual" action="{{ url_for('orden_compra.establecer_gestion_manual', id=orden.id) }}" method="POST" style="display: none;">
@@ -757,43 +731,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // --- Lógica de Listeners Diferenciados ---
         
-        // Si edito CUARENTENA o RECHAZADA, se ajusta APROBADA
+        // --- Lógica de Auto-Ajuste (Prioridad a Defectos) ---
+
         const onProblemaInput = (e) => {
-            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
-            let rechazadaVal = checkAndFixValue(rechazadaInput);
+            let cVal = parseFloat(cuarentenaInput.value) || 0;
+            let rVal = parseFloat(rechazadaInput.value) || 0;
             
-            // Validar que la suma de problemas no supere el total
-            if (cuarentenaVal + rechazadaVal > roundedTotal) {
-                if (e.target === cuarentenaInput) {
-                    cuarentenaVal = roundedTotal - rechazadaVal;
-                } else {
-                    rechazadaVal = roundedTotal - cuarentenaVal;
-                }
-                // Actualizar el valor del input que se estaba editando
-                e.target.value = (e.target === cuarentenaInput ? cuarentenaVal : rechazadaVal).toFixed(precision);
+            // 1. Si la suma de problemas ya supera el total, topar el input actual
+            if (cVal + rVal > roundedTotal) {
+                if (e.target === cuarentenaInput) cVal = roundedTotal - rVal;
+                else rVal = roundedTotal - cVal;
+                e.target.value = (e.target === cuarentenaInput ? cVal : rVal).toFixed(precision);
             }
 
-            let aprobadoRestante = roundedTotal - cuarentenaVal - rechazadaVal;
+            // 2. Ajustar Aprobado automáticamente con lo que sobra
+            let aprobadoRestante = roundedTotal - cVal - rVal;
+            // Evitar negativos por decimales
+            if (aprobadoRestante < 0) aprobadoRestante = 0;
+            
             aprobadaInput.value = aprobadoRestante.toFixed(precision);
             toggleMotivo();
         };
 
-        // Si edito APROBADA, se ajusta RECHAZADA (asumiendo que cuarentena es prioritaria)
+        // Si toco Aprobado, no dejo que suba más de lo disponible libre
         const onAprobadaInput = (e) => {
-            let aprobadaVal = checkAndFixValue(aprobadaInput);
-            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
-
-            // Validar que aprobada + cuarentena no supere el total
-            if (aprobadaVal + cuarentenaVal > roundedTotal) {
-                aprobadaVal = roundedTotal - cuarentenaVal;
-                aprobadaInput.value = aprobadaVal.toFixed(precision);
-            }
+            let aVal = parseFloat(aprobadaInput.value) || 0;
+            let cVal = parseFloat(cuarentenaInput.value) || 0;
+            let rVal = parseFloat(rechazadaInput.value) || 0;
             
-            let rechazadaRestante = roundedTotal - aprobadaVal - cuarentenaVal;
-            rechazadaInput.value = rechazadaRestante.toFixed(precision);
+            // El máximo que puede tener aprobado es (Total - Problemas)
+            let maxAprobado = roundedTotal - cVal - rVal;
+            
+            if (aVal > maxAprobado) {
+                // Corrección automática al máximo posible
+                aprobadaInput.value = maxAprobado.toFixed(precision);
+                
+                // Feedback visual opcional
+                e.target.classList.add('is-invalid');
+                setTimeout(() => e.target.classList.remove('is-invalid'), 500);
+            }
             toggleMotivo();
         };
-        
+
         cuarentenaInput.addEventListener('input', onProblemaInput);
         rechazadaInput.addEventListener('input', onProblemaInput);
         aprobadaInput.addEventListener('input', onAprobadaInput);

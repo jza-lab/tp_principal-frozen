@@ -205,31 +205,46 @@ class LoteProductoController(BaseController):
             logger.error(f"Error calculando stock real para producto {producto_id}: {e}", exc_info=True)
             return self.error_response('Error interno al calcular stock real', 500)
 
-    def obtener_stock_disponible_real_para_productos(self, producto_ids: list) -> tuple:
+    def obtener_stock_disponible_real_para_productos(self, producto_ids: list, fecha_requisito: date = None) -> tuple:
         """
         Calcula el stock real disponible para una lista de productos.
         CORRECCIÓN: En un modelo de 'Reserva Dura', la 'cantidad_actual' de los lotes
         ya tiene descontadas las reservas. No se debe restar la tabla reservas nuevamente.
+
+        NUEVO: Si se pasa 'fecha_requisito', solo suma lotes que venzan DESPUÉS o IGUAL a esa fecha.
         """
         if not producto_ids:
             return self.success_response(data={})
 
         try:
-            # 1. Obtener todos los lotes físicos disponibles (estado DISPONIBLE)
-            lotes_result = self.model.find_all(filters={
-                'producto_id': ('in', producto_ids),
-                'estado': 'DISPONIBLE'
-            })
-            if not lotes_result.get('success'):
-                return self.error_response(lotes_result.get('error'), 500)
+            # Preparar filtros base
+            filtros_query = self.model.db.table(self.model.get_table_name()) \
+                .select('*') \
+                .in_('producto_id', producto_ids) \
+                .eq('estado', 'DISPONIBLE')
+
+            # --- NUEVO FILTRO DE VENCIMIENTO ---
+            if fecha_requisito:
+                # Solo lotes que vencen el mismo día del requisito o después (>=)
+                # La fecha de vencimiento debe ser "mayor o igual" a la fecha requerida.
+                filtros_query = filtros_query.gte('fecha_vencimiento', fecha_requisito.isoformat())
+            else:
+                # Si no hay fecha requerida, asumimos entrega inmediata.
+                # Filtramos solo que no estén vencidos hoy.
+                filtros_query = filtros_query.gte('fecha_vencimiento', date.today().isoformat())
+
+            lotes_result = filtros_query.execute()
+
+            if not lotes_result.data:
+                # Si no hay datos, devolvemos mapa en 0
+                return self.success_response(data={pid: 0 for pid in producto_ids})
 
             # 2. Sumar la cantidad_actual (que es el remanente libre)
             stock_disponible_map = {pid: 0 for pid in producto_ids}
-            lotes_disponibles = lotes_result.get('data', [])
+            lotes_disponibles = lotes_result.data
 
             for lote in lotes_disponibles:
                 pid = lote['producto_id']
-                # En reserva dura, cantidad_actual ES el disponible.
                 stock_disponible_map[pid] += float(lote.get('cantidad_actual', 0))
 
             return self.success_response(data=stock_disponible_map)
@@ -666,67 +681,82 @@ class LoteProductoController(BaseController):
     def reservar_stock_para_pedido(self, pedido_id: int, items: list, usuario_id: int) -> dict:
         """
         Implementa "reserva dura": descuenta físicamente el stock de los lotes y
-        crea un registro de la operación con estado 'RESERVADO', con logging
-        detallado y una pseudo-transacción.
+        crea un registro de la operación con estado 'RESERVADO'.
+        FILTRA LOTES POR FECHA DE VENCIMIENTO vs FECHA REQUERIDO.
         """
+        from app.models.pedido import PedidoModel # Importación local para evitar ciclos
+
         logger.info(f"Iniciando reserva dura de stock para pedido ID: {pedido_id}")
-        lotes_modificados = [] # Para revertir en caso de fallo
+        lotes_modificados = []
 
         try:
+            # 1. Obtener la fecha requerida del pedido para validar vencimientos
+            pedido_model = PedidoModel()
+            pedido_res = pedido_model.find_by_id(pedido_id)
+            fecha_requerido_str = None
+
+            if pedido_res.get('success') and pedido_res.get('data'):
+                fecha_requerido_str = pedido_res['data'].get('fecha_requerido')
+
+            # Si no hay fecha requerida, usamos HOY como base (no aceptar vencidos)
+            fecha_filtro = fecha_requerido_str if fecha_requerido_str else date.today().isoformat()
+
             for item in items:
                 producto_id = item['producto_id']
                 cantidad_necesaria = float(item['cantidad'])
                 logger.info(f"Procesando item producto ID {producto_id}, cantidad requerida: {cantidad_necesaria}")
                 cantidad_restante_a_descontar = cantidad_necesaria
 
-                filtros_lotes = {'producto_id': producto_id, 'estado': 'DISPONIBLE', 'cantidad_actual': ('gt', 0)}
-                lotes_disponibles_res = self.model.find_all(filters=filtros_lotes, order_by='fecha_vencimiento.asc.nullslast')
-                if not lotes_disponibles_res.get('success'):
-                    raise Exception(f"No se pudieron obtener los lotes para el producto ID {producto_id}.")
+                # --- CONSULTA FILTRADA POR VENCIMIENTO ---
+                # Buscamos lotes DISPONIBLES, con stock > 0 y que NO venzan antes de la fecha requerida
+                lotes_query = self.model.db.table(self.model.get_table_name()) \
+                    .select('*') \
+                    .eq('producto_id', producto_id) \
+                    .eq('estado', 'DISPONIBLE') \
+                    .gt('cantidad_actual', 0) \
+                    .gte('fecha_vencimiento', fecha_filtro) \
+                    .order('fecha_vencimiento', desc=False) # FEFO (Primero los que vencen más cerca, pero validos)
 
-                for lote in lotes_disponibles_res.get('data', []):
+                lotes_disponibles_data = lotes_query.execute().data
+
+                if not lotes_disponibles_data:
+                    # Si no hay lotes validos por fecha, lanzamos error específico
+                    raise Exception(f"No hay lotes con fecha de vencimiento válida (>= {fecha_filtro}) para el producto ID {producto_id}.")
+
+                for lote in lotes_disponibles_data:
                     if cantidad_restante_a_descontar <= 0: break
 
-                    stock_fisico_en_lote = lote.get('cantidad_actual', 0)
+                    stock_fisico_en_lote = float(lote.get('cantidad_actual', 0))
                     cantidad_a_tomar_de_lote = min(stock_fisico_en_lote, cantidad_restante_a_descontar)
-                    if cantidad_a_tomar_de_lote <= 0: continue
 
-                    # Nunca permitir que se reserve más de lo que hay físicamente en el lote.
-                    if cantidad_a_tomar_de_lote > stock_fisico_en_lote:
-                        raise Exception(f"Intento de sobre-reserva en lote {lote['id_lote']}. Solicitado: {cantidad_a_tomar_de_lote}, Disponible: {stock_fisico_en_lote}.")
+                    if cantidad_a_tomar_de_lote <= 0: continue
 
                     # 1. Descontar stock del lote
                     nueva_cantidad_lote = stock_fisico_en_lote - cantidad_a_tomar_de_lote
                     update_data = {'cantidad_actual': nueva_cantidad_lote}
                     if nueva_cantidad_lote <= 0: update_data['estado'] = 'AGOTADO'
 
-                    logger.info(f"Intentando descontar {cantidad_a_tomar_de_lote} del lote ID {lote['id_lote']}. Nueva cantidad: {nueva_cantidad_lote}, Nuevo estado: {update_data.get('estado', 'DISPONIBLE')}")
+                    logger.info(f"Descontando {cantidad_a_tomar_de_lote} del lote {lote['id_lote']} (Vence: {lote['fecha_vencimiento']})")
+
                     update_result = self.model.update(lote['id_lote'], update_data, 'id_lote')
 
-                    if not update_result.get('success') or not update_result.get('data'):
-                        raise Exception(f"Fallo crítico al descontar stock del lote {lote['id_lote']}. La operación será revertida.")
+                    if not update_result.get('success'):
+                        raise Exception(f"Fallo crítico al descontar stock del lote {lote['id_lote']}.")
 
                     lotes_modificados.append({'lote_id': lote['id_lote'], 'cantidad_devuelta': cantidad_a_tomar_de_lote, 'estado_anterior': lote.get('estado')})
-                    logger.info(f"Descuento exitoso del lote ID {lote['id_lote']}.")
 
                     # 2. Crear registro de trazabilidad
                     datos_reserva = {
                         'lote_producto_id': lote['id_lote'], 'pedido_id': pedido_id, 'pedido_item_id': item.get('id'),
                         'cantidad_reservada': cantidad_a_tomar_de_lote, 'usuario_reserva_id': usuario_id, 'estado': 'RESERVADO'
                     }
-                    logger.info(f"Creando registro de reserva para lote {lote['id_lote']} y pedido {pedido_id}")
-                    resultado_creacion = self.reserva_model.create(self.reserva_schema.load(datos_reserva))
-
-                    if not resultado_creacion.get('success'):
-                        raise Exception(f"Se descontó stock del lote {lote['id_lote']} pero no se pudo crear el registro de reserva. La operación será revertida. Error: {resultado_creacion.get('error')}")
-                    logger.info(f"Registro de reserva creado exitosamente con ID {resultado_creacion.get('data', {}).get('id')}.")
+                    self.reserva_model.create(self.reserva_schema.load(datos_reserva))
 
                     cantidad_restante_a_descontar -= cantidad_a_tomar_de_lote
 
                 if cantidad_restante_a_descontar > 0.01:
-                    raise Exception(f"Stock insuficiente al momento de descontar para el producto ID {producto_id}. Faltaron {cantidad_restante_a_descontar} unidades. La operación será revertida.")
+                    raise Exception(f"Stock insuficiente (válido por fecha) para el producto ID {producto_id}. Faltaron {cantidad_restante_a_descontar} unidades.")
 
-            logger.info(f"Reserva dura de stock para pedido {pedido_id} completada exitosamente.")
             return {'success': True}
 
         except Exception as e:
@@ -1554,4 +1584,20 @@ class LoteProductoController(BaseController):
 
         except Exception as e:
             logger.error(f"Error crítico en liberar_reserva_especifica: {e}", exc_info=True)
+            return False
+
+
+    def devolver_stock_a_lote(self, lote_id: int, cantidad: float) -> bool:
+        """Devuelve stock físico a un lote sin tocar reservas."""
+        try:
+            lote = self.model.find_by_id(lote_id, 'id_lote').get('data')
+            if not lote: return False
+
+            nueva_cantidad = float(lote.get('cantidad_actual', 0)) + cantidad
+            estado = 'DISPONIBLE' if lote.get('estado') == 'AGOTADO' else lote.get('estado')
+
+            self.model.update(lote_id, {'cantidad_actual': nueva_cantidad, 'estado': estado}, 'id_lote')
+            return True
+        except Exception as e:
+            logger.error(f"Error devolviendo stock a lote {lote_id}: {e}")
             return False

@@ -6,13 +6,19 @@ ENV PYTHONUNBUFFERED=1
 
 # Instalar dependencias del sistema
 RUN apt-get update && apt-get install -y \
+    # 🔧 Toolchain para compilar extensiones (NECESARIO para pycairo)
+    build-essential \
+    gcc \
+    pkg-config \
+    libcairo2-dev \
+    libpango1.0-dev \
+    libgdk-pixbuf2.0-dev \
     libgl1 \
     libglib2.0-0 \
     libpng16-16 \
     libjpeg62-turbo \
     libtiff5 \
     libopenblas0 \
-    libcairo2-dev \
     libx11-6 \
     libsm6 \
     libxext6 \
@@ -34,11 +40,12 @@ RUN pip install --no-cache-dir \
 # ✅ Verificar que dlib se instaló correctamente
 RUN python -c "import dlib; print('dlib version:', dlib.__version__)"
 
+
 # ✅ Instalar face_recognition_models
 RUN pip install --no-cache-dir \
     git+https://github.com/ageitgey/face_recognition_models
 
-# ✅ Instalar requirements
+# ✅ Instalar requirements (incluye xhtml2pdf y reportlab)
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ✅ Verificar que face_recognition funciona
@@ -48,5 +55,4 @@ COPY . .
 
 EXPOSE 5000
 
-# Reemplaza tu CMD original por este:
 CMD ["gunicorn", "-b", "0.0.0.0:5000", "--worker-class=gthread", "--workers=1", "--threads=8", "main:app"]

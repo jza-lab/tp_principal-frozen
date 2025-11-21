@@ -200,7 +200,20 @@ class PedidoController(BaseController):
             auto_aprobar_produccion = True
 
             producto_ids_pedido = [item['producto_id'] for item in items_data]
-            stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(producto_ids_pedido)
+
+            # --- CAMBIO AQUÍ: Obtener fecha para filtrar stock ---
+            fecha_entrega_pedido = form_data.get('fecha_requerido')
+            fecha_obj_filtro = None
+            if fecha_entrega_pedido:
+                 fecha_obj_filtro = datetime.fromisoformat(fecha_entrega_pedido).date()
+
+            # Pasamos la fecha al controlador de lotes
+            stock_global_resp, _ = self.lote_producto_controller.obtener_stock_disponible_real_para_productos(
+                producto_ids_pedido,
+                fecha_requisito=fecha_obj_filtro
+            )
+            # ----------------------------------------------------
+
             if not stock_global_resp.get('success'):
                 return self.error_response("No se pudo verificar el stock para los productos del pedido.", 500)
             stock_global_map = stock_global_resp.get('data', {})
@@ -1330,9 +1343,8 @@ class PedidoController(BaseController):
 
     def _intentar_reasignar_stock(self, producto_id: int, cantidad_necesaria: int, fecha_limite_urgente: date) -> int:
         """
-        Intenta liberar stock de pedidos menos urgentes.
-        Si la víctima ya tiene una OP, actualiza esa OP.
-        Si no tiene OP (estaba ALISTADO), crea una nueva OP y pasa a EN_PRODUCCION.
+        Intenta liberar stock de pedidos menos urgentes (Arbitraje).
+        Filtra estrictamente por producto_id a través de la relación con lotes.
         """
         cantidad_recuperada = 0
         fecha_limite_str = fecha_limite_urgente.isoformat()
@@ -1343,122 +1355,176 @@ class PedidoController(BaseController):
         reservas_candidatas = []
 
         try:
+            # Aseguramos que el ID sea entero
+            prod_id_int = int(producto_id)
+
+            # CONSULTA CORREGIDA:
+            # 1. Usamos !inner en lotes_productos para forzar que el lote exista.
+            # 2. Usamos .filter() explícito para la tabla unida.
             response = self.reserva_producto_model.db.table('reservas_productos') \
-                .select('id, cantidad_reservada, pedido_id, pedido_item_id, lotes_productos!inner(producto_id), pedidos!inner(id, fecha_requerido)') \
-                .eq('lotes_productos.producto_id', producto_id) \
+                .select('id, cantidad_reservada, pedido_id, pedido_item_id, lote_producto_id, lotes_productos!inner(producto_id), pedidos!inner(id, fecha_requerido)') \
                 .eq('estado', 'RESERVADO') \
                 .gt('pedidos.fecha_requerido', fecha_limite_str) \
+                .filter('lotes_productos.producto_id', 'eq', prod_id_int) \
                 .order('fecha_requerido', desc=True, foreign_table='pedidos') \
                 .execute()
-            reservas_candidatas = response.data if response.data else []
+
+            raw_data = response.data if response.data else []
+
+            # --- FILTRO DE SEGURIDAD EN MEMORIA ---
+            # Verificamos manualmente que lo que trajo la DB sea del producto correcto.
+            for r in raw_data:
+                lote_data = r.get('lotes_productos')
+                if lote_data and lote_data.get('producto_id') == prod_id_int:
+                    reservas_candidatas.append(r)
+                else:
+                    logger.warning(f"[ARBITRAJE] Ignorando reserva {r['id']} porque es del producto {lote_data.get('producto_id')} (Esperado: {prod_id_int})")
+
+            logger.info(f"[ARBITRAJE] Candidatos VÁLIDOS encontrados: {len(reservas_candidatas)}")
+
         except Exception as e:
-            logger.error(f"[ARBITRAJE] Error consulta DB: {e}")
+            logger.error(f"[ARBITRAJE] Error consulta DB: {e}", exc_info=True)
             return 0
 
         if not reservas_candidatas:
             return 0
 
-        # Importación diferida para evitar ciclos y Controller
+        # Importación diferida
         from app.controllers.orden_produccion_controller import OrdenProduccionController
-        from app.models.receta import RecetaModel
         op_ctrl = OrdenProduccionController()
 
         for i, reserva in enumerate(reservas_candidatas):
             if cantidad_recuperada >= cantidad_necesaria:
                 break
 
-            cantidad_a_liberar = float(reserva.get('cantidad_reservada', 0))
+            cantidad_reserva_actual = float(reserva.get('cantidad_reservada', 0))
             pedido_afectado_id = reserva.get('pedido_id')
             item_afectado_id = reserva.get('pedido_item_id')
             reserva_id = reserva.get('id')
+            lote_id = reserva.get('lote_producto_id') # Esto ahora vendrá correctamente gracias al select
 
-            logger.info(f"[ARBITRAJE] Procesando víctima: Pedido {pedido_afectado_id}, Item {item_afectado_id}")
+            falta_para_meta = cantidad_necesaria - cantidad_recuperada
+            cantidad_a_robar = min(cantidad_reserva_actual, falta_para_meta)
 
-            # 1. Liberar la reserva
-            exito_liberacion = self.lote_producto_controller.liberar_reserva_especifica(reserva_id)
+            logger.info(f"[ARBITRAJE] Víctima: Pedido {pedido_afectado_id}. Tiene {cantidad_reserva_actual}, Robo {cantidad_a_robar}")
 
-            if exito_liberacion:
-                cantidad_recuperada += cantidad_a_liberar
+            exito_operacion = False
 
-                # 2. Actualizar la Víctima
+            # CASO A: Robo Parcial
+            if cantidad_reserva_actual > cantidad_a_robar:
+                try:
+                    nueva_cantidad_reserva = cantidad_reserva_actual - cantidad_a_robar
+                    self.reserva_producto_model.update(reserva_id, {'cantidad_reservada': nueva_cantidad_reserva}, 'id')
+
+                    # Devolver stock al lote físico
+                    if lote_id:
+                        self.lote_producto_controller.devolver_stock_a_lote(lote_id, cantidad_a_robar)
+                        exito_operacion = True
+                        logger.info(f"[ARBITRAJE] Robo parcial exitoso.")
+                    else:
+                        logger.error(f"[ARBITRAJE] Error: No se obtuvo lote_id para la reserva {reserva_id}")
+
+                except Exception as e:
+                    logger.error(f"[ARBITRAJE] Fallo en robo parcial: {e}")
+
+            # CASO B: Robo Total
+            else:
+                exito_operacion = self.lote_producto_controller.liberar_reserva_especifica(reserva_id)
+
+            if exito_operacion:
+                cantidad_recuperada += cantidad_a_robar
+
+                # Gestionar impacto en la víctima (Crear/Actualizar OP)
                 if item_afectado_id:
                     try:
-                        # Estado por defecto: PENDIENTE (Así, si falla la OP, no se queda en ALISTADO)
-                        nuevo_estado_item = 'PENDIENTE'
-                        op_id_final = None
-
-                        # Obtener datos del item
-                        item_victima_res = self.model.db.table('pedido_items').select('*').eq('id', item_afectado_id).single().execute()
-                        item_victima = item_victima_res.data if item_victima_res.data else None
-
-                        if item_victima:
-                            # CASO A: Ya tenía OP -> Actualizarla
-                            if item_victima.get('orden_produccion_id'):
-                                op_id = item_victima['orden_produccion_id']
-                                op_actual_res = self.op_model.find_by_id(op_id)
-                                if op_actual_res.get('success'):
-                                    op_data = op_actual_res['data']
-                                    nueva_cantidad = float(op_data.get('cantidad_planificada', 0)) + cantidad_a_liberar
-                                    self.op_model.update(op_id, {'cantidad_planificada': nueva_cantidad}, 'id')
-                                    nuevo_estado_item = 'EN_PRODUCCION'
-                                    logger.info(f"[ARBITRAJE] OP {op_id} actualizada a {nueva_cantidad}")
-
-                            # CASO B: NO tenía OP (estaba ALISTADO) -> CREAR NUEVA OP
-                            else:
-                                try:
-                                    # 1. Buscar Receta Activa (CRITICO: Sin esto falla crear_orden)
-                                    receta_res = RecetaModel().find_all({'producto_id': producto_id, 'activa': True}, limit=1)
-                                    receta_id = receta_res['data'][0]['id'] if receta_res.get('success') and receta_res.get('data') else None
-
-                                    if receta_id:
-                                        pedido_padre = self.model.find_by_id(pedido_afectado_id).get('data', {})
-                                        
-                                        datos_op = {
-                                            'producto_id': producto_id,
-                                            'receta_id': receta_id,
-                                            'cantidad': cantidad_a_liberar,
-                                            'fecha_planificada': date.today().isoformat(),
-                                            'prioridad': 'ALTA',
-                                            'fecha_meta': pedido_padre.get('fecha_requerido'),
-                                            'productos': [
-                                                {
-                                                    'id': producto_id,
-                                                    'cantidad': cantidad_a_liberar
-                                                }
-                                            ]
-                                        }
-
-                                        # Crear OP
-                                        op_resp = op_ctrl.crear_orden(datos_op, 1) # Usuario sistema 1
-                                        resultado = op_resp[0] if isinstance(op_resp, tuple) else op_resp
-
-                                        if resultado.get('success') and resultado.get('data'):
-                                            op_creada = resultado['data'][0]
-                                            op_id_final = op_creada['id']
-                                            nuevo_estado_item = 'EN_PRODUCCION'
-                                            logger.info(f"[ARBITRAJE] Nueva OP {op_id_final} creada.")
-                                        else:
-                                            logger.error(f"[ARBITRAJE] Fallo creando OP: {resultado.get('error')}")
-                                    else:
-                                        logger.warning(f"[ARBITRAJE] No hay receta activa para Prod {producto_id}. Item quedará PENDIENTE.")
-
-                                except Exception as e_op:
-                                    logger.error(f"[ARBITRAJE] Excepción creando OP: {e_op}")
-                                    # Si falla, nuevo_estado_item sigue siendo 'PENDIENTE', lo cual es seguro.
-
-                        # C) Actualizar Item (ESTO DEBE CORRER SIEMPRE)
-                        update_data = {'estado': nuevo_estado_item}
-                        if op_id_final:
-                            update_data['orden_produccion_id'] = op_id_final
-
-                        # Si estaba ALISTADO y falló la OP, esto lo fuerza a PENDIENTE, corrigiendo el error visual.
-                        self.model.update_item(item_afectado_id, update_data)
-
-                        # D) Recalcular estado global
-                        self.model.actualizar_estado_agregado(pedido_afectado_id)
-
-                    except Exception as update_error:
-                         logger.error(f"[ARBITRAJE] Error actualizando víctima {item_afectado_id}: {update_error}")
+                        self._gestionar_impacto_victima(item_afectado_id, pedido_afectado_id, producto_id, cantidad_a_robar)
+                    except Exception as e:
+                        logger.error(f"[ARBITRAJE] Error gestionando impacto víctima: {e}")
 
         logger.info(f"[ARBITRAJE] FIN. Recuperado: {cantidad_recuperada}")
         return cantidad_recuperada
+
+    def _gestionar_impacto_victima(self, item_id, pedido_id, producto_id, cantidad_robada):
+        """
+        Maneja la creación/actualización de OP para la víctima tras el robo de stock.
+        Se asegura de cubrir la cantidad robada con producción.
+        """
+        try:
+            # 1. Obtener datos del ítem
+            item_res = self.model.db.table('pedido_items').select('*').eq('id', item_id).single().execute()
+            item = item_res.data
+
+            nuevo_estado = 'PENDIENTE' # Default fallback
+            op_id_final = None
+
+            # 2. Si ya tenía OP, sumarle lo robado
+            if item.get('orden_produccion_id'):
+                op_id = item['orden_produccion_id']
+                # Obtener OP actual para sumar
+                op_actual_res = self.op_model.find_by_id(op_id)
+                if op_actual_res.get('success'):
+                    op_data = op_actual_res['data']
+                    cantidad_actual_op = float(op_data.get('cantidad_planificada', 0))
+                    nueva_cantidad_op = cantidad_actual_op + cantidad_robada
+
+                    self.op_model.update(op_id, {'cantidad_planificada': nueva_cantidad_op}, 'id')
+                    logger.info(f"[ARBITRAJE] OP existente {op_id} actualizada: {cantidad_actual_op} -> {nueva_cantidad_op}")
+
+                    nuevo_estado = 'EN_PRODUCCION'
+                    op_id_final = op_id
+
+            # 3. Si NO tenía OP (era puro stock), crear OP nueva por lo robado
+            else:
+                from app.controllers.orden_produccion_controller import OrdenProduccionController
+                op_ctrl = OrdenProduccionController()
+
+                # Buscar Receta Activa
+                receta_res = self.receta_model.find_all({'producto_id': producto_id, 'activa': True}, limit=1)
+                if receta_res.get('success') and receta_res.get('data'):
+                    receta_id = receta_res['data'][0]['id']
+
+                    # Buscar fecha requerido del pedido padre
+                    pedido_padre = self.model.find_by_id(pedido_id).get('data', {})
+                    fecha_meta = pedido_padre.get('fecha_requerido') or date.today().isoformat()
+
+                    datos_op = {
+                        'producto_id': producto_id,
+                        'receta_id': receta_id,
+                        'cantidad': cantidad_robada,
+                        'fecha_planificada': date.today().isoformat(),
+                        'prioridad': 'ALTA',
+                        'fecha_meta': fecha_meta,
+                        # CORRECCIÓN: Agregar la lista de productos que espera el controlador
+                        'productos': [
+                            {'id': producto_id, 'cantidad': cantidad_robada}
+                        ]
+                    }
+
+                    # Crear OP (usamos ID 1 o el actual si es posible)
+                    op_res = op_ctrl.crear_orden(datos_op, 1)
+
+                    # Manejar respuesta de creación (puede venir como lista)
+                    resultado = op_res[0] if isinstance(op_res, tuple) else op_res
+                    if resultado.get('success'):
+                        op_creada = resultado['data'][0] if isinstance(resultado.get('data'), list) else resultado.get('data')
+                        op_id_final = op_creada['id']
+                        nuevo_estado = 'EN_PRODUCCION'
+                        logger.info(f"[ARBITRAJE] Nueva OP {op_id_final} creada por {cantidad_robada}u para víctima.")
+                    else:
+                        logger.error(f"[ARBITRAJE] Fallo creando OP víctima: {resultado.get('error')}")
+                else:
+                    logger.warning(f"[ARBITRAJE] No hay receta activa para Prod {producto_id}. Víctima queda sin cobertura.")
+
+            # 5. Aplicar actualización al ítem
+            update_data = {'estado': nuevo_estado}
+            if op_id_final:
+                update_data['orden_produccion_id'] = op_id_final
+
+            self.model.update_item(item_id, update_data)
+            logger.info(f"[ARBITRAJE] Ítem víctima {item_id} actualizado a {nuevo_estado}")
+
+            # 6. Recalcular estado global del pedido víctima
+            self.model.actualizar_estado_agregado(pedido_id)
+
+        except Exception as e:
+            logger.error(f"[ARBITRAJE] Error crítico gestionando impacto víctima: {e}", exc_info=True)

@@ -14,6 +14,7 @@ import time
 import math
 import requests  # <-- AÑADIR
 import threading # <-- AÑADIR
+from app.models.control_calidad_insumo import ControlCalidadInsumoModel
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class OrdenCompraController:
         self.usuario_controller = UsuarioController()
         self.registro_controller = RegistroController()
         self.reclamo_proveedor_controller = ReclamoProveedorController()
+        self.control_calidad_insumo_model = ControlCalidadInsumoModel()
 
 
     def _parse_form_data(self, form_data):
@@ -990,14 +992,22 @@ class OrdenCompraController:
             if not codigo_oc_padre:
                 return {'success': False, 'error': 'La orden padre no tiene un código de OC para trazar los lotes.'}
 
-            documento_ingreso = f"OC-{codigo_oc_padre}"
+            # --- CORRECCIÓN AQUÍ ---
+            # Usamos el código exacto, ya que los lotes se guardaron con este mismo string.
+            documento_ingreso = codigo_oc_padre
+            # -----------------------
 
             items_faltantes = []
+
+            # Añadimos un pequeño delay para asegurar que Supabase haya indexado los lotes recién creados
+            time.sleep(1)
 
             lotes_creados_res = self.inventario_controller.inventario_model.find_all(
                 filters={'documento_ingreso': documento_ingreso}
             )
             lotes_creados = lotes_creados_res.get('data', []) if lotes_creados_res.get('success') else []
+
+            logger.info(f"[OC HIJA] Buscando lotes con doc '{documento_ingreso}'. Encontrados: {len(lotes_creados)}")
 
             lotes_por_insumo = {}
             for lote in lotes_creados:
@@ -1010,18 +1020,19 @@ class OrdenCompraController:
                 item_insumo_id = item.get('insumo_id')
                 solicitado = float(item.get('cantidad_solicitada', 0))
 
-                # --- LÓGICA CORREGIDA PARA OC HIJA ---
-                # Calcular el total que SÍ fue aprobado O puesto en cuarentena
                 lotes_del_item = lotes_por_insumo.get(item_insumo_id, [])
 
-                # Sumamos solo lo que fue aprobado (cantidad_actual del lote)
+                # Sumamos lo que realmente entró al stock (cantidad_actual)
+                # Si hubo rechazo o cuarentena, cantidad_actual será menor a lo recibido físicamente
                 total_ingresado = sum(
                     float(lote.get('cantidad_actual', 0))
                     for lote in lotes_del_item
                 )
 
+                # Calculamos el faltante
                 cantidad_a_reordenar = solicitado - total_ingresado
-                # --- FIN LÓGICA CORREGIDA ---
+
+                logger.info(f"[OC HIJA] Insumo {item_insumo_id}: Solicitado {solicitado} - Ingresado {total_ingresado} = Faltante {cantidad_a_reordenar}")
 
                 if cantidad_a_reordenar > 0.01:
                     items_faltantes.append({
@@ -1038,7 +1049,6 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error creando OC hija para la OC {orden_padre_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
-    # --- FIN DE LA MODIFICACIÓN ---
 
     def _crear_orden_complementaria(self, orden_original_data, items_faltantes, usuario_id):
         nueva_orden_data = {
