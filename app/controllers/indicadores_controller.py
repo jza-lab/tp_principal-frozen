@@ -17,6 +17,7 @@ from app.models.lote_producto import LoteProductoModel
 from app.models.producto import ProductoModel
 from app.models.nota_credito import NotaCreditoModel
 from app.controllers.reporte_produccion_controller import ReporteProduccionController
+from app.controllers.reporte_stock_controller import ReporteStockController
 from decimal import Decimal
 from app.utils import estados
 import logging
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 class IndicadoresController:
     def __init__(self):
         self.reporte_produccion_controller = ReporteProduccionController()
+        self.reporte_stock_controller = ReporteStockController()
         self.orden_produccion_model = OrdenProduccionModel()
         self.control_calidad_producto_model = ControlCalidadProductoModel()
         self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
@@ -90,7 +92,7 @@ class IndicadoresController:
         """
         return {}
 
-    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=5):
+    def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=5, **kwargs):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
         # Determinar contexto para la evolución
@@ -741,27 +743,134 @@ class IndicadoresController:
         }
         
     # --- CATEGORÍA: INVENTARIO ---
-    def obtener_datos_inventario(self, semana=None, mes=None, ano=None): # Periodo se ignora aquí
-        # Para la rotación, usamos un período fijo (ej. último año) para que sea consistente
-        hoy = datetime.now()
-        fecha_inicio = hoy - timedelta(days=365)
-        fecha_fin = hoy
+    def obtener_datos_inventario(self, semana=None, mes=None, ano=None, top_n=5, **kwargs): # Periodo se ignora aquí
+        top_n = top_n if top_n else 5
         
-        rotacion = self._calcular_rotacion_inventario(fecha_inicio, fecha_fin)
-        cobertura = self._calcular_cobertura_stock()
+        # --- 1. KPIs Numeric ---
+        insumos_criticos_res = self.reporte_stock_controller.obtener_insumos_stock_critico()
+        insumos_criticos_list = insumos_criticos_res.get('data', []) if insumos_criticos_res.get('success') else []
+        insumos_criticos_count = len(insumos_criticos_list)
+
+        productos_cero_res = self.reporte_stock_controller.obtener_productos_sin_stock()
+        productos_cero_list = productos_cero_res.get('data', []) if productos_cero_res.get('success') else []
+        productos_cero_count = len(productos_cero_list)
+
+        productos_venc_count = self.reporte_stock_controller.obtener_conteo_vencimiento_porcentual('producto', 0.15)
+        insumos_venc_count = self.reporte_stock_controller.obtener_conteo_vencimiento_porcentual('insumo', 0.15)
+
+        # Listas detalladas para gráficos/tablas
+        # Insumos próximos a vencer
+        insumos_venc_res = self.reporte_stock_controller.obtener_lotes_insumos_a_vencer(dias_horizonte=30)
+        insumos_venc_list = insumos_venc_res.get('data', []) if insumos_venc_res.get('success') else []
+        
+        # Productos próximos a vencer
+        productos_venc_res = self.reporte_stock_controller.obtener_lotes_productos_a_vencer(dias_horizonte=30)
+        productos_venc_list = productos_venc_res.get('data', []) if productos_venc_res.get('success') else []
+
+        kpis_inventario = {
+            "insumos_criticos": insumos_criticos_count,
+            "productos_cero": productos_cero_count,
+            "productos_proximos_vencimiento": productos_venc_count,
+            "insumos_proximos_vencimiento": insumos_venc_count
+        }
+
+        # --- 2. Antiguedad Stock (Modificado para contar lotes) ---
         antiguedad_insumos = self.obtener_antiguedad_stock('insumo')
         antiguedad_productos = self.obtener_antiguedad_stock('producto')
 
-        kpis_inventario = {
-            "rotacion_inventario": rotacion if isinstance(rotacion, dict) else {"valor": 0, "cogs": 0, "inventario_valorizado": 0}
+        # --- 3. Nuevos Gráficos ---
+        # Valor del stock de insumos (Top N)
+        valor_insumos_res = self.reporte_stock_controller.obtener_valor_stock_insumos(top_n=top_n)
+        valor_insumos_data = valor_insumos_res.get('data', {}) if valor_insumos_res.get('success') else {}
+        valor_insumos_chart = {
+            "labels": list(valor_insumos_data.keys()), 
+            "data": list(valor_insumos_data.values())
+        }
+        
+        # Valor del stock de productos (Top N) - Agregado a pedido
+        valor_productos_res = self.reporte_stock_controller.obtener_valor_stock_productos(top_n=top_n)
+        valor_productos_data = valor_productos_res.get('data', {}) if valor_productos_res.get('success') else {}
+        valor_productos_chart = {
+            "labels": list(valor_productos_data.keys()),
+            "data": list(valor_productos_data.values())
         }
 
-        # Se retorna una estructura defensiva que coincide con el frontend
+        # Composición del stock (Insumos)
+        comp_insumos_res = self.reporte_stock_controller.obtener_composicion_stock_insumos()
+        comp_insumos_data = comp_insumos_res.get('data', {}) if comp_insumos_res.get('success') else {}
+        comp_insumos_chart = {
+            "labels": list(comp_insumos_data.keys()),
+            "data": list(comp_insumos_data.values())
+        }
+
+        # Distribución por estado (Productos)
+        dist_estado_res = self.reporte_stock_controller.obtener_distribucion_stock_por_estado_producto()
+        dist_estado_data = dist_estado_res.get('data', {}) if dist_estado_res.get('success') else {}
+        dist_estado_chart = {
+            "labels": list(dist_estado_data.keys()),
+            "data": list(dist_estado_data.values())
+        }
+
+        # Cobertura de Stock (Top Productos con menos cobertura)
+        cobertura_res = self.reporte_stock_controller.obtener_cobertura_stock(dias_periodo=30)
+        cobertura_data_raw = cobertura_res.get('data', {}) if cobertura_res.get('success') else {}
+        # Tomar los 5 con menor cobertura pero > 0 para alertas, o general
+        cobertura_chart = {
+            "labels": list(cobertura_data_raw.keys())[:10],
+            "data": list(cobertura_data_raw.values())[:10]
+        }
+        
+        # Gráficos de Stock Crítico (Barras: Actual vs Minimo)
+        # Limitamos a top N para no saturar el gráfico
+        stock_critico_chart = {
+            "labels": [x['nombre'] for x in insumos_criticos_list[:top_n]],
+            "actual": [x['stock_actual'] for x in insumos_criticos_list[:top_n]],
+            "minimo": [x['stock_min'] for x in insumos_criticos_list[:top_n]]
+        }
+        
+        # Gráfico de Próximos a Vencer (Barras: Días restantes)
+        # Calculamos días restantes para ordenarlos
+        today = date.today()
+        
+        def get_days_left(date_str):
+            try:
+                d = datetime.fromisoformat(str(date_str)).date() if 'T' in str(date_str) else datetime.strptime(str(date_str), '%Y-%m-%d').date()
+                return (d - today).days
+            except: return 0
+
+        insumos_venc_processed = sorted([
+            {'nombre': x.get('insumo_nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
+            for x in insumos_venc_list
+        ], key=lambda k: k['dias'])[:top_n]
+
+        productos_venc_processed = sorted([
+            {'nombre': x.get('producto_nombre') or x.get('producto', {}).get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
+            for x in productos_venc_list
+        ], key=lambda k: k['dias'])[:top_n]
+
+        insumos_venc_chart = {
+            "labels": [x['nombre'] for x in insumos_venc_processed],
+            "data": [x['dias'] for x in insumos_venc_processed]
+        }
+        
+        productos_venc_chart = {
+            "labels": [x['nombre'] for x in productos_venc_processed],
+            "data": [x['dias'] for x in productos_venc_processed]
+        }
+
         return {
+            "meta": {"top_n": top_n},
             "kpis_inventario": kpis_inventario,
-            "cobertura_stock": cobertura if isinstance(cobertura, dict) else {"valor": 0, "insumo_nombre": "N/A", "stock": 0, "consumo_diario": 0},
-            "antiguedad_stock_insumos": antiguedad_insumos if isinstance(antiguedad_insumos, dict) else {"labels": [], "data": []},
-            "antiguedad_stock_productos": antiguedad_productos if isinstance(antiguedad_productos, dict) else {"labels": [], "data": []},
+            "antiguedad_stock_insumos": antiguedad_insumos,
+            "antiguedad_stock_productos": antiguedad_productos,
+            "valor_stock_insumos_chart": valor_insumos_chart,
+            "valor_stock_productos_chart": valor_productos_chart,
+            "composicion_stock_insumos_chart": comp_insumos_chart,
+            "distribucion_estado_productos_chart": dist_estado_chart,
+            "cobertura_chart": cobertura_chart,
+            "stock_critico_chart": stock_critico_chart,
+            "insumos_vencimiento_chart": insumos_venc_chart,
+            "productos_vencimiento_chart": productos_venc_chart
         }
         
     # --- MÉTODOS DE CÁLCULO OPTIMIZADOS ---
@@ -1281,35 +1390,67 @@ class IndicadoresController:
         return {"labels": labels, "data": data, "line_data": [round(p, 2) for p in acum_porc]}
 
     def obtener_antiguedad_stock(self, tipo='insumo'):
+        """
+        Devuelve el conteo de lotes por rango de antigüedad.
+        Adicionalmente, retorna información detallada para los tooltips (cantidad total).
+        """
         hoy = datetime.now().date()
-        categorias = {"0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "+90 días": 0.0}
-        empty_return = {"labels": list(categorias.keys()), "data": [0] * len(categorias)}
+        # Estructura: {Rango: {count: int, quantity: float}}
+        categorias = {
+            "0-30 días": {"count": 0, "quantity": 0.0},
+            "31-60 días": {"count": 0, "quantity": 0.0},
+            "61-90 días": {"count": 0, "quantity": 0.0},
+            "+90 días": {"count": 0, "quantity": 0.0}
+        }
+        
+        def asignar_categoria(dias, cantidad):
+            key = "+90 días"
+            if 0 <= dias <= 30: key = "0-30 días"
+            elif 31 <= dias <= 60: key = "31-60 días"
+            elif 61 <= dias <= 90: key = "61-90 días"
+            
+            categorias[key]["count"] += 1
+            categorias[key]["quantity"] += cantidad
 
         if tipo == 'insumo':
             lotes_res = self.insumo_inventario_model.get_all_lotes_for_view()
-            if not lotes_res.get('success'): return empty_return
-            for lote in lotes_res.get('data', []):
-                if not (fecha_str := lote.get('fecha_ingreso')): continue
-                antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
-                valor = float(lote.get('precio_unitario') or 0.0) * float(lote.get('cantidad', 0))
-                if 0 <= antiguedad <= 30: categorias["0-30 días"] += valor
-                elif 31 <= antiguedad <= 60: categorias["31-60 días"] += valor
-                elif 61 <= antiguedad <= 90: categorias["61-90 días"] += valor
-                else: categorias["+90 días"] += valor
+            if lotes_res.get('success'):
+                for lote in lotes_res.get('data', []):
+                    if not (fecha_str := lote.get('fecha_ingreso')): continue
+                    # Manejo robusto de fechas (con o sin hora)
+                    try:
+                        if 'T' in fecha_str: dt = datetime.fromisoformat(fecha_str).date()
+                        else: dt = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
+                    except ValueError: continue
+
+                    antiguedad = (hoy - dt).days
+                    cantidad = float(lote.get('cantidad', 0))
+                    asignar_categoria(antiguedad, cantidad)
+
         else: # producto
             lotes_res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
-            if not lotes_res.get('success'): return empty_return
-            lotes_data = lotes_res.get('data', [])
+            if lotes_res.get('success'):
+                lotes_data = lotes_res.get('data', [])
+                for lote in lotes_data:
+                    # Intentar con fecha_produccion o fecha_fabricacion (alias)
+                    fecha_str = lote.get('fecha_produccion') or lote.get('fecha_fabricacion')
+                    if not fecha_str: continue
+
+                    try:
+                        if 'T' in fecha_str: dt = datetime.fromisoformat(fecha_str).date()
+                        else: dt = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
+                    except ValueError: continue
+                    
+                    antiguedad = (hoy - dt).days
+                    cantidad = float(lote.get('cantidad', 0))
+                    asignar_categoria(antiguedad, cantidad)
             
-            for lote in lotes_data:
-                if not (fecha_str := lote.get('fecha_fabricacion')): continue
-                antiguedad = (hoy - datetime.fromisoformat(fecha_str).date()).days
-                
-                valor = float(lote.get('costo_unitario_estimado') or 0.0) * float(lote.get('cantidad_actual', 0)) 
-                
-                if 0 <= antiguedad <= 30: categorias["0-30 días"] += valor
-                elif 31 <= antiguedad <= 60: categorias["31-60 días"] += valor
-                elif 61 <= antiguedad <= 90: categorias["61-90 días"] += valor
-                else: categorias["+90 días"] += valor
-            
-        return {"labels": list(categorias.keys()), "data": list(categorias.values())}
+        labels = list(categorias.keys())
+        data_counts = [categorias[k]["count"] for k in labels]
+        data_quantities = [categorias[k]["quantity"] for k in labels]
+        
+        return {
+            "labels": labels,
+            "data": data_counts,
+            "quantities": data_quantities
+        }

@@ -1,107 +1,311 @@
-const inventarioColors = ['#73C0DE', '#3BA272', '#FC8452', '#9A60B4'];
+const inventarioColors = ['#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC', '#91CC75', '#EE6666'];
 
-updateAntiguedadInsumosChart = () => {
-    const chartDom = document.getElementById('antiguedad-insumos-chart');
-    if (!chartDom) return;
+// --- HELPERS ---
+
+function formatCurrency(value) {
+    return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value);
+}
+
+function createTopNSelector(id, currentValue, onChangeCallback) {
+    const select = document.createElement('select');
+    select.className = 'form-select form-select-sm d-inline-block w-auto ms-2 border-0 bg-light fw-bold text-primary';
+    select.style.cursor = 'pointer';
     
-    const chart = echarts.getInstanceByDom(chartDom) || echarts.init(chartDom);
-    const downloadBtn = document.getElementById('download-antiguedad-insumos');
+    [5, 10, 15, 20].forEach(n => {
+        const option = document.createElement('option');
+        option.value = n;
+        option.text = `Top ${n}`;
+        if (parseInt(currentValue) === n) option.selected = true;
+        select.appendChild(option);
+    });
 
-    chart.showLoading();
-    fetch(`/reportes/api/inventario/antiguedad_stock?tipo=insumo`)
-        .then(response => response.json())
-        .then(data => {
-            chart.hideLoading();
-            if (data.error || data.data.reduce((a, b) => a + b, 0) === 0) {
-                chart.setOption({ title: { text: 'No se encontraron datos', left: 'center', top: 'center' }, series: [] }, true);
-                document.getElementById('antiguedad-insumos-descripcion').textContent = 'No hay datos de stock de insumos.';
-                return;
+    select.addEventListener('change', (e) => onChangeCallback(e.target.value));
+    return select;
+}
+
+// --- MAIN RENDER FUNCTION ---
+
+window.renderInventario = function(data, container, utils) {
+    const { renderKpiCard, createChart, createSmartCardHTML } = utils || window;
+    const topN = data.meta?.top_n || 5;
+
+    container.innerHTML = ''; // Clear container
+
+    // Helper to check valid data
+    const hasData = (dataset) => dataset && dataset.data && dataset.data.some(v => v > 0);
+
+    // --- SECCIÓN: INSUMOS ---
+    
+    const sectionInsumos = document.createElement('div');
+    sectionInsumos.className = 'mb-5';
+    sectionInsumos.innerHTML = `<h5 class="mb-4 text-primary border-bottom pb-2"><i class="bi bi-box-seam me-2"></i>Gestión de Insumos</h5>`;
+    container.appendChild(sectionInsumos);
+
+    // 1. KPIs Insumos
+    let kpisInsumos = '<div class="row g-3 mb-4">';
+    kpisInsumos += renderKpiCard(
+        'Insumos Críticos', 
+        data.kpis_inventario.insumos_criticos, 
+        'Bajo stock mín.', 
+        'bi-exclamation-triangle-fill text-warning', 
+        'Insumos con stock actual inferior al mínimo configurado.'
+    );
+    kpisInsumos += renderKpiCard(
+        'Ins. Vencimiento', 
+        data.kpis_inventario.insumos_proximos_vencimiento, 
+        'Próximos a vencer', 
+        'bi-alarm-fill text-danger', 
+        'Lotes que han consumido >85% de su vida útil.'
+    );
+    kpisInsumos += '</div>';
+    sectionInsumos.innerHTML += kpisInsumos;
+
+    // 2. Gráficos Insumos
+    let chartsInsumos = '<div class="row g-3">';
+    
+    // Antigüedad (Donut)
+    chartsInsumos += '<div class="col-lg-4 col-md-6">';
+    chartsInsumos += createSmartCardHTML('antiguedad-insumos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', 'Permite identificar lotes inmovilizados.', 'Porcentaje de lotes en cada rango de antigüedad.');
+    chartsInsumos += '</div>';
+
+    // Composición (Pie)
+    chartsInsumos += '<div class="col-lg-4 col-md-6">';
+    chartsInsumos += createSmartCardHTML('composicion-insumos-chart', 'Composición por Categoría', 'Volumen de inventario.', 'Panorama de los tipos de insumos.', 'Cantidad de stock agrupada por categoría.');
+    chartsInsumos += '</div>';
+
+    // Valor Stock (Bar - Top N)
+    chartsInsumos += '<div class="col-lg-4 col-md-12">';
+    chartsInsumos += createSmartCardHTML('valor-stock-insumos-chart', 'Valor Stock Insumos', 'Mayor inversión inmovilizada.', 'Foco en insumos de alto valor.', 'Stock Actual * Precio Unitario.');
+    chartsInsumos += '</div>';
+
+    // Stock Crítico (Bar Comparison)
+    chartsInsumos += '<div class="col-lg-6">';
+    chartsInsumos += createSmartCardHTML('stock-critico-chart', 'Insumos Críticos (Top)', 'Comparativa Actual vs Mínimo.', 'Requieren reabastecimiento urgente.', 'Diferencia entre stock actual y punto de pedido.');
+    chartsInsumos += '</div>';
+
+    // Vencimiento (Bar Days)
+    chartsInsumos += '<div class="col-lg-6">';
+    chartsInsumos += createSmartCardHTML('insumos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', 'Priorizar uso de estos lotes.', 'Lotes ordenados por fecha de vencimiento más cercana.');
+    chartsInsumos += '</div>';
+
+    chartsInsumos += '</div>';
+    sectionInsumos.innerHTML += chartsInsumos;
+
+
+    // --- SECCIÓN: PRODUCTOS ---
+
+    const sectionProductos = document.createElement('div');
+    sectionProductos.innerHTML = `<h5 class="mb-4 text-success border-bottom pb-2 mt-4"><i class="bi bi-box2-heart me-2"></i>Gestión de Productos</h5>`;
+    container.appendChild(sectionProductos);
+
+    // 1. KPIs Productos
+    let kpisProductos = '<div class="row g-3 mb-4">';
+    kpisProductos += renderKpiCard(
+        'Sin Stock', 
+        data.kpis_inventario.productos_cero, 
+        'Productos agotados', 
+        'bi-dash-circle-fill text-danger', 
+        'Productos terminados con stock 0.'
+    );
+    kpisProductos += renderKpiCard(
+        'Prod. Vencimiento', 
+        data.kpis_inventario.productos_proximos_vencimiento, 
+        'Próximos a vencer', 
+        'bi-calendar-x-fill text-warning', 
+        'Lotes que han consumido >85% de su vida útil.'
+    );
+    kpisProductos += '</div>';
+    sectionProductos.innerHTML += kpisProductos;
+
+    // 2. Gráficos Productos
+    let chartsProductos = '<div class="row g-3">';
+
+    // Antigüedad (Donut)
+    chartsProductos += '<div class="col-lg-4 col-md-6">';
+    chartsProductos += createSmartCardHTML('antiguedad-productos-chart', 'Antigüedad Stock', 'Distribución de lotes por edad.', 'Detecta productos de baja rotación.', 'Porcentaje de lotes en cada rango.');
+    chartsProductos += '</div>';
+
+    // Distribución Estado (Pie)
+    chartsProductos += '<div class="col-lg-4 col-md-6">';
+    chartsProductos += createSmartCardHTML('dist-estado-productos-chart', 'Estado del Stock', 'Disponibilidad de inventario.', 'Stock disponible vs reservado.', 'Proporción de lotes por estado.');
+    chartsProductos += '</div>';
+
+    // Valor Stock (Bar - Top N)
+    chartsProductos += '<div class="col-lg-4 col-md-12">';
+    chartsProductos += createSmartCardHTML('valor-stock-productos-chart', 'Valor Stock Productos', 'Productos con mayor valoración.', 'Capital en productos terminados.', 'Stock * Precio Venta.');
+    chartsProductos += '</div>';
+
+    // Cobertura (Horizontal Bar)
+    chartsProductos += '<div class="col-lg-6">';
+    chartsProductos += createSmartCardHTML('cobertura-productos-chart', 'Cobertura Estimada', 'Días de venta cubiertos.', 'Riesgo de quiebre de stock.', 'Stock / Venta Promedia Diaria.');
+    chartsProductos += '</div>';
+
+    // Vencimiento (Bar Days)
+    chartsProductos += '<div class="col-lg-6">';
+    chartsProductos += createSmartCardHTML('productos-vencimiento-chart', 'Próximos Vencimientos', 'Días restantes de vida útil.', 'Priorizar despacho/promoción.', 'Lotes ordenados por fecha de vencimiento.');
+    chartsProductos += '</div>';
+
+    chartsProductos += '</div>';
+    sectionProductos.innerHTML += chartsProductos;
+
+
+    // --- INJECT SELECTORS & INTERACTIVITY ---
+    const updateTopN = (val) => window.updateCategoryParam('inventario', 'top_n', val);
+    
+    const injectSelector = (chartId) => {
+        const chartDiv = document.getElementById(chartId);
+        if (chartDiv) {
+            const header = chartDiv.closest('.card').querySelector('.card-header');
+            // Check if selector already exists to avoid dupes on re-render
+            if (header && !header.querySelector('select')) {
+                const selector = createTopNSelector(chartId + '-select', topN, updateTopN);
+                header.appendChild(selector);
             }
+        }
+    };
 
-            const option = {
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                xAxis: { type: 'category', data: data.labels },
-                yAxis: { type: 'value', name: 'Valor ($)' },
-                series: [{
-                    name: 'Valor de Stock', type: 'bar', data: data.data,
-                    itemStyle: { color: (params) => inventarioColors[params.dataIndex] }
-                }],
-                grid: { containLabel: true }
-            };
-            chart.setOption(option, true);
+    injectSelector('valor-stock-insumos-chart');
+    injectSelector('valor-stock-productos-chart');
+    injectSelector('stock-critico-chart');
+    injectSelector('insumos-vencimiento-chart');
+    injectSelector('productos-vencimiento-chart');
 
-            const descripcionEl = document.getElementById('antiguedad-insumos-descripcion');
-            const totalValor = data.data.reduce((a, b) => a + b, 0);
-            const valorMas90 = data.data[3] || 0;
-            if (valorMas90 > 0) {
-                 const porcentaje = ((valorMas90 / totalValor) * 100).toFixed(2);
-                 descripcionEl.textContent = `Atención: El ${porcentaje}% ($${valorMas90.toFixed(2)}) del valor del stock de insumos tiene más de 90 días.`;
-            } else {
-                 descripcionEl.textContent = `El valor total del stock de insumos es de $${totalValor.toFixed(2)}. No hay stock obsoleto.`;
-            }
+
+    // --- RENDER CHARTS ---
+
+    // 1. Antigüedad (Donut - Percentage Focused)
+    const renderAntiguedad = (id, dataset, color) => {
+        if (hasData(dataset)) {
+            createChart(id, {
+                tooltip: { trigger: 'item', formatter: '{b}: <b>{c} Lotes</b> ({d}%)' },
+                legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10 },
+                color: [color, '#fac858', '#ee6666', '#91cc75'], // Custom palette
+                series: [{ 
+                    type: 'pie', 
+                    radius: ['40%', '70%'],
+                    center: ['50%', '45%'],
+                    itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+                    data: dataset.labels.map((l, i) => ({ value: dataset.data[i], name: l }))
+                }]
+            });
+        } else {
+            document.getElementById(id).innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">Sin datos de antigüedad</div>';
+        }
+    };
+
+    renderAntiguedad('antiguedad-insumos-chart', data.antiguedad_stock_insumos, '#5470c6');
+    renderAntiguedad('antiguedad-productos-chart', data.antiguedad_stock_productos, '#91cc75');
+
+
+    // 2. Valor Stock (Bar - Currency)
+    const renderValueChart = (id, dataset, color) => {
+        createChart(id, {
+            tooltip: { 
+                trigger: 'axis', axisPointer: { type: 'shadow' },
+                formatter: (params) => `${params[0].name}<br/>Valor: <b>${formatCurrency(params[0].value)}</b>`
+            },
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+            xAxis: { 
+                type: 'category', 
+                data: dataset.labels, 
+                axisLabel: { interval: 0, rotate: 30, fontSize: 10, width: 80, overflow: 'truncate' } 
+            },
+            yAxis: { type: 'value', axisLabel: { formatter: (val) => `$${(val/1000).toFixed(0)}k` } },
+            series: [{ 
+                type: 'bar', 
+                data: dataset.data, 
+                itemStyle: { color: color, borderRadius: [4, 4, 0, 0] },
+                barMaxWidth: 50
+            }]
         });
-        
-    if (downloadBtn && !downloadBtn.hasAttribute('data-initialized')) {
-        downloadBtn.addEventListener('click', () => {
-            const url = chart.getConnectedDataURL({ pixelRatio: 2, backgroundColor: '#fff' });
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'antiguedad_stock_insumos.png';
-            a.click();
+    };
+
+    renderValueChart('valor-stock-insumos-chart', data.valor_stock_insumos_chart, '#5470c6');
+    renderValueChart('valor-stock-productos-chart', data.valor_stock_productos_chart, '#91cc75');
+
+
+    // 3. Composición (Pie)
+    createChart('composicion-insumos-chart', {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        series: [{ 
+            type: 'pie', radius: '70%', center: ['50%', '50%'],
+            data: data.composicion_stock_insumos_chart.labels.map((l, i) => ({ value: data.composicion_stock_insumos_chart.data[i], name: l })),
+            itemStyle: { borderRadius: 5 },
+            label: { show: false } // Hide labels to avoid clutter, rely on tooltip/legend
+        }]
+    });
+
+    // 4. Distribución Estado (Donut)
+    createChart('dist-estado-productos-chart', {
+        tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+        legend: { bottom: 0 },
+        series: [{ 
+            type: 'pie', radius: ['40%', '70%'], center: ['50%', '45%'],
+            data: data.distribucion_estado_productos_chart.labels.map((l, i) => ({ value: data.distribucion_estado_productos_chart.data[i], name: l })),
+            itemStyle: { borderRadius: 5 },
+            label: { show: false }
+        }]
+    });
+
+    // 5. Stock Crítico (Comparison Bar)
+    if (data.stock_critico_chart && data.stock_critico_chart.labels.length > 0) {
+        createChart('stock-critico-chart', {
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            legend: { data: ['Stock Actual', 'Mínimo'], bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+            xAxis: { type: 'category', data: data.stock_critico_chart.labels, axisLabel: { interval: 0, rotate: 30 } },
+            yAxis: { type: 'value' },
+            series: [
+                { name: 'Stock Actual', type: 'bar', data: data.stock_critico_chart.actual, itemStyle: { color: '#ee6666' } },
+                { name: 'Mínimo', type: 'bar', data: data.stock_critico_chart.minimo, itemStyle: { color: '#fac858' }, barGap: '-100%', opacity: 0.5 }
+            ]
         });
-        downloadBtn.setAttribute('data-initialized', 'true');
+    } else {
+        document.getElementById('stock-critico-chart').innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-success small"><i class="bi bi-check-circle me-2"></i>No hay insumos con stock crítico.</div>';
     }
-};
 
-updateAntiguedadProductosChart = () => {
-    const chartDom = document.getElementById('antiguedad-productos-chart');
-    if(!chartDom) return;
-    
-    const chart = echarts.getInstanceByDom(chartDom) || echarts.init(chartDom);
-    const downloadBtn = document.getElementById('download-antiguedad-productos');
-    
-    chart.showLoading();
-    fetch(`/reportes/api/inventario/antiguedad_stock?tipo=producto`)
-        .then(response => response.json())
-        .then(data => {
-            chart.hideLoading();
-            if (data.error || data.data.reduce((a, b) => a + b, 0) === 0) {
-                chart.setOption({ title: { text: 'No se encontraron datos', left: 'center', top: 'center' }, series: [] }, true);
-                document.getElementById('antiguedad-productos-descripcion').textContent = 'No hay datos de stock de productos.';
-                return;
-            }
+    // 6. Vencimientos (Bar - Days Left)
+    const renderExpiration = (id, dataset) => {
+        if (dataset && dataset.labels.length > 0) {
+            createChart(id, {
+                tooltip: { formatter: '{b}: <b>{c} días</b> para vencer' },
+                grid: { left: '3%', right: '10%', bottom: '3%', containLabel: true },
+                xAxis: { type: 'value', name: 'Días' },
+                yAxis: { type: 'category', data: dataset.labels, inverse: true }, // Inverse to show nearest at top
+                series: [{ 
+                    type: 'bar', 
+                    data: dataset.data, 
+                    itemStyle: { 
+                        color: (params) => params.value < 15 ? '#d9534f' : params.value < 30 ? '#f0ad4e' : '#5bc0de' 
+                    },
+                    label: { show: true, position: 'right', formatter: '{c} d' }
+                }]
+            });
+        } else {
+            document.getElementById(id).innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">No hay lotes próximos a vencer.</div>';
+        }
+    };
 
-            const option = {
-                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-                xAxis: { type: 'category', data: data.labels },
-                yAxis: { type: 'value', name: 'Valor ($)' },
-                series: [{
-                    name: 'Valor de Stock', type: 'bar', data: data.data,
-                     itemStyle: { color: (params) => inventarioColors[params.dataIndex] }
-                }],
-                grid: { containLabel: true }
-            };
-            chart.setOption(option, true);
+    renderExpiration('insumos-vencimiento-chart', data.insumos_vencimiento_chart);
+    renderExpiration('productos-vencimiento-chart', data.productos_vencimiento_chart);
 
-             const descripcionEl = document.getElementById('antiguedad-productos-descripcion');
-            const totalValor = data.data.reduce((a, b) => a + b, 0);
-            const valorMas90 = data.data[3] || 0;
-            if (valorMas90 > 0) {
-                 const porcentaje = ((valorMas90 / totalValor) * 100).toFixed(2);
-                 descripcionEl.textContent = `Alerta: El ${porcentaje}% ($${valorMas90.toFixed(2)}) del valor del stock de productos tiene más de 90 días.`;
-            } else {
-                 descripcionEl.textContent = `El valor total del stock de productos es de $${totalValor.toFixed(2)}.`;
-            }
+    // 7. Cobertura (Horizontal Bar)
+    if (data.cobertura_chart && data.cobertura_chart.labels.length > 0) {
+        createChart('cobertura-productos-chart', {
+            tooltip: { formatter: '{b}: <b>{c} días</b> de cobertura estimada' },
+            grid: { containLabel: true },
+            xAxis: { type: 'value', name: 'Días' },
+            yAxis: { type: 'category', data: data.cobertura_chart.labels },
+            series: [{ 
+                type: 'bar', 
+                data: data.cobertura_chart.data, 
+                itemStyle: { color: '#73c0de' },
+                markLine: {
+                    data: [{ xAxis: 30, name: 'Objetivo Mensual', lineStyle: { color: 'green', type: 'dashed' } }]
+                }
+            }]
         });
-        
-    if (downloadBtn && !downloadBtn.hasAttribute('data-initialized')) {
-         downloadBtn.addEventListener('click', () => {
-            const url = chart.getConnectedDataURL({ pixelRatio: 2, backgroundColor: '#fff' });
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'antiguedad_stock_productos.png';
-            a.click();
-        });
-        downloadBtn.setAttribute('data-initialized', 'true');
+    } else {
+        document.getElementById('cobertura-productos-chart').innerHTML = '<div class="d-flex align-items-center justify-content-center h-100 text-muted small">Sin datos de ventas para calcular cobertura.</div>';
     }
 };

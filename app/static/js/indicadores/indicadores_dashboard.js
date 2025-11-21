@@ -291,33 +291,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderInventario(data, container) {
-        let content = '<div class="row g-3 mb-3">';
-        content += renderKpiCard('Rotación', data.kpis_inventario.rotacion_inventario.valor.toFixed(2), `Vueltas/Año`, 'bi-arrow-repeat',
-            'Número de veces que el inventario se ha renovado en el último año. Una rotación alta indica ventas eficientes.');
-
-        // Si tuvieras un KPI de Stock Bajo Mínimo, lo añadirías aquí
-        if (data.cobertura_stock) {
-            const cobVal = data.cobertura_stock.valor === 'Inf' ? '∞' : data.cobertura_stock.valor;
-            content += renderKpiCard('Cobertura', cobVal, `Días estimados`, 'bi-shield-check', 'Días estimados que durará el stock actual basado en el consumo promedio diario.');
+        // Delegar al archivo inventario.js si está cargado
+        if (typeof window.renderInventario === 'function') {
+            window.renderInventario(data, container, {
+                renderKpiCard, createChart, createSmartCardHTML
+            });
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error: El módulo de inventario no se ha cargado correctamente.</div>';
+            console.error("renderInventario (externo) no está definido. Verifica que inventario.js esté incluido.");
         }
-
-        content += '</div><div class="row g-3">';
-        content += '<div class="col-lg-6">';
-        content += renderChartCard('antiguedad-insumos-chart', 'Stock Insumos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los insumos almacenados.', 'download-antiguedad-insumos');
-        content += '</div><div class="col-lg-6">';
-        content += renderChartCard('antiguedad-productos-chart', 'Stock Productos', 'Antigüedad lotes', 'Muestra cuánto tiempo llevan los productos terminados en almacén.', 'download-antiguedad-productos');
-        content += '</div></div>';
-
-        container.innerHTML = content;
-
-        const pieOptions = (labels, dataValues) => ({
-            tooltip: { trigger: 'item' },
-            legend: { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10 } },
-            series: [{ type: 'pie', radius: ['45%', '70%'], center: ['50%', '45%'], itemStyle: { borderRadius: 3, borderColor: '#fff', borderWidth: 1 }, label: { show: false }, data: labels.map((name, i) => ({ value: dataValues[i], name })) }]
-        });
-
-        createChart('antiguedad-insumos-chart', pieOptions(data.antiguedad_stock_insumos.labels, data.antiguedad_stock_insumos.data));
-        createChart('antiguedad-productos-chart', pieOptions(data.antiguedad_stock_productos.labels, data.antiguedad_stock_productos.data));
     }
 
     // --- FILTRO INTERACTIVO & ESTILOS ---
