@@ -17,6 +17,8 @@ from app.models.insumo import InsumoModel
 from app.models.lote_producto import LoteProductoModel
 from app.models.producto import ProductoModel
 from app.models.nota_credito import NotaCreditoModel
+from app.models.alerta_riesgo import AlertaRiesgoModel
+from app.models.reclamo_proveedor_model import ReclamoProveedorModel
 from app.controllers.reporte_produccion_controller import ReporteProduccionController
 from app.controllers.reporte_stock_controller import ReporteStockController
 from decimal import Decimal
@@ -48,6 +50,10 @@ class IndicadoresController:
         self.lote_producto_model = LoteProductoModel()
         self.producto_model = ProductoModel()
         self.nota_credito_model = NotaCreditoModel()
+        self.alerta_riesgo_model = AlertaRiesgoModel()
+        self.reclamo_proveedor_model = ReclamoProveedorModel()
+        self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
+        self.registro_desperdicio_insumo_model = RegistroDesperdicioModel()
 
     def _parsear_fechas(self, fecha_inicio_str, fecha_fin_str, default_days=30):
         if fecha_inicio_str:
@@ -253,6 +259,126 @@ class IndicadoresController:
             "chart_type": chart_type
         }
 
+    def _obtener_top_items_con_desperdicio(self, fecha_inicio, fecha_fin):
+        """
+        Obtiene un ranking de los insumos y productos que han registrado desperdicios.
+        Combina registros de desperdicio de productos y de insumos (incluyendo mermas de producción vía OP).
+        """
+        conteo_items = Counter()
+
+        # 1. Productos (Desperdicio de Lote de Producto Terminado)
+        res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_prod = res_prod.get('data', []) if res_prod.get('success') else []
+        
+        if data_prod:
+            lote_ids = []
+            for d in data_prod:
+                lid = d.get('lote_producto_id') or d.get('lote_id')
+                if lid: lote_ids.append(lid)
+            
+            lote_ids = list(set(lote_ids))
+            lote_map = {}
+
+            if lote_ids:
+                lote_ids_str = [str(id_) for id_ in lote_ids]
+                try:
+                    lotes_res = self.lote_producto_model.db.table('lotes_productos')\
+                        .select('id_lote, producto:productos(nombre)')\
+                        .in_('id_lote', lote_ids_str)\
+                        .execute()
+                    
+                    if lotes_res.data:
+                        for item in lotes_res.data:
+                            lote_map[str(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                            lote_map[int(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                except Exception as e:
+                    logger.error(f"Error fetching product details for waste: {e}")
+
+            for d in data_prod:
+                l_id = d.get('lote_producto_id') or d.get('lote_id')
+                if l_id:
+                    name = lote_map.get(l_id) or lote_map.get(str(l_id)) or f"Producto ID {l_id}"
+                    conteo_items[f"{name}"] += 1
+
+        # 2. Insumos y Producción (Registros Generales)
+        res_ins = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_ins = res_ins.get('data', []) if res_ins.get('success') else []
+
+        if data_ins:
+            op_ids_to_fetch = set()
+            lote_insumo_ids = set()
+
+            # Primera pasada: recolectar IDs
+            for d in data_ins:
+                op_id = d.get('orden_produccion_id')
+                if op_id:
+                    op_ids_to_fetch.add(op_id)
+                
+                lid = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
+                if lid:
+                    lote_insumo_ids.add(lid)
+
+            # Mapa para OPs
+            op_map = {}
+            if op_ids_to_fetch:
+                try:
+                    ops_res = self.orden_produccion_model.db.table('ordenes_produccion')\
+                        .select('id, producto:productos(nombre)')\
+                        .in_('id', list(op_ids_to_fetch))\
+                        .execute()
+                    
+                    if ops_res.data:
+                        for item in ops_res.data:
+                            p_name = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                            # Distinguir visualmente que viene de una OP
+                            op_map[item['id']] = f"{p_name} (En Producción)"
+                except Exception as e:
+                    logger.error(f"Error fetching OP details for waste: {e}")
+
+            # Mapa para Insumos
+            insumo_map = {}
+            if lote_insumo_ids:
+                lote_ids_str = [str(id_) for id_ in lote_insumo_ids]
+                try:
+                    insumos_res = self.insumo_inventario_model.db.table('insumos_inventario')\
+                        .select('id_lote, insumo:insumos_catalogo(nombre)')\
+                        .in_('id_lote', lote_ids_str)\
+                        .execute()
+                    
+                    if insumos_res.data:
+                        for item in insumos_res.data:
+                            insumo_map[str(item['id_lote'])] = item.get('insumo', {}).get('nombre', 'Insumo Desconocido')
+                except Exception as e:
+                    logger.error(f"Error fetching insumo details for waste: {e}")
+
+            # Contabilizar
+            for d in data_ins:
+                op_id = d.get('orden_produccion_id')
+                l_id = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
+                
+                if op_id and op_id in op_map:
+                    conteo_items[op_map[op_id]] += 1
+                elif l_id:
+                    name = insumo_map.get(str(l_id)) or f"Insumo ID {str(l_id)[:8]}..."
+                    conteo_items[f"{name}"] += 1
+                elif op_id: # Fallback si la OP no se encontró en el mapa
+                     conteo_items[f"Orden Producción #{op_id}"] += 1
+
+        # Top 10
+        top_items = conteo_items.most_common(10)
+        
+        insight = "No se registraron desperdicios específicos."
+        if top_items:
+            top_name = top_items[0][0]
+            insight = f"El ítem con más reportes de desperdicio es '{top_name}'."
+
+        return {
+            "categories": [x[0] for x in top_items],
+            "values": [x[1] for x in top_items],
+            "insight": insight,
+            "tooltip": "Ranking de productos e insumos según la cantidad de reportes de desperdicio registrados."
+        }
+
     def _obtener_evolucion_desperdicios(self, fecha_inicio, fecha_fin, contexto='mes'):
         """
         Evolución dinámica basada en el periodo seleccionado.
@@ -417,15 +543,254 @@ class IndicadoresController:
     def obtener_datos_calidad(self, semana=None, mes=None, ano=None):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
+        contexto = 'mes'
+        if semana: contexto = 'semana'
+        elif mes: contexto = 'mes'
+        elif ano: contexto = 'ano'
+
         rechazo_interno = self._calcular_tasa_rechazo_interno(fecha_inicio, fecha_fin)
         reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
         rechazo_proveedores = self._calcular_tasa_rechazo_proveedores(fecha_inicio, fecha_fin)
         
+        # KPIs Extra
+        alertas_activas_res = self.alerta_riesgo_model.find_all(filters={'estado': 'Pendiente'})
+        alertas_activas_count = len(alertas_activas_res.get('data', [])) if alertas_activas_res.get('success') else 0
+
+        desperdicios_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        desperdicios_count = len(desperdicios_res.get('data', [])) if desperdicios_res.get('success') else 0
+        # Sumamos también desperdicios de insumos
+        desperdicios_insumos_res = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        desperdicios_count += len(desperdicios_insumos_res.get('data', [])) if desperdicios_insumos_res.get('success') else 0
+
+        # Gráficos
+        evolucion_reclamos = self._obtener_evolucion_reclamos_detalle(fecha_inicio, fecha_fin, contexto)
+        distribucion_alertas = self._obtener_distribucion_alertas(fecha_inicio, fecha_fin)
+        resultados_calidad = self._obtener_resultados_calidad(fecha_inicio, fecha_fin)
+        motivos_alerta = self._obtener_motivos_alerta(fecha_inicio, fecha_fin)
+        evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
+        top_items_desperdicio = self._obtener_top_items_con_desperdicio(fecha_inicio, fecha_fin)
+
         # Se retorna una estructura defensiva que coincide con el frontend
         return {
             "tasa_rechazo_interno": rechazo_interno if isinstance(rechazo_interno, dict) else {"valor": 0, "rechazadas": 0, "inspeccionadas": 0},
             "tasa_reclamos_clientes": reclamos_clientes if isinstance(reclamos_clientes, dict) else {"valor": 0, "reclamos": 0, "pedidos_entregados": 0},
             "tasa_rechazo_proveedores": rechazo_proveedores if isinstance(rechazo_proveedores, dict) else {"valor": 0, "rechazados": 0, "recibidos": 0},
+            "alertas_activas": alertas_activas_count,
+            "incidentes_desperdicio": desperdicios_count,
+            "evolucion_reclamos_clientes": evolucion_reclamos['clientes'],
+            "evolucion_reclamos_proveedores": evolucion_reclamos['proveedores'],
+            "distribucion_alertas": distribucion_alertas,
+            "resultados_calidad": resultados_calidad,
+            "motivos_alerta": motivos_alerta,
+            "evolucion_desperdicios": evolucion_desperdicios,
+            "top_items_desperdicio": top_items_desperdicio
+        }
+
+    def _obtener_evolucion_reclamos_detalle(self, fecha_inicio, fecha_fin, contexto):
+        # Reclamos de Clientes
+        reclamos_cli_res = self.reclamo_model.find_all(filters={
+            'created_at_gte': fecha_inicio.isoformat(),
+            'created_at_lte': fecha_fin.isoformat()
+        })
+        data_cli = reclamos_cli_res.get('data', []) if reclamos_cli_res.get('success') else []
+
+        # Reclamos a Proveedores
+        reclamos_prov_res = self.reclamo_proveedor_model.find_all(filters={
+            'created_at_gte': fecha_inicio.isoformat(),
+            'created_at_lte': fecha_fin.isoformat()
+        })
+        data_prov = reclamos_prov_res.get('data', []) if reclamos_prov_res.get('success') else []
+
+        data_agregada = defaultdict(lambda: {'cli': 0, 'prov': 0})
+        labels_ordenados = []
+        
+        bucket_format = "%Y-%m-%d"
+        delta = timedelta(days=1)
+        
+        if contexto == 'ano':
+            bucket_format = "%Y-%m"
+            current = fecha_inicio.replace(day=1)
+            while current <= fecha_fin:
+                key = current.strftime(bucket_format)
+                labels_ordenados.append(key)
+                data_agregada[key] # Init
+                next_month = current.replace(day=28) + timedelta(days=4)
+                current = next_month - timedelta(days=next_month.day - 1)
+        else:
+            current = fecha_inicio
+            while current <= fecha_fin:
+                key = current.strftime(bucket_format)
+                labels_ordenados.append(key)
+                data_agregada[key] # Init
+                current += delta
+
+        def procesar(data, tipo):
+            for d in data:
+                f_str = d.get('created_at')
+                if not f_str: continue
+                try:
+                    dt = datetime.fromisoformat(f_str)
+                    key = dt.strftime(bucket_format)
+                    if key in data_agregada:
+                        data_agregada[key][tipo] += 1
+                    elif contexto == 'ano': # Fallback año
+                        if key in data_agregada:
+                             data_agregada[key][tipo] += 1
+                except: pass
+        
+        procesar(data_cli, 'cli')
+        procesar(data_prov, 'prov')
+
+        vals_cli = [data_agregada[k]['cli'] for k in labels_ordenados]
+        vals_prov = [data_agregada[k]['prov'] for k in labels_ordenados]
+
+        labels_display = []
+        for k in labels_ordenados:
+             if contexto == 'ano':
+                 dt = datetime.strptime(k, "%Y-%m")
+                 labels_display.append(dt.strftime("%b"))
+             else:
+                 dt = datetime.strptime(k, "%Y-%m-%d")
+                 labels_display.append(dt.strftime("%d/%m"))
+
+        # Generar insights separados
+        tot_cli = sum(vals_cli)
+        trend_cli = "estable"
+        if len(vals_cli) > 1:
+            if vals_cli[-1] > vals_cli[0]: trend_cli = "al alza"
+            elif vals_cli[-1] < vals_cli[0]: trend_cli = "a la baja"
+        insight_cli = f"Se registraron {tot_cli} reclamos de clientes. La tendencia es {trend_cli}."
+
+        tot_prov = sum(vals_prov)
+        insight_prov = f"Se registraron {tot_prov} reclamos a proveedores."
+
+        return {
+            "clientes": {
+                "categories": labels_display,
+                "series": [{"name": "Reclamos Clientes", "data": vals_cli}],
+                "insight": insight_cli,
+                "tooltip": "Evolución de reclamos recibidos de clientes."
+            },
+            "proveedores": {
+                "categories": labels_display,
+                "series": [{"name": "Reclamos Proveedores", "data": vals_prov}],
+                "insight": insight_prov,
+                "tooltip": "Evolución de reclamos emitidos a proveedores."
+            }
+        }
+
+    def _obtener_distribucion_alertas(self, fecha_inicio, fecha_fin):
+        res = self.alerta_riesgo_model.find_all(filters={
+            'fecha_creacion_gte': fecha_inicio.isoformat(),
+            'fecha_creacion_lte': fecha_fin.isoformat()
+        })
+        data = res.get('data', []) if res.get('success') else []
+        
+        conteo = Counter([d.get('origen_tipo_entidad', 'Desconocido') for d in data])
+        # Mapear nombres amigables
+        nombres_map = {
+            'lote_insumo': 'Insumos',
+            'lote_producto': 'Productos',
+            'pedido': 'Pedidos',
+            'orden_produccion': 'Producción'
+        }
+        
+        formatted = [{"name": nombres_map.get(k, k).capitalize(), "value": v} for k, v in conteo.items()]
+        
+        insight = "No se han generado alertas de riesgo en este periodo."
+        if data:
+            top = conteo.most_common(1)[0]
+            nom = nombres_map.get(top[0], top[0])
+            insight = f"La mayor fuente de riesgos proviene de '{nom}' ({top[1]} alertas)."
+
+        return {
+            "data": formatted,
+            "insight": insight,
+            "tooltip": "Desglose de alertas de riesgo según el origen (Insumo, Producto, Pedido, etc.)."
+        }
+
+    def _obtener_resultados_calidad(self, fecha_inicio, fecha_fin):
+        # Insumos
+        try:
+            res_ins = self.control_calidad_insumo_model.db.table('control_calidad_insumos').select('decision_final').gte('fecha_inspeccion', fecha_inicio.isoformat()).lte('fecha_inspeccion', fecha_fin.isoformat()).execute()
+            data_ins = res_ins.data if res_ins.data else []
+        except Exception as e:
+            logger.error(f"Error obteniendo resultados calidad insumos: {e}")
+            data_ins = []
+
+        # Productos
+        try:
+            res_prod = self.control_calidad_producto_model.db.table('control_calidad_productos').select('decision_final').gte('fecha_inspeccion', fecha_inicio.isoformat()).lte('fecha_inspeccion', fecha_fin.isoformat()).execute()
+            data_prod = res_prod.data if res_prod.data else []
+        except Exception as e:
+            logger.error(f"Error obteniendo resultados calidad productos: {e}")
+            data_prod = []
+        
+        # Contar
+        c_ins = Counter([d.get('decision_final', 'PENDIENTE') for d in data_ins])
+        c_prod = Counter([d.get('decision_final', 'PENDIENTE') for d in data_prod])
+        
+        # Normalizar claves
+        keys = ['APROBADO', 'RECHAZADO', 'CUARENTENA', 'EN_CUARENTENA'] # EN_CUARENTENA might be used
+        
+        # Mapear a structure: series per status
+        series = {
+            'Aprobado': [],
+            'Rechazado': [],
+            'Cuarentena': []
+        }
+        categories = ['Insumos', 'Productos']
+        
+        def get_val(counter, key_list):
+            return sum(counter.get(k, 0) for k in key_list)
+
+        series['Aprobado'] = [get_val(c_ins, ['APROBADO', 'Aprobado']), get_val(c_prod, ['APROBADO', 'Aprobado'])]
+        series['Rechazado'] = [get_val(c_ins, ['RECHAZADO', 'Rechazado']), get_val(c_prod, ['RECHAZADO', 'Rechazado'])]
+        series['Cuarentena'] = [get_val(c_ins, ['CUARENTENA', 'EN_CUARENTENA', 'En Cuarentena']), get_val(c_prod, ['CUARENTENA', 'EN_CUARENTENA'])]
+
+        total_ins = sum(c_ins.values())
+        total_prod = sum(c_prod.values())
+        
+        rechazo_ins = series['Rechazado'][0]
+        rechazo_prod = series['Rechazado'][1]
+        
+        insight = "Calidad estable."
+        if total_ins > 0 or total_prod > 0:
+            t_rechazo = rechazo_ins + rechazo_prod
+            t_total = total_ins + total_prod
+            pct = (t_rechazo / t_total * 100)
+            insight = f"Tasa global de rechazo: {pct:.1f}% ({t_rechazo} inspecciones fallidas de {t_total})."
+
+        return {
+            "categories": categories,
+            "series": [
+                {"name": "Aprobado", "data": series['Aprobado'], "color": "#198754"}, # Green
+                {"name": "Rechazado", "data": series['Rechazado'], "color": "#dc3545"}, # Red
+                {"name": "Cuarentena", "data": series['Cuarentena'], "color": "#ffc107"} # Yellow
+            ],
+            "insight": insight,
+            "tooltip": "Resultados de las inspecciones de calidad realizadas en el periodo."
+        }
+
+    def _obtener_motivos_alerta(self, fecha_inicio, fecha_fin):
+        res = self.alerta_riesgo_model.find_all(filters={
+            'fecha_creacion_gte': fecha_inicio.isoformat(),
+            'fecha_creacion_lte': fecha_fin.isoformat()
+        })
+        data = res.get('data', []) if res.get('success') else []
+        
+        conteo = Counter([d.get('motivo', 'Sin motivo') for d in data])
+        top_5 = conteo.most_common(5)
+        
+        insight = "Sin alertas registradas."
+        if top_5:
+            insight = f"El motivo más frecuente es '{top_5[0][0]}'."
+
+        return {
+            "categories": [x[0] for x in top_5],
+            "values": [x[1] for x in top_5],
+            "insight": insight,
+            "tooltip": "Ranking de los motivos declarados al crear alertas de riesgo."
         }
 
     # --- CATEGORÍA: COMERCIAL ---

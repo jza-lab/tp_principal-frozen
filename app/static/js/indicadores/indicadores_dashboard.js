@@ -269,17 +269,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderCalidad(data, container) {
-        let content = '<div class="row g-3 mb-3">';
-        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} un. descartadas`, 'bi-x-circle',
-            'Porcentaje de productos detectados como defectuosos durante el proceso de producción interno, antes de salir de fábrica.', 'danger');
-
-        content += renderKpiCard('Reclamos', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos activos`, 'bi-emoji-frown',
-            'Porcentaje de pedidos entregados que resultaron en un reclamo formal por parte del cliente.', 'warning');
-
-        content += renderKpiCard('Rechazo Prov.', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} lotes`, 'bi-truck-flatbed',
-            'Porcentaje de lotes de materia prima rechazados en la recepción por no cumplir estándares de calidad.', 'secondary');
-        content += '</div>';
-        container.innerHTML = content;
+        if (typeof window.renderCalidadTab === 'function') {
+            window.renderCalidadTab(data, container, {
+                renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
+            });
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error: El módulo de gráficos de calidad no se ha cargado correctamente.</div>';
+            console.error("renderCalidadTab no está definido. Verifica que calidad.js esté incluido.");
+        }
     }
 
     function renderFinanciera(data, container) {
