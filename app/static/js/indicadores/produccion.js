@@ -21,13 +21,13 @@ window.renderProduccionTab = function(data, container) {
     <div class="row g-3 mb-4">
         <!-- Left Column: OEE Gauge -->
         <div class="col-lg-5">
-            <div class="card shadow-sm border-0 h-100">
+            <div class="card shadow border-0 h-100 rounded-3">
                 <div class="card-body position-relative p-2">
-                    <h6 class="text-center text-muted fw-bold text-uppercase mt-2 mb-0">OEE Global</h6>
+                    <h6 class="text-center text-muted fw-bold text-uppercase mt-3 mb-0" style="letter-spacing: 1px;">OEE Global</h6>
                     <div id="oee-gauge-chart" style="height: 250px;"></div>
-                    <div class="text-center position-absolute w-100" style="bottom: 15px;">
-                        <span class="badge bg-light text-dark border" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
-                            <i class="bi bi-info-circle me-1"></i> Eficiencia General de los Equipos
+                    <div class="text-center position-absolute w-100" style="bottom: 20px;">
+                        <span class="badge bg-light text-dark border shadow-sm py-2 px-3 rounded-pill" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
+                            <i class="bi bi-info-circle me-1 text-primary"></i> Eficiencia General
                         </span>
                     </div>
                 </div>
@@ -38,24 +38,24 @@ window.renderProduccionTab = function(data, container) {
         <div class="col-lg-7">
             <div class="row g-3 h-100 align-content-center">
                 ${window.renderKpiCard('Disponibilidad', `${(oeeData.disponibilidad * 100).toFixed(1)}%`, 'Tiempo Operativo vs Planificado', 'bi-clock-history', 
-                    '<b>Fórmula:</b> (Tiempo Operativo / Tiempo Planificado) <br>Mide las pérdidas por paradas no planificadas o averías.')}
+                    '<b>Fórmula:</b> (Tiempo Operativo / Tiempo Planificado) <br>Mide las pérdidas por paradas no planificadas o averías.', 'primary')}
                 
                 ${window.renderKpiCard('Rendimiento', `${(oeeData.rendimiento * 100).toFixed(1)}%`, 'Velocidad Real vs Teórica', 'bi-speedometer', 
-                    '<b>Fórmula:</b> (Tiempo Ganado / Tiempo Operativo) <br>Mide si la máquina está produciendo a su velocidad máxima teórica.')}
+                    '<b>Fórmula:</b> (Tiempo Ganado / Tiempo Operativo) <br>Mide si la máquina está produciendo a su velocidad máxima teórica.', 'info')}
                 
                 ${window.renderKpiCard('Calidad', `${(oeeData.calidad * 100).toFixed(1)}%`, 'Piezas Buenas vs Totales', 'bi-check-circle', 
-                    '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).')}
+                    '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).', 'success')}
                 
                 ${window.renderKpiCard('Cumplimiento Plan', `${cumplimiento.valor.toFixed(1)}%`, `${cumplimiento.completadas_a_tiempo} órdenes a tiempo`, 'bi-calendar-check', 
-                    'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.')}
+                    'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.', 'indigo')}
             </div>
         </div>
     </div>
     
     <div class="d-flex align-items-center mb-4">
-        <hr class="flex-grow-1">
-        <span class="px-3 text-muted small text-uppercase fw-bold">Análisis Gráfico Detallado</span>
-        <hr class="flex-grow-1">
+        <hr class="flex-grow-1 border-secondary opacity-25">
+        <span class="px-3 text-muted small text-uppercase fw-bold" style="letter-spacing: 1px;">Análisis Gráfico Detallado</span>
+        <hr class="flex-grow-1 border-secondary opacity-25">
     </div>
 
     <!-- 2. Fila Inferior: Gráficos Avanzados (Smart Cards) -->
@@ -91,34 +91,32 @@ window.renderProduccionTab = function(data, container) {
         <!-- Gráfico 2: Top Insumos (NUEVO) -->
         <div class="col-lg-6 col-xl-6">
              <!-- Custom Smart Card con Selector -->
-            <div class="card shadow-sm border-0 h-100 smart-card-container">
-                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 pb-0">
+            <div class="card shadow border-0 h-100 smart-card-container rounded-3">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3 border-0 px-4">
                     <div class="d-flex align-items-center gap-2">
-                        <h6 class="fw-bold text-dark mb-0" style="font-size: 1rem;">Top Insumos Utilizados</h6>
-                        <select class="form-select form-select-sm py-0 px-2" style="width: auto; height: 24px; font-size: 0.75rem;" onchange="window.updateCategoryParam('produccion', 'top_n', this.value)">
+                        <h6 class="fw-bold text-dark mb-0 h6">Top Insumos Utilizados</h6>
+                        <select class="form-select form-select-sm py-0 px-2 border-0 bg-light text-primary fw-bold" style="width: auto; height: 24px; font-size: 0.75rem; cursor: pointer;" onchange="window.updateCategoryParam('produccion', 'top_n', this.value)">
                             <option value="5" ${data.meta?.top_n == 5 ? 'selected' : ''}>Top 5</option>
                             <option value="10" ${!data.meta?.top_n || data.meta?.top_n == 10 ? 'selected' : ''}>Top 10</option>
                             <option value="20" ${data.meta?.top_n == 20 ? 'selected' : ''}>Top 20</option>
                         </select>
                     </div>
-                    <i class="bi bi-question-circle-fill text-muted opacity-50" 
+                    <i class="bi bi-question-circle-fill text-muted opacity-25 hover-opacity-100 transition-opacity" 
                        data-bs-toggle="tooltip" 
                        data-bs-placement="left" 
                        title="${topInsumos.tooltip}" 
-                       style="cursor: help; font-size: 0.9rem;"></i>
+                       style="cursor: help; font-size: 1rem;"></i>
                 </div>
-                <div class="card-body p-3 d-flex flex-column h-100 pt-0">
-                    <p class="text-muted small mb-3 mt-2" style="font-size: 0.8rem;">Insumos con mayor cantidad reservada para producción.</p>
+                <div class="card-body px-4 pb-4 pt-0 d-flex flex-column h-100">
+                    <p class="text-muted small mb-3" style="font-size: 0.85rem;">Insumos con mayor cantidad reservada para producción.</p>
                     
-                    <div class="flex-grow-1 position-relative" style="min-height: 250px;">
+                    <div class="flex-grow-1 position-relative" style="min-height: 280px;">
                         <div id="chart-top-insumos" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"></div>
                     </div>
 
-                    <div class="alert alert-light border-start border-4 border-primary bg-light shadow-sm mb-0 mt-3 py-2 px-3">
-                        <div class="d-flex align-items-center">
-                            <i class="bi bi-lightbulb-fill text-primary me-2"></i>
-                            <span class="text-dark small fw-medium dynamic-insight">${topInsumos.insight}</span>
-                        </div>
+                    <div class="alert alert-light border-0 bg-light-subtle rounded-3 mb-0 mt-3 py-2 px-3 d-flex align-items-start">
+                        <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
+                        <span class="text-secondary small fw-medium dynamic-insight" style="line-height: 1.4;">${topInsumos.insight}</span>
                     </div>
                 </div>
             </div>

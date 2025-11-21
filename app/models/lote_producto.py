@@ -24,7 +24,7 @@ class LoteProductoModel(BaseModel):
         
         try:
             query = self.db.table(self.get_table_name()).select(
-                'fecha_produccion, cantidad_actual, producto_id'
+                'fecha_produccion, cantidad_actual, producto_id, fecha_vencimiento'
             ).gt('cantidad_actual', 0)
 
             lotes_res = query.execute()
@@ -51,6 +51,8 @@ class LoteProductoModel(BaseModel):
                 
                 # Renombrar para consistencia
                 lote['cantidad'] = lote.pop('cantidad_actual')
+                # Proveer alias 'fecha_fabricacion' para mantener compatibilidad si alguien lo usa
+                lote['fecha_fabricacion'] = lote.get('fecha_produccion')
 
             return {'success': True, 'data': lotes_data}
 

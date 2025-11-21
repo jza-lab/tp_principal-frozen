@@ -1,5 +1,6 @@
 from app.models.insumo import InsumoModel
 from app.models.inventario import InventarioModel
+from app.models.insumo_inventario import InsumoInventarioModel
 from app.models.producto import ProductoModel
 from app.models.lote_producto import LoteProductoModel
 from app.models.pedido import PedidoModel
@@ -9,6 +10,7 @@ class ReporteStockController:
     def __init__(self):
         self.insumo_model = InsumoModel()
         self.inventario_model = InventarioModel()
+        self.insumo_inventario_model = InsumoInventarioModel()
         self.producto_model = ProductoModel()
         self.lote_producto_model = LoteProductoModel()
         self.pedido_model = PedidoModel()
@@ -165,6 +167,67 @@ class ReporteStockController:
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
+
+    def obtener_conteo_vencimiento_porcentual(self, tipo='insumo', porcentaje=0.15):
+        """
+        Cuenta cuántos lotes están próximos a vencer basándose en un porcentaje de su vida útil.
+        Ej: Si vida útil es 100 días y quedan 10 días (10%), y el porcentaje es 0.15, entonces cuenta.
+        """
+        try:
+            if tipo == 'insumo':
+                # Necesita que el modelo devuelva fecha_ingreso (created_at) y fecha_vencimiento
+                res = self.insumo_inventario_model.get_all_lotes_for_view()
+                key_start = 'fecha_ingreso'
+            else:
+                res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
+                key_start = 'fecha_produccion'
+
+            if not res.get('success'):
+                return 0
+
+            lotes = res.get('data', [])
+            count_critico = 0
+            hoy = datetime.now().date()
+
+            for lote in lotes:
+                f_inicio_str = lote.get(key_start)
+                f_fin_str = lote.get('fecha_vencimiento')
+
+                if not f_inicio_str or not f_fin_str:
+                    continue
+
+                # Parseo fechas
+                try:
+                    # Soportar tanto ISO con tiempo como solo fecha
+                    if 'T' in f_inicio_str:
+                        f_inicio = datetime.fromisoformat(f_inicio_str).date()
+                    else:
+                        f_inicio = datetime.strptime(f_inicio_str[:10], '%Y-%m-%d').date()
+
+                    if 'T' in f_fin_str:
+                        f_fin = datetime.fromisoformat(f_fin_str).date()
+                    else:
+                         f_fin = datetime.strptime(f_fin_str[:10], '%Y-%m-%d').date()
+                except ValueError:
+                    continue
+
+                # Cálculos
+                vida_total = (f_fin - f_inicio).days
+                vida_restante = (f_fin - hoy).days
+
+                if vida_total <= 0: 
+                    continue # Datos inválidos
+
+                ratio = vida_restante / vida_total
+                
+                # Si ya venció (vida_restante < 0), el ratio es negativo, que es < porcentaje, así que cuenta.
+                if ratio <= porcentaje:
+                    count_critico += 1
+
+            return count_critico
+        except Exception as e:
+            print(f"Error en obtener_conteo_vencimiento_porcentual: {e}")
+            return 0
 
     # --- Métodos para Productos ---
 

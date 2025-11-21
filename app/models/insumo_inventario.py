@@ -20,7 +20,7 @@ class InsumoInventarioModel(BaseModel):
             # Corregido: 'fecha_ingreso' no existe, se usa 'created_at' que es la fecha de creación del lote.
             # Se renombra en el resultado para mantener la consistencia con lo que espera el controlador.
             query = self.db.table(self.get_table_name()).select(
-                'created_at, cantidad_actual, precio_unitario'
+                'created_at,cantidad_actual,precio_unitario,fecha_vencimiento'
             ).gt('cantidad_actual', 0) # Solo lotes con stock
 
             result = query.execute()
