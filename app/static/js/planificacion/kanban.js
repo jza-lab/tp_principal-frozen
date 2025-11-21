@@ -351,7 +351,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     camposCantidades.style.display = 'block';
                     campoCuarentena.style.display = 'block';
                     inputCuarentena.required = true;
-                    inputCuarentena.min = '0.01';
+                    inputCuarentena.min = '1';
+                    inputCuarentena.step = '1';
                 } else if (decision === 'MIXTO') {
                     camposCantidades.style.display = 'block';
                     campoRechazar.style.display = 'block';
@@ -360,7 +361,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     inputRechazar.min = '1';
                     inputRechazar.step = '1';
                     inputCuarentena.required = true;
-                    inputCuarentena.min = '0.01';
+                    inputCuarentena.min = '1';
+                    inputCuarentena.step = '1';
                 }
             }
         });
