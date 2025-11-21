@@ -73,3 +73,37 @@ def reactivar(id):
         flash('Error al reactivar el costo fijo.', 'error')
         
     return redirect(url_for('costos_fijos.listar'))
+
+@costos_fijos_bp.route('/<int:id>/historial', methods=['GET'])
+@permission_required('admin_configuracion_sistema')
+def historial(id):
+    controller = CostoFijoController()
+    
+    costo_res, _ = controller.get_costo_fijo_by_id(id)
+    costo = costo_res.get('data')
+    if not costo:
+        flash('Costo fijo no encontrado.', 'error')
+        return redirect(url_for('costos_fijos.listar'))
+
+    historial_res, _ = controller.get_historial(id)
+    historial = historial_res.get('data', [])
+    
+    return render_template('costos_fijos/historial.html', costo=costo, historial=historial)
+
+@costos_fijos_bp.route('/<int:id>/historial/nuevo', methods=['POST'])
+@permission_required('admin_configuracion_sistema')
+def historial_nuevo(id):
+    """
+    Ruta para agregar un registro histórico manualmente.
+    """
+    controller = CostoFijoController()
+    data = request.form.to_dict()
+    
+    _, status_code = controller.agregar_registro_historial(id, data)
+    
+    if status_code == 200:
+        flash('Registro histórico agregado exitosamente.', 'success')
+    else:
+        flash('Error al agregar el registro histórico.', 'error')
+        
+    return redirect(url_for('costos_fijos.historial', id=id))

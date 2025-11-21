@@ -38,15 +38,18 @@
                             {% endif %}
                         </td>
                         <td>
+                            <a href="{{ url_for('costos_fijos.historial', id=costo.id) }}" class="btn btn-sm btn-outline-info me-2" title="Ver Historial">
+                                <i class="bi bi-clock-history"></i>
+                            </a>
                             {% if costo.activo %}
                                 <a href="{{ url_for('costos_fijos.editar', id=costo.id) }}" class="btn btn-sm btn-outline-primary me-2" title="Editar">
-                                    <i class="bi bi-pencil-square"></i> Editar
+                                    <i class="bi bi-pencil-square"></i>
                                 </a>
                                 
                                 <form action="{{ url_for('costos_fijos.eliminar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Estás seguro de que quieres desactivar este costo?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar">
-                                        <i class="bi bi-trash"></i> Desactivar
+                                        <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
 
@@ -54,7 +57,7 @@
                                 <form action="{{ url_for('costos_fijos.reactivar', id=costo.id) }}" method="POST" class="d-inline" onsubmit="return confirm('¿Deseas reactivar este costo fijo?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                                     <button type="submit" class="btn btn-sm btn-success" title="Reactivar">
-                                        <i class="bi bi-arrow-counterclockwise"></i> Reactivar
+                                        <i class="bi bi-arrow-counterclockwise"></i>
                                     </button>
                                 </form>
                             {% endif %}
@@ -75,6 +78,4 @@
         </div>
     </div>
 </div>
-
-<!-- Incluir un modal de confirmación genérico si no existe en el layout base -->
 {% endblock %}
