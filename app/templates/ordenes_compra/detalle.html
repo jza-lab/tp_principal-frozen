@@ -731,43 +731,48 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // --- Lógica de Listeners Diferenciados ---
         
-        // Si edito CUARENTENA o RECHAZADA, se ajusta APROBADA
+        // --- Lógica de Auto-Ajuste (Prioridad a Defectos) ---
+
         const onProblemaInput = (e) => {
-            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
-            let rechazadaVal = checkAndFixValue(rechazadaInput);
+            let cVal = parseFloat(cuarentenaInput.value) || 0;
+            let rVal = parseFloat(rechazadaInput.value) || 0;
             
-            // Validar que la suma de problemas no supere el total
-            if (cuarentenaVal + rechazadaVal > roundedTotal) {
-                if (e.target === cuarentenaInput) {
-                    cuarentenaVal = roundedTotal - rechazadaVal;
-                } else {
-                    rechazadaVal = roundedTotal - cuarentenaVal;
-                }
-                // Actualizar el valor del input que se estaba editando
-                e.target.value = (e.target === cuarentenaInput ? cuarentenaVal : rechazadaVal).toFixed(precision);
+            // 1. Si la suma de problemas ya supera el total, topar el input actual
+            if (cVal + rVal > roundedTotal) {
+                if (e.target === cuarentenaInput) cVal = roundedTotal - rVal;
+                else rVal = roundedTotal - cVal;
+                e.target.value = (e.target === cuarentenaInput ? cVal : rVal).toFixed(precision);
             }
 
-            let aprobadoRestante = roundedTotal - cuarentenaVal - rechazadaVal;
+            // 2. Ajustar Aprobado automáticamente con lo que sobra
+            let aprobadoRestante = roundedTotal - cVal - rVal;
+            // Evitar negativos por decimales
+            if (aprobadoRestante < 0) aprobadoRestante = 0;
+            
             aprobadaInput.value = aprobadoRestante.toFixed(precision);
             toggleMotivo();
         };
 
-        // Si edito APROBADA, se ajusta RECHAZADA (asumiendo que cuarentena es prioritaria)
+        // Si toco Aprobado, no dejo que suba más de lo disponible libre
         const onAprobadaInput = (e) => {
-            let aprobadaVal = checkAndFixValue(aprobadaInput);
-            let cuarentenaVal = checkAndFixValue(cuarentenaInput);
-
-            // Validar que aprobada + cuarentena no supere el total
-            if (aprobadaVal + cuarentenaVal > roundedTotal) {
-                aprobadaVal = roundedTotal - cuarentenaVal;
-                aprobadaInput.value = aprobadaVal.toFixed(precision);
-            }
+            let aVal = parseFloat(aprobadaInput.value) || 0;
+            let cVal = parseFloat(cuarentenaInput.value) || 0;
+            let rVal = parseFloat(rechazadaInput.value) || 0;
             
-            let rechazadaRestante = roundedTotal - aprobadaVal - cuarentenaVal;
-            rechazadaInput.value = rechazadaRestante.toFixed(precision);
+            // El máximo que puede tener aprobado es (Total - Problemas)
+            let maxAprobado = roundedTotal - cVal - rVal;
+            
+            if (aVal > maxAprobado) {
+                // Corrección automática al máximo posible
+                aprobadaInput.value = maxAprobado.toFixed(precision);
+                
+                // Feedback visual opcional
+                e.target.classList.add('is-invalid');
+                setTimeout(() => e.target.classList.remove('is-invalid'), 500);
+            }
             toggleMotivo();
         };
-        
+
         cuarentenaInput.addEventListener('input', onProblemaInput);
         rechazadaInput.addEventListener('input', onProblemaInput);
         aprobadaInput.addEventListener('input', onAprobadaInput);
