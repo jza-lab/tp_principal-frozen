@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, date
+from dateutil import parser
 from app.models.orden_produccion import OrdenProduccionModel
 from app.models.control_calidad_producto import ControlCalidadProductoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
@@ -819,7 +820,69 @@ class IndicadoresController:
             "labels": list(cobertura_data_raw.keys())[:10],
             "data": list(cobertura_data_raw.values())[:10]
         }
+        # Insight Cobertura
+        low_coverage = [k for k, v in cobertura_data_raw.items() if v < 7]
+        if low_coverage:
+            insight_cobertura = f"Existen {len(low_coverage)} productos con cobertura crítica (menos de 7 días). Se sugiere revisar el plan de producción."
+        else:
+            insight_cobertura = "La mayoría de los productos tienen una cobertura saludable superior a una semana."
+        cobertura_chart['insight'] = insight_cobertura
+
+        # Insight Valor Insumos
+        total_val_ins = sum(valor_insumos_data.values())
+        if valor_insumos_chart['labels']:
+            top_ins = valor_insumos_chart['labels'][0]
+            pct_ins = (valor_insumos_chart['data'][0] / total_val_ins * 100) if total_val_ins else 0
+            valor_insumos_chart['insight'] = f"'{top_ins}' concentra el {pct_ins:.1f}% del valor total del inventario de insumos."
+        else:
+            valor_insumos_chart['insight'] = "No hay datos de valorización."
+
+        # Insight Valor Productos
+        total_val_prod = sum(valor_productos_data.values())
+        if valor_productos_chart['labels']:
+            top_prod = valor_productos_chart['labels'][0]
+            pct_prod = (valor_productos_chart['data'][0] / total_val_prod * 100) if total_val_prod else 0
+            valor_productos_chart['insight'] = f"El producto '{top_prod}' representa el {pct_prod:.1f}% del valor del stock terminado."
+        else:
+            valor_productos_chart['insight'] = "No hay datos de valorización."
+
+        # Insight Composición Insumos
+        comp_labels = comp_insumos_chart['labels']
+        comp_vals = comp_insumos_chart['data']
+        if comp_labels:
+            max_idx = comp_vals.index(max(comp_vals))
+            comp_insumos_chart['insight'] = f"La categoría '{comp_labels[max_idx]}' es la predominante en volumen de almacenamiento."
+        else:
+            comp_insumos_chart['insight'] = "Sin datos de composición."
+
+        # Insight Distribución Estado
+        dist_labels = dist_estado_chart['labels']
+        dist_vals = dist_estado_chart['data']
+        if dist_labels:
+            max_idx = dist_vals.index(max(dist_vals))
+            dist_estado_chart['insight'] = f"La mayor parte del stock se encuentra en estado '{dist_labels[max_idx]}'."
+        else:
+            dist_estado_chart['insight'] = "Sin datos de estado."
+
+        # Ordenar insumos críticos por importancia (frecuencia de uso)
+        # Obtenemos frecuencia de uso histórica (sin filtro de fecha para capturar importancia general)
+        usage_res = self.reporte_produccion_controller.obtener_top_insumos(top_n=1000)
+        usage_map = usage_res.get('data', {}) if usage_res.get('success') else {}
+
+        # Enriquecer lista con score de uso
+        for insumo in insumos_criticos_list:
+            nombre = insumo.get('nombre')
+            insumo['usage_score'] = usage_map.get(nombre, 0)
         
+        # Ordenar: 1. Mayor uso (Desc), 2. Menor stock actual (Asc - para priorizar quiebres/0 stock)
+        # usage_score DESC => usage_score
+        # stock_actual ASC => -stock_actual (con reverse=True, esto seria stock_actual DESC, queremos ASC)
+        # Sort key normal: (usage_score, -stock_actual) with reverse=True.
+        # Usage 10, Stock 0 -> (10, 0)
+        # Usage 10, Stock 5 -> (10, -5)
+        # (10, 0) > (10, -5). So Stock 0 comes first. Correct.
+        insumos_criticos_list.sort(key=lambda x: (x.get('usage_score', 0), -x.get('stock_actual', 0)), reverse=True)
+
         # Gráficos de Stock Crítico (Barras: Actual vs Minimo)
         # Limitamos a top N para no saturar el gráfico
         stock_critico_chart = {
@@ -827,6 +890,10 @@ class IndicadoresController:
             "actual": [x['stock_actual'] for x in insumos_criticos_list[:top_n]],
             "minimo": [x['stock_min'] for x in insumos_criticos_list[:top_n]]
         }
+        if insumos_criticos_count > 0:
+            stock_critico_chart['insight'] = f"Se han detectado {insumos_criticos_count} insumos por debajo de su stock mínimo de seguridad."
+        else:
+            stock_critico_chart['insight'] = "Todos los insumos mantienen niveles de stock saludables."
         
         # Gráfico de Próximos a Vencer (Barras: Días restantes)
         # Calculamos días restantes para ordenarlos
@@ -852,11 +919,21 @@ class IndicadoresController:
             "labels": [x['nombre'] for x in insumos_venc_processed],
             "data": [x['dias'] for x in insumos_venc_processed]
         }
+        if insumos_venc_list:
+            min_days = min([x['dias'] for x in insumos_venc_processed]) if insumos_venc_processed else 0
+            insumos_venc_chart['insight'] = f"Se detectaron {len(insumos_venc_list)} lotes próximos a vencer. El más urgente vence en {min_days} días."
+        else:
+            insumos_venc_chart['insight'] = "No hay alertas de vencimiento inminente en insumos."
         
         productos_venc_chart = {
             "labels": [x['nombre'] for x in productos_venc_processed],
             "data": [x['dias'] for x in productos_venc_processed]
         }
+        if productos_venc_list:
+            min_days = min([x['dias'] for x in productos_venc_processed]) if productos_venc_processed else 0
+            productos_venc_chart['insight'] = f"Se detectaron {len(productos_venc_list)} lotes de producto terminados próximos a vencer."
+        else:
+            productos_venc_chart['insight'] = "El stock de productos terminados tiene fechas de vencimiento lejanas."
 
         return {
             "meta": {"top_n": top_n},
@@ -1400,7 +1477,8 @@ class IndicadoresController:
             "0-30 días": {"count": 0, "quantity": 0.0},
             "31-60 días": {"count": 0, "quantity": 0.0},
             "61-90 días": {"count": 0, "quantity": 0.0},
-            "+90 días": {"count": 0, "quantity": 0.0}
+            "+90 días": {"count": 0, "quantity": 0.0},
+            "Sin fecha": {"count": 0, "quantity": 0.0}
         }
         
         def asignar_categoria(dias, cantidad):
@@ -1412,45 +1490,65 @@ class IndicadoresController:
             categorias[key]["count"] += 1
             categorias[key]["quantity"] += cantidad
 
+        def procesar_lote(lote, fecha_key):
+            cantidad = float(lote.get('cantidad', 0))
+            fecha_str = lote.get(fecha_key)
+            
+            if not fecha_str:
+                categorias["Sin fecha"]["count"] += 1
+                categorias["Sin fecha"]["quantity"] += cantidad
+                return
+
+            try:
+                dt = parser.parse(str(fecha_str)).date()
+                antiguedad = (hoy - dt).days
+                asignar_categoria(antiguedad, cantidad)
+            except (ValueError, TypeError) as e:
+                # Si falla el parseo, lo contamos como 'Sin fecha' para no perder el dato
+                logger.warning(f"Error parseando fecha '{fecha_str}': {e}")
+                categorias["Sin fecha"]["count"] += 1
+                categorias["Sin fecha"]["quantity"] += cantidad
+
         if tipo == 'insumo':
             lotes_res = self.insumo_inventario_model.get_all_lotes_for_view()
             if lotes_res.get('success'):
                 for lote in lotes_res.get('data', []):
-                    if not (fecha_str := lote.get('fecha_ingreso')): continue
-                    # Manejo robusto de fechas (con o sin hora)
-                    try:
-                        if 'T' in fecha_str: dt = datetime.fromisoformat(fecha_str).date()
-                        else: dt = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
-                    except ValueError: continue
-
-                    antiguedad = (hoy - dt).days
-                    cantidad = float(lote.get('cantidad', 0))
-                    asignar_categoria(antiguedad, cantidad)
+                    procesar_lote(lote, 'fecha_ingreso')
 
         else: # producto
             lotes_res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
             if lotes_res.get('success'):
-                lotes_data = lotes_res.get('data', [])
-                for lote in lotes_data:
+                for lote in lotes_res.get('data', []):
                     # Intentar con fecha_produccion o fecha_fabricacion (alias)
-                    fecha_str = lote.get('fecha_produccion') or lote.get('fecha_fabricacion')
-                    if not fecha_str: continue
-
-                    try:
-                        if 'T' in fecha_str: dt = datetime.fromisoformat(fecha_str).date()
-                        else: dt = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
-                    except ValueError: continue
-                    
-                    antiguedad = (hoy - dt).days
-                    cantidad = float(lote.get('cantidad', 0))
-                    asignar_categoria(antiguedad, cantidad)
+                    fecha_key = 'fecha_produccion' if lote.get('fecha_produccion') else 'fecha_fabricacion'
+                    procesar_lote(lote, fecha_key)
             
+        # Filtrar categoría "Sin fecha" si está vacía para limpiar el gráfico
+        if categorias["Sin fecha"]["count"] == 0:
+            del categorias["Sin fecha"]
+
         labels = list(categorias.keys())
         data_counts = [categorias[k]["count"] for k in labels]
         data_quantities = [categorias[k]["quantity"] for k in labels]
         
+        # Insight Dinámico
+        total_lotes = sum(data_counts)
+        if total_lotes > 0:
+            top_category = max(categorias, key=lambda k: categorias[k]['count'])
+            pct = (categorias[top_category]['count'] / total_lotes) * 100
+            
+            if top_category == "0-30 días":
+                insight = f"El stock es mayormente reciente, con un {pct:.0f}% de los lotes ingresados en el último mes."
+            elif top_category == "+90 días":
+                insight = f"Atención: El {pct:.0f}% de los lotes tiene una antigüedad superior a 3 meses."
+            else:
+                insight = f"La mayor concentración de lotes ({pct:.0f}%) se encuentra en el rango de {top_category}."
+        else:
+            insight = "No hay lotes en inventario para analizar su antigüedad."
+
         return {
             "labels": labels,
             "data": data_counts,
-            "quantities": data_quantities
+            "quantities": data_quantities,
+            "insight": insight
         }
