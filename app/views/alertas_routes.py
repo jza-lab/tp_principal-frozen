@@ -93,28 +93,49 @@ def actualizar_stock_min_max():
 @permission_required(accion='configurar_alertas')
 def configurar_alertas_lotes():
     """
-    Permite configurar el umbral de días para alertas de vencimiento de lotes.
+    Permite configurar el umbral de días para alertas de vencimiento de lotes
+    y los umbrales del semáforo de vida útil.
     """
     config_controller = ConfiguracionController()
+    config_model = config_controller.model
+    
     if request.method == 'POST':
         dias_vencimiento = request.form.get('dias_vencimiento')
+        sem_verde = request.form.get('sem_verde')
+        sem_amarillo = request.form.get('sem_amarillo')
+        
         try:
-            dias = int(dias_vencimiento)
-            response, status_code = config_controller.guardar_dias_vencimiento(dias)
+            if dias_vencimiento:
+                dias = int(dias_vencimiento)
+                # Se guarda la configuración de días de alerta (urgencia)
+                response, status_code = config_controller.guardar_dias_vencimiento(dias)
+                if status_code != 200:
+                     flash(response.get('error', 'Error al guardar días vencimiento.'), 'error')
 
-            if status_code == 200:
-                flash(response.get('message', 'Configuración guardada.'), 'success')
-            else:
-                flash(response.get('error', 'Error al guardar.'), 'error')
+            # Guardar configuración semáforos directamente
+            if sem_verde and sem_amarillo:
+                config_model.guardar_valor('UMBRAL_VIDA_UTIL_VERDE', int(sem_verde))
+                config_model.guardar_valor('UMBRAL_VIDA_UTIL_AMARILLO', int(sem_amarillo))
+            
+            flash('Configuración guardada.', 'success')
 
         except (ValueError, TypeError):
-            flash('Por favor, ingrese un número válido de días.', 'error')
+            flash('Por favor, ingrese números válidos.', 'error')
 
         return redirect(url_for('alertas.configurar_alertas_lotes'))
 
     dias_vencimiento_actual = config_controller.obtener_dias_vencimiento()
+    
+    # Obtener valores actuales o defaults para el semáforo
+    sem_verde = config_model.obtener_valor('UMBRAL_VIDA_UTIL_VERDE', 75)
+    sem_amarillo = config_model.obtener_valor('UMBRAL_VIDA_UTIL_AMARILLO', 50)
 
-    return render_template('alertas/lotes.html', dias_vencimiento=dias_vencimiento_actual)
+    return render_template(
+        'alertas/lotes.html', 
+        dias_vencimiento=dias_vencimiento_actual,
+        sem_verde=sem_verde,
+        sem_amarillo=sem_amarillo
+    )
 
 @alertas_bp.route('/productos', methods=['GET'])
 @permission_required(accion='ver_alertas')

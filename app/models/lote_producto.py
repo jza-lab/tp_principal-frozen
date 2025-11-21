@@ -3,6 +3,9 @@ from datetime import date, datetime, timedelta
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 import logging
+from app.models.configuracion import ConfiguracionModel
+from app.utils.vida_util import calcular_semaforo
+from app.controllers.configuracion_controller import DIAS_ALERTA_VENCIMIENTO_LOTE, DEFAULT_DIAS_ALERTA
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +150,25 @@ class LoteProductoModel(BaseModel):
 
             lotes_data = lotes_result.data
 
+            # Obtener configuración de semáforos
+            config_model = ConfiguracionModel()
+            try:
+                umbral_verde = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_VERDE', 75))
+            except (ValueError, TypeError):
+                umbral_verde = 75.0
+            
+            try:
+                umbral_amarillo = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_AMARILLO', 50))
+            except (ValueError, TypeError):
+                umbral_amarillo = 50.0
+            
+            # Obtener configuración de días de alerta
+            try:
+                dias_alerta_str = config_model.obtener_valor(DIAS_ALERTA_VENCIMIENTO_LOTE, str(DEFAULT_DIAS_ALERTA))
+                dias_alerta = int(dias_alerta_str)
+            except (ValueError, TypeError):
+                dias_alerta = DEFAULT_DIAS_ALERTA
+
             # 2. Obtener todas las reservas activas
             reservas_result = self.db.table('reservas_productos').select(
                 'lote_producto_id, cantidad_reservada'
@@ -174,6 +196,20 @@ class LoteProductoModel(BaseModel):
 
                 # Añadir cantidad reservada
                 lote['cantidad_reservada'] = reservas_map.get(lote.get('id_lote'), 0)
+
+                # --- CALCULO SEMAFORO ---
+                # Fecha Inicio: fecha_produccion
+                # Fecha Fin: fecha_vencimiento
+                # Fecha Actual: calculada dentro de la función (date.today())
+                semaforo = calcular_semaforo(
+                    lote.get('fecha_produccion'),
+                    lote.get('fecha_vencimiento'),
+                    umbral_verde=umbral_verde,
+                    umbral_amarillo=umbral_amarillo,
+                    dias_alerta=dias_alerta
+                )
+                lote['semaforo_color'] = semaforo['color']
+                lote['vida_util_percent'] = semaforo['percent']
 
                 enriched_data.append(lote)
 
