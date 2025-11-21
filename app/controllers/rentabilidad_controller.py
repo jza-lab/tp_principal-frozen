@@ -5,6 +5,12 @@ from app.models.producto import ProductoModel
 from app.models.receta import RecetaModel
 from app.models.pedido import PedidoModel, PedidoItemModel
 from app.models.insumo import InsumoModel
+from app.models.costo_fijo import CostoFijoModel
+from app.models.operacion_receta_model import OperacionRecetaModel
+from app.models.operacion_receta_rol_model import OperacionRecetaRolModel
+from app.models.rol import RoleModel
+from app.models.zona import ZonaModel
+from app.controllers.receta_controller import RecetaController
 from typing import Dict, List
 
 logger = logging.getLogger(__name__)
@@ -21,120 +27,444 @@ class RentabilidadController(BaseController):
         self.pedido_model = PedidoModel()
         self.insumo_model = InsumoModel()
         self.pedido_item_model = PedidoItemModel()
+        self.costo_fijo_model = CostoFijoModel()
+        self.operacion_receta_model = OperacionRecetaModel()
+        self.operacion_receta_rol_model = OperacionRecetaRolModel()
+        self.rol_model = RoleModel()
+        self.zona_model = ZonaModel()
+        # Instanciamos RecetaController para reutilizar la lógica de costo de materia prima
+        self.receta_controller = RecetaController()
 
     def obtener_datos_matriz_rentabilidad(self, fecha_inicio: str = None, fecha_fin: str = None) -> tuple:
         """
         Orquesta el cálculo de métricas para todos los productos, con un rango de fechas opcional.
+        Calcula costos variables dinámicos y resta costos fijos globales y costos de envío del total facturado.
         """
-        # 1. Obtener todos los productos activos y sus costos de una vez.
+        # 1. Calcular duración del período para prorrateo de costos fijos (fallback si no hay histórico)
+        months_duration = 1.0
+        if fecha_inicio and fecha_fin:
+            try:
+                dt_inicio = datetime.fromisoformat(fecha_inicio)
+                dt_fin = datetime.fromisoformat(fecha_fin)
+                delta = dt_fin - dt_inicio
+                # Consideramos 30 días como un mes estándar
+                months_duration = max(delta.days / 30.0, 1.0)
+            except ValueError:
+                months_duration = 1.0
+        else:
+            # Si es histórico ("Todo"), calculamos desde el primer pedido hasta hoy
+            try:
+                first_order_res = self.pedido_model.db.table('pedidos').select('fecha_solicitud').order('fecha_solicitud', desc=False).limit(1).execute()
+                if first_order_res.data:
+                    dt_inicio = datetime.fromisoformat(first_order_res.data[0]['fecha_solicitud'])
+                    dt_fin = datetime.now()
+                    delta = dt_fin - dt_inicio
+                    months_duration = max(delta.days / 30.0, 1.0)
+            except Exception as e:
+                logger.error(f"Error calculando duración histórica: {e}")
+                months_duration = 1.0
+
+        # 2. Obtener todos los productos activos.
         productos_result = self.producto_model.find_all({'activo': True})
         if not productos_result.get('success'):
             return self.error_response("Error al obtener productos.", 500)
         
         productos_data = productos_result.get('data', [])
-        productos_con_costo = {p['id']: self._calcular_margen_ganancia(p) for p in productos_data}
+        
+        # Pre-fetch roles y sus costos para optimizar
+        roles_resp = self.rol_model.find_all()
+        roles_map = {}
+        if roles_resp.get('success'):
+            for r in roles_resp.get('data', []):
+                roles_map[r['id']] = float(r.get('costo_por_hora') or 0)
 
-        # 2. Obtener los IDs de los pedidos dentro del rango de fechas.
+        # Calcular costos unitarios dinámicos para cada producto
+        productos_con_costo = {}
+        for p in productos_data:
+            costos_dinamicos = self._calcular_costos_unitarios_dinamicos(p, roles_map)
+            productos_con_costo[p['id']] = {
+                'producto': p,
+                'costos': costos_dinamicos
+            }
+
+        # 3. Obtener los IDs de los pedidos dentro del rango de fechas.
         pedidos_en_rango_ids = None
+        pedidos_data_for_shipping = []
+        
         if fecha_inicio and fecha_fin:
             try:
-                pedidos_query = self.pedido_model.db.table('pedidos').select('id').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin)
+                pedidos_query = self.pedido_model.db.table('pedidos').select('id, id_direccion_entrega').gte('fecha_solicitud', fecha_inicio).lte('fecha_solicitud', fecha_fin)
                 pedidos_result = pedidos_query.execute()
                 if hasattr(pedidos_result, 'data'):
                     pedidos_en_rango_ids = [p['id'] for p in pedidos_result.data]
+                    pedidos_data_for_shipping = pedidos_result.data
                 else:
                     pedidos_en_rango_ids = []
             except Exception as e:
                 logger.error(f"Error al obtener pedidos en rango de fechas: {e}", exc_info=True)
                 return self.error_response("Error al filtrar pedidos por fecha.", 500)
+        else:
+             # Histórico
+             try:
+                pedidos_query = self.pedido_model.db.table('pedidos').select('id, id_direccion_entrega')
+                pedidos_result = pedidos_query.execute()
+                pedidos_en_rango_ids = None 
+                pedidos_data_for_shipping = pedidos_result.data if hasattr(pedidos_result, 'data') else []
+             except Exception as e:
+                 logger.error(f"Error al obtener pedidos históricos: {e}")
 
-        # 3. Calcular ventas para cada producto.
+        # 4. Calcular métricas de ventas y agregados globales
         datos_matriz = []
-        for producto_id, margen_info in productos_con_costo.items():
-            producto_nombre = margen_info['nombre']
+        
+        total_facturacion_global = 0.0
+        total_costo_variable_global = 0.0
+        total_volumen_ventas = 0
+        total_margen_porcentual_acumulado = 0.0
+
+        for producto_id, info in productos_con_costo.items():
+            producto = info['producto']
+            costos = info['costos']
+            producto_nombre = producto.get('nombre')
             
             items_query = self.pedido_item_model.db.table('pedido_items').select('cantidad').eq('producto_id', producto_id)
             if pedidos_en_rango_ids is not None:
                 if not pedidos_en_rango_ids:
-                    items_result = None # No hay pedidos, no hay ventas
+                    items_result = None # No hay pedidos
                 else:
                     items_result = items_query.in_('pedido_id', pedidos_en_rango_ids).execute()
-            else: # Sin filtro de fecha, obtener todo
+            else:
                 items_result = items_query.execute()
 
             volumen_ventas = 0
             if items_result and hasattr(items_result, 'data'):
                 volumen_ventas = sum(item.get('cantidad', 0) for item in items_result.data)
             
-            precio_unitario = margen_info.get('precio_venta', 0)
-            facturacion_total = volumen_ventas * precio_unitario
-            ganancia_bruta = margen_info['margen_absoluto'] * volumen_ventas
-            costo_total_ventas = margen_info['costos']['costo_total'] * volumen_ventas
+            precio_venta = float(producto.get('precio_unitario') or 0)
+            costo_variable_unitario = costos['costo_variable_unitario']
+            
+            facturacion_producto = volumen_ventas * precio_venta
+            costo_variable_total_producto = volumen_ventas * costo_variable_unitario
+            margen_contribucion_producto = facturacion_producto - costo_variable_total_producto
+            
+            margen_contribucion_unitario = precio_venta - costo_variable_unitario
+            margen_porcentual = (margen_contribucion_unitario / precio_venta * 100) if precio_venta > 0 else 0
+
+            # Acumulados globales
+            total_facturacion_global += facturacion_producto
+            total_costo_variable_global += costo_variable_total_producto
+            total_volumen_ventas += volumen_ventas
+            if volumen_ventas > 0:
+                total_margen_porcentual_acumulado += margen_porcentual
 
             datos_matriz.append({
                 'id': producto_id,
                 'nombre': producto_nombre,
                 'volumen_ventas': volumen_ventas,
-                'margen_ganancia': margen_info['margen_porcentual'],
-                'ganancia_bruta': round(ganancia_bruta, 2),
-                'facturacion_total': round(facturacion_total, 2),
-                'costo_total': round(costo_total_ventas, 2),
-                'costos_unitarios': margen_info['costos']
+                'precio_venta': round(precio_venta, 2),
+                'costo_variable_unitario': round(costo_variable_unitario, 2),
+                'margen_contribucion_unitario': round(margen_contribucion_unitario, 2),
+                'margen_porcentual': round(margen_porcentual, 2),
+                'facturacion_total': round(facturacion_producto, 2),
+                'costo_variable_total': round(costo_variable_total_producto, 2),
+                'margen_contribucion_total': round(margen_contribucion_producto, 2),
+                'detalles_costo': costos
             })
 
-        # 4. Calcular promedios y devolver respuesta.
-        productos_con_ventas = [p for p in datos_matriz if p['volumen_ventas'] > 0]
-        if not productos_con_ventas:
-            return self.success_response(data={'productos': [], 'promedios': {'volumen_ventas': 0, 'margen_ganancia': 0}})
-
-        total_productos = len(productos_con_ventas)
-        volumen_ventas_total = sum(p['volumen_ventas'] for p in productos_con_ventas)
-        margen_ganancia_total = sum(p['margen_ganancia'] for p in productos_con_ventas)
+        # 5. Calcular Costos Fijos Globales
+        # Intentamos usar el cálculo histórico preciso primero
+        total_costos_fijos_global = self._calcular_costo_fijo_historico_total(fecha_inicio, fecha_fin)
         
-        volumen_promedio = volumen_ventas_total / total_productos
-        margen_promedio = margen_ganancia_total / total_productos
+        # Si el cálculo histórico devuelve 0 (por ejemplo, sin datos históricos), 
+        # usamos el fallback del multiplicador simple si hay costos activos
+        if total_costos_fijos_global == 0.0:
+             try:
+                costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
+                if costos_fijos_resp.get('success') and costos_fijos_resp.get('data'):
+                    total_mensual = sum(float(c.get('monto_mensual') or 0) for c in costos_fijos_resp.get('data', []))
+                    total_costos_fijos_global = total_mensual * months_duration
+             except Exception as e:
+                 logger.error(f"Error en fallback de costos fijos: {e}")
+
+        # 6. Calcular Costos de Envío Globales
+        total_costos_envio_global = self._calcular_costos_envio(pedidos_data_for_shipping)
+
+        # 7. Calcular Rentabilidad Neta Global
+        margen_contribucion_global = total_facturacion_global - total_costo_variable_global
+        rentabilidad_neta_global = margen_contribucion_global - total_costos_fijos_global - total_costos_envio_global
+        
+        rentabilidad_porcentual_global = (rentabilidad_neta_global / total_facturacion_global * 100) if total_facturacion_global > 0 else 0
+        
+        # 8. Calcular Promedios para la Matriz (Cuadrantes)
+        productos_con_ventas_count = len([p for p in datos_matriz if p['volumen_ventas'] > 0])
+        promedio_ventas = total_volumen_ventas / productos_con_ventas_count if productos_con_ventas_count > 0 else 0
+        promedio_margen = total_margen_porcentual_acumulado / productos_con_ventas_count if productos_con_ventas_count > 0 else 0
+
+        totales_globales = {
+            'facturacion_total': round(total_facturacion_global, 2),
+            'costo_variable_total': round(total_costo_variable_global, 2),
+            'margen_contribucion_total': round(margen_contribucion_global, 2),
+            'costos_fijos_total': round(total_costos_fijos_global, 2),
+            'costos_envio_total': round(total_costos_envio_global, 2),
+            'rentabilidad_neta': round(rentabilidad_neta_global, 2),
+            'rentabilidad_porcentual': round(rentabilidad_porcentual_global, 2)
+        }
+        
+        promedios_matriz = {
+            'volumen_ventas': round(promedio_ventas, 2),
+            'margen_ganancia': round(promedio_margen, 2)
+        }
 
         respuesta = {
             'productos': datos_matriz,
-            'promedios': {
-                'volumen_ventas': round(volumen_promedio, 2),
-                'margen_ganancia': round(margen_promedio, 2)
-            }
+            'totales_globales': totales_globales,
+            'promedios': promedios_matriz
         }
+        
         return self.success_response(data=respuesta)
+
+    def _calcular_costo_fijo_historico_total(self, fecha_inicio_str: str, fecha_fin_str: str) -> float:
+        """
+        Calcula el costo fijo total acumulado en un rango de fechas, considerando el historial de cambios.
+        """
+        total_acumulado = 0.0
+        
+        # Definir el rango de fechas
+        if not fecha_inicio_str:
+            # Si no hay inicio, buscar la fecha del primer costo creado o primer pedido (fallback a 30 días)
+            start_date = datetime.now() - timedelta(days=30) 
+        else:
+            start_date = datetime.fromisoformat(fecha_inicio_str)
+            
+        if not fecha_fin_str:
+            end_date = datetime.now()
+        else:
+            end_date = datetime.fromisoformat(fecha_fin_str)
+
+        try:
+            # 1. Obtener todos los costos fijos (incluso inactivos si estuvieron activos en el periodo)
+            # Por simplicidad, usamos los activos actualmente o implementamos lógica más compleja luego.
+            # Lo ideal es iterar sobre todos los costos que existan.
+            costos_res = self.costo_fijo_model.find_all() # Trae activos e inactivos si el modelo lo permite, sino filtrar
+            if not costos_res.get('success'):
+                return 0.0
+            
+            costos = costos_res.get('data', [])
+
+            for costo in costos:
+                costo_id = costo['id']
+                # Obtener historial ordenado por fecha
+                historial_res = self.costo_fijo_model.db.table('historial_costos_fijos')\
+                    .select('*').eq('costo_fijo_id', costo_id).order('fecha_cambio', desc=False).execute()
+                
+                cambios = historial_res.data if historial_res.data else []
+                
+                # Construir línea de tiempo
+                # Timeline es una lista de (fecha_inicio, valor)
+                timeline = []
+                
+                # Valor inicial: asumimos que antes del primer cambio era el 'monto_anterior' del primer cambio,
+                # o el valor actual si no hay cambios.
+                if not cambios:
+                    timeline.append((datetime.min, float(costo['monto_mensual'])))
+                else:
+                    # El valor antes del primer cambio registrado
+                    primer_cambio = cambios[0]
+                    # fecha_primer_cambio = datetime.fromisoformat(primer_cambio['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
+                    valor_inicial = float(primer_cambio['monto_anterior'])
+                    timeline.append((datetime.min, valor_inicial))
+                    
+                    for cambio in cambios:
+                        fecha = datetime.fromisoformat(cambio['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
+                        valor = float(cambio['monto_nuevo'])
+                        timeline.append((fecha, valor))
+                
+                # Integrar sobre el periodo [start_date, end_date]
+                costo_acumulado_item = 0.0
+                
+                # Convertir a timestamps para facilitar comparación
+                ts_start = start_date.timestamp()
+                ts_end = end_date.timestamp()
+                
+                # Asegurar que el loop cubre el rango
+                for i in range(len(timeline)):
+                    period_start_date = timeline[i][0]
+                    # Si es min date (dummy), usar una fecha muy antigua o ajustar al start_date
+                    if period_start_date == datetime.min:
+                        ts_period_start = 0
+                    else:
+                        ts_period_start = period_start_date.timestamp()
+                        
+                    value = timeline[i][1]
+                    
+                    # Determinar fin de este segmento
+                    if i + 1 < len(timeline):
+                        period_end_date = timeline[i+1][0]
+                        ts_period_end = period_end_date.timestamp()
+                    else:
+                        # Usamos un timestamp futuro seguro en lugar de max para evitar OverflowError
+                        # Año 3000 es suficiente
+                        ts_period_end = datetime(3000, 1, 1).timestamp()
+                    
+                    # Intersección con [ts_start, ts_end]
+                    overlap_start = max(ts_start, ts_period_start)
+                    overlap_end = min(ts_end, ts_period_end)
+                    
+                    if overlap_end > overlap_start:
+                        # Calcular días
+                        seconds = overlap_end - overlap_start
+                        days = seconds / (24 * 3600)
+                        # Prorrateo mensual (30 días)
+                        costo_acumulado_item += (days / 30.0) * value
+                
+                total_acumulado += costo_acumulado_item
+
+        except Exception as e:
+            logger.error(f"Error en cálculo histórico de costos fijos: {e}", exc_info=True)
+            return 0.0
+            
+        return total_acumulado
+
+    def _calcular_costos_envio(self, pedidos_data: List[Dict]) -> float:
+        """
+        Calcula el costo total de envíos basado en las direcciones de entrega de los pedidos.
+        Utiliza las zonas y sus precios por código postal.
+        """
+        total_costo = 0.0
+        if not pedidos_data:
+            return total_costo
+
+        try:
+            # Obtener todas las zonas para búsqueda en memoria (más eficiente que N queries)
+            zonas_res = self.zona_model.find_all()
+            zonas = zonas_res.get('data', []) if zonas_res.get('success') else []
+            
+            # Mapa de dirección -> CP para minimizar queries a usuario_direccion
+            direccion_ids = [p['id_direccion_entrega'] for p in pedidos_data if p.get('id_direccion_entrega')]
+            
+            if not direccion_ids:
+                return 0.0
+
+            # Consultar direcciones en lote
+            direcciones_res = self.pedido_model.db.table('usuario_direccion').select('id, codigo_postal').in_('id', direccion_ids).execute()
+            direcciones_map = {d['id']: d.get('codigo_postal') for d in direcciones_res.data} if direcciones_res.data else {}
+
+            for pedido in pedidos_data:
+                dir_id = pedido.get('id_direccion_entrega')
+                if not dir_id:
+                    continue
+                
+                cp_str = direcciones_map.get(dir_id)
+                if not cp_str:
+                    continue
+                
+                try:
+                    cp = int(cp_str)
+                    # Buscar zona correspondiente
+                    precio_zona = 0.0
+                    for zona in zonas:
+                        if zona.get('codigo_postal_inicio') <= cp <= zona.get('codigo_postal_fin'):
+                            precio_zona = float(zona.get('precio', 0))
+                            break
+                    total_costo += precio_zona
+                except (ValueError, TypeError):
+                    continue
+
+        except Exception as e:
+            logger.error(f"Error calculando costos de envío: {e}", exc_info=True)
+        
+        return total_costo
+
+    def _calcular_costos_unitarios_dinamicos(self, producto: Dict, roles_map: Dict[int, float]) -> Dict:
+        """
+        Calcula el costo unitario variable (Materia Prima + Mano de Obra) dinámicamente.
+        """
+        producto_id = producto.get('id')
+        costo_materia_prima = 0.0
+        costo_mano_obra = 0.0
+        
+        try:
+            # 1. Obtener Receta Activa
+            # Asumimos que hay una receta activa vinculada, o buscamos la más reciente.
+            # La relación producto-receta suele ser 1 a 1 en el modelo actual o inversa.
+            # RecetaModel tiene producto_id.
+            receta_resp = self.receta_model.find_all(filters={'producto_id': producto_id})
+            receta = None
+            if receta_resp.get('success') and receta_resp.get('data'):
+                # Tomamos la primera receta encontrada (idealmente debería ser la activa)
+                receta = receta_resp['data'][0] 
+            
+            if receta:
+                receta_id = receta['id']
+                
+                # 2. Costo Materia Prima (Ingredientes)
+                costo_mp_resp = self.receta_controller.calcular_costo_total_receta(receta_id)
+                if costo_mp_resp and costo_mp_resp.get('success'):
+                    costo_materia_prima = float(costo_mp_resp['data'].get('costo_total', 0))
+
+                # 3. Costo Mano de Obra (Operaciones * Roles)
+                operaciones_resp = self.operacion_receta_model.find_by_receta_id(receta_id)
+                if operaciones_resp.get('success'):
+                    for op in operaciones_resp.get('data', []):
+                        tiempo_minutos = float(op.get('tiempo_ejecucion_unitario') or 0)
+                        tiempo_horas = tiempo_minutos / 60.0
+                        
+                        # Obtener roles asignados a esta operación
+                        roles_op_resp = self.operacion_receta_rol_model.find_by_operacion_id(op['id'])
+                        if roles_op_resp.get('success'):
+                            for rol_asignado in roles_op_resp.get('data', []):
+                                rol_id = rol_asignado.get('rol_id')
+                                costo_hora_rol = roles_map.get(rol_id, 0.0)
+                                costo_mano_obra += tiempo_horas * costo_hora_rol
+
+        except Exception as e:
+            logger.error(f"Error calculando costos dinámicos para producto {producto_id}: {e}", exc_info=True)
+
+        costo_variable_unitario = costo_materia_prima + costo_mano_obra
+        
+        return {
+            'costo_materia_prima': round(costo_materia_prima, 2),
+            'costo_mano_obra': round(costo_mano_obra, 2),
+            'costo_variable_unitario': round(costo_variable_unitario, 2)
+        }
 
     def obtener_evolucion_producto(self, producto_id: int) -> tuple:
         """
         Devuelve la evolución de ventas y margen para un producto en los últimos 12 meses.
+        Nota: En esta versión simplificada, el margen histórico se calcula con el costo ACTUAL dinámico.
+        Para un histórico preciso se necesitaría guardar snapshots de costos, pero esto cumple el requerimiento actual.
         """
-        # 1. Obtener datos del producto y calcular su margen unitario
+        # 1. Obtener datos del producto
         producto_result = self.producto_model.find_by_id(producto_id)
         if not producto_result.get('success') or not producto_result.get('data'):
             return self.error_response("Producto no encontrado", 404)
         
         producto_data = producto_result.get('data')
-        margen_info = self._calcular_margen_ganancia(producto_data)
-        precio_venta_unitario = margen_info.get('precio_venta', 0)
-        margen_absoluto_unitario = margen_info.get('margen_absoluto', 0)
+        
+        # Calcular costos dinámicos actuales
+        roles_resp = self.rol_model.find_all()
+        roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+        
+        costos = self._calcular_costos_unitarios_dinamicos(producto_data, roles_map)
+        costo_variable_unitario = costos['costo_variable_unitario']
+        precio_venta_unitario = float(producto_data.get('precio_unitario') or 0)
+        margen_contribucion_unitario = precio_venta_unitario - costo_variable_unitario
 
         # 2. Obtener ventas del último año
         fecha_fin = datetime.now()
         fecha_inicio = fecha_fin - timedelta(days=365)
         
         try:
-            # Primero, obtenemos los IDs de los pedidos en el rango de fechas
             pedidos_resp = self.pedido_model.db.table('pedidos').select('id').gte(
                 'fecha_solicitud', fecha_inicio.isoformat()
             ).lte('fecha_solicitud', fecha_fin.isoformat()).execute()
             
             if not hasattr(pedidos_resp, 'data'):
-                return self.success_response(data=[]) # No hay pedidos, no hay evolución
+                return self.success_response(data=[]) 
             
             pedido_ids_en_rango = [p['id'] for p in pedidos_resp.data]
             if not pedido_ids_en_rango:
                 return self.success_response(data=[])
 
-            # Luego, obtenemos los items de este producto en esos pedidos
             items_result = self.pedido_item_model.db.table('pedido_items').select(
                 'cantidad, pedido:pedidos!pedido_items_pedido_id_fkey!inner(fecha_solicitud)'
             ).eq('producto_id', producto_id).in_('pedido_id', pedido_ids_en_rango).execute()
@@ -158,9 +488,9 @@ class RentabilidadController(BaseController):
                 
                 ventas_por_mes[mes_key]['unidades'] += cantidad
                 ventas_por_mes[mes_key]['facturacion'] += cantidad * precio_venta_unitario
-                ventas_por_mes[mes_key]['ganancia'] += cantidad * margen_absoluto_unitario
+                ventas_por_mes[mes_key]['ganancia'] += cantidad * margen_contribucion_unitario
 
-        # 4. Formatear la respuesta, asegurando que existan los 12 meses
+        # 4. Formatear la respuesta
         evolucion = []
         for i in range(12):
             mes_actual = fecha_fin - timedelta(days=i * 30)
@@ -172,71 +502,33 @@ class RentabilidadController(BaseController):
             evolucion.append({
                 "mes": mes_key,
                 "unidades_vendidas": datos_mes['unidades'],
-                "margen_ganancia_porcentual": round(margen_porcentual, 2)
+                "margen_ganancia_porcentual": round(margen_porcentual, 2) # Ahora es Margen Contribución %
             })
 
-        # Ordenar por mes de forma ascendente
         evolucion.sort(key=lambda x: x['mes'])
         return self.success_response(data=evolucion)
 
     def _calcular_costo_producto(self, producto: Dict) -> Dict:
         """
-        Calcula el costo desglosado de un producto (materia prima, mano de obra, costos fijos, total).
-        Utiliza los valores almacenados en la base de datos.
+        Método legacy mantenido para compatibilidad con views antiguas que lo usen,
+        pero redirigido a la lógica dinámica si es posible, o devolviendo lo almacenado.
+        Para este caso, usamos la lógica dinámica instanciando dependencias al vuelo si es necesario.
         """
-        default_cost = {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_fijos': 0.0, 'costo_total': 0.0}
-        if not producto:
-            return default_cost
-            
+        # Esta función se usaba para mostrar detalles estáticos.
+        # Vamos a intentar usar la dinámica.
         try:
-            # Obtener los costos almacenados en el producto
-            costo_total = float(producto.get('costo_total_produccion') or 0.0)
-            costo_mano_obra = float(producto.get('costo_mano_obra') or 0.0)
-            costo_fijos = float(producto.get('costo_fijos') or 0.0)
-            
-            # Calcular costo materia prima por diferencia para asegurar consistencia con el total
-            costo_materia_prima = costo_total - costo_mano_obra - costo_fijos
-            
-            # Asegurar que no sea negativo por inconsistencias de redondeo o datos antiguos
-            if costo_materia_prima < 0:
-                costo_materia_prima = 0.0
+            roles_resp = self.rol_model.find_all()
+            roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+            costos = self._calcular_costos_unitarios_dinamicos(producto, roles_map)
             
             return {
-                'costo_materia_prima': round(costo_materia_prima, 2),
-                'costo_mano_obra': round(costo_mano_obra, 2),
-                'costo_fijos': round(costo_fijos, 2),
-                'costo_total': round(costo_total, 2)
+                'costo_materia_prima': costos['costo_materia_prima'],
+                'costo_mano_obra': costos['costo_mano_obra'],
+                'costo_fijos': 0.0, # Ya no se asigna unitariamente
+                'costo_total': costos['costo_variable_unitario']
             }
-        except Exception as e:
-            logger.error(f"Error al calcular costo para producto ID {producto.get('id')}: {e}", exc_info=True)
-            return default_cost
-
-    def _calcular_margen_ganancia(self, producto: Dict) -> Dict:
-        """
-        Calcula el margen de ganancia a partir de un diccionario de producto.
-        """
-        default_margen = {'nombre': 'N/A', 'margen_porcentual': 0.0, 'margen_absoluto': 0.0, 'costos': {'costo_materia_prima': 0.0, 'costo_mano_obra': 0.0, 'costo_fijos': 0.0, 'costo_total': 0.0}, 'precio_venta': 0}
-        if not producto:
-            return default_margen
-
-        try:
-            precio_venta = producto.get('precio_unitario', 0.0) or 0.0
-            costos_info = self._calcular_costo_producto(producto)
-            costo_total = costos_info['costo_total']
-            
-            margen_absoluto = precio_venta - costo_total
-            margen_porcentual = (margen_absoluto / precio_venta) * 100 if precio_venta > 0 else 0
-            
-            return {
-                'nombre': producto.get('nombre'),
-                'margen_porcentual': round(margen_porcentual, 2),
-                'margen_absoluto': round(margen_absoluto, 2),
-                'costos': costos_info,
-                'precio_venta': precio_venta
-            }
-        except Exception as e:
-            logger.error(f"Error al calcular margen para producto ID {producto.get('id')}: {e}", exc_info=True)
-            return {**default_margen, 'nombre': producto.get('nombre', 'N/A')}
+        except:
+            return {'costo_materia_prima': 0, 'costo_mano_obra': 0, 'costo_fijos': 0, 'costo_total': 0}
 
     def calcular_crecimiento_ventas(self, periodo: str, metrica: str) -> tuple:
         """
@@ -306,7 +598,7 @@ class RentabilidadController(BaseController):
                 return self.success_response(data={
                     'nombre_producto': producto_nombre,
                     'historial_ventas': [], 'historial_precios': [], 'clientes_principales': [],
-                    'costos': self._calcular_costo_producto(producto_data) # Devuelve costos incluso sin ventas
+                    'costos': self._calcular_costo_producto(producto_data)
                 })
         except Exception as e:
             logger.error(f"Error al consultar detalles para producto ID {producto_id}: {e}", exc_info=True)

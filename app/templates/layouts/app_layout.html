@@ -186,7 +186,7 @@
                 {% if 'configurar_alertas' is has_permission and not is_operario and current_user and
                 current_user.roles.codigo != 'RRHH' %}
                 <li class="nav-item">
-                    <a class="nav-link {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
+                    <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
                        href="{{ url_for('reportes.indicadores') }}">
                         <i class="bi bi-bar-chart-line-fill me-1"></i> Indicadores
                     </a>
