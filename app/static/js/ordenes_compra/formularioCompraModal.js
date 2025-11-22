@@ -18,23 +18,36 @@ document.addEventListener('DOMContentLoaded', function () {
     function poblarInsumosEnModal() {
         insumoSelect.innerHTML = ''; // Limpiar opciones existentes
         insumosData.forEach(insumo => {
-            const proveedor = proveedoresData.find(p => p.id === insumo.proveedor.id);
-            const rating_stars = proveedor ? ('★'.repeat(proveedor.rating) + '☆'.repeat(5 - proveedor.rating)) : '';
+            // --- CORRECCIÓN: Validación segura de proveedor ---
+            const tieneProveedor = insumo.proveedor && insumo.proveedor.id;
+            const proveedorId = tieneProveedor ? insumo.proveedor.id : null;
+            const proveedorNombre = tieneProveedor ? insumo.proveedor.nombre : 'Sin Proveedor Asignado';
+            
+            // Buscar datos adicionales del proveedor para el rating
+            let rating_stars = '';
+            if (tieneProveedor) {
+                const proveedor = proveedoresData.find(p => p.id === proveedorId);
+                if (proveedor) {
+                    rating_stars = ' ' + ('★'.repeat(proveedor.rating) + '☆'.repeat(5 - proveedor.rating));
+                }
+            }
 
             const option = document.createElement('option');
             option.value = insumo.id_insumo;
-            option.textContent = `${insumo.nombre} - ${insumo.proveedor.nombre} ${rating_stars}`;
+            option.textContent = `${insumo.nombre} - ${proveedorNombre}${rating_stars}`;
+            
+            // Asignar datasets de forma segura
             option.dataset.nombre = insumo.nombre;
             option.dataset.precio = insumo.precio_unitario;
-            option.dataset.proveedorId = insumo.proveedor.id;
-            option.dataset.proveedorNombre = insumo.proveedor.nombre;
+            option.dataset.proveedorId = proveedorId || '';
+            option.dataset.proveedorNombre = proveedorNombre;
             option.dataset.stockActual = insumo.stock_actual || 0;
             option.dataset.stockMax = insumo.stock_max || 999999;
             option.dataset.id_insumo = insumo.id_insumo;
+            
             insumoSelect.appendChild(option);
         });
     }
-
     searchFilterInput.addEventListener('input', function () {
         const searchTerm = this.value.toLowerCase();
         Array.from(insumoSelect.options).forEach(option => {

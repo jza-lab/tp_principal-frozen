@@ -96,7 +96,14 @@
                             <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
                             <td>
                                 {% if lote.fecha_vencimiento %}
-                                {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'N/A' }}
+                                    {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') if lote.fecha_vencimiento else 'N/A' }}
+                                    {% if lote.semaforo_color %}
+                                        <span class="badge rounded-pill bg-{{ lote.semaforo_color }} text-{{ 'dark' if lote.semaforo_color == 'warning' else 'white' }} ms-1"
+                                              data-bs-toggle="tooltip"
+                                              title="Vida útil restante">
+                                            {{ lote.vida_util_percent }}%
+                                        </span>
+                                    {% endif %}
                                 {% else %}
                                 <span class="text-muted">No aplica</span>
                                 {% endif %}

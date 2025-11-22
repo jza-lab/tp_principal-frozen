@@ -3,6 +3,9 @@ from datetime import date, datetime, timedelta
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 import logging
+from app.models.configuracion import ConfiguracionModel
+from app.utils.vida_util import calcular_semaforo
+from app.controllers.configuracion_controller import DIAS_ALERTA_VENCIMIENTO_LOTE, DEFAULT_DIAS_ALERTA
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +89,15 @@ class LoteProductoModel(BaseModel):
     def find_lotes_disponibles(self) -> Dict:
         """Busca lotes disponibles (no vencidos y con stock)."""
         try:
+            # FILTRO MEJORADO: Excluir explícitamente los que vencen hoy o antes
+            fecha_hoy = date.today().isoformat()
+            
             result = (
                 self.db.table(self.get_table_name())
                 .select('*')
                 .eq('estado', 'DISPONIBLE')
                 .gt('cantidad_actual', 0)
+                .gt('fecha_vencimiento', fecha_hoy) # Solo vencimiento futuro estricto (> HOY)
                 .execute()
             )
             return {'success': True, 'data': result.data}
@@ -147,6 +154,25 @@ class LoteProductoModel(BaseModel):
 
             lotes_data = lotes_result.data
 
+            # Obtener configuración de semáforos
+            config_model = ConfiguracionModel()
+            try:
+                umbral_verde = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_VERDE', 75))
+            except (ValueError, TypeError):
+                umbral_verde = 75.0
+            
+            try:
+                umbral_amarillo = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_AMARILLO', 50))
+            except (ValueError, TypeError):
+                umbral_amarillo = 50.0
+            
+            # Obtener configuración de días de alerta
+            try:
+                dias_alerta_str = config_model.obtener_valor(DIAS_ALERTA_VENCIMIENTO_LOTE, str(DEFAULT_DIAS_ALERTA))
+                dias_alerta = int(dias_alerta_str)
+            except (ValueError, TypeError):
+                dias_alerta = DEFAULT_DIAS_ALERTA
+
             # 2. Obtener todas las reservas activas
             reservas_result = self.db.table('reservas_productos').select(
                 'lote_producto_id, cantidad_reservada'
@@ -174,6 +200,39 @@ class LoteProductoModel(BaseModel):
 
                 # Añadir cantidad reservada
                 lote['cantidad_reservada'] = reservas_map.get(lote.get('id_lote'), 0)
+
+                # --- CALCULO SEMAFORO ---
+                # Fecha Inicio: fecha_produccion
+                # Fecha Fin: fecha_vencimiento
+                # Fecha Actual: calculada dentro de la función (date.today())
+                semaforo = calcular_semaforo(
+                    lote.get('fecha_produccion'),
+                    lote.get('fecha_vencimiento'),
+                    umbral_verde=umbral_verde,
+                    umbral_amarillo=umbral_amarillo,
+                    dias_alerta=dias_alerta
+                )
+                lote['semaforo_color'] = semaforo['color']
+                lote['vida_util_percent'] = semaforo['percent']
+
+                # --- CORRECCIÓN VISUAL DE ESTADO ---
+                # Si vence HOY o ya venció, forzamos el estado visual a 'VENCIDO'
+                # aunque en la base de datos siga como DISPONIBLE hasta que corra un cron.
+                if lote.get('fecha_vencimiento'):
+                    try:
+                        venc_str = lote['fecha_vencimiento']
+                        # Manejo robusto de formato fecha
+                        if isinstance(venc_str, str):
+                             venc = datetime.fromisoformat(venc_str.split('T')[0]).date()
+                        else:
+                             venc = venc_str # Asumimos date object
+                        
+                        if venc <= date.today():
+                            lote['estado'] = 'VENCIDO'
+                            lote['semaforo_color'] = 'danger' # Forzar rojo
+                            lote['vida_util_percent'] = 0.0
+                    except Exception as e_date:
+                        logger.warning(f"Error parseando fecha vencimiento lote {lote.get('id_lote')}: {e_date}")
 
                 enriched_data.append(lote)
 

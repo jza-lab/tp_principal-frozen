@@ -709,12 +709,13 @@ class LoteProductoController(BaseController):
 
                 # --- CONSULTA FILTRADA POR VENCIMIENTO ---
                 # Buscamos lotes DISPONIBLES, con stock > 0 y que NO venzan antes de la fecha requerida
+                # CORRECCIÓN: Usamos gt (mayor estricto) en lugar de gte para asegurar que no vence HOY.
                 lotes_query = self.model.db.table(self.model.get_table_name()) \
                     .select('*') \
                     .eq('producto_id', producto_id) \
                     .eq('estado', 'DISPONIBLE') \
                     .gt('cantidad_actual', 0) \
-                    .gte('fecha_vencimiento', fecha_filtro) \
+                    .gt('fecha_vencimiento', fecha_filtro) \
                     .order('fecha_vencimiento', desc=False) # FEFO (Primero los que vencen más cerca, pero validos)
 
                 lotes_disponibles_data = lotes_query.execute().data
