@@ -1405,11 +1405,9 @@ class InventarioController(BaseController):
                 'insumo_id': lote['id_insumo'],
                 'motivo_desperdicio_id': motivo_id,
                 'cantidad': cantidad_retiro,
-                'costo_unitario': costo_unitario,
-                'costo_total': costo_total,
-                'fecha_registro': datetime.now().isoformat(), # Corrección: usar created_at automatico o fecha_registro si modelo lo pide
+                'fecha_registro': datetime.now().isoformat(),
                 'usuario_id': usuario_id,
-                'comentarios': comentarios
+                'observaciones': comentarios # Mapear comentarios a observaciones
             }
             
             # Check if model requires fecha_registro or uses created_at. Assuming fecha_registro based on earlier read.

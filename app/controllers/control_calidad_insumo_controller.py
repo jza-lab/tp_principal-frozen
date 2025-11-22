@@ -386,10 +386,12 @@ class ControlCalidadInsumoController(BaseController):
                 if motivo_id and cantidad_reservada > 0:
                     desperdicio_data = {
                         'orden_produccion_id': op_id,
+                        'insumo_id': insumo_id,
                         'motivo_desperdicio_id': motivo_id,
                         'cantidad': cantidad_reservada,
                         'usuario_id': usuario_id,
-                        'comentarios': f"Rechazo del lote de insumo ID {lote_rechazado_id}"
+                        'observaciones': f"Rechazo del lote de insumo ID {lote_rechazado_id}",
+                        'fecha_registro': datetime.now().isoformat()
                     }
                     desperdicio_model.create(desperdicio_data)
                     msg = f"Se registró un desperdicio de {cantidad_reservada} para la OP {op_codigo}."
