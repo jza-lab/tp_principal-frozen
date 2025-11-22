@@ -447,6 +447,11 @@
                          class="img-fluid" 
                          style="max-width: 200px; border: 1px solid #ddd; padding: 5px; border-radius: 5px; cursor: pointer;">
                 </a>
+                <div class="mt-3">
+                    <a href="{{ url_for('public.seguimiento_publico_pedido', token=token_seguimiento) }}" target="_blank" class="btn btn-outline-info w-100">
+                        <i class="bi bi-eye me-1"></i> Ver Seguimiento
+                    </a>
+                </div>
                 {% else %}
                     <img src="{{ url_for('orden_venta.generar_qr_pedido', id_pedido=pedido.id) }}" 
                          alt="Código QR de Trazabilidad" 

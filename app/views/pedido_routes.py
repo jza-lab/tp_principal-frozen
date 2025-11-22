@@ -218,7 +218,7 @@ def detalle(id):
     if pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
         pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
         
-    return render_template('orden_venta/detalle.html', pedido=pedido_data, pagos=pagos)
+    return render_template('orden_venta/detalle.html', pedido=pedido_data, pagos=pagos, token_seguimiento=token_seguimiento)
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
