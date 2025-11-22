@@ -709,13 +709,12 @@ class LoteProductoController(BaseController):
 
                 # --- CONSULTA FILTRADA POR VENCIMIENTO ---
                 # Buscamos lotes DISPONIBLES, con stock > 0 y que NO venzan antes de la fecha requerida
-                # CORRECCIÓN: Usamos gt (mayor estricto) en lugar de gte para asegurar que no vence HOY.
                 lotes_query = self.model.db.table(self.model.get_table_name()) \
                     .select('*') \
                     .eq('producto_id', producto_id) \
                     .eq('estado', 'DISPONIBLE') \
                     .gt('cantidad_actual', 0) \
-                    .gt('fecha_vencimiento', fecha_filtro) \
+                    .gte('fecha_vencimiento', fecha_filtro) \
                     .order('fecha_vencimiento', desc=False) # FEFO (Primero los que vencen más cerca, pero validos)
 
                 lotes_disponibles_data = lotes_query.execute().data
@@ -1388,7 +1387,7 @@ class LoteProductoController(BaseController):
     def marcar_lote_como_no_apto(self, lote_id: int, usuario_id: int, motivo: str, resultado_inspeccion: str) -> tuple:
         """
         Marca un lote de producto como 'NO_APTO' y anula su stock.
-        También crea un registro de control de calidad para la trazabilidad.
+        (Legacy / Fallback)
         """
         try:
             lote_res = self.model.find_by_id(lote_id, 'id_lote')
@@ -1428,6 +1427,151 @@ class LoteProductoController(BaseController):
             logger.error(f"Error en marcar_lote_como_no_apto (producto): {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
+    def procesar_no_apto_avanzado(self, lote_id: int, form_data: dict, usuario_id: int) -> tuple:
+        """
+        Maneja el flujo avanzado de marcar un lote de producto como NO APTO.
+        """
+        try:
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+            
+            lote = lote_res['data']
+            accion = form_data.get('accion_no_apto')
+
+            if accion == 'retirar':
+                return self._procesar_retiro_producto(lote, form_data, usuario_id)
+            
+            elif accion == 'alerta':
+                return self._procesar_alerta_producto(lote, form_data, usuario_id)
+            
+            else:
+                return self.error_response('Acción no válida.', 400)
+
+        except Exception as e:
+            logger.error(f"Error en procesar_no_apto_avanzado (producto): {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+    def _procesar_retiro_producto(self, lote, form_data, usuario_id):
+        """Lógica para retirar stock de producto y registrar desperdicio."""
+        
+        try:
+            cantidad_retiro = float(form_data.get('cantidad_retiro'))
+            motivo_id = form_data.get('motivo_desperdicio_id')
+            comentarios = form_data.get('comentarios_retiro')
+            resultado_inspeccion = form_data.get('resultado_inspeccion')
+
+            if cantidad_retiro <= 0:
+                return self.error_response("La cantidad debe ser mayor a 0.", 400)
+            if not motivo_id:
+                return self.error_response("Debe seleccionar un motivo de desperdicio.", 400)
+
+            stock_disp = float(lote.get('cantidad_actual', 0))
+            stock_cuar = float(lote.get('cantidad_en_cuarentena', 0))
+            stock_total = stock_disp + stock_cuar
+
+            if cantidad_retiro > stock_total:
+                return self.error_response(f"La cantidad a retirar ({cantidad_retiro}) excede el stock total del lote ({stock_total}).", 400)
+
+            # 1. Registrar Desperdicio
+            # Usamos el modelo RegistroDesperdicioLoteProductoModel
+            desperdicio_model = RegistroDesperdicioLoteProductoModel()
+            
+            datos_desperdicio = {
+                'lote_producto_id': lote['id_lote'],
+                'motivo_id': motivo_id,
+                'cantidad': cantidad_retiro,
+                'usuario_id': usuario_id,
+                'created_at': datetime.now().isoformat()
+            }
+            
+            res_desperdicio = desperdicio_model.create(datos_desperdicio)
+            if not res_desperdicio.get('success'):
+                return self.error_response(f"Error al registrar desperdicio: {res_desperdicio.get('error')}", 500)
+
+            # 2. Actualizar Stock del Lote
+            nueva_cantidad_cuar = stock_cuar
+            nueva_cantidad_disp = stock_disp
+            remanente_a_descontar = cantidad_retiro
+
+            # Prioridad: Descontar de cuarentena primero
+            if stock_cuar > 0:
+                descuento_cuar = min(stock_cuar, remanente_a_descontar)
+                nueva_cantidad_cuar -= descuento_cuar
+                remanente_a_descontar -= descuento_cuar
+            
+            if remanente_a_descontar > 0:
+                nueva_cantidad_disp -= remanente_a_descontar
+
+            nuevo_estado = lote['estado']
+            if (nueva_cantidad_cuar + nueva_cantidad_disp) <= 0:
+                if cantidad_retiro >= stock_total:
+                    nuevo_estado = 'RETIRADO'
+                else:
+                    nuevo_estado = 'AGOTADO'
+            
+            update_data = {
+                'cantidad_actual': nueva_cantidad_disp,
+                'cantidad_en_cuarentena': nueva_cantidad_cuar,
+                'estado': nuevo_estado
+            }
+            
+            self.model.update(lote['id_lote'], update_data, 'id_lote')
+
+            # 3. Crear registro de Control de Calidad para trazabilidad (opcional pero recomendado)
+            cc_data = {
+                'lote_producto_id': lote['id_lote'],
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': 'RETIRADO' if nuevo_estado == 'RETIRADO' else 'APROBADO', # Parcial?
+                'comentarios': f"Retiro manual de {cantidad_retiro}. {comentarios}",
+                'resultado_inspeccion': resultado_inspeccion or 'Retiro por desperdicio',
+                'cantidad_inspeccionada': cantidad_retiro
+            }
+            # Solo creamos registro si fue un retiro relevante, para dejar constancia
+            self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
+
+            return self.success_response(message="Lote de producto retirado y desperdicio registrado correctamente.")
+
+        except ValueError:
+             return self.error_response("Datos numéricos inválidos.", 400)
+        except Exception as e:
+            logger.error(f"Error en _procesar_retiro_producto: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
+    def _procesar_alerta_producto(self, lote, form_data, usuario_id):
+        """Lógica para crear una alerta de riesgo desde un lote de producto."""
+        from app.controllers.riesgo_controller import RiesgoController
+        
+        try:
+            motivo = form_data.get('motivo_alerta')
+            descripcion = form_data.get('descripcion_alerta')
+
+            if not motivo:
+                return self.error_response("El motivo de la alerta es obligatorio.", 400)
+
+            datos_alerta = {
+                "tipo_entidad": "lote_producto",
+                "id_entidad": lote['id_lote'],
+                "motivo": motivo,
+                "comentarios": descripcion,
+                "url_evidencia": None
+            }
+
+            riesgo_controller = RiesgoController()
+            # Llamada que devuelve tuple
+            res_alerta_tuple = riesgo_controller.crear_alerta_riesgo_con_usuario(datos_alerta, usuario_id)
+            
+            res_alerta = res_alerta_tuple[0] if isinstance(res_alerta_tuple, tuple) else res_alerta_tuple
+
+            if res_alerta.get('success'):
+                return self.success_response(message="Alerta de riesgo creada correctamente.")
+            else:
+                return self.error_response(f"Error al crear alerta: {res_alerta.get('error')}", 500)
+
+        except Exception as e:
+            logger.error(f"Error en _procesar_alerta_producto: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
+
     def _subir_foto_y_obtener_url(self, file_storage, lote_id: int) -> str | None:
         if not file_storage or not file_storage.filename:
             return None
@@ -1462,26 +1606,6 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Excepción general al subir foto para el lote {lote_id}: {e}", exc_info=True)
             raise e
-
-    def marcar_lote_retirado_alerta(self, lote_id: int):
-        """
-        Marca un lote de producto como 'retirado' por una alerta y anula su stock.
-        """
-        try:
-            update_data = {
-                'estado': 'RETIRADO',
-                'cantidad_actual': 0,
-                'cantidad_en_cuarentena': 0,
-            }
-            result = self.model.update(lote_id, update_data, 'id_lote')
-
-            if not result.get('success'):
-                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-
-            return self.success_response(message="Lote de producto marcado como retirado.")
-        except Exception as e:
-            logger.error(f"Error en marcar_lote_retirado_alerta (producto): {e}", exc_info=True)
-            return self.error_response('Error interno del servidor', 500)
 
     def liberar_lote_de_cuarentena_alerta(self, lote_id: int) -> tuple:
         """

@@ -157,3 +157,28 @@ def ejecutar_accion_api(alerta_id):
     controller = RiesgoController()
     resultado, status_code = controller.ejecutar_accion_riesgo_api(alerta_id, datos, usuario_id)
     return jsonify(resultado), status_code
+
+@api_riesgos_bp.route('/lote_producto/<int:lote_id>/pedidos_afectados', methods=['GET'])
+@jwt_required(locations=["cookies"])
+def obtener_pedidos_lote_producto(lote_id):
+    from app.models.reserva_producto import ReservaProductoModel
+    try:
+        reserva_model = ReservaProductoModel()
+        reservas_res = reserva_model.db.table('reservas_productos')\
+            .select('cantidad_reservada, pedido:pedidos(id, codigo, clientes(nombre))')\
+            .eq('lote_producto_id', lote_id).execute()
+        
+        data = []
+        if reservas_res.data:
+            for r in reservas_res.data:
+                pedido = r.get('pedido') or {}
+                cliente = pedido.get('clientes') or {}
+                data.append({
+                    'pedido_id': pedido.get('id'),
+                    'pedido_codigo': pedido.get('codigo') or f"#{pedido.get('id')}",
+                    'cliente_nombre': cliente.get('nombre', 'Desconocido'),
+                    'cantidad_reservada': r.get('cantidad_reservada', 0)
+                })
+        return jsonify({'success': True, 'data': data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -2421,8 +2421,15 @@ class OrdenProduccionController(BaseController):
             # Reutilicemos lógica de crear_orden adaptada o hagamoslo manual para ser precisos.
             # Manual es más seguro para copiar exacto.
             
-            nueva_op_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            # Validar datos sin campos de solo lectura
             validated_data = self.schema.load(nueva_op_data)
+            
+            # Agregar campos generados por el sistema post-validación
+            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            # usuario_creador_id está marcado como dump_only en el schema, por lo que load() lo ignora.
+            # Lo agregamos manualmente aquí.
+            if 'usuario_creador_id' in nueva_op_data:
+                validated_data['usuario_creador_id'] = nueva_op_data['usuario_creador_id']
             
             create_res = self.model.create(validated_data)
             if not create_res.get('success'):

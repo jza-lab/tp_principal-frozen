@@ -261,6 +261,11 @@
             <div class="tab-pane fade" id="trazabilidad-tab-pane" role="tabpanel" aria-labelledby="trazabilidad-tab" tabindex="0">
                 <div class="card">
                     <div class="card-body">
+                        <div class="d-flex justify-content-end mb-3">
+                            <button id="export-trazabilidad-pdf" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-file-earmark-pdf me-1"></i> Exportar a PDF
+                            </button>
+                        </div>
                         <div id="resumen-trazabilidad-contenedor">
                         </div>
                         <div class="accordion" id="accordionDiagrama">
@@ -616,5 +621,12 @@ document.addEventListener('DOMContentLoaded', function () {
 // --- FIN: BLOQUE ÚNICO DE DOMCONTENTLOADED ---
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadPedido.js') }}?v=1.1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    window.ENTITY_TYPE = "pedido";
+    window.ENTITY_ID = "{{ pedido.id }}";
+</script>
+<script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.1"></script>
 
 {% endblock %}

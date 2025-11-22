@@ -1052,9 +1052,15 @@ class RiesgoController(BaseController):
         for op_data in ordenes_afectadas:
             op_id = op_data['id']
             if accion_ops == 'replanificar':
-                # Lógica existente: Volver a pendiente y buscar reemplazo
-                op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_id)
-                resolucion_texto = 'Pendiente por insumo no apto'
+                # Nueva lógica: Crear nueva OP y cancelar la anterior para mantener trazabilidad
+                res_replan = op_controller.replanificar_op_con_copia(op_id)
+                if res_replan.get('success'):
+                    nuevo_codigo = res_replan.get('data', {}).get('codigo')
+                    resolucion_texto = f'Replanificada (Nueva OP: {nuevo_codigo})'
+                else:
+                    # Fallback si falla la replanificación
+                    logger.error(f"Fallo al replanificar OP {op_id}: {res_replan.get('error')}")
+                    resolucion_texto = 'Error al replanificar'
             else:
                 # Dejar como está (solo se marca resuelto en la alerta)
                 resolucion_texto = 'Mantenida (Insumo No Apto)'
@@ -1073,6 +1079,7 @@ class RiesgoController(BaseController):
         op_id = data.get('op_id')
         sub_accion = data.get('sub_accion') # continuar, cancelar, replanificar
         motivo = data.get('motivo')
+        retirar_lote_producto = data.get('retirar_lote_producto')
 
         if not all([op_id, sub_accion]):
             return {"success": False, "error": "Faltan datos (op_id, sub_accion)."}, 400
@@ -1106,11 +1113,28 @@ class RiesgoController(BaseController):
             elif sub_accion == 'cancelar':
                 op_controller.rechazar_orden(op_id, motivo or "Cancelada desde Alerta de Riesgo")
                 resolucion_texto = 'Cancelada Definitivamente'
+                
+                # Si se seleccionó retirar el lote de productos afectados
+                if retirar_lote_producto:
+                    # Buscar lotes de producto asociados a esta OP
+                    from app.controllers.lote_producto_controller import LoteProductoController
+                    lp_controller = LoteProductoController()
+                    lotes_res = lp_controller.model.find_all(filters={'orden_produccion_id': op_id})
+                    if lotes_res.get('success') and lotes_res.get('data'):
+                        for lote in lotes_res['data']:
+                            # Marcar el lote como retirado
+                            lp_controller.marcar_lote_retirado_alerta(lote['id_lote'])
+                            # Registrar en la alerta si el lote también estaba afectado
+                            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote['id_lote'], 'resuelto', 'Retirado por Cancelación de OP', usuario_id)
+                        resolucion_texto += " (Lotes Retirados)"
 
             elif sub_accion == 'replanificar':
-                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
-                # Opcional: Limpiar asignaciones previas si es necesario
-                resolucion_texto = 'Replanificada (A Pendiente)'
+                res_replan = op_controller.replanificar_op_con_copia(op_id)
+                if res_replan.get('success'):
+                    nuevo_codigo = res_replan.get('data', {}).get('codigo')
+                    resolucion_texto = f'Replanificada (Nueva OP: {nuevo_codigo})'
+                else:
+                    return {"success": False, "error": f"Error al replanificar: {res_replan.get('error')}"}, 500
             
             else:
                 return {"success": False, "error": "Acción desconocida."}, 400
@@ -1194,20 +1218,35 @@ class RiesgoController(BaseController):
 
     def _ejecutar_recibir_devolucion_api(self, alerta_id, data, usuario_id):
         lote_id = data.get('lote_id')
+        devoluciones = data.get('devoluciones', [])
+        
         if not lote_id:
             return {"success": False, "error": "Falta el ID del lote."}, 400
 
         from app.models.lote_producto import LoteProductoModel
         lote_producto_model = LoteProductoModel()
         
-        # Corregido: Usar mayúsculas para el estado
-        resultado = lote_producto_model.update(lote_id, {'estado': 'RETIRADO'}, 'id_lote')
+        # Calcular total recibido
+        cantidad_total_recibida = sum(float(d.get('cantidad', 0)) for d in devoluciones)
+        
+        # Actualizar el lote: Estado RETIRADO y cantidad igual a lo recibido (para registro)
+        resultado = lote_producto_model.update(lote_id, {
+            'estado': 'RETIRADO',
+            'cantidad_actual': cantidad_total_recibida
+        }, 'id_lote')
         
         if resultado.get('success'):
+            # Construir mensaje de detalle
+            detalle_devoluciones = ", ".join([f"Pedido #{d['pedido_id']}: {d['cantidad']}u" for d in devoluciones])
+            resolucion_texto = f'Retirado (Devolución Recibida: {cantidad_total_recibida}u). Detalle: {detalle_devoluciones}'
+            
             self.alerta_riesgo_model.registrar_resolucion_afectado(
-                alerta_id, 'lote_producto', lote_id, 'resuelto', 'Retirado (Devolución Recibida)', usuario_id
+                alerta_id, 'lote_producto', lote_id, 'resuelto', resolucion_texto, usuario_id
             )
-            return {"success": True, "message": "El lote ha sido marcado como RETIRADO."}, 200
+            
+            # Opcional: Aquí se podría actualizar el estado de los pedidos a 'DEVUELTO' si se desea
+            
+            return {"success": True, "message": "El lote ha sido marcado como RETIRADO y se registraron las cantidades devueltas."}, 200
         else:
             logger.error(f"Error al actualizar lote a RETIRADO: {resultado.get('error')}")
             return {"success": False, "error": "No se pudo actualizar el estado del lote."}, 500
