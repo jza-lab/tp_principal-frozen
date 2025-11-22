@@ -1523,12 +1523,12 @@ class IndicadoresController:
             except: return 0
 
         insumos_venc_processed = sorted([
-            {'nombre': x.get('insumo_nombre') or x.get('insumos_catalogo', {}).get('nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('f_vencimiento') or x.get('fecha_vencimiento'))}
+            {'nombre': x.get('nombre_insumo') or x.get('insumo_nombre') or x.get('insumos_catalogo', {}).get('nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('f_vencimiento') or x.get('fecha_vencimiento'))}
             for x in insumos_venc_list
         ], key=lambda k: k['dias'])[:top_n]
 
         productos_venc_processed = sorted([
-            {'nombre': x.get('producto_nombre') or x.get('producto', {}).get('nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
+            {'nombre': x.get('producto', {}).get('nombre') or x.get('producto_nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
             for x in productos_venc_list
         ], key=lambda k: k['dias'])[:top_n]
 

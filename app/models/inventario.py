@@ -137,7 +137,7 @@ class InventarioModel(BaseModel):
             fecha_hoy = date.today().isoformat()
 
             result = (self.db.table(self.table_name)
-                     .select('*, insumos_catalogo(nombre, es_critico)')
+                     .select('*, insumos_catalogo(nombre, es_critico, unidad_medida)')
                      .gte('f_vencimiento', fecha_hoy)
                      .lte('f_vencimiento', fecha_limite)
                      .eq('estado', 'disponible')
