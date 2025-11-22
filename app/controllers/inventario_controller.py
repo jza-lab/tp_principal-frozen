@@ -888,6 +888,77 @@ class InventarioController(BaseController):
             logger.error(f"Error contando alertas de vencimiento: {str(e)}")
             return 0
 
+    def liberar_lote_de_cuarentena_alerta(self, lote_id: str, usuario_id: int) -> tuple:
+        """
+        Libera un lote de CUARENTENA, devolviéndolo a su estado previo a la alerta.
+        """
+        try:
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+
+            lote = lote_res['data']
+            
+            afectado_res = self.db.table('alerta_riesgo_afectados').select('estado_previo').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).order('id', desc=True).limit(1).execute().data
+            
+            estado_previo = 'disponible' 
+            if afectado_res and afectado_res[0].get('estado_previo'):
+                estado_previo = afectado_res[0]['estado_previo']
+
+            estado_destino = 'disponible' if 'en revision' in estado_previo.lower() else estado_previo
+
+            cantidad_en_cuarentena = float(lote.get('cantidad_en_cuarentena', 0))
+            cantidad_actual = float(lote.get('cantidad_actual', 0))
+
+            nueva_cantidad_actual = cantidad_actual + cantidad_en_cuarentena
+            
+            update_data = {
+                'estado': estado_destino,
+                'cantidad_actual': nueva_cantidad_actual,
+                'cantidad_en_cuarentena': 0,
+                'motivo_cuarentena': None
+            }
+
+            result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+            
+            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+            
+            return self.success_response(message="Lote liberado de cuarentena de alerta.")
+
+        except Exception as e:
+            logger.error(f"Error en liberar_lote_de_cuarentena_alerta: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
+    def marcar_lote_retirado_alerta(self, lote_id: str, usuario_id: int):
+        """
+        Marca un lote como 'retirado' por una alerta y anula su stock.
+        """
+        try:
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success'):
+                return self.error_response('Lote no encontrado', 404)
+            lote = lote_res['data']
+
+            update_data = {
+                'estado': 'retirado',
+                'cantidad_actual': 0,
+                'cantidad_en_cuarentena': 0,
+                'observaciones': f"Lote retirado por alerta de riesgo. Usuario ID: {usuario_id}."
+            }
+            result = self.inventario_model.update(lote_id, update_data, 'id_lote')
+            
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+            
+            self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
+
+            return self.success_response(message="Lote marcado como retirado.")
+        except Exception as e:
+            logger.error(f"Error en marcar_lote_retirado_alerta: {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
 
     def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str = None, foto_file=None) -> tuple:
         """

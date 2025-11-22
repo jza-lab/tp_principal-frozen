@@ -236,8 +236,8 @@ document.addEventListener('DOMContentLoaded', function () {
             };
 
             if (renderFunctions[category]) {
-                if (category === 'comercial') {
-                    // Pass utils to renderComercial
+                if (['comercial', 'financiera'].includes(category)) {
+                    // Pass utils to these modules
                     await renderFunctions[category](data, contentContainer, {
                         renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
                     });
@@ -269,30 +269,26 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderCalidad(data, container) {
-        let content = '<div class="row g-3 mb-3">';
-        content += renderKpiCard('Rechazo Interno', `${data.tasa_rechazo_interno.valor.toFixed(2)}%`, `${data.tasa_rechazo_interno.rechazadas} un. descartadas`, 'bi-x-circle',
-            'Porcentaje de productos detectados como defectuosos durante el proceso de producción interno, antes de salir de fábrica.', 'danger');
-
-        content += renderKpiCard('Reclamos', `${data.tasa_reclamos_clientes.valor.toFixed(2)}%`, `${data.tasa_reclamos_clientes.reclamos} reclamos activos`, 'bi-emoji-frown',
-            'Porcentaje de pedidos entregados que resultaron en un reclamo formal por parte del cliente.', 'warning');
-
-        content += renderKpiCard('Rechazo Prov.', `${data.tasa_rechazo_proveedores.valor.toFixed(2)}%`, `${data.tasa_rechazo_proveedores.rechazados} lotes`, 'bi-truck-flatbed',
-            'Porcentaje de lotes de materia prima rechazados en la recepción por no cumplir estándares de calidad.', 'secondary');
-        content += '</div>';
-        container.innerHTML = content;
+        if (typeof window.renderCalidadTab === 'function') {
+            window.renderCalidadTab(data, container, {
+                renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
+            });
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error: El módulo de gráficos de calidad no se ha cargado correctamente.</div>';
+            console.error("renderCalidadTab no está definido. Verifica que calidad.js esté incluido.");
+        }
     }
 
     function renderFinanciera(data, container) {
-        let content = '<div class="row g-3 mb-3">';
-        if (data.kpis_financieros) {
-            content += renderKpiCard('Facturación', `$${data.kpis_financieros.facturacion_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Ingresos`, 'bi-wallet2', 'Total facturado en ventas confirmadas durante el periodo seleccionado.', 'success');
-            content += renderKpiCard('Costos', `$${data.kpis_financieros.costo_total.valor.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, `Directos`, 'bi-cash', 'Estimación de costos directos de producción (MP + MO + GF estimados) asociados a las ventas.', 'danger');
-            content += renderKpiCard('Margen', `${data.kpis_financieros.margen_beneficio.valor.toFixed(1)}%`, `Beneficio`, 'bi-percent', 'Porcentaje de ganancia bruta sobre la facturación. ((Ingresos - Costos) / Ingresos).', 'info');
+        // Delegar al archivo finanzas.js si está cargado
+        if (typeof window.renderFinanciera === 'function') {
+            window.renderFinanciera(data, container, {
+                renderKpiCard, createSmartCardHTML, createChart, createSplitSmartCardHTML
+            });
         } else {
-            content += '<div class="col-12"><div class="alert alert-light border text-center text-muted small">Sin datos financieros.</div></div>';
+            container.innerHTML = '<div class="alert alert-warning">Error: El módulo de gráficos financieros no se ha cargado correctamente.</div>';
+            console.error("renderFinanciera (externo) no está definido. Verifica que finanzas.js esté incluido.");
         }
-        content += '</div>';
-        container.innerHTML = content;
     }
 
     function renderInventario(data, container) {

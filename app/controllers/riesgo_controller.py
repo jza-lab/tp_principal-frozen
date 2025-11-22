@@ -132,17 +132,44 @@ class RiesgoController(BaseController):
         for afectado in afectados:
             tipo, entidad_id = afectado['tipo_entidad'], afectado['id_entidad']
             estado_actual = estados_previos.get((tipo, str(entidad_id)), '').lower()
-            if any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
-                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
-                try:
-                    if tipo in ['lote_insumo', 'lote_producto']:
-                        controllers[tipo].poner_lote_en_cuarentena(entidad_id, motivo_log, 999999, usuario_id if tipo == 'lote_insumo' else None)
-                    elif tipo == 'orden_produccion':
-                        controllers[tipo].cambiar_estado_orden_simple(int(entidad_id), 'EN ESPERA')
-                    elif tipo == 'pedido':
-                        controllers[tipo].cambiar_estado_pedido(int(entidad_id), 'EN REVISION')
-                except Exception as e:
-                    logger.error(f"Fallo al procesar efecto secundario para {tipo}:{entidad_id}. Error: {e}", exc_info=True)
+            
+            # Modificación: Si es insumo agotado pero afectado, forzamos la cuarentena para revisión
+            if tipo == 'lote_insumo' and 'agotado' in estado_actual:
+                pass # Se procesará abajo aunque esté agotado
+            elif not any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
+                continue
+
+            self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
+            try:
+                if tipo == 'lote_insumo':
+                    # Si está agotado, poner cantidad 0 en cuarentena solo para marcar el estado
+                    cantidad_a_cuarentena = 999999
+                    if 'agotado' in estado_actual:
+                        cantidad_a_cuarentena = 0 
+                    
+                    controllers[tipo].poner_lote_en_cuarentena(
+                        lote_id=entidad_id, 
+                        motivo=motivo_log, 
+                        cantidad=cantidad_a_cuarentena, 
+                        usuario_id=usuario_id,
+                        resultado_inspeccion="Pendiente de revisión (Automático por Alerta)",
+                        foto_file=None
+                    )
+                elif tipo == 'lote_producto':
+                    controllers[tipo].poner_lote_en_cuarentena(
+                        lote_id=entidad_id, 
+                        motivo=motivo_log, 
+                        cantidad=999999, 
+                        usuario_id=None, # LoteProductoController no usa usuario_id en args posicionales, pero verificamos firma
+                        resultado_inspeccion="Pendiente de revisión (Automático por Alerta)",
+                        foto_file=None
+                    )
+                elif tipo == 'orden_produccion':
+                    controllers[tipo].cambiar_estado_orden_simple(int(entidad_id), 'EN ESPERA')
+                elif tipo == 'pedido':
+                    controllers[tipo].cambiar_estado_pedido(int(entidad_id), 'EN REVISION')
+            except Exception as e:
+                logger.error(f"Fallo al procesar efecto secundario para {tipo}:{entidad_id}. Error: {e}", exc_info=True)
 
 
         
@@ -976,6 +1003,7 @@ class RiesgoController(BaseController):
             "nota_credito": self._ejecutar_nota_de_credito_api,
             "inhabilitar_pedido": self._ejecutar_inhabilitar_pedidos_api,
             "resolver_pedidos": self._ejecutar_resolver_pedidos_api,
+            "resolver_op_individual": self._ejecutar_resolver_op_individual_api
         }
 
         handler = acciones.get(accion)
@@ -990,9 +1018,112 @@ class RiesgoController(BaseController):
             return {"success": False, "error": "Error interno del servidor al procesar la acción."}, 500
 
     def _ejecutar_resolucion_lote_api(self, alerta_id, data, usuario_id):
-        # Reutiliza la lógica de resolver_cuarentena_lote_desde_alerta pero con el nuevo formato
+        # Extraer la decisión sobre OPs downstream
+        accion_ops_downstream = data.get('accion_ops_downstream')
+        # Pasarlo a la función legacy inyectando en 'data'
         data['alerta_id'] = alerta_id
+        # El método legacy no espera 'accion_ops_downstream', así que mejor lo manejamos aquí si es No Apto
+        resolucion = data.get('resolucion')
+        
+        if data.get('tipo_lote') == 'lote_insumo' and resolucion == 'No Apto' and accion_ops_downstream:
+             # Lógica custom para este caso específico que reemplaza a _resolver_lote_insumo_no_apto estándar
+             return self._resolver_lote_insumo_no_apto_custom(alerta_id, data.get('lote_id'), usuario_id, accion_ops_downstream)
+
         return self.resolver_cuarentena_lote_desde_alerta(data, usuario_id)
+
+    def _resolver_lote_insumo_no_apto_custom(self, alerta_id, lote_insumo_id, usuario_id, accion_ops):
+        from app.controllers.inventario_controller import InventarioController
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+
+        inventario_controller = InventarioController()
+        op_controller = OrdenProduccionController()
+
+        # 1. Retirar el insumo
+        inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
+
+        # 2. Obtener afectados
+        afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
+        afectados_downstream = self._transformar_trazabilidad_a_diccionario(afectados_downstream_res)
+        
+        # 3. Procesar OPs según la decisión del usuario
+        ordenes_afectadas = afectados_downstream.get('ordenes_produccion', [])
+        
+        for op_data in ordenes_afectadas:
+            op_id = op_data['id']
+            if accion_ops == 'replanificar':
+                # Lógica existente: Volver a pendiente y buscar reemplazo
+                op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_id)
+                resolucion_texto = 'Pendiente por insumo no apto'
+            else:
+                # Dejar como está (solo se marca resuelto en la alerta)
+                resolucion_texto = 'Mantenida (Insumo No Apto)'
+            
+            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_id, 'resuelto', resolucion_texto, usuario_id)
+
+        # 4. Procesar Lotes de Producto (Siempre se marcan No Aptos si el insumo es No Apto, por seguridad)
+        # NOTA: Podríamos preguntar también, pero por defecto asumimos riesgo alto.
+        for lp_data in afectados_downstream.get('lotes_productos', []):
+            self._resolver_lote_producto_no_apto(alerta_id, lp_data['id'], usuario_id, motivo_adicional=f"originado por insumo no apto {lote_insumo_id}")
+        
+        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
+        return {"success": True, "message": "Lote de insumo retirado y OPs procesadas según selección."}, 200
+
+    def _ejecutar_resolver_op_individual_api(self, alerta_id, data, usuario_id):
+        op_id = data.get('op_id')
+        sub_accion = data.get('sub_accion') # continuar, cancelar, replanificar
+        motivo = data.get('motivo')
+
+        if not all([op_id, sub_accion]):
+            return {"success": False, "error": "Faltan datos (op_id, sub_accion)."}, 400
+
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+        op_controller = OrdenProduccionController()
+
+        try:
+            op_id = int(op_id)
+            if sub_accion == 'continuar':
+                # Restaurar estado previo si estaba pausada por alerta
+                # Buscamos el estado previo en la tabla de afectados
+                afectado = self.alerta_riesgo_model.db.table('alerta_riesgo_afectados').select('estado_previo').eq('alerta_id', alerta_id).eq('tipo_entidad', 'orden_produccion').eq('id_entidad', op_id).maybe_single().execute()
+                
+                estado_destino = 'EN_PROCESO' # Default seguro
+                if afectado.data and afectado.data.get('estado_previo'):
+                    estado_previo = afectado.data['estado_previo']
+                    # Evitar volver a un estado que ya no tiene sentido o es el mismo de la alerta
+                    if estado_previo not in ['PAUSADA', 'EN ESPERA', 'EN REVISION']:
+                        estado_destino = estado_previo
+                
+                # Si estaba completada, no cambiamos el estado, solo resolvemos la alerta
+                op_actual_res = op_controller.obtener_orden_por_id(op_id)
+                if op_actual_res.get('success'):
+                    estado_actual_op = op_actual_res['data'].get('estado')
+                    if estado_actual_op != 'COMPLETADA':
+                         op_controller.cambiar_estado_orden_simple(op_id, estado_destino)
+
+                resolucion_texto = 'Continuada (Aprobada)'
+
+            elif sub_accion == 'cancelar':
+                op_controller.rechazar_orden(op_id, motivo or "Cancelada desde Alerta de Riesgo")
+                resolucion_texto = 'Cancelada Definitivamente'
+
+            elif sub_accion == 'replanificar':
+                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+                # Opcional: Limpiar asignaciones previas si es necesario
+                resolucion_texto = 'Replanificada (A Pendiente)'
+            
+            else:
+                return {"success": False, "error": "Acción desconocida."}, 400
+
+            # Marcar como resuelto en la alerta
+            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_id, 'resuelto', resolucion_texto, usuario_id)
+            self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
+
+            return {"success": True, "message": f"Orden procesada: {resolucion_texto}"}, 200
+
+        except Exception as e:
+            logger.error(f"Error en resolver_op_individual: {e}", exc_info=True)
+            return {"success": False, "error": "Error interno al procesar la OP."}, 500
 
     def _ejecutar_finalizar_analisis_api(self, alerta_id, data, usuario_id):
         conclusion = data.get('conclusion')

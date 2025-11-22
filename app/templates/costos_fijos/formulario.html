@@ -21,7 +21,7 @@
                             <label for="monto_mensual" class="form-label">Monto Mensual</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="monto_mensual" name="monto_mensual" step="0.01" min="0" value="{{ costo.monto_mensual if is_edit else '' }}" required>
+                                <input type="number" class="form-control" id="monto_mensual" name="monto_mensual" step="0.01" min="0" max="999999999999" value="{{ costo.monto_mensual if is_edit else '' }}" required>
                             </div>
                         </div>
                         <div class="d-flex justify-content-end">

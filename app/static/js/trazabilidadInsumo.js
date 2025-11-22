@@ -127,8 +127,8 @@ document.addEventListener('DOMContentLoaded', function () {
         data.addRows(rows);
 
         const options = {
-            width: '100%',
-            height: 300, // Ajustar según sea necesario
+            width: 2000, // Ancho fijo para forzar scroll horizontal y mejor visualización
+            height: 600, // Aumentado para mejor visualización
             sankey: {
                 node: {
                     label: { 
@@ -188,6 +188,20 @@ document.addEventListener('DOMContentLoaded', function () {
         trazabilidadTab.addEventListener('shown.bs.tab', () => {
             cargarDatosTrazabilidad('simple');
         }, { once: true });
+    }
+
+    // Redibujar el diagrama cuando se abre el acordeón para asegurar que se renderice con las dimensiones correctas
+    const accordionElement = document.getElementById('accordionDiagrama');
+    if (accordionElement) {
+        accordionElement.addEventListener('shown.bs.collapse', function () {
+            if (chart && datosCompletosCache) {
+                // Si ya tenemos los datos y el chart, redibujamos.
+                google.charts.setOnLoadCallback(() => renderizarSankey(datosCompletosCache.diagrama));
+            } else {
+                 // Disparar un evento de resize para forzar el redibujado si el gráfico ya existe pero no tenemos caché completo.
+                 window.dispatchEvent(new Event('resize'));
+            }
+        });
     }
 
     if (nivelSwitch) {

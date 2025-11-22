@@ -282,6 +282,11 @@ class PedidoController(BaseController):
             form_data['estado'] = estado_inicial
 
             # 4. CREAR PEDIDO EN BD
+            # --- LÓGICA DE PAGO AUTOMÁTICO PARA 'CONTADO' ---
+            condicion_venta = form_data.get('condicion_venta', 'contado')
+            precio_orden = form_data.get('precio_orden') # Asegurarse que el frontend envíe el total
+            
+
             result = self.model.create_with_items(form_data, items_para_crear)
             if not result.get('success'):
                 return self.error_response(result.get('error', 'No se pudo crear el pedido.'), 400)
@@ -289,6 +294,30 @@ class PedidoController(BaseController):
             nuevo_pedido = result.get('data')
             pedido_id_creado = nuevo_pedido.get('id')
             mensaje_final = f"Pedido {pedido_id_creado} creado en estado '{estado_inicial}'."
+
+            # --- REGISTRO AUTOMÁTICO DE PAGO (Si es AL CONTADO) ---
+            if condicion_venta == 'contado' and precio_orden:
+                try:
+                    # Crear registro en tabla pagos
+                    pago_data = {
+                        'id_pedido': pedido_id_creado,
+                        'monto': str(precio_orden),
+                        'metodo_pago': 'efectivo', # Default asumido, idealmente vendría del form si se especifica
+                        'estado': 'verificado',
+                        'id_usuario_registro': usuario_id,
+                        'datos_adicionales': {'nota': 'Pago automático por venta al contado'}
+                    }
+                    # Usamos directamente el modelo de pago para evitar validaciones de request del controller
+                    pago_result = self.pago_model.create(pago_data)
+                    
+                    if pago_result.get('success'):
+                        # Actualizar estado del pedido a 'Pagado'
+                        self.model.update(pedido_id_creado, {'estado_pago': 'Pagado'})
+                        mensaje_final += " Pago registrado autométicamente."
+                    else:
+                        logger.error(f"Fallo al registrar pago automático para pedido {pedido_id_creado}: {pago_result.get('error')}")
+                except Exception as e:
+                    logger.error(f"Excepción al registrar pago automático: {e}")
 
             # 5. EJECUTAR ACCIÓN POST-CREACIÓN (RESERVA DURA Y/O PRODUCCIÓN)
             items_creados = nuevo_pedido.get('items', [])

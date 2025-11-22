@@ -45,9 +45,6 @@ window.renderProduccionTab = function(data, container) {
                 
                 ${window.renderKpiCard('Calidad', `${(oeeData.calidad * 100).toFixed(1)}%`, 'Piezas Buenas vs Totales', 'bi-check-circle', 
                     '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).', 'success')}
-                
-                ${window.renderKpiCard('Cumplimiento Plan', `${cumplimiento.valor.toFixed(1)}%`, `${cumplimiento.completadas_a_tiempo} órdenes a tiempo`, 'bi-calendar-check', 
-                    'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.', 'indigo')}
             </div>
         </div>
     </div>

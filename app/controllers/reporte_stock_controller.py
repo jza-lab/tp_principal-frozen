@@ -163,7 +163,21 @@ class ReporteStockController:
             if not response.get('success'):
                 return response
             
-            return {'success': True, 'data': response.get('data', [])}
+            # Transformar datos para el frontend
+            raw_data = response.get('data', [])
+            formatted_data = []
+            
+            for item in raw_data:
+                insumo = item.get('insumos_catalogo', {}) or {}
+                formatted_data.append({
+                    'nombre_insumo': insumo.get('nombre', 'Desconocido'),
+                    'numero_lote': item.get('numero_lote_proveedor', 'S/N'),
+                    'fecha_vencimiento': item.get('f_vencimiento'),
+                    'cantidad_disponible': item.get('cantidad_actual'),
+                    'unidad_medida': insumo.get('unidad_medida', '')
+                })
+
+            return {'success': True, 'data': formatted_data}
 
         except Exception as e:
             return {'success': False, 'error': str(e)}
@@ -190,8 +204,10 @@ class ReporteStockController:
             hoy = datetime.now().date()
 
             for lote in lotes:
-                f_inicio_str = lote.get(key_start)
-                f_fin_str = lote.get('fecha_vencimiento')
+                # Support both keys for start date: 'fecha_ingreso'/'fecha_produccion' and 'f_ingreso'
+                f_inicio_str = lote.get(key_start) or lote.get('f_ingreso')
+                # Support both keys for end date: 'fecha_vencimiento' and 'f_vencimiento'
+                f_fin_str = lote.get('fecha_vencimiento') or lote.get('f_vencimiento')
 
                 if not f_inicio_str or not f_fin_str:
                     continue
