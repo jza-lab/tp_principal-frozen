@@ -820,7 +820,7 @@ class PedidoController(BaseController):
             estado_actual_ov = pedido_actual.get('estado')
 
             # 2. Validar estados
-            estados_cancelables = ['PENDIENTE', 'EN_PROCESO', 'LISTA_PARA_ENTREGA', 'PLANIFICADA']
+            estados_cancelables = ['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'PLANIFICADA']
             if estado_actual_ov not in estados_cancelables and estado_actual_ov != 'CANCELADO':
                  return self.error_response(f"No se puede cancelar un pedido en estado '{estado_actual_ov}'.", 400)
 

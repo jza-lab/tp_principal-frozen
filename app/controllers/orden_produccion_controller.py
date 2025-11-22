@@ -2322,15 +2322,23 @@ class OrdenProduccionController(BaseController):
 
     def desvincular_orden_de_pedido(self, orden_id: int, motivo: str = "") -> Dict:
         """
-        Caso 3 y 4: Desvincula una OP de un Pedido (setea pedido_id = None).
-        Esto permite que la OP continúe su curso hacia Stock General
-        aunque el pedido original se haya cancelado.
+        Caso 3 y 4: Desvincula una OP de un Pedido.
+        LIMPIEZA TOTAL:
+        1. Quita link en tabla ordenes_produccion.
+        2. Borra asignaciones intermedias.
+        3. Cancela reservas existentes.
+        4. (NUEVO) Quita el link en pedido_items para evitar reservas futuras.
         """
         try:
-            # 1. Actualizar la OP para quitar la referencia al pedido
-            # Dependiendo de tu modelo, usamos 'pedido_id' directo.
+            # 1. Obtener datos actuales
+            op_actual_res = self.model.find_by_id(orden_id)
+            if not op_actual_res.get('success'):
+                return {'success': False, 'error': "OP no encontrada."}
 
-            op_actual = self.model.find_by_id(orden_id).get('data', {})
+            op_actual = op_actual_res.get('data')
+            pedido_id_asociado = op_actual.get('pedido_id')
+
+            # 2. Desvincular en la tabla de OPs (Header)
             obs_actual = op_actual.get('observaciones') or ''
             nueva_obs = f"{obs_actual}\n[Desvinculada de Pedido Cancelado]: {motivo}".strip()
 
@@ -2338,18 +2346,42 @@ class OrdenProduccionController(BaseController):
                 'pedido_id': None,
                 'observaciones': nueva_obs
             }
-
             result = self.model.update(orden_id, update_data)
 
-            # 2. Si utilizas la tabla intermedia 'asignaciones_pedidos', también hay que limpiar allí
+            # 3. Limpiar tabla intermedia asignaciones_pedidos
             try:
                 self.asignacion_pedido_model.db.table('asignaciones_pedidos')\
                     .delete().eq('orden_produccion_id', orden_id).execute()
             except Exception as e_assign:
                 logger.warning(f"No se pudo limpiar asignaciones_pedidos para OP {orden_id}: {e_assign}")
 
+            # 4. Limpiar Reservas Físicas Existentes (si las hubiera)
+            if pedido_id_asociado:
+                lotes_op_res = self.lote_producto_controller.model.find_all({'orden_produccion_id': orden_id})
+                if lotes_op_res.get('success'):
+                    for lote in lotes_op_res.get('data', []):
+                        reservas_lote = self.lote_producto_controller.reserva_model.find_all({
+                            'lote_producto_id': lote['id_lote'],
+                            'pedido_id': pedido_id_asociado,
+                            'estado': 'RESERVADO'
+                        })
+                        if reservas_lote.get('success'):
+                            for reserva in reservas_lote.get('data', []):
+                                self.lote_producto_controller.liberar_reserva_especifica(reserva['id'])
+
+            # 5. (NUEVO CRÍTICO) Desvincular items del pedido para evitar reservas futuras
+            # Esto asegura que cuando la OP termine, no encuentre estos items esperando.
+            try:
+                self.pedido_model.db.table('pedido_items')\
+                    .update({'orden_produccion_id': None})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+                logger.info(f"Items de pedido desvinculados de la OP {orden_id}.")
+            except Exception as e_items:
+                logger.error(f"Error desvinculando items de pedido de la OP {orden_id}: {e_items}")
+
             if result.get('success'):
-                logger.info(f"OP {orden_id} desvinculada exitosamente del pedido. Pasa a Stock General.")
+                logger.info(f"OP {orden_id} desvinculada exitosamente. Pasa a Stock General.")
                 return {'success': True, 'data': result.get('data')}
             return result
 
