@@ -19,8 +19,10 @@ from app.models.producto import ProductoModel
 from app.models.nota_credito import NotaCreditoModel
 from app.models.alerta_riesgo import AlertaRiesgoModel
 from app.models.reclamo_proveedor_model import ReclamoProveedorModel
+from app.models.costo_fijo import CostoFijoModel
 from app.controllers.reporte_produccion_controller import ReporteProduccionController
 from app.controllers.reporte_stock_controller import ReporteStockController
+from app.controllers.rentabilidad_controller import RentabilidadController
 from decimal import Decimal
 from app.utils import estados
 import logging
@@ -33,10 +35,12 @@ class IndicadoresController:
     def __init__(self):
         self.reporte_produccion_controller = ReporteProduccionController()
         self.reporte_stock_controller = ReporteStockController()
+        self.rentabilidad_controller = RentabilidadController()
         self.orden_produccion_model = OrdenProduccionModel()
         self.control_calidad_producto_model = ControlCalidadProductoModel()
         self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
         self.registro_desperdicio_insumo_model = RegistroDesperdicioModel()
+        self.costo_fijo_model = CostoFijoModel()
         self.receta_model = RecetaModel()
         self.registro_paro_model = RegistroParoModel()
         self.bloqueo_capacidad_model = BloqueoCapacidadModel()
@@ -1065,12 +1069,71 @@ class IndicadoresController:
         fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
         fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
         
+        contexto = 'mes'
+        if semana: contexto = 'semana'
+        elif mes: contexto = 'mes'
+        elif ano: contexto = 'ano'
+        
         # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
-        total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-        facturacion_total = total_valor_res.get('total_valor', 0.0) if total_valor_res.get('success') else 0.0
+        
+        # KPI 1: Ventas Totales (Facturación Emitida / Pendiente)
+        # Incluimos todos los pedidos confirmados (no cancelados, ni rechazados).
+        # Esto incluye EN_PROCESO, LISTO_PARA_ENTREGA, etc. para reflejar todo lo "Vendido" vs "Cobrado".
+        estados_ventas = [
+            estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
+            estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
+        ]
+        ventas_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio_str, fecha_fin_str, estados_filtro=estados_ventas)
+        data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
+        ventas_totales = sum(float(p.get('precio_orden') or 0) for p in data_ventas)
 
+        # KPI 2: Flujo de Caja Real (Recaudación de Ventas del Periodo)
+        # OPTIMIZACIÓN SOLICITADA: Usar estado_pago='Pagado' para calcular ingreso directo sin request extra.
+        # Esto cambia la definición a "Cobranza de las ventas generadas en el periodo".
+        
+        flujo_caja_real = 0.0
+        ids_pago_parcial = []
+        
+        for p in data_ventas:
+            estado_pago = p.get('estado_pago', '').lower()
+            precio = float(p.get('precio_orden') or 0)
+            
+            if estado_pago == 'pagado':
+                flujo_caja_real += precio
+            elif estado_pago == 'pagado parcialmente':
+                ids_pago_parcial.append(p['id'])
+                
+        # Consultar pagos solo para los parciales (si existen)
+        from app.models.pago import PagoModel
+        pago_model = PagoModel()
+        
+        if ids_pago_parcial:
+            try:
+                pagos_parciales_res = pago_model.db.table('pagos').select('monto')\
+                    .in_('id_pedido', ids_pago_parcial)\
+                    .eq('estado', 'verificado')\
+                    .execute()
+                data_parciales = pagos_parciales_res.data if pagos_parciales_res.data else []
+                flujo_caja_real += sum(float(pg.get('monto') or 0) for pg in data_parciales)
+            except Exception as e:
+                logger.error(f"Error consultando pagos parciales: {e}")
+
+        # KPI 3: Ingreso Pendiente (Cuentas por Cobrar)
+        # Diferencia simple dado que flujo_caja_real ahora está alineado a las mismas ventas
+        ingreso_pendiente = ventas_totales - flujo_caja_real
+        if ingreso_pendiente < 0: ingreso_pendiente = 0
+
+        # KPI 4: Egresos (Costos)
+        # Cálculo rápido de costo para KPI (estimado)
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         costo_total = 0.0
+        dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
+        
+        # Obtener costos fijos mensuales activos
+        costos_fijos_res = self.costo_fijo_model.find_all(filters={'activo': True})
+        monto_mensual_fijos = sum(float(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', [])) if costos_fijos_res.get('success') else 0.0
+        gastos_fijos_periodo = (monto_mensual_fijos / 30) * dias_periodo
+
         if ordenes_res.get('success'):
             ordenes_data = ordenes_res.get('data', [])
             producto_ids_en_ordenes = [op['producto_id'] for op in ordenes_data if op.get('producto_id')]
@@ -1078,34 +1141,447 @@ class IndicadoresController:
             
             costo_mp = sum(self._get_costo_producto(op['producto_id'], costos_cache) * float(op.get('cantidad_producida', 0)) for op in ordenes_data if op.get('producto_id'))
             horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
-            costo_mo = horas_prod * 15
-            dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
-            gastos_fijos = (5000 / 30) * dias_periodo
-            costo_total = costo_mp + costo_mo + gastos_fijos
+            costo_mo = horas_prod * 15 # COSTO HORA ESTIMADO
+            costo_total = costo_mp + costo_mo + gastos_fijos_periodo
 
-        beneficio_bruto = facturacion_total - costo_total
-        margen_beneficio = (beneficio_bruto / facturacion_total) * 100 if facturacion_total > 0 else 0
+        beneficio_bruto = ventas_totales - costo_total
+        margen_beneficio = (beneficio_bruto / ventas_totales) * 100 if ventas_totales > 0 else 0
         
         kpis = {
-            "facturacion_total": {"valor": round(facturacion_total, 2), "etiqueta": "Facturación Total"},
-            "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Costo de Ventas"},
-            "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Beneficio Bruto"},
-            "margen_beneficio": {"valor": round(margen_beneficio, 2), "etiqueta": "Margen de Beneficio (%)"}
+            "ventas_totales": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales (Pendiente)"},
+            "flujo_caja_real": {"valor": round(flujo_caja_real, 2), "etiqueta": "Flujo de Caja (Recibido)"},
+            "ingreso_pendiente": {"valor": round(ingreso_pendiente, 2), "etiqueta": "Cuentas por Cobrar"},
+            "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Egresos Totales (Est.)"},
+            "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Resultado Operativo"},
+            # Mantener compatibilidad por si acaso
+            "facturacion_total": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales"}
         }
 
         # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
-        facturacion = self.obtener_facturacion_por_periodo(fecha_inicio_str, fecha_fin_str)
-        costo_ganancia = self.obtener_costo_vs_ganancia(fecha_inicio_str, fecha_fin_str)
-        rentabilidad = self.obtener_rentabilidad_productos(fecha_inicio_str, fecha_fin_str)
-        descomposicion = self.obtener_descomposicion_costos(fecha_inicio_str, fecha_fin_str)
+        
+        # A. Evolución de Ingresos (Line Chart) - AHORA INCLUYE FLUJO DE CAJA
+        # Usamos obtener_facturacion_por_periodo pero adaptado al contexto
+        evolucion_ingresos = self._obtener_evolucion_financiera_comparativa(fecha_inicio, fecha_fin, contexto)
 
-        # --- 3. COMBINAR AMBAS ESTRUCTURAS ---
+        # B. Egresos Básicos y Desglose (Pie Chart + Drilldown Data)
+        descomposicion = self._obtener_descomposicion_costos_con_detalle(fecha_inicio, fecha_fin, gastos_fijos_periodo)
+
+        # C. Ingresos vs Egresos (Multi-line)
+        ingresos_vs_egresos = self._obtener_evolucion_ingresos_vs_egresos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
+
+        # D. Evolución Costos Fijos (Line)
+        evolucion_costos_fijos = self._obtener_evolucion_costos_fijos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
+
+        # E. Matriz BCG (Scatter)
+        # Llamamos al controlador de rentabilidad existente
+        try:
+            rentabilidad_raw = self.rentabilidad_controller.obtener_datos_matriz_rentabilidad(fecha_inicio_str, fecha_fin_str)
+            # rentabilidad_raw podría ser una tupla (data, status) si usa success_response de BaseController
+            if isinstance(rentabilidad_raw, tuple):
+                rentabilidad_res = rentabilidad_raw[0]
+            else:
+                rentabilidad_res = rentabilidad_raw
+                
+            bcg_matrix = rentabilidad_res.get('data', {}) if rentabilidad_res.get('success') else {}
+        except Exception as e:
+            logger.error(f"Error obteniendo matriz rentabilidad: {e}")
+            bcg_matrix = {}
+
         return {
             "kpis_financieros": kpis,
-            "facturacion_periodo": facturacion if isinstance(facturacion, dict) else {"labels": [], "data": []},
-            "costo_vs_ganancia": costo_ganancia if isinstance(costo_ganancia, dict) else {"labels": [], "ingresos": [], "costos": []},
-            "rentabilidad_productos": rentabilidad if isinstance(rentabilidad, dict) else {"labels": [], "costos": [], "ingresos": [], "rentabilidad_neta": []},
-            "descomposicion_costos": descomposicion if isinstance(descomposicion, dict) else {"labels": [], "data": []},
+            "evolucion_ingresos": evolucion_ingresos,
+            "descomposicion_costos": descomposicion,
+            "ingresos_vs_egresos": ingresos_vs_egresos,
+            "evolucion_costos_fijos": evolucion_costos_fijos,
+            "bcg_matrix": bcg_matrix
+        }
+
+    def _fill_time_series_gaps(self, data_dict, start_date, end_date, frequency='day'):
+        """
+        Rellena los huecos en una serie temporal con ceros.
+        frequency: 'day', 'month'
+        data_dict: Diccionario { 'YYYY-MM-DD': valor } o { 'YYYY-MM': valor }
+        Retorna: (sorted_labels, sorted_values)
+        """
+        labels = []
+        values = []
+        
+        current = start_date
+        if frequency == 'month':
+            # Alinear al primer día del mes para iterar
+            current = current.replace(day=1)
+            end_align = end_date.replace(day=1)
+            
+            while current <= end_align:
+                key = current.strftime('%Y-%m')
+                labels.append(key)
+                values.append(data_dict.get(key, 0.0))
+                # Avanzar un mes
+                next_month = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
+                current = next_month
+        else: # day
+            while current <= end_date:
+                key = current.strftime('%Y-%m-%d')
+                labels.append(key)
+                values.append(data_dict.get(key, 0.0))
+                current += timedelta(days=1)
+                
+        return labels, values
+
+    def _obtener_evolucion_financiera_comparativa(self, fecha_inicio, fecha_fin, contexto):
+        """
+        Compara Ventas (Devengado) vs Flujo de Caja (Percibido) en el tiempo.
+        Alineado a la lógica de KPIs: 'Flujo de Caja' aquí representa la cobranza de las ventas de ese día.
+        """
+        freq = 'month' if contexto == 'ano' else 'day'
+        bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
+
+        # 1. Ventas (Ingresos devengados) - Usamos la misma base amplia
+        estados_ventas = [
+            estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
+            estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
+        ]
+        
+        # Reutilizamos logic de get_ingresos_en_periodo pero asegurando traer datos crudos para procesar pago
+        ventas_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio.strftime('%Y-%m-%d'), fecha_fin.strftime('%Y-%m-%d'), estados_filtro=estados_ventas)
+        data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
+
+        ventas_map = defaultdict(float)
+        caja_map = defaultdict(float)
+        
+        # IDs para consultar parciales si es necesario (optimización)
+        ids_parciales = []
+        mapa_fechas_parciales = {} # id -> fecha_bucket
+
+        for p in data_ventas:
+            if not p.get('fecha_solicitud'): continue
+            dt = datetime.fromisoformat(p['fecha_solicitud'])
+            key = dt.strftime(bucket_fmt)
+            
+            precio = float(p.get('precio_orden') or 0)
+            ventas_map[key] += precio
+            
+            estado_pago = p.get('estado_pago', '').lower()
+            if estado_pago == 'pagado':
+                caja_map[key] += precio
+            elif estado_pago == 'pagado parcialmente':
+                ids_parciales.append(p['id'])
+                mapa_fechas_parciales[p['id']] = key
+
+        # Consultar parciales
+        if ids_parciales:
+            from app.models.pago import PagoModel
+            pago_model = PagoModel()
+            try:
+                pagos_res = pago_model.db.table('pagos').select('id_pedido, monto')\
+                    .in_('id_pedido', ids_parciales)\
+                    .eq('estado', 'verificado')\
+                    .execute()
+                if pagos_res.data:
+                    for pg in pagos_res.data:
+                        pid = pg['id_pedido']
+                        if pid in mapa_fechas_parciales:
+                            key = mapa_fechas_parciales[pid]
+                            caja_map[key] += float(pg['monto'])
+            except Exception as e:
+                logger.error(f"Error sumando parciales en grafica: {e}")
+
+        # 3. Rellenar huecos
+        filled_labels, filled_ventas = self._fill_time_series_gaps(dict(ventas_map), fecha_inicio, fecha_fin, freq)
+        _, filled_caja = self._fill_time_series_gaps(dict(caja_map), fecha_inicio, fecha_fin, freq)
+
+        # 4. Formatear Labels
+        display_labels = []
+        for l in filled_labels:
+            if freq == 'month':
+                dt = datetime.strptime(l, "%Y-%m")
+                display_labels.append(dt.strftime("%b"))
+            else:
+                dt = datetime.strptime(l, "%Y-%m-%d")
+                display_labels.append(dt.strftime("%d/%m"))
+
+        insight = "Flujos alineados."
+        total_ventas = sum(filled_ventas)
+        total_caja = sum(filled_caja)
+        if total_ventas > total_caja * 1.2:
+            insight = "Las ventas superan significativamente al flujo de caja real (Crédito)."
+        elif total_caja > total_ventas:
+            insight = "El flujo de caja supera a las ventas del periodo (Cobros atrasados)."
+
+        return {
+            "categories": display_labels,
+            "series": [
+                {"name": "Ventas (Devengado)", "data": filled_ventas},
+                {"name": "Flujo Caja (Percibido)", "data": filled_caja}
+            ],
+            "insight": insight,
+            "tooltip": "Comparativa entre lo facturado (Ventas) y lo realmente cobrado (Flujo de Caja)."
+        }
+
+    def _obtener_descomposicion_costos_con_detalle(self, fecha_inicio, fecha_fin, gastos_fijos_total):
+        # Calcular MP y MO como antes
+        ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_ordenes = ordenes_res.get('data', []) if ordenes_res.get('success') else []
+        
+        producto_ids = [op['producto_id'] for op in data_ordenes if op.get('producto_id')]
+        costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids)))
+
+        costo_mp = 0.0
+        horas_prod = 0.0
+        
+        for op in data_ordenes:
+            if pid := op.get('producto_id'):
+                u_cost = self._get_costo_producto(pid, costos_cache)
+                costo_mp += u_cost * float(op.get('cantidad_producida', 0))
+            if op.get('fecha_inicio') and op.get('fecha_fin'):
+                horas_prod += (datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600
+
+        costo_mo = horas_prod * 15.0 # Valor fijo hora hombre estimado
+        
+        # Obtener detalle de costos fijos para el drilldown
+        costos_fijos_res = self.costo_fijo_model.find_all(filters={'activo': True})
+        detalle_fijos = []
+        total_mensual_fijos = 0.0
+        
+        if costos_fijos_res.get('success'):
+            for cf in costos_fijos_res.get('data', []):
+                monto = float(cf.get('monto_mensual', 0))
+                total_mensual_fijos += monto
+                detalle_fijos.append({"name": cf.get('nombre_costo', 'Varios'), "value": monto})
+
+        # Ajustar el detalle al periodo (prorrateo)
+        dias = max((fecha_fin - fecha_inicio).days, 1)
+        factor = dias / 30.0
+        
+        detalle_fijos_ajustado = [{"name": d["name"], "value": round(d["value"] * factor, 2)} for d in detalle_fijos]
+
+        # Datos principales
+        main_data = [
+            {"name": "Materia Prima", "value": round(costo_mp, 2)},
+            {"name": "Mano de Obra", "value": round(costo_mo, 2)},
+            {"name": "Costos Fijos", "value": round(gastos_fijos_total, 2), "drilldown": True} # Flag for frontend
+        ]
+        
+        total = costo_mp + costo_mo + gastos_fijos_total
+        pct_fijos = (gastos_fijos_total / total * 100) if total > 0 else 0
+        insight = f"Los costos fijos representan el {pct_fijos:.1f}% de los egresos básicos totales."
+
+        return {
+            "data": main_data,
+            "drilldown_data": detalle_fijos_ajustado, # Data for the secondary chart
+            "insight": insight,
+            "tooltip": "Desglose de los principales egresos. Haga clic en 'Costos Fijos' para ver su composición."
+        }
+
+    def _obtener_evolucion_ingresos_vs_egresos(self, fecha_inicio, fecha_fin, contexto, monto_mensual_fijos):
+        # 1. Obtener datos base usando la misma lógica de relleno
+        # Si el contexto es 'mes', usamos 'diario' para ver la curva. Si es 'ano', 'mensual'.
+        periodo_req = 'mensual' if contexto == 'ano' else 'diario'
+        res_cvg = self.obtener_costo_vs_ganancia(fecha_inicio.strftime('%Y-%m-%d'), fecha_fin.strftime('%Y-%m-%d'), periodo=periodo_req)
+        
+        raw_labels = res_cvg.get('labels', [])
+        ingresos_map = dict(zip(raw_labels, res_cvg.get('ingresos', [])))
+        costos_var_map = dict(zip(raw_labels, res_cvg.get('costos', [])))
+        
+        freq = 'month' if contexto == 'ano' else 'day'
+        
+        # Rellenar series temporales
+        filled_labels, filled_ingresos = self._fill_time_series_gaps(ingresos_map, fecha_inicio, fecha_fin, freq)
+        _, filled_costos_var = self._fill_time_series_gaps(costos_var_map, fecha_inicio, fecha_fin, freq)
+        
+        # 2. Calcular Costo Fijo por bucket y sumar a Egresos
+        # Si es por día: monto / 30
+        # Si es por mes: monto
+        fixed_cost_per_bucket = monto_mensual_fijos
+        if freq == 'day':
+            fixed_cost_per_bucket = monto_mensual_fijos / 30.0
+        
+        filled_egresos = []
+        for cv in filled_costos_var:
+            filled_egresos.append(round(cv + fixed_cost_per_bucket, 2))
+            
+        # Insight
+        total_ing = sum(filled_ingresos)
+        total_egr = sum(filled_egresos)
+        diff = total_ing - total_egr
+        insight = "Los egresos superan a los ingresos en este periodo."
+        if diff > 0:
+            insight = "El balance es positivo, con ingresos superando a los egresos básicos."
+
+        # Formatear labels
+        display_labels = []
+        for l in filled_labels:
+            if freq == 'month':
+                dt = datetime.strptime(l, "%Y-%m")
+                display_labels.append(dt.strftime("%b"))
+            else:
+                dt = datetime.strptime(l, "%Y-%m-%d")
+                display_labels.append(dt.strftime("%d/%m"))
+
+        return {
+            "categories": display_labels,
+            "series": [
+                {"name": "Ingresos", "data": filled_ingresos},
+                {"name": "Egresos Básicos", "data": filled_egresos}
+            ],
+            "insight": insight,
+            "tooltip": "Comparativa de Ingresos vs Egresos Básicos (Variable + Fijos). Nota: Los egresos son aproximados."
+        }
+
+    def _obtener_evolucion_costos_fijos(self, fecha_inicio, fecha_fin, contexto, monto_actual):
+        freq = 'month' if contexto == 'ano' else 'day'
+        bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
+
+        # Usar la lógica histórica si está disponible
+        # Iteramos sobre cada bucket temporal y calculamos el costo fijo activo en ese momento
+        # Esto es costoso si llamamos a _calcular_costo_fijo_historico_total muchas veces.
+        # Optimizamos: traemos todo el historial y lo procesamos en memoria.
+        
+        data_map = defaultdict(float)
+        
+        try:
+            # Obtener todos los costos fijos
+            costos_res = self.costo_fijo_model.find_all()
+            costos = costos_res.get('data', []) if costos_res.get('success') else []
+            
+            # Obtener todo el historial de una vez (o filtrar por rango si la tabla es gigante, aquí asumimos manejable)
+            historial_res = self.costo_fijo_model.db.table('historial_costos_fijos').select('*').execute()
+            all_historial = historial_res.data if historial_res.data else []
+            
+            # Agrupar historial por costo_fijo_id
+            historial_map = defaultdict(list)
+            for h in all_historial:
+                historial_map[h['costo_fijo_id']].append(h)
+            
+            # Ordenar historial por fecha
+            for cid in historial_map:
+                historial_map[cid].sort(key=lambda x: x['fecha_cambio'])
+
+            # Generar secuencia de fechas
+            fechas_bucket = []
+            current = fecha_inicio
+            if freq == 'month':
+                current = current.replace(day=1)
+                end_align = fecha_fin.replace(day=1)
+                while current <= end_align:
+                    fechas_bucket.append(current)
+                    next_month = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
+                    current = next_month
+            else:
+                while current <= fecha_fin:
+                    fechas_bucket.append(current)
+                    current += timedelta(days=1)
+
+            for date_point in fechas_bucket:
+                key = date_point.strftime(bucket_fmt)
+                
+                # Para este punto en el tiempo, sumar el valor vigente de cada costo fijo
+                total_dia = 0.0
+                
+                for costo in costos:
+                    cid = costo['id']
+                    cambios = historial_map.get(cid, [])
+                    
+                    # Encontrar el valor vigente para date_point
+                    # SAFETY: Parseo robusto
+                    try:
+                        valor_vigente = float(costo.get('monto_mensual') or 0.0) 
+                    except:
+                        valor_vigente = 0.0
+                    
+                    # Si hay historial, buscar el último cambio ANTERIOR o IGUAL a date_point
+                    # Si date_point es anterior al primer cambio, asumimos el valor 'monto_anterior' del primer cambio
+                    
+                    point_dt = datetime.combine(date_point, datetime.min.time())
+                    
+                    if cambios:
+                        try:
+                            # Verificar si es antes del primer cambio
+                            primer_cambio_dt = datetime.fromisoformat(cambios[0]['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
+                            
+                            if point_dt < primer_cambio_dt:
+                                valor_vigente = float(cambios[0].get('monto_anterior') or 0.0)
+                            else:
+                                # Buscar el último cambio válido
+                                for cambio in cambios:
+                                    cambio_dt = datetime.fromisoformat(cambio['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
+                                    if cambio_dt <= point_dt:
+                                        valor_vigente = float(cambio.get('monto_nuevo') or 0.0)
+                                    else:
+                                        break
+                        except Exception as e:
+                            logger.error(f"Error procesando historial de costo {cid}: {e}")
+                    
+                    # SAFETY CAP: Evitar valores corruptos gigantes que rompen la gráfica (e.g. e+234)
+                    if valor_vigente > 1_000_000_000_000: # 1 Trillón como limite absurdo
+                        logger.warning(f"Valor de costo fijo {cid} anormalmente alto detectado y omitido: {valor_vigente}")
+                        valor_vigente = 0.0
+
+                    total_dia += valor_vigente
+
+                # Si la frecuencia es diaria, dividimos por 30. Si es mensual, tomamos el total mensual.
+                val_final = total_dia if freq == 'month' else (total_dia / 30.0)
+                data_map[key] = val_final
+
+        except Exception as e:
+            logger.error(f"Error calculando historial costos fijos para gráfico: {e}")
+            # Fallback a proyección plana
+            val_per_unit = monto_actual if freq == 'month' else (monto_actual / 30.0)
+            return self._obtener_evolucion_costos_fijos_fallback(fecha_inicio, fecha_fin, freq, val_per_unit)
+
+        labels = sorted(data_map.keys())
+        values = [round(data_map[k], 2) for k in labels]
+        
+        # Formatear labels visuales
+        display_labels = []
+        for l in labels:
+            if freq == 'month':
+                dt = datetime.strptime(l, "%Y-%m")
+                display_labels.append(dt.strftime("%b"))
+            else:
+                dt = datetime.strptime(l, "%Y-%m-%d")
+                display_labels.append(dt.strftime("%d/%m"))
+
+        # Generar insight
+        insight = "Los costos fijos se mantienen estables."
+        if len(values) > 1:
+            first = values[0]
+            last = values[-1]
+            if last > first * 1.05:
+                insight = "Se observa un aumento en la estructura de costos fijos."
+            elif last < first * 0.95:
+                insight = "Los costos fijos han disminuido en el periodo."
+
+        return {
+            "categories": display_labels,
+            "values": values,
+            "insight": insight,
+            "tooltip": "Evolución histórica calculada basada en los registros de cambio de valor."
+        }
+
+    def _obtener_evolucion_costos_fijos_fallback(self, fecha_inicio, fecha_fin, freq, val_per_unit):
+        labels = []
+        values = []
+        current = fecha_inicio
+        
+        if freq == 'month':
+            current = current.replace(day=1)
+            end_align = fecha_fin.replace(day=1)
+            while current <= end_align:
+                labels.append(current.strftime("%b"))
+                values.append(round(val_per_unit, 2))
+                current = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
+        else:
+            while current <= fecha_fin:
+                labels.append(current.strftime("%d/%m"))
+                values.append(round(val_per_unit, 2))
+                current += timedelta(days=1)
+
+        return {
+            "categories": labels,
+            "values": values,
+            "insight": "Proyección basada en valores actuales (sin historial disponible).",
+            "tooltip": "Evolución proyectada del total de costos fijos."
         }
         
     # --- CATEGORÍA: INVENTARIO ---
@@ -1654,19 +2130,24 @@ class IndicadoresController:
         ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin)
         if not ingresos_res.get('success'): return {"labels": [], "data": []}
 
-        try:
-            total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-            num_pedidos_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
-        except Exception as e:
-            logger.error(f"Error calculando valor promedio: {e}")
+        # Determinar el formato de la clave basado en el periodo solicitado
+        # Si es anual ('anual' o 'mensual' como fallback largo), agrupamos por mes
+        # Si es semanal o mensual, agrupamos por día para mostrar evolución fina
+        date_format = '%Y-%m'
+        if periodo in ['semanal', 'diario']:
+            date_format = '%Y-%m-%d'
+        # Si es mensual, también queremos ver días
+        if periodo == 'mensual':
+            date_format = '%Y-%m-%d'
 
         if isinstance(ingresos_res.get('data'), dict):
             return ingresos_res['data']
         else:
             processed_data = defaultdict(float)
             for ingreso in ingresos_res.get('data', []):
+                 if not ingreso.get('fecha_solicitud'): continue
                  fecha_dt = datetime.fromisoformat(ingreso['fecha_solicitud'])
-                 key = fecha_dt.strftime('%Y-%m') 
+                 key = fecha_dt.strftime(date_format)
                  processed_data[key] += float(ingreso['precio_orden'])
             
             labels = sorted(processed_data.keys())
@@ -1747,6 +2228,11 @@ class IndicadoresController:
         
         costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
 
+        # Determinar formato de fecha consistente con obtener_facturacion_por_periodo
+        date_format = '%Y-%m'
+        if periodo in ['semanal', 'diario', 'mensual']:
+            date_format = '%Y-%m-%d'
+
         costos_por_periodo = defaultdict(float)
         for op in ordenes_data:
             producto_id = op.get('producto_id')
@@ -1761,7 +2247,7 @@ class IndicadoresController:
                 continue
 
             fecha_op = datetime.fromisoformat(fecha_op_str).date()
-            key = fecha_op.strftime('%Y-%m') if periodo == 'mensual' else fecha_op.strftime('%Y-W%U') if periodo == 'semanal' else fecha_op.strftime('%Y-%m-%d')
+            key = fecha_op.strftime(date_format)
             costos_por_periodo[key] += costo_op
 
         labels = sorted(list(set(facturacion_res['labels']) | set(costos_por_periodo.keys())))
