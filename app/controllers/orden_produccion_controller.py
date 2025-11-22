@@ -1825,11 +1825,11 @@ class OrdenProduccionController(BaseController):
             # 2. Simular la distribución del stock bueno de la OP Padre (FIFO)
             #    Esto es crucial porque en este punto la OP Padre aún no ha reservado stock físicamente,
             #    pero sabemos que producirá una cierta cantidad "Buena" que cubrirá a los primeros pedidos.
-            
+
             # Calcular stock bueno estimado del padre (Planificado - Desperdicio reportado en la hija)
             cantidad_planificada_padre = Decimal(str(op_padre.get('cantidad_planificada', '0')))
             stock_bueno_estimado_padre = cantidad_planificada_padre - cantidad_op_hija
-            
+
             logger.info(f"Simulando asignación FIFO para OP Padre {op_padre_id}. Stock Bueno Est: {stock_bueno_estimado_padre}. Desperdicio (OP Hija): {cantidad_op_hija}")
 
             # Ordenar items por antigüedad del pedido (FIFO)
@@ -1843,23 +1843,23 @@ class OrdenProduccionController(BaseController):
 
             for item in items_asociados:
                 cantidad_requerida = Decimal(str(item.get('cantidad', '0')))
-                
+
                 # 1. Verificar cuánto YA estaba reservado previamente (por si acaso hubo entregas parciales anteriores)
                 reservas_previas_res = self.lote_producto_controller.reserva_model.find_all({'pedido_item_id': item['id'], 'estado': 'RESERVADO'})
                 cantidad_ya_entregada = sum(Decimal(r.get('cantidad_reservada', '0')) for r in reservas_previas_res.get('data', []))
-                
+
                 pendiente_real = cantidad_requerida - cantidad_ya_entregada
-                
+
                 if pendiente_real <= 0:
                     continue
 
                 # 2. Simular cuánto cubre el Padre
                 cubierto_por_padre = min(pendiente_real, stock_padre_remanente)
                 stock_padre_remanente -= cubierto_por_padre
-                
+
                 # 3. Calcular qué falta y debe cubrir la Hija
                 falta_para_hija = pendiente_real - cubierto_por_padre
-                
+
                 logger.info(f"Item {item['id']} (Req: {cantidad_requerida}): Cubierto por Padre: {cubierto_por_padre}. Falta: {falta_para_hija}.")
 
                 if falta_para_hija > 0.01:
@@ -1876,7 +1876,7 @@ class OrdenProduccionController(BaseController):
             # 3. Distribuir la cantidad de la OP hija
             cantidad_a_distribuir = cantidad_op_hija
             nuevas_asignaciones = []
-            
+
             for item_faltante in items_para_op_hija:
                 if cantidad_a_distribuir <= 0:
                     break
@@ -1890,7 +1890,7 @@ class OrdenProduccionController(BaseController):
                 })
                 cantidad_a_distribuir -= cantidad_a_asignar
                 logger.info(f"Herencia de asignación: Se asignarán {cantidad_a_asignar} unidades de la OP hija {op_hija_id} al item {item_faltante['item_id']}.")
-            
+
             # 4. Insertar las nuevas asignaciones.
             if nuevas_asignaciones:
                 logger.info(f"Creando {len(nuevas_asignaciones)} nueva(s) asignacion(es) para la OP hija {op_hija_id}, cubriendo los faltantes.")
@@ -2319,3 +2319,40 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"[MRP Check] ERROR CRÍTICO calculando insumo en curso: {e}", exc_info=True)
             return 0.0
+
+    def desvincular_orden_de_pedido(self, orden_id: int, motivo: str = "") -> Dict:
+        """
+        Caso 3 y 4: Desvincula una OP de un Pedido (setea pedido_id = None).
+        Esto permite que la OP continúe su curso hacia Stock General
+        aunque el pedido original se haya cancelado.
+        """
+        try:
+            # 1. Actualizar la OP para quitar la referencia al pedido
+            # Dependiendo de tu modelo, usamos 'pedido_id' directo.
+
+            op_actual = self.model.find_by_id(orden_id).get('data', {})
+            obs_actual = op_actual.get('observaciones') or ''
+            nueva_obs = f"{obs_actual}\n[Desvinculada de Pedido Cancelado]: {motivo}".strip()
+
+            update_data = {
+                'pedido_id': None,
+                'observaciones': nueva_obs
+            }
+
+            result = self.model.update(orden_id, update_data)
+
+            # 2. Si utilizas la tabla intermedia 'asignaciones_pedidos', también hay que limpiar allí
+            try:
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos')\
+                    .delete().eq('orden_produccion_id', orden_id).execute()
+            except Exception as e_assign:
+                logger.warning(f"No se pudo limpiar asignaciones_pedidos para OP {orden_id}: {e_assign}")
+
+            if result.get('success'):
+                logger.info(f"OP {orden_id} desvinculada exitosamente del pedido. Pasa a Stock General.")
+                return {'success': True, 'data': result.get('data')}
+            return result
+
+        except Exception as e:
+            logger.error(f"Error desvinculando OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}

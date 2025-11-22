@@ -418,8 +418,7 @@
                     </button>
 
                     {# Botón Cancelar (si no está Completado o Cancelado) #}
-                    {% if pedido.estado not in ['COMPLETADO', 'CANCELADO'] and 'cancelar_ordenes_venta' is
-                    has_permission %}
+                    {% if pedido.estado in ['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA'] and 'cancelar_ordenes_venta' is has_permission %}
                     <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
                         class="confirm-form d-grid" data-title="Confirmar Cancelación"
                         data-message="¿Está seguro? Esta acción no se puede deshacer." data-button-type="danger">

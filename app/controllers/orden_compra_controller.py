@@ -1094,3 +1094,24 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error estableciendo gestión manual para orden {orden_id}: {e}")
             return {'success': False, 'error': str(e)}
+
+    def desvincular_de_orden_produccion(self, orden_produccion_id: int) -> dict:
+        """
+        Desvincula las OCs de una OP específica (setea orden_produccion_id = NULL).
+        Útil cuando se cancela una OP pero se quiere mantener la compra de insumos para stock general.
+        """
+        try:
+            # Buscamos OCs asociadas a esta OP que no estén ya canceladas/completas
+            # (Aunque técnicamente desvinculamos todas para mantener limpieza histórica)
+            update_result = self.model.db.table(self.model.get_table_name())\
+                .update({'orden_produccion_id': None})\
+                .eq('orden_produccion_id', orden_produccion_id)\
+                .execute()
+
+            if update_result.data:
+                logger.info(f"Se desvincularon {len(update_result.data)} OCs de la OP {orden_produccion_id}.")
+
+            return {'success': True}
+        except Exception as e:
+            logger.error(f"Error desvinculando OCs de la OP {orden_produccion_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
