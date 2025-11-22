@@ -114,8 +114,15 @@ def configurar_alertas_lotes():
 
             # Guardar configuración semáforos directamente
             if sem_verde and sem_amarillo:
-                config_model.guardar_valor('UMBRAL_VIDA_UTIL_VERDE', int(sem_verde))
-                config_model.guardar_valor('UMBRAL_VIDA_UTIL_AMARILLO', int(sem_amarillo))
+                sem_verde_val = int(sem_verde)
+                sem_amarillo_val = int(sem_amarillo)
+
+                if sem_verde_val <= sem_amarillo_val:
+                    flash('El umbral Verde debe ser mayor estricto que el umbral Amarillo.', 'error')
+                    return redirect(url_for('alertas.configurar_alertas_lotes'))
+
+                config_model.guardar_valor('UMBRAL_VIDA_UTIL_VERDE', sem_verde_val)
+                config_model.guardar_valor('UMBRAL_VIDA_UTIL_AMARILLO', sem_amarillo_val)
             
             flash('Configuración guardada.', 'success')
 
