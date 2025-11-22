@@ -1456,7 +1456,11 @@ class LoteProductoController(BaseController):
         """Lógica para retirar stock de producto y registrar desperdicio."""
         
         try:
-            cantidad_retiro = float(form_data.get('cantidad_retiro'))
+            cantidad_retiro_str = form_data.get('cantidad_retiro')
+            if not cantidad_retiro_str:
+                 return self.error_response("La cantidad a retirar es obligatoria.", 400)
+
+            cantidad_retiro = float(cantidad_retiro_str)
             motivo_id = form_data.get('motivo_desperdicio_id')
             comentarios = form_data.get('comentarios_retiro')
             resultado_inspeccion = form_data.get('resultado_inspeccion')

@@ -100,7 +100,6 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-check"></i>
                 </button>
-                {% endif %}
 
                 <!-- Botón para Marcar como No Apto -->
                 <button type="button" class="btn btn-sm btn-outline-danger"
@@ -113,6 +112,7 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-slash-circle"></i>
                 </button>
+                {% endif %}
             </td>
         </tr>
         {% else %}

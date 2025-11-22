@@ -586,7 +586,7 @@ def generar_documento_pdf(tipo, id_documento):
 
             template_name = 'orden_venta/_comprobante_pago.html'
             context = {'pedido': pedido, 'pago': pago}
-            filename = f"Recibo_Pago_{pago['id']}.pdf"
+            filename = f"Recibo_Pago_{pago.get('id_pago', pago.get('id'))}.pdf"
 
         elif tipo == 'nc':
             from app.controllers.nota_credito_controller import NotaCreditoController
