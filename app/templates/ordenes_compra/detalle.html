@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Variable global para que el JS de trazabilidad pueda acceder al ID
     window.ORDEN_COMPRA_ID = {{ orden.id|tojson }};
     window.ENTITY_TYPE = "orden_compra";
-    window.ENTITY_ID = "{{ orden.codigo_oc }}";
+    window.ENTITY_ID = "{{ orden.id }}";
     
     const form = document.getElementById('recepcionForm');
     

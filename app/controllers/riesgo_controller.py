@@ -145,7 +145,26 @@ class RiesgoController(BaseController):
                     # Si está agotado, poner cantidad 0 en cuarentena solo para marcar el estado
                     cantidad_a_cuarentena = 999999
                     if 'agotado' in estado_actual:
+                        # Lógica de simulación: si está agotado pero tiene OPs activas, usar la cantidad de las OPs
                         cantidad_a_cuarentena = 0 
+                        from app.models.orden_produccion import OrdenProduccionModel
+                        from app.models.reserva_insumo import ReservaInsumoModel
+                        
+                        # Buscar OPs activas que usen este lote
+                        reserva_model = ReservaInsumoModel()
+                        reservas = reserva_model.find_all({'lote_inventario_id': entidad_id}).get('data', [])
+                        
+                        total_en_ops = 0
+                        for r in reservas:
+                            # Verificar si la OP está activa
+                            op_res = OrdenProduccionModel().find_by_id(r['orden_produccion_id'])
+                            if op_res.get('success'):
+                                op_estado = op_res['data'].get('estado', '')
+                                if op_estado in ['EN_PROCESO', 'PAUSADA', 'EN ESPERA', 'LISTA PARA PRODUCIR']:
+                                    total_en_ops += float(r['cantidad_reservada'])
+                        
+                        if total_en_ops > 0:
+                             cantidad_a_cuarentena = total_en_ops
                     
                     controllers[tipo].poner_lote_en_cuarentena(
                         lote_id=entidad_id, 

@@ -968,7 +968,10 @@ class LoteProductoController(BaseController):
                 msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
                 return self.error_response(msg, 400)
 
-            if not motivo:
+            # Fallback: si motivo (comentarios) está vacío, usar resultado_inspeccion (dropdown)
+            motivo_final = motivo or resultado_inspeccion
+
+            if not motivo_final:
                 return self.error_response("Se requiere un motivo para la cuarentena.", 400)
 
             if cantidad <= 0:
@@ -984,7 +987,7 @@ class LoteProductoController(BaseController):
 
             update_data = {
                 'estado': 'CUARENTENA',
-                'motivo_cuarentena': motivo,
+                'motivo_cuarentena': motivo_final,
                 'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                 'cantidad_actual': nueva_cantidad_disponible
             }
@@ -998,8 +1001,8 @@ class LoteProductoController(BaseController):
                 'lote_producto_id': lote_id,
                 'usuario_supervisor_id': usuario_id,
                 'decision_final': 'CUARENTENA',
-                'comentarios': motivo,
-                'resultado_inspeccion': resultado_inspeccion,
+                'comentarios': motivo_final,
+                'resultado_inspeccion': resultado_inspeccion or 'Cuarentena Manual',
                 'foto_url': foto_url,
                 'cantidad_inspeccionada': cantidad
             }
@@ -1456,11 +1459,7 @@ class LoteProductoController(BaseController):
         """Lógica para retirar stock de producto y registrar desperdicio."""
         
         try:
-            cantidad_retiro_str = form_data.get('cantidad_retiro')
-            if not cantidad_retiro_str:
-                 return self.error_response("La cantidad a retirar es obligatoria.", 400)
-
-            cantidad_retiro = float(cantidad_retiro_str)
+            cantidad_retiro = float(form_data.get('cantidad_retiro'))
             motivo_id = form_data.get('motivo_desperdicio_id')
             comentarios = form_data.get('comentarios_retiro')
             resultado_inspeccion = form_data.get('resultado_inspeccion')
@@ -1481,11 +1480,16 @@ class LoteProductoController(BaseController):
             # Usamos el modelo RegistroDesperdicioLoteProductoModel
             desperdicio_model = RegistroDesperdicioLoteProductoModel()
             
+            # El modelo requiere 'detalle', usaremos resultado_inspeccion, comentarios o un default
+            detalle_final = resultado_inspeccion or comentarios or "Retiro manual de producto"
+
             datos_desperdicio = {
                 'lote_producto_id': lote['id_lote'],
                 'motivo_id': motivo_id,
                 'cantidad': cantidad_retiro,
                 'usuario_id': usuario_id,
+                'detalle': detalle_final,
+                'comentarios': comentarios, # Agregar comentarios también si el modelo lo soporta
                 'created_at': datetime.now().isoformat()
             }
             
@@ -1499,6 +1503,9 @@ class LoteProductoController(BaseController):
             remanente_a_descontar = cantidad_retiro
 
             # Prioridad: Descontar de cuarentena primero
+            # Fix TypeError: stock_cuar (float) must handle None
+            stock_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
+
             if stock_cuar > 0:
                 descuento_cuar = min(stock_cuar, remanente_a_descontar)
                 nueva_cantidad_cuar -= descuento_cuar

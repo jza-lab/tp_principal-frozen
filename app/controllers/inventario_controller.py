@@ -908,12 +908,15 @@ class InventarioController(BaseController):
             cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
             cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
 
-            if not motivo:
+            # Fallback: si motivo (comentarios) está vacío, usar resultado_inspeccion (dropdown)
+            motivo_final = motivo or resultado_inspeccion
+
+            if not motivo_final:
                 return self.error_response("Se requiere un motivo para la cuarentena.", 400)
 
             # Path 1: Cuarentena por trazabilidad (lote agotado, sin cantidad)
             if estado_actual == 'agotado' and cantidad == 0:
-                update_data = { 'estado': 'cuarentena', 'motivo_cuarentena': motivo }
+                update_data = { 'estado': 'cuarentena', 'motivo_cuarentena': motivo_final }
                 result = self.inventario_model.update(lote_id, update_data, 'id_lote')
                 if not result.get('success'):
                     return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
@@ -943,7 +946,7 @@ class InventarioController(BaseController):
 
                 update_data = {
                     'estado': nuevo_estado,
-                    'motivo_cuarentena': motivo,
+                    'motivo_cuarentena': motivo_final,
                     'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
                     'cantidad_actual': nueva_cantidad_disponible
                 }
@@ -960,9 +963,9 @@ class InventarioController(BaseController):
                 lote_id=lote_id,
                 usuario_id=usuario_id,
                 decision='EN_CUARENTENA',
-                comentarios=motivo,
+                comentarios=motivo_final,
                 orden_compra_id=None,
-                resultado_inspeccion=resultado_inspeccion,
+                resultado_inspeccion=resultado_inspeccion or 'Cuarentena Manual',
                 foto_url=foto_url
             )
 
@@ -1385,8 +1388,9 @@ class InventarioController(BaseController):
                 return self.error_response("Debe seleccionar un motivo de desperdicio.", 400)
 
             # Calcular stock disponible total (Actual + Cuarentena)
-            stock_disp = float(lote.get('cantidad_actual', 0))
-            stock_cuar = float(lote.get('cantidad_en_cuarentena', 0))
+            # Fix TypeError: handle None
+            stock_disp = float(lote.get('cantidad_actual') or 0)
+            stock_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
             stock_total = stock_disp + stock_cuar
 
             if cantidad_retiro > stock_total:

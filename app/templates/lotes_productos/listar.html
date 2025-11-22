@@ -224,8 +224,20 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="motivo_cuarentena" class="form-label">Motivo (Requerido):</label>
-                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" required></textarea>
+                        <label for="resultado_inspeccion" class="form-label">Motivo (Requerido):</label>
+                        <select class="form-select" id="resultado_inspeccion" name="resultado_inspeccion" required>
+                            <option value="" selected disabled>Seleccione un motivo...</option>
+                            <option value="Cuarentena por calidad">Cuarentena por calidad</option>
+                            <option value="Sospecha de contaminación">Sospecha de contaminación</option>
+                            <option value="Defecto de empaque">Defecto de empaque</option>
+                            <option value="Etiquetado incorrecto">Etiquetado incorrecto</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivo_cuarentena" class="form-label">Comentarios:</label>
+                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" placeholder="Detalles adicionales..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -325,7 +337,7 @@
                             <select class="form-select" id="motivo_desperdicio_id" name="motivo_desperdicio_id">
                                 <option value="" selected disabled>Seleccione un motivo...</option>
                                 {% for motivo in motivos_desperdicio %}
-                                <option value="{{ motivo.id }}">{{ motivo.motivo }}</option>
+                                <option value="{{ motivo.id }}">{{ motivo.motivo or motivo.descripcion or motivo.nombre or 'Motivo ' ~ loop.index }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -346,8 +358,15 @@
                         <h6 class="text-warning-emphasis mb-3"><i class="bi bi-shield-exclamation me-2"></i>Datos de la Alerta</h6>
                         
                         <div class="mb-3">
-                            <label for="motivo_alerta" class="form-label">Motivo de la Alerta (Título):</label>
-                            <input type="text" class="form-control" id="motivo_alerta" name="motivo_alerta" placeholder="Ej: Contaminación en producto final...">
+                            <label for="motivo_alerta" class="form-label">Motivo de la Alerta:</label>
+                            <select class="form-select" id="motivo_alerta" name="motivo_alerta">
+                                <option value="" selected disabled>Seleccione un motivo...</option>
+                                {% for motivo in motivos_desperdicio %}
+                                {% set motivo_texto = motivo.motivo or motivo.descripcion or motivo.nombre or 'Motivo ' ~ loop.index %}
+                                <option value="{{ motivo_texto }}">{{ motivo_texto }}</option>
+                                {% endfor %}
+                                <option value="Otro">Otro</option>
+                            </select>
                         </div>
 
                         <div class="mb-3">
