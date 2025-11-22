@@ -79,8 +79,8 @@ class InventarioController(BaseController):
 
     def reservar_stock_insumos_para_op(self, orden_produccion: Dict, usuario_id: int) -> dict:
         """
-        Crea registros de reserva para los insumos de una OP.
-        NO consume el stock físico. Devuelve los lotes implicados.
+        Crea reservas de insumos Y DESCUENTA EL STOCK FÍSICO DEL LOTE inmediatamente.
+        Ignora lotes que vencen antes de la fecha de la OP.
         """
         receta_model = RecetaModel()
         reserva_insumo_model = ReservaInsumoModel()
@@ -89,6 +89,19 @@ class InventarioController(BaseController):
             receta_id = orden_produccion['receta_id']
             cantidad_a_producir = float(orden_produccion.get('cantidad_planificada', 0))
 
+            # --- 1. EXTRAER Y VALIDAR FECHA DE USO ---
+            f_plan = orden_produccion.get('fecha_inicio_planificada') or orden_produccion.get('fecha_planificada') or orden_produccion.get('fecha_meta')
+            fecha_uso = date.today()
+
+            if f_plan:
+                 if isinstance(f_plan, str):
+                     # Manejo robusto de strings con/sin hora (YYYY-MM-DDTHH:MM:SS)
+                     fecha_uso = date.fromisoformat(f_plan.split('T')[0])
+                 elif isinstance(f_plan, (date, datetime)):
+                     fecha_uso = f_plan
+            # -----------------------------------------
+
+            # 2. Obtener Ingredientes
             ingredientes_result = receta_model.get_ingredientes(receta_id)
             if not ingredientes_result.get('success'):
                 raise Exception("No se pudieron obtener los ingredientes de la receta.")
@@ -97,22 +110,30 @@ class InventarioController(BaseController):
             insumos_faltantes = []
             lotes_implicados = set()
 
+            # 3. Iterar sobre cada insumo de la receta
             for ingrediente in ingredientes:
                 insumo_id = ingrediente['id_insumo']
                 cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
 
-                # Usamos la lógica de verificación para obtener lotes y su disponibilidad real
-                verificacion_lotes = self._obtener_lotes_con_disponibilidad(insumo_id)
+                # A. Obtener lotes válidos (Filtrados por fecha de vencimiento)
+                # Nota: Al usar reserva dura, 'disponibilidad' será igual a 'cantidad_actual'
+                verificacion_lotes = self._obtener_lotes_con_disponibilidad(insumo_id, fecha_limite_validez=fecha_uso)
+
                 cantidad_restante_a_reservar = cantidad_necesaria
 
+                # B. Iterar lotes para descontar (FIFO)
                 for lote in verificacion_lotes:
                     if cantidad_restante_a_reservar <= 0:
                         break
 
-                    disponibilidad_en_lote = lote['disponibilidad']
-                    cantidad_a_reservar_de_lote = min(disponibilidad_en_lote, cantidad_restante_a_reservar)
+                    # Usamos la cantidad física real del lote para el descuento
+                    stock_fisico_lote = float(lote.get('cantidad_actual', 0))
+
+                    # Tomamos lo que necesitamos o lo que haya, lo que sea menor
+                    cantidad_a_reservar_de_lote = min(stock_fisico_lote, cantidad_restante_a_reservar)
 
                     if cantidad_a_reservar_de_lote > 0:
+                        # C. Crear el registro de reserva (TRAZABILIDAD)
                         datos_reserva = {
                             'orden_produccion_id': orden_produccion['id'],
                             'lote_inventario_id': lote['id_lote'],
@@ -122,24 +143,39 @@ class InventarioController(BaseController):
                         }
                         reserva_insumo_model.create(datos_reserva)
                         lotes_implicados.add(lote['id_lote'])
+
+                        # D. DESCONTAR FÍSICAMENTE DEL LOTE (ACTUALIZACIÓN DB)
+                        nueva_cantidad = stock_fisico_lote - cantidad_a_reservar_de_lote
+                        update_data = {'cantidad_actual': nueva_cantidad}
+
+                        # E. Marcar como AGOTADO si llega a 0
+                        if nueva_cantidad <= 0:
+                            update_data['estado'] = 'agotado'
+
+                        # Ejecutar Update en Tabla Inventario
+                        self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+
+                        # Actualizar contador del bucle
                         cantidad_restante_a_reservar -= cantidad_a_reservar_de_lote
 
-                if cantidad_restante_a_reservar > 0:
+                # F. Verificar si faltó stock tras recorrer los lotes
+                if cantidad_restante_a_reservar > 0.01: # Tolerancia decimal
                     insumos_faltantes.append({
                         'insumo_id': insumo_id,
-                        'nombre': ingrediente.get('nombre_insumo', 'N/A'),
                         'cantidad_faltante': cantidad_restante_a_reservar
                     })
 
+                # G. Actualizar el stock consolidado del insumo (Catalogo)
+                self.insumo_controller.actualizar_stock_insumo(insumo_id)
+
+            # 4. Retorno final
             if insumos_faltantes:
-                # En un caso real, aquí habría que hacer un rollback de las reservas creadas.
-                # Por simplicidad, asumimos que este método solo se llama después de una verificación exitosa.
-                return {'success': False, 'error': f"Faltantes encontrados durante la reserva: {insumos_faltantes}"}
+                return {'success': False, 'error': f"Stock insuficiente al momento de reservar: {insumos_faltantes}"}
 
             return {'success': True, 'data': {'insumos_faltantes': [], 'lotes_implicados': list(lotes_implicados)}}
 
         except Exception as e:
-            logger.error(f"Error crítico al reservar insumos para OP {orden_produccion['id']}: {e}", exc_info=True)
+            logger.error(f"Error reservando insumos para OP {orden_produccion.get('id')}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def consumir_stock_reservado_para_op(self, orden_produccion_id: int) -> dict:
@@ -282,7 +318,7 @@ class InventarioController(BaseController):
                         update_data = {'cantidad_actual': nueva_cantidad_lote}
                         if nueva_cantidad_lote <= 0:
                             update_data['estado'] = 'agotado'
-                        
+
                         self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
                         cantidad_restante_a_consumir -= cantidad_a_consumir_de_lote
 
@@ -298,16 +334,16 @@ class InventarioController(BaseController):
             return {'success': False, 'error': str(e)}
 
 
-    def _obtener_lotes_con_disponibilidad(self, insumo_id: int) -> List[Dict]:
+    def _obtener_lotes_con_disponibilidad(self, insumo_id: int, fecha_limite_validez: date = None) -> List[Dict]:
         """
-        Obtiene todos los lotes activos de un insumo y calcula su disponibilidad real.
-        Disponibilidad = Cantidad Física - Cantidad Reservada.
+        Obtiene lotes activos y calcula disponibilidad real.
+        NUEVO: Si 'fecha_limite_validez' está presente, excluye lotes que venzan ANTES de esa fecha.
         """
-        # 1. Obtener todos los lotes activos (físicamente existentes)
+        # 1. Obtener todos los lotes activos
         estados_fisicos = ['disponible', 'reservado', 'cuarentena', 'EN REVISION']
         lotes_activos_res = self.inventario_model.find_all(
             filters={'id_insumo': insumo_id, 'estado': ('in', estados_fisicos)},
-            order_by='f_ingreso.asc'
+            order_by='f_ingreso.asc' # FIFO
         )
         if not lotes_activos_res.get('success'):
             return []
@@ -316,7 +352,7 @@ class InventarioController(BaseController):
         if not lotes_activos:
             return []
 
-        # 2. Obtener todas las reservas para esos lotes
+        # 2. Obtener reservas
         lote_ids = [lote['id_lote'] for lote in lotes_activos]
         reservas_res = self.reserva_insumo_model.find_all(
             filters={
@@ -331,23 +367,69 @@ class InventarioController(BaseController):
                 lote_id = reserva['lote_inventario_id']
                 reservas_por_lote[lote_id] = reservas_por_lote.get(lote_id, 0) + float(reserva['cantidad_reservada'])
 
-        # 3. Calcular disponibilidad real para cada lote
+        lotes_validos = []
+
+        # 3. Calcular disponibilidad y FILTRAR POR FECHA
         for lote in lotes_activos:
+            # --- FILTRO DE VENCIMIENTO ---
+            if fecha_limite_validez and lote.get('fecha_vencimiento'):
+                try:
+                    vencimiento_str = lote['fecha_vencimiento']
+                    # Manejo robusto de fecha (puede venir con T00:00:00)
+                    if 'T' in vencimiento_str:
+                        vencimiento = date.fromisoformat(vencimiento_str.split('T')[0])
+                    else:
+                        vencimiento = date.fromisoformat(vencimiento_str)
+
+                    # REGLA: Si vence ANTES de la fecha requerida, no sirve.
+                    # (Debe vencer el mismo día o después)
+                    if vencimiento < fecha_limite_validez:
+                        # Log opcional para depuración
+                        # logger.debug(f"Lote {lote['numero_lote_proveedor']} ignorado. Vence {vencimiento} < Req {fecha_limite_validez}")
+                        continue
+                except ValueError:
+                    pass # Si la fecha es inválida, asumimos que sirve (o ignoramos, según política)
+            # -----------------------------
+
             cantidad_fisica = float(lote.get('cantidad_actual', 0))
             cantidad_reservada = reservas_por_lote.get(lote['id_lote'], 0)
-            lote['disponibilidad'] = max(0, cantidad_fisica - cantidad_reservada)
+            disponibilidad = max(0, cantidad_fisica - cantidad_reservada)
 
-        return lotes_activos
+            lote['disponibilidad'] = disponibilidad
 
-    def verificar_stock_para_op(self, orden_produccion: Dict) -> dict:
+            # Solo agregamos si tiene algo de disponibilidad (o si queremos mostrarlo igual)
+            # Para reservar necesitamos disponibilidad > 0, pero para ver stock total a veces queremos ver todo.
+            # En este flujo crítico, retornamos lo activo.
+            lotes_validos.append(lote)
+
+        return lotes_validos
+
+    def verificar_stock_para_op(self, orden_produccion: Dict, fecha_requisito: date = None) -> dict:
         """
-        Verifica si hay stock suficiente para una OP, usando la disponibilidad real
-        (cantidad física - cantidad reservada).
+        Verifica stock considerando disponibilidad real y VENCIMIENTO.
+        Acepta 'fecha_requisito' explícita, o intenta leerla de la OP.
         """
         receta_model = RecetaModel()
         try:
             receta_id = orden_produccion['receta_id']
             cantidad_a_producir = float(orden_produccion.get('cantidad_planificada', 0))
+
+            # --- DETERMINAR FECHA DE USO ---
+            fecha_uso = fecha_requisito
+            if not fecha_uso:
+                # Si no viene explícita, buscamos en la OP
+                f_plan = orden_produccion.get('fecha_planificada') or orden_produccion.get('fecha_inicio_planificada')
+                f_meta = orden_produccion.get('fecha_meta')
+
+                fecha_str = f_plan if f_plan else f_meta
+                if fecha_str:
+                    if isinstance(fecha_str, str):
+                        fecha_uso = date.fromisoformat(fecha_str.split('T')[0])
+                    elif isinstance(fecha_str, (date, datetime)):
+                         fecha_uso = fecha_str
+                else:
+                    fecha_uso = date.today() # Default a hoy
+            # -------------------------------
 
             ingredientes_result = receta_model.get_ingredientes(receta_id)
             if not ingredientes_result.get('success'):
@@ -360,7 +442,9 @@ class InventarioController(BaseController):
                 insumo_id = ingrediente['id_insumo']
                 cantidad_necesaria = float(ingrediente.get('cantidad', 0)) * cantidad_a_producir
 
-                lotes_con_disponibilidad = self._obtener_lotes_con_disponibilidad(insumo_id)
+                # Pasamos la fecha al helper
+                lotes_con_disponibilidad = self._obtener_lotes_con_disponibilidad(insumo_id, fecha_limite_validez=fecha_uso)
+
                 stock_disponible_total = sum(lote['disponibilidad'] for lote in lotes_con_disponibilidad)
 
                 if stock_disponible_total < cantidad_necesaria:
@@ -368,7 +452,7 @@ class InventarioController(BaseController):
                         'insumo_id': insumo_id,
                         'nombre': ingrediente.get('nombre_insumo', 'N/A'),
                         'cantidad_necesaria': cantidad_necesaria,
-                        'stock_disponible': stock_disponible_total,
+                        'stock_disponible': stock_disponible_total, # Aquí solo suma lo NO vencido
                         'cantidad_faltante': cantidad_necesaria - stock_disponible_total
                     })
 
@@ -433,7 +517,7 @@ class InventarioController(BaseController):
         """Crear un nuevo lote de inventario"""
         try:
             data.pop('csrf_token', None)
-            
+
             # --- LÓGICA MODIFICADA PARA ACEPTAR CUARENTENA ---
             # Si 'cantidad_actual' no se provee, se asume que es la 'cantidad_inicial'.
             if 'cantidad_actual' not in data and 'cantidad_inicial' in data:
@@ -467,7 +551,7 @@ class InventarioController(BaseController):
             codigo_insumo = insumo_result['data'].get('codigo_interno', 'INS')
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
             codigo_lote = f"{codigo_insumo}-{timestamp}"
-            
+
             # --- MODIFICACIÓN: Usar 'numero_lote_proveedor' si viene, sino generar ---
             if 'numero_lote_proveedor' not in validated_data or not validated_data['numero_lote_proveedor']:
                 validated_data['numero_lote_proveedor'] = codigo_lote
@@ -574,7 +658,7 @@ class InventarioController(BaseController):
 
             # Cargar el historial de control de calidad
             cc_model = ControlCalidadInsumoModel()
-            
+
             # --- MODIFICACIÓN: Llamar a la función corregida ---
             historial_result = cc_model.find_by_lote_id(id_lote)
 
@@ -898,10 +982,10 @@ class InventarioController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            
+
             afectado_res = self.db.table('alerta_riesgo_afectados').select('estado_previo').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).order('id', desc=True).limit(1).execute().data
-            
-            estado_previo = 'disponible' 
+
+            estado_previo = 'disponible'
             if afectado_res and afectado_res[0].get('estado_previo'):
                 estado_previo = afectado_res[0]['estado_previo']
 
@@ -911,7 +995,7 @@ class InventarioController(BaseController):
             cantidad_actual = float(lote.get('cantidad_actual', 0))
 
             nueva_cantidad_actual = cantidad_actual + cantidad_en_cuarentena
-            
+
             update_data = {
                 'estado': estado_destino,
                 'cantidad_actual': nueva_cantidad_actual,
@@ -922,9 +1006,9 @@ class InventarioController(BaseController):
             result = self.inventario_model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
-            
+
             return self.success_response(message="Lote liberado de cuarentena de alerta.")
 
         except Exception as e:
@@ -948,10 +1032,10 @@ class InventarioController(BaseController):
                 'observaciones': f"Lote retirado por alerta de riesgo. Usuario ID: {usuario_id}."
             }
             result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-            
+
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
             return self.success_response(message="Lote marcado como retirado.")
@@ -1140,7 +1224,7 @@ class InventarioController(BaseController):
 
                 # Actualizar el stock consolidado del insumo
                 self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
-                
+
                 # Disparar la verificación de cierre de alertas
                 try:
                     alerta_model = AlertaRiesgoModel()
@@ -1185,7 +1269,7 @@ class InventarioController(BaseController):
             links = []
             node_map = {}
             # --- FIN MODIFICACIÓN ---
-            
+
             resultado = trazabilidad_model.obtener_trazabilidad_completa_lote_insumo(id_lote)
 
             # --- 1. NODO INICIAL: LOTE INSUMO ---
@@ -1381,7 +1465,7 @@ class InventarioController(BaseController):
         Delega la acción de marcar un lote como 'NO APTO' al controlador de calidad.
         """
         from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
-        
+
         try:
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
@@ -1422,10 +1506,10 @@ class InventarioController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            
+
             afectado_res = self.db.table('alerta_riesgo_afectados').select('estado_previo').eq('tipo_entidad', 'lote_insumo').eq('id_entidad', lote_id).order('id', desc=True).limit(1).execute().data
-            
-            estado_previo = 'disponible' 
+
+            estado_previo = 'disponible'
             if afectado_res and afectado_res[0].get('estado_previo'):
                 estado_previo = afectado_res[0]['estado_previo']
 
@@ -1435,7 +1519,7 @@ class InventarioController(BaseController):
             cantidad_actual = float(lote.get('cantidad_actual', 0))
 
             nueva_cantidad_actual = cantidad_actual + cantidad_en_cuarentena
-            
+
             update_data = {
                 'estado': estado_destino,
                 'cantidad_actual': nueva_cantidad_actual,
@@ -1446,9 +1530,9 @@ class InventarioController(BaseController):
             result = self.inventario_model.update(lote_id, update_data, 'id_lote')
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
-            
+
             return self.success_response(message="Lote liberado de cuarentena de alerta.")
 
         except Exception as e:
@@ -1472,10 +1556,10 @@ class InventarioController(BaseController):
                 'observaciones': f"Lote retirado por alerta de riesgo. Usuario ID: {usuario_id}."
             }
             result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-            
+
             if not result.get('success'):
                 return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
-            
+
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
             return self.success_response(message="Lote marcado como retirado.")

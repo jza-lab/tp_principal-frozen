@@ -494,12 +494,15 @@ class OrdenProduccionController(BaseController):
         logger.info(summary_message)
         return {'success': True, 'message': summary_message, 'data': {'actualizadas': ordenes_actualizadas_count, 'errores': len(errores)}}
 
-    # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
     def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
-        """
-        Wrapper que delega la verificación de stock de insumos al controlador de inventario.
-        """
-        return self.inventario_controller.verificar_stock_para_op(orden_simulada)
+        # Extraer fecha para pasarla explícitamente
+        fecha_uso = None
+        f_str = orden_simulada.get('fecha_inicio_planificada') or orden_simulada.get('fecha_meta')
+        if f_str:
+             try: fecha_uso = date.fromisoformat(f_str.split('T')[0])
+             except: pass
+
+        return self.inventario_controller.verificar_stock_para_op(orden_simulada, fecha_requisito=fecha_uso)
 
     # --- MÉTODO CORREGIDO ---
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
