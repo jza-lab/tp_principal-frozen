@@ -95,9 +95,10 @@ def nueva():
             )
 
     today = datetime.now().strftime("%Y-%m-%d")
-    insumos_resp, _ = insumo_controller.obtener_insumos()
+    
+    # MODIFICACIÓN: Agregar filtros={'activo': True}
+    insumos_resp, _ = insumo_controller.obtener_insumos(filtros={'activo': True})
     insumos = insumos_resp.get("data", [])
-
     # Obtener proveedores con su rating
     proveedores_resp, _ = proveedor_controller.get_proveedores_con_rating()
     proveedores = proveedores_resp.get("data", [])
@@ -197,8 +198,11 @@ def editar(id):
         flash("Error al cargar la orden para editar.", "error")
         return redirect(url_for("orden_compra.listar"))
     orden = response_data.get("data")
-    insumos_resp, _ = insumo_controller.obtener_insumos()
+    
+    # MODIFICACIÓN: Agregar filtros={'activo': True}
+    insumos_resp, _ = insumo_controller.obtener_insumos(filtros={'activo': True})
     insumos = insumos_resp.get("data", [])
+    
     return render_template(
         "ordenes_compra/formulario.html",
         orden=orden,
