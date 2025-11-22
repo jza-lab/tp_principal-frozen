@@ -1,43 +1,424 @@
 {% extends "layouts/app_layout.html" %}
 
-{% block title %}Configuración de Producción - Sistema Frozen{% endblock %}
+{% block title %}Configuración de Horas Laborables - Sistema Frozen{% endblock %}
+
+{% block extra_css %}
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-top: 5px;
+    }
+    .calendar-header {
+        font-weight: 600;
+        text-align: center;
+        padding: 8px;
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        font-size: 0.9em;
+        text-transform: uppercase;
+        color: #495057;
+    }
+    .calendar-day {
+        height: 85px;
+        border: 1px solid #e9ecef;
+        padding: 6px;
+        position: relative;
+        cursor: pointer;
+        background-color: #fff;
+        border-radius: 6px;
+        transition: all 0.2s ease-in-out;
+    }
+    .calendar-day:hover {
+        border-color: #adb5bd;
+        z-index: 1;
+        background-color: #f8f9fa;
+    }
+    .calendar-day.empty {
+        background-color: transparent;
+        border: none;
+        cursor: default;
+    }
+    .calendar-day.feriado {
+        background-color: #fff5f5;
+        border-color: #ffc9c9;
+        color: #c92a2a;
+    }
+    .calendar-day.fin-semana {
+        background-color: #f8f9fa;
+        color: #adb5bd;
+    }
+    /* Nuevos estilos para excepciones */
+    .calendar-day.excepcion-libre {
+        background-color: #fff9db; /* Amarillo claro */
+        border-color: #ffec99;
+        color: #e67700;
+    }
+    .calendar-day.excepcion-laborable {
+        background-color: #ebfbee; /* Verde claro */
+        border-color: #b2f2bb;
+        color: #2b8a3e;
+    }
+
+    .day-number {
+        font-weight: 600;
+        font-size: 1.1em;
+        color: #343a40;
+    }
+    .calendar-day.feriado .day-number { color: #c92a2a; }
+    .calendar-day.excepcion-libre .day-number { color: #e67700; }
+    .calendar-day.excepcion-laborable .day-number { color: #2b8a3e; }
+
+    .day-hours {
+        font-size: 0.85em;
+        color: #6c757d;
+        position: absolute;
+        bottom: 6px;
+        right: 8px;
+        background-color: rgba(255,255,255,0.8);
+        padding: 0 4px;
+        border-radius: 4px;
+    }
+    .day-status {
+        font-size: 0.75em;
+        display: block;
+        margin-top: 4px;
+        font-weight: 600;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .total-hours-display {
+        font-size: 1.8em;
+        font-weight: 700;
+        color: #0d6efd;
+        line-height: 1;
+    }
+    
+    .card-enhanced {
+        border: none;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    .card-header-enhanced {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #f1f3f5;
+        padding: 1rem 1.25rem;
+    }
+    .card-body-enhanced {
+        padding: 1.25rem;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        margin-right: 6px;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
 
 {% block app_content %}
 <div class="container mt-4">
     <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card">
-                <div class="card-header">
-                    <h3>Configuración de Horas de Producción</h3>
-                    <p class="text-muted">Define las horas de producción estándar para cada día de la semana.</p>
+        
+        <!-- COLUMNA IZQUIERDA: CONFIGURACIÓN ESTÁNDAR -->
+        <div class="col-md-4 mb-4">
+            <div class="card card-enhanced h-100">
+                <div class="card-header card-header-enhanced">
+                    <h5 class="mb-1 fw-bold text-dark">Configuración Estándar</h5>
+                    <p class="text-muted small mb-0">Horas base por día de semana</p>
                 </div>
-                <div class="card-body">
-                    <form method="POST" action="{{ url_for('configuracion_produccion.gestionar_configuracion') }}">
-                        {{ csrf_form.csrf_token }}
-                        {% for dia_id, dia_nombre in dias_semana.items() %}
-                        <div class="row mb-3 align-items-center">
-                            <div class="col-md-4">
-                                <label for="horas_{{ dia_id }}" class="form-label">{{ dia_nombre }}</label>
-                            </div>
-                            <div class="col-md-8">
-                                <div class="input-group">
-                                    <input type="number" class="form-control" id="horas_{{ dia_id }}" name="horas_{{ dia_id }}" step="0.5" min="0" max="24" value="{{ configuraciones[dia_id].horas if configuraciones[dia_id] else 0 }}" required>
-                                    <span class="input-group-text">horas</span>
-                                </div>
+                <div class="card-body card-body-enhanced">
+                    <div class="alert alert-info small mb-4 border-0 shadow-sm" role="alert" style="background-color: #e7f5ff; color: #004085; border-left: 4px solid #0d6efd !important;">
+                        <div class="d-flex">
+                            <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+                            <div>
+                                <strong>Nota Importante:</strong><br>
+                                Estas horas definen la capacidad mensual para el cálculo del <strong>Costo Fijo por Producto</strong>.
                             </div>
                         </div>
-                        {% endfor %}
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('configuracion_produccion.gestionar_configuracion') }}">
+                        {{ csrf_form.csrf_token }}
+                        <input type="hidden" name="action" value="update_standard">
+                        
+                        <div class="vstack gap-3">
+                            {% for dia_id, dia_nombre in dias_semana.items() %}
+                            <div class="row align-items-center g-2">
+                                <div class="col-4">
+                                    <label for="horas_{{ dia_id }}" class="col-form-label col-form-label-sm fw-semibold text-secondary">{{ dia_nombre }}</label>
+                                </div>
+                                <div class="col-8">
+                                    <div class="input-group input-group-sm">
+                                        {% set config_item = configuraciones.get(dia_id) %}
+                                        <input type="number" class="form-control bg-light border-light text-center fw-bold" id="horas_{{ dia_id }}" name="horas_{{ dia_id }}" step="0.5" min="0" max="24" value="{{ config_item.horas if config_item else 0 }}" required>
+                                        <span class="input-group-text bg-white border-light text-muted">hs</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
 
-                        <div class="d-flex justify-content-end mt-4">
-                            <a href="{{ url_for('admin_dashboard.index') }}" class="btn btn-secondary me-2">Cancelar</a>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-save me-2"></i>Guardar Configuración
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary shadow-sm">
+                                <i class="bi bi-check2-circle me-2"></i>Guardar Estándar
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
         </div>
+
+        <!-- COLUMNA DERECHA: CALENDARIO Y EXCEPCIONES -->
+        <div class="col-md-8">
+            <div class="card card-enhanced">
+                <div class="card-header card-header-enhanced d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1 fw-bold text-dark">Calendario Laborable</h5>
+                        <p class="text-muted small mb-0">Proyección mensual y feriados</p>
+                    </div>
+                    <div class="text-end bg-white px-3 py-1 rounded shadow-sm border">
+                        <span class="text-uppercase text-muted" style="font-size: 0.65rem; letter-spacing: 1px;">Total Mes</span>
+                        <div class="total-hours-display">{{ total_horas_mes }} <span class="fs-6 fw-normal text-secondary">hs</span></div>
+                    </div>
+                </div>
+                <div class="card-body card-body-enhanced">
+                    <!-- Navegación de Meses -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <a href="?month={{ prev_month }}&year={{ prev_year }}" class="btn btn-light btn-sm text-secondary border">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                        <h4 class="mb-0 fw-bold text-dark text-capitalize">{{ month_name }} <span class="text-muted fw-light">{{ current_year }}</span></h4>
+                        <a href="?month={{ next_month }}&year={{ next_year }}" class="btn btn-light btn-sm text-secondary border">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                    </div>
+
+                    <!-- Leyenda Compacta -->
+                    <div class="d-flex justify-content-center gap-3 mb-3 flex-wrap">
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #fff;"></div> Laborable
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #fff5f5; border-color: #ffc9c9;"></div> Feriado
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #f8f9fa;"></div> Libre
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #ebfbee; border-color: #b2f2bb;"></div> Extra
+                        </div>
+                        <div class="legend-item">
+                            <div class="legend-color" style="background-color: #fff9db; border-color: #ffec99;"></div> Excepción Libre
+                        </div>
+                    </div>
+
+                    <!-- Grilla del Calendario -->
+                    <div class="calendar-grid">
+                        {% for dia_nombre in ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] %}
+                            <div class="calendar-header">{{ dia_nombre }}</div>
+                        {% endfor %}
+
+                        {% for semana in calendario_data %}
+                            {% for dia in semana %}
+                                {% if dia %}
+                                    <!-- Célula interactiva -->
+                                    <div class="calendar-day {{ dia.clase }}" 
+                                         onclick="openExceptionModal('{{ dia.fecha }}', '{{ dia.es_laborable }}', '{{ dia.es_excepcion }}', '{{ dia.horas }}', `{{ dia.titulo }}`)">
+                                        
+                                        <span class="day-number">{{ dia.dia }}</span>
+                                        
+                                        {% if dia.es_excepcion %}
+                                            <span class="day-status text-truncate" title="{{ dia.titulo }}">
+                                                <i class="bi bi-exclamation-circle-fill me-1"></i>{{ dia.titulo }}
+                                            </span>
+                                        {% elif not dia.es_laborable and dia.es_feriado %}
+                                            <span class="day-status text-truncate" title="{{ dia.titulo }}" style="color: #e03131;">
+                                                <i class="bi bi-flag-fill me-1"></i>{{ dia.titulo }}
+                                            </span>
+                                        {% endif %}
+                                        
+                                        <span class="day-hours">{{ dia.horas|int if dia.horas == dia.horas|int else dia.horas }}h</span>
+                                    </div>
+                                {% else %}
+                                    <div class="calendar-day empty"></div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Modal para Gestionar Excepciones -->
+<div class="modal fade" id="exceptionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Gestionar Día <span id="modalDateDisplay" class="fw-bold"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-secondary py-2 small mb-3">
+                    Estado actual: <strong id="currentStatusDisplay"></strong>
+                </div>
+
+                <form id="exceptionForm">
+                    <input type="hidden" id="modalDateIso" name="fecha">
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Acción</label>
+                        <div class="btn-group w-100" role="group" aria-label="Tipo de excepción">
+                            <input type="radio" class="btn-check" name="es_laborable" id="option_libre" value="False" autocomplete="off">
+                            <label class="btn btn-outline-warning" for="option_libre">
+                                <i class="bi bi-slash-circle me-1"></i> Marcar No Laborable
+                            </label>
+                          
+                            <input type="radio" class="btn-check" name="es_laborable" id="option_extra" value="True" autocomplete="off">
+                            <label class="btn btn-outline-success" for="option_extra">
+                                <i class="bi bi-briefcase me-1"></i> Marcar Día Extra
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3" id="divHoras" style="display:none;">
+                        <label for="modalHoras" class="form-label">Horas a Trabajar</label>
+                        <input type="number" class="form-control" id="modalHoras" name="horas" min="0.5" max="24" step="0.5" value="8">
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalMotivo" class="form-label">Motivo / Descripción</label>
+                        <input type="text" class="form-control" id="modalMotivo" name="motivo" placeholder="Ej. Mantenimiento, Horas Extra, Asueto..." required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button type="button" class="btn btn-outline-danger" id="btnDelete" style="display:none;">
+                    <i class="bi bi-trash"></i> Restablecer
+                </button>
+                <div>
+                    <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnSave">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let exceptionModal;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        exceptionModal = new bootstrap.Modal(document.getElementById('exceptionModal'));
+        
+        // Toggle Horas Input visibility
+        const radios = document.getElementsByName('es_laborable');
+        const divHoras = document.getElementById('divHoras');
+        
+        radios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'True') {
+                    divHoras.style.display = 'block';
+                } else {
+                    divHoras.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    function openExceptionModal(fecha, isLaborableDefault, isException, currentHours, currentTitle) {
+        // Reset Form
+        document.getElementById('exceptionForm').reset();
+        document.getElementById('divHoras').style.display = 'none';
+        
+        // Set Date
+        document.getElementById('modalDateIso').value = fecha;
+        document.getElementById('modalDateDisplay').textContent = fecha;
+        document.getElementById('currentStatusDisplay').textContent = currentTitle + (isException === 'True' ? ' (Excepción)' : '');
+
+        // UI Logic
+        const btnDelete = document.getElementById('btnDelete');
+        
+        if (isException === 'True') {
+            btnDelete.style.display = 'block';
+            // Pre-select based on current type?? Ideally we pass more data, but simple logic:
+            if (currentHours > 0) {
+                document.getElementById('option_extra').checked = true;
+                document.getElementById('divHoras').style.display = 'block';
+                document.getElementById('modalHoras').value = currentHours;
+            } else {
+                document.getElementById('option_libre').checked = true;
+            }
+            document.getElementById('modalMotivo').value = currentTitle; // Approx
+        } else {
+            btnDelete.style.display = 'none';
+            // Smart Default: If currently working -> suggest Free. If currently Free -> suggest Extra.
+            if (isLaborableDefault === 'True') {
+                document.getElementById('option_libre').checked = true;
+            } else {
+                document.getElementById('option_extra').checked = true;
+                document.getElementById('divHoras').style.display = 'block';
+            }
+        }
+
+        exceptionModal.show();
+    }
+
+    // Save Handler
+    document.getElementById('btnSave').addEventListener('click', function() {
+        const formData = new FormData(document.getElementById('exceptionForm'));
+        formData.append('action', 'save');
+        sendRequest(formData);
+    });
+
+    // Delete Handler
+    document.getElementById('btnDelete').addEventListener('click', function() {
+        const formData = new FormData();
+        formData.append('action', 'delete');
+        formData.append('fecha', document.getElementById('modalDateIso').value);
+        
+        if(confirm('¿Estás seguro de eliminar esta excepción y volver al horario estándar?')) {
+            sendRequest(formData);
+        }
+    });
+
+    function sendRequest(formData) {
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        
+        fetch("{{ url_for('configuracion_produccion.gestionar_excepcion') }}", {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-CSRFToken': csrfToken }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Ocurrió un error desconocido'));
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Error de conexión');
+        });
+    }
+</script>
 {% endblock %}

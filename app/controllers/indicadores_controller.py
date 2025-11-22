@@ -55,9 +55,9 @@ class IndicadoresController:
         self.nota_credito_model = NotaCreditoModel()
         self.alerta_riesgo_model = AlertaRiesgoModel()
         self.reclamo_proveedor_model = ReclamoProveedorModel()
-        self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
-        self.registro_desperdicio_insumo_model = RegistroDesperdicioModel()
-
+        # self.registro_desperdicio_model es para registro_desperdicio_lote_producto
+        # self.registro_desperdicio_insumo_model es para mes_kanban.registros_desperdicio (mermas de produccion)
+        
     def _parsear_fechas(self, fecha_inicio_str, fecha_fin_str, default_days=30):
         if fecha_inicio_str:
             fecha_inicio = datetime.strptime(fecha_inicio_str, '%Y-%m-%d')
@@ -128,7 +128,7 @@ class IndicadoresController:
         evolucion_consumo_insumos = self._obtener_evolucion_consumo_insumos(fecha_inicio, fecha_fin, contexto)
 
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
-        cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
+        # cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
 
         return {
             "meta": {"top_n": top_n},
@@ -139,7 +139,7 @@ class IndicadoresController:
             "top_insumos": top_insumos,
             "evolucion_consumo_insumos": evolucion_consumo_insumos,
             "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
-            "cumplimiento_plan": cumplimiento_plan
+            # "cumplimiento_plan": cumplimiento_plan
         }
 
     # --- MÉTODOS PRIVADOS PRODUCCIÓN ---
@@ -1650,9 +1650,54 @@ class IndicadoresController:
 
         rendimiento = float(tiempo_produccion_planificado) / tiempo_operativo if tiempo_operativo > 0 else 0
 
-        produccion_real = sum(op.get('cantidad_producida', 0) for op in ordenes_en_periodo)
-        unidades_buenas_res = self.control_calidad_producto_model.get_total_unidades_aprobadas_en_periodo(fecha_inicio, fecha_fin)
-        unidades_buenas = unidades_buenas_res.get('total_unidades', 0) if unidades_buenas_res.get('success') else 0
+        produccion_real = sum(float(op.get('cantidad_producida', 0)) for op in ordenes_en_periodo)
+        
+        # --- CÁLCULO DE CALIDAD ---
+        cantidad_rechazada = 0
+        cantidad_desperdicio = 0
+        op_ids = [op['id'] for op in ordenes_en_periodo]
+        
+        if op_ids:
+            try:
+                # 1. Calcular Desperdicios (Mermas) de estas OPs
+                # self.registro_desperdicio_insumo_model mapea a mes_kanban.registros_desperdicio
+                # Usamos schema explícito para asegurar que consultamos la tabla correcta
+                desperdicios_res = self.registro_desperdicio_insumo_model.db.schema('mes_kanban').table('registros_desperdicio')\
+                    .select('cantidad')\
+                    .in_('orden_produccion_id', op_ids)\
+                    .execute()
+                
+                if desperdicios_res.data:
+                    cantidad_desperdicio = sum(float(d.get('cantidad', 0)) for d in desperdicios_res.data)
+
+                # 2. Calcular Rechazos de Calidad (Lotes Completos Rechazados/Cuarentena)
+                # Primero obtener los lotes asociados a estas OPs que fueron rechazados
+                # Buscamos en control_calidad_productos los registros con decision negativa
+                rechazos_cc_res = self.control_calidad_producto_model.db.table('control_calidad_productos')\
+                    .select('lote_producto_id')\
+                    .in_('orden_produccion_id', op_ids)\
+                    .in_('decision_final', ['RECHAZADO', 'CUARENTENA', 'NO APTO'])\
+                    .execute()
+                
+                lotes_rechazados_ids = [r['lote_producto_id'] for r in rechazos_cc_res.data] if rechazos_cc_res.data else []
+                
+                if lotes_rechazados_ids:
+                    # Sumar la cantidad inicial de estos lotes
+                    lotes_res = self.lote_producto_model.db.table('lotes_productos')\
+                        .select('cantidad_inicial')\
+                        .in_('id_lote', lotes_rechazados_ids)\
+                        .execute()
+                    
+                    if lotes_res.data:
+                        cantidad_rechazada = sum(float(l.get('cantidad_inicial', 0)) for l in lotes_res.data)
+
+            except Exception as e:
+                logger.error(f"Error calculando calidad OEE: {e}")
+
+        # Calidad = Unidades Buenas / Total Producido
+        # Unidades Buenas = Total Producido - (Desperdicios + Rechazos)
+        unidades_malas = cantidad_rechazada + cantidad_desperdicio
+        unidades_buenas = max(produccion_real - unidades_malas, 0)
         
         calidad = unidades_buenas / produccion_real if produccion_real > 0 else 0
 
