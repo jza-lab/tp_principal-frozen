@@ -190,8 +190,10 @@ class ReporteStockController:
             hoy = datetime.now().date()
 
             for lote in lotes:
-                f_inicio_str = lote.get(key_start)
-                f_fin_str = lote.get('fecha_vencimiento')
+                # Support both keys for start date: 'fecha_ingreso'/'fecha_produccion' and 'f_ingreso'
+                f_inicio_str = lote.get(key_start) or lote.get('f_ingreso')
+                # Support both keys for end date: 'fecha_vencimiento' and 'f_vencimiento'
+                f_fin_str = lote.get('fecha_vencimiento') or lote.get('f_vencimiento')
 
                 if not f_inicio_str or not f_fin_str:
                     continue

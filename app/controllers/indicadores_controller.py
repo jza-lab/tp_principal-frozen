@@ -26,7 +26,6 @@ from app.controllers.rentabilidad_controller import RentabilidadController
 from decimal import Decimal
 from app.utils import estados
 import logging
-# Faltaba importar defaultdict
 from collections import defaultdict, Counter
 
 logger = logging.getLogger(__name__)
@@ -97,22 +96,16 @@ class IndicadoresController:
 
     # --- CATEGORÍA: PRODUCCIÓN ---
     def obtener_datos_produccion(self, semana=None, mes=None, ano=None):
-        """
-        Esta función está reservada para KPIs puramente de producción.
-        La lógica de inventario que estaba aquí fue movida a su propia categoría.
-        """
         return {}
 
     def obtener_kpis_produccion(self, semana=None, mes=None, ano=None, top_n=5, **kwargs):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         
-        # Determinar contexto para la evolución
-        contexto = 'mes' # Default
+        contexto = 'mes' 
         if semana: contexto = 'semana'
         elif mes: contexto = 'mes'
         elif ano: contexto = 'ano'
 
-        # --- Métodos de apoyo para fechas fijas ---
         hoy_dt = datetime.now()
         inicio_semana_dt = hoy_dt - timedelta(days=hoy_dt.weekday())
         inicio_semana_actual = inicio_semana_dt.date()
@@ -127,12 +120,11 @@ class IndicadoresController:
         panorama_estados = self._obtener_panorama_estados(inicio_semana_actual)
         ranking_desperdicios = self._obtener_ranking_desperdicios(inicio_mes_actual, fin_mes_actual)
         
-        # Pasar el contexto y rango dinámico a la evolución
         evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
         
         velocidad_produccion = self._obtener_velocidad_produccion(inicio_mes_actual, fin_mes_actual)
         top_insumos = self._obtener_top_insumos_wrapper(fecha_inicio, fecha_fin, top_n=top_n)
-        # Nuevo gráfico de insumos
+        
         evolucion_consumo_insumos = self._obtener_evolucion_consumo_insumos(fecha_inicio, fecha_fin, contexto)
 
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
@@ -150,30 +142,23 @@ class IndicadoresController:
             "cumplimiento_plan": cumplimiento_plan
         }
 
-    # --- IMPLEMENTACIÓN NUEVOS MÉTODOS PRIVADOS ---
+    # --- MÉTODOS PRIVADOS PRODUCCIÓN ---
 
     def _obtener_panorama_estados(self, inicio_semana):
-        """
-        Obtiene el conteo de órdenes por estado.
-        Criterio: Todas las activas (independiente de fecha) + Completadas esta semana.
-        """
         estados_activos = [
             'EN ESPERA', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'LISTA PARA PRODUCIR', 'EN_EMPAQUETADO', 
             'EN_PROCESO', 'CONTROL_DE_CALIDAD', 'PAUSADA'
         ]
         
-        # 1. Activas
         res_activas = self.orden_produccion_model.find_all(filters={'estado': estados_activos})
         data_activas = res_activas.get('data', []) if res_activas.get('success') else []
         
-        # 2. Completadas esta semana
         res_completadas = self.orden_produccion_model.find_all(filters={
             'estado': 'COMPLETADA',
             'fecha_fin_gte': inicio_semana.isoformat() 
         })
         data_completadas = res_completadas.get('data', []) if res_completadas.get('success') else []
 
-        # Consolidar y contar
         conteo_estados = Counter()
         conteo_lineas = Counter()
         total = 0
@@ -188,7 +173,6 @@ class IndicadoresController:
             estado_fmt = estado_raw.replace('_', ' ')
             conteo_estados[estado_fmt] += 1
             
-            # Conteo para líneas
             if estado_raw == 'EN_LINEA_1':
                 conteo_lineas['Línea 1'] += 1
             elif estado_raw == 'EN_LINEA_2':
@@ -208,35 +192,25 @@ class IndicadoresController:
         }
 
     def _obtener_ranking_desperdicios(self, fecha_inicio, fecha_fin):
-        """
-        Top 5 motivos de desperdicio más frecuentes en el periodo (count).
-        Combina desperdicios de productos y desperdicios de insumos.
-        """
-        # 1. Desperdicio de Productos
         res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_prod = res_prod.get('data', []) if res_prod.get('success') else []
 
-        # 2. Desperdicio de Insumos (Nuevo)
         res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
         
         conteo = Counter()
         
-        # Procesar Productos
         for d in data_prod:
-            # Motivo en 'motivo' dict o string
             if isinstance(d.get('motivo'), dict):
                 motivo = d.get('motivo', {}).get('motivo', 'Sin motivo') 
             else:
                 motivo = 'Sin motivo'
             conteo[motivo] += 1 
             
-        # Procesar Insumos (campo 'motivo_desperdicio' -> 'descripcion')
         for d in data_insumo:
             if isinstance(d.get('motivo_desperdicio'), dict):
                 motivo = d.get('motivo_desperdicio', {}).get('descripcion', 'Sin motivo')
             else:
-                 # Fallback si no hay join o estructura diferente
                 motivo = 'Sin motivo (Insumo)'
             conteo[motivo] += 1
 
@@ -251,8 +225,6 @@ class IndicadoresController:
             insight = "No se han registrado incidentes de desperdicio significativos durante este mes."
 
         top_5_inv = top_5[::-1]
-
-        # --- Lógica Dinámica (Pie vs Bar) ---
         chart_type = 'pie' if len(top_5) <= 6 else 'bar'
         
         return {
@@ -264,13 +236,8 @@ class IndicadoresController:
         }
 
     def _obtener_top_items_con_desperdicio(self, fecha_inicio, fecha_fin):
-        """
-        Obtiene un ranking de los insumos y productos que han registrado desperdicios.
-        Combina registros de desperdicio de productos y de insumos (incluyendo mermas de producción vía OP).
-        """
         conteo_items = Counter()
 
-        # 1. Productos (Desperdicio de Lote de Producto Terminado)
         res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_prod = res_prod.get('data', []) if res_prod.get('success') else []
         
@@ -304,7 +271,6 @@ class IndicadoresController:
                     name = lote_map.get(l_id) or lote_map.get(str(l_id)) or f"Producto ID {l_id}"
                     conteo_items[f"{name}"] += 1
 
-        # 2. Insumos y Producción (Registros Generales)
         res_ins = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_ins = res_ins.get('data', []) if res_ins.get('success') else []
 
@@ -312,7 +278,6 @@ class IndicadoresController:
             op_ids_to_fetch = set()
             lote_insumo_ids = set()
 
-            # Primera pasada: recolectar IDs
             for d in data_ins:
                 op_id = d.get('orden_produccion_id')
                 if op_id:
@@ -322,7 +287,6 @@ class IndicadoresController:
                 if lid:
                     lote_insumo_ids.add(lid)
 
-            # Mapa para OPs
             op_map = {}
             if op_ids_to_fetch:
                 try:
@@ -334,12 +298,10 @@ class IndicadoresController:
                     if ops_res.data:
                         for item in ops_res.data:
                             p_name = item.get('producto', {}).get('nombre', 'Producto Desconocido')
-                            # Distinguir visualmente que viene de una OP
                             op_map[item['id']] = f"{p_name} (En Producción)"
                 except Exception as e:
                     logger.error(f"Error fetching OP details for waste: {e}")
 
-            # Mapa para Insumos
             insumo_map = {}
             if lote_insumo_ids:
                 lote_ids_str = [str(id_) for id_ in lote_insumo_ids]
@@ -355,7 +317,6 @@ class IndicadoresController:
                 except Exception as e:
                     logger.error(f"Error fetching insumo details for waste: {e}")
 
-            # Contabilizar
             for d in data_ins:
                 op_id = d.get('orden_produccion_id')
                 l_id = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
@@ -365,10 +326,9 @@ class IndicadoresController:
                 elif l_id:
                     name = insumo_map.get(str(l_id)) or f"Insumo ID {str(l_id)[:8]}..."
                     conteo_items[f"{name}"] += 1
-                elif op_id: # Fallback si la OP no se encontró en el mapa
+                elif op_id: 
                      conteo_items[f"Orden Producción #{op_id}"] += 1
 
-        # Top 10
         top_items = conteo_items.most_common(10)
         
         insight = "No se registraron desperdicios específicos."
@@ -384,10 +344,6 @@ class IndicadoresController:
         }
 
     def _obtener_evolucion_desperdicios(self, fecha_inicio, fecha_fin, contexto='mes'):
-        """
-        Evolución dinámica basada en el periodo seleccionado.
-        """
-        # Ampliar rango para asegurar datos en bordes si es necesario
         res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_prod = res_prod.get('data', []) if res_prod.get('success') else []
 
@@ -397,27 +353,21 @@ class IndicadoresController:
         data_agregada = defaultdict(int)
         labels_ordenados = []
         
-        # Definir formato de buckets
         bucket_format = "%Y-%m-%d"
-        label_format = "%d/%m"
         delta = timedelta(days=1)
         
         if contexto == 'ano':
             bucket_format = "%Y-%m"
-            label_format = "%b %Y" # Ene 2024
-            # Iterar por meses
             current = fecha_inicio.replace(day=1)
             while current <= fecha_fin:
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
                 data_agregada[key] = 0
-                # Avanzar mes
                 next_month = current.replace(day=28) + timedelta(days=4)
                 current = next_month - timedelta(days=next_month.day - 1)
         else:
-            # Iterar por días (semana o mes)
             current = fecha_inicio
-            while current <= fecha_fin: # Corregido comparación
+            while current <= fecha_fin:
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
                 data_agregada[key] = 0
@@ -428,11 +378,9 @@ class IndicadoresController:
                 fecha_raw = d.get(fecha_key)
                 if not fecha_raw: continue
                 try:
-                    # Intentar parsear ISO completo
                     dt = datetime.fromisoformat(fecha_raw)
                 except ValueError:
                     try:
-                        # Intentar solo fecha
                         dt = datetime.strptime(fecha_raw[:10], "%Y-%m-%d")
                     except:
                         continue
@@ -440,8 +388,7 @@ class IndicadoresController:
                 key = dt.strftime(bucket_format)
                 if key in data_agregada:
                     data_agregada[key] += 1
-                elif contexto == 'ano': # Fallback para año si las fechas no están alineadas al dia 1
-                     # Si el key generado por el dato está en el rango, sumarlo
+                elif contexto == 'ano': 
                      if key in data_agregada: 
                          data_agregada[key] += 1
 
@@ -450,12 +397,11 @@ class IndicadoresController:
 
         valores = [data_agregada[k] for k in labels_ordenados]
         
-        # Formatear etiquetas para el frontend
         labels_display = []
         for k in labels_ordenados:
              if contexto == 'ano':
                  dt = datetime.strptime(k, "%Y-%m")
-                 labels_display.append(dt.strftime("%b")) # Nombre mes
+                 labels_display.append(dt.strftime("%b"))
              else:
                  dt = datetime.strptime(k, "%Y-%m-%d")
                  labels_display.append(dt.strftime("%d/%m"))
@@ -476,11 +422,6 @@ class IndicadoresController:
         }
 
     def _obtener_velocidad_produccion(self, fecha_inicio, fecha_fin):
-        """
-        Tiempo promedio de ciclo (Cycle Time) para órdenes completadas en el periodo.
-        Usa la lógica centralizada de ReporteProduccionController.
-        """
-        # Usamos el nuevo método estandarizado que devuelve horas
         res = self.reporte_produccion_controller.obtener_tiempo_ciclo_horas(fecha_inicio, fecha_fin)
         
         data = res.get('data', {}) if res.get('success') else {}
@@ -497,11 +438,7 @@ class IndicadoresController:
         }
 
     def _obtener_evolucion_consumo_insumos(self, fecha_inicio, fecha_fin, contexto='mensual'):
-        """
-        Wrapper para obtener la evolución del consumo de insumos.
-        """
-        # Adaptamos 'contexto' que viene de indicadores (mes/semana/ano) a lo que espera reporte_produccion
-        periodo_map = {'mes': 'mensual', 'semana': 'semanal', 'ano': 'mensual'} # 'ano' usa mensual por ahora
+        periodo_map = {'mes': 'mensual', 'semana': 'semanal', 'ano': 'mensual'} 
         periodo = periodo_map.get(contexto, 'mensual')
         
         res = self.reporte_produccion_controller.obtener_consumo_insumos_por_tiempo(fecha_inicio, fecha_fin, periodo)
@@ -520,14 +457,9 @@ class IndicadoresController:
         }
 
     def _obtener_top_insumos_wrapper(self, fecha_inicio, fecha_fin, top_n=5):
-        """
-        Wrapper para obtener el Top Insumos usando ReporteProduccionController.
-        """
         res = self.reporte_produccion_controller.obtener_top_insumos(top_n) 
         data = res.get('data', {}) if res.get('success') else {}
         
-        # Transformar formato dict {nombre: cantidad} a listas para gráficas {labels: [], data: []}
-        # Ordenar por valor descendente
         sorted_items = sorted(data.items(), key=lambda item: item[1], reverse=True)
         
         labels = [x[0] for x in sorted_items]
@@ -556,17 +488,14 @@ class IndicadoresController:
         reclamos_clientes = self._calcular_tasa_reclamos_clientes(fecha_inicio, fecha_fin)
         rechazo_proveedores = self._calcular_tasa_rechazo_proveedores(fecha_inicio, fecha_fin)
         
-        # KPIs Extra
         alertas_activas_res = self.alerta_riesgo_model.find_all(filters={'estado': 'Pendiente'})
         alertas_activas_count = len(alertas_activas_res.get('data', [])) if alertas_activas_res.get('success') else 0
 
         desperdicios_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         desperdicios_count = len(desperdicios_res.get('data', [])) if desperdicios_res.get('success') else 0
-        # Sumamos también desperdicios de insumos
         desperdicios_insumos_res = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         desperdicios_count += len(desperdicios_insumos_res.get('data', [])) if desperdicios_insumos_res.get('success') else 0
 
-        # Gráficos
         evolucion_reclamos = self._obtener_evolucion_reclamos_detalle(fecha_inicio, fecha_fin, contexto)
         distribucion_alertas = self._obtener_distribucion_alertas(fecha_inicio, fecha_fin)
         resultados_calidad = self._obtener_resultados_calidad(fecha_inicio, fecha_fin)
@@ -574,7 +503,6 @@ class IndicadoresController:
         evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
         top_items_desperdicio = self._obtener_top_items_con_desperdicio(fecha_inicio, fecha_fin)
 
-        # Se retorna una estructura defensiva que coincide con el frontend
         return {
             "tasa_rechazo_interno": rechazo_interno if isinstance(rechazo_interno, dict) else {"valor": 0, "rechazadas": 0, "inspeccionadas": 0},
             "tasa_reclamos_clientes": reclamos_clientes if isinstance(reclamos_clientes, dict) else {"valor": 0, "reclamos": 0, "pedidos_entregados": 0},
@@ -591,14 +519,12 @@ class IndicadoresController:
         }
 
     def _obtener_evolucion_reclamos_detalle(self, fecha_inicio, fecha_fin, contexto):
-        # Reclamos de Clientes
         reclamos_cli_res = self.reclamo_model.find_all(filters={
             'created_at_gte': fecha_inicio.isoformat(),
             'created_at_lte': fecha_fin.isoformat()
         })
         data_cli = reclamos_cli_res.get('data', []) if reclamos_cli_res.get('success') else []
 
-        # Reclamos a Proveedores
         reclamos_prov_res = self.reclamo_proveedor_model.find_all(filters={
             'created_at_gte': fecha_inicio.isoformat(),
             'created_at_lte': fecha_fin.isoformat()
@@ -617,7 +543,7 @@ class IndicadoresController:
             while current <= fecha_fin:
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
-                data_agregada[key] # Init
+                data_agregada[key] 
                 next_month = current.replace(day=28) + timedelta(days=4)
                 current = next_month - timedelta(days=next_month.day - 1)
         else:
@@ -625,7 +551,7 @@ class IndicadoresController:
             while current <= fecha_fin:
                 key = current.strftime(bucket_format)
                 labels_ordenados.append(key)
-                data_agregada[key] # Init
+                data_agregada[key] 
                 current += delta
 
         def procesar(data, tipo):
@@ -637,7 +563,7 @@ class IndicadoresController:
                     key = dt.strftime(bucket_format)
                     if key in data_agregada:
                         data_agregada[key][tipo] += 1
-                    elif contexto == 'ano': # Fallback año
+                    elif contexto == 'ano': 
                         if key in data_agregada:
                              data_agregada[key][tipo] += 1
                 except: pass
@@ -657,7 +583,6 @@ class IndicadoresController:
                  dt = datetime.strptime(k, "%Y-%m-%d")
                  labels_display.append(dt.strftime("%d/%m"))
 
-        # Generar insights separados
         tot_cli = sum(vals_cli)
         trend_cli = "estable"
         if len(vals_cli) > 1:
@@ -691,7 +616,6 @@ class IndicadoresController:
         data = res.get('data', []) if res.get('success') else []
         
         conteo = Counter([d.get('origen_tipo_entidad', 'Desconocido') for d in data])
-        # Mapear nombres amigables
         nombres_map = {
             'lote_insumo': 'Insumos',
             'lote_producto': 'Productos',
@@ -714,7 +638,6 @@ class IndicadoresController:
         }
 
     def _obtener_resultados_calidad(self, fecha_inicio, fecha_fin):
-        # Insumos
         try:
             res_ins = self.control_calidad_insumo_model.db.table('control_calidad_insumos').select('decision_final').gte('fecha_inspeccion', fecha_inicio.isoformat()).lte('fecha_inspeccion', fecha_fin.isoformat()).execute()
             data_ins = res_ins.data if res_ins.data else []
@@ -722,7 +645,6 @@ class IndicadoresController:
             logger.error(f"Error obteniendo resultados calidad insumos: {e}")
             data_ins = []
 
-        # Productos
         try:
             res_prod = self.control_calidad_producto_model.db.table('control_calidad_productos').select('decision_final').gte('fecha_inspeccion', fecha_inicio.isoformat()).lte('fecha_inspeccion', fecha_fin.isoformat()).execute()
             data_prod = res_prod.data if res_prod.data else []
@@ -730,14 +652,9 @@ class IndicadoresController:
             logger.error(f"Error obteniendo resultados calidad productos: {e}")
             data_prod = []
         
-        # Contar
         c_ins = Counter([d.get('decision_final', 'PENDIENTE') for d in data_ins])
         c_prod = Counter([d.get('decision_final', 'PENDIENTE') for d in data_prod])
         
-        # Normalizar claves
-        keys = ['APROBADO', 'RECHAZADO', 'CUARENTENA', 'EN_CUARENTENA'] # EN_CUARENTENA might be used
-        
-        # Mapear a structure: series per status
         series = {
             'Aprobado': [],
             'Rechazado': [],
@@ -768,9 +685,9 @@ class IndicadoresController:
         return {
             "categories": categories,
             "series": [
-                {"name": "Aprobado", "data": series['Aprobado'], "color": "#198754"}, # Green
-                {"name": "Rechazado", "data": series['Rechazado'], "color": "#dc3545"}, # Red
-                {"name": "Cuarentena", "data": series['Cuarentena'], "color": "#ffc107"} # Yellow
+                {"name": "Aprobado", "data": series['Aprobado'], "color": "#198754"}, 
+                {"name": "Rechazado", "data": series['Rechazado'], "color": "#dc3545"}, 
+                {"name": "Cuarentena", "data": series['Cuarentena'], "color": "#ffc107"} 
             ],
             "insight": insight,
             "tooltip": "Resultados de las inspecciones de calidad realizadas en el periodo."
@@ -801,7 +718,6 @@ class IndicadoresController:
     def obtener_datos_comercial(self, semana=None, mes=None, ano=None):
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
 
-        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
         kpis_data = self._obtener_kpis_comerciales(fecha_inicio, fecha_fin)
 
         contexto = 'mes'
@@ -822,7 +738,6 @@ class IndicadoresController:
         }
 
     def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
-        # 1. Cumplimiento de Pedidos: (Completados / Total Pedidos [incl. cancelados]) * 100
         estados_totales = [
             estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
             estados.OV_COMPLETADO, estados.OV_CANCELADA, estados.OV_EN_TRANSITO, estados.OV_ITEM_ALISTADO
@@ -835,9 +750,6 @@ class IndicadoresController:
         
         cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
 
-        # 2. Ticket Medio: Total Valor (sin cancelados) / Num Pedidos (sin cancelados)
-        # Obtenemos pedidos en estados válidos (no cancelados) para sumar su valor
-                # Use get_ingresos_en_periodo which already filters CANCELLED and calculates price if missing
         estados_activos = [
             estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
             estados.OV_COMPLETADO, estados.OV_EN_TRANSITO, estados.OV_ITEM_ALISTADO
@@ -867,21 +779,19 @@ class IndicadoresController:
             estados.OV_PENDIENTE, 
             estados.OV_EN_PROCESO, 
             estados.OV_LISTO_PARA_ENTREGA,
-            estados.OV_ITEM_ALISTADO, # Por si acaso
+            estados.OV_ITEM_ALISTADO, 
             estados.OV_EN_TRANSITO
         ]
-        # Periodo Actual
+        
         pedidos_actuales = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin, estados_filtro=estados_ventas)
         data_actual = pedidos_actuales.get('data', []) if pedidos_actuales.get('success') else []
         
-        # Periodo Anterior (Simple logic: mismo delta de tiempo hacia atrás)
         delta_periodo = fecha_fin - fecha_inicio
         fecha_fin_prev = fecha_inicio - timedelta(days=1)
         fecha_inicio_prev = fecha_fin_prev - delta_periodo
         pedidos_previos = self.pedido_model.get_ingresos_en_periodo(fecha_inicio_prev, fecha_fin_prev, estados_filtro=estados_ventas)
         data_previo = pedidos_previos.get('data', []) if pedidos_previos.get('success') else []
         
-        # Agregación
         def agregar_data(dataset, inicio):
             agregado = defaultdict(float)
             labels = []
@@ -889,7 +799,6 @@ class IndicadoresController:
             
             if contexto == 'ano':
                 fmt = "%Y-%m"
-                # Generar keys para todos los meses
                 curr = inicio.replace(day=1)
                 while curr <= end:
                     labels.append(curr.strftime(fmt))
@@ -901,7 +810,6 @@ class IndicadoresController:
                     labels.append(curr.strftime(fmt))
                     curr += timedelta(days=1)
             
-            # Rellenar con datos
             for p in dataset:
                 f_str = p.get('fecha_solicitud')
                 if not f_str: continue
@@ -909,27 +817,20 @@ class IndicadoresController:
                 key = dt.strftime(fmt)
                 agregado[key] += float(p.get('precio_orden', 0))
             
-            # Ordenar y devolver solo valores alineados a los labels (o índice)
-            # Para comparativa simple, devolvemos la lista de valores.
-            # Nota: Las fechas no coincidirán, así que alineamos por índice (Día 1, Día 2...)
             return [agregado[l] for l in labels], labels
 
-        # Como los periodos tienen fechas distintas, alineamos por "Día del periodo"
         vals_actual, keys_actual = agregar_data(data_actual, fecha_inicio)
         vals_previo, keys_previo = agregar_data(data_previo, fecha_inicio_prev)
         
-        # Truncar o rellenar para que coincidan en longitud si es necesario
         max_len = max(len(vals_actual), len(vals_previo))
         vals_actual += [0] * (max_len - len(vals_actual))
         vals_previo += [0] * (max_len - len(vals_previo))
 
-        # Formatear Labels para visualización (usamos las fechas del periodo actual)
         labels_display = []
         for k in keys_actual:
             dt = datetime.strptime(k, "%Y-%m" if contexto == 'ano' else "%Y-%m-%d")
             labels_display.append(dt.strftime("%b" if contexto == 'ano' else "%d/%m"))
 
-        # Insight
         total_actual = sum(vals_actual)
         total_previo = sum(vals_previo)
         diff = total_actual - total_previo
@@ -957,7 +858,6 @@ class IndicadoresController:
         conteo = Counter([d.get('estado', 'DESCONOCIDO') for d in data])
         formatted_data = [{"name": k.replace('_', ' '), "value": v} for k, v in conteo.items()]
         
-        # Insight
         total = sum(conteo.values())
         completados = conteo.get('COMPLETADO', 0)
         pct = (completados / total * 100) if total > 0 else 0
@@ -970,8 +870,6 @@ class IndicadoresController:
         }
 
     def _obtener_top_clientes_kpi(self, fecha_inicio, fecha_fin):
-        # Reutilizamos lógica pero permitiendo todos los estados excepto cancelados si se quiere revenue potencial
-        # El usuario pidió "cantidad total gastada", asumimos ventas válidas.
         estados_validos = [estados.OV_COMPLETADO, estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA]
         
         res = self.pedido_model.find_all(filters={
@@ -982,14 +880,8 @@ class IndicadoresController:
         data = res.get('data', []) if res.get('success') else []
         
         clientes_spend = defaultdict(float)
-        clientes_names = {} # Cache names if possible, or use ID
+        clientes_names = {} 
         
-        # Necesitamos nombres de clientes. La consulta simple no trae join.
-        # Usamos get_all_with_items filtrado es mejor opción.
-        # Pero para no reescribir todo, hacemos una pasada rápida.
-        
-        # Mejor opción: get_all_with_items con filtro custom implementado en controller
-        # Simulemos con lo que tenemos:
         full_data_res = self.pedido_model.get_all_with_items(filtros={
             'fecha_desde': fecha_inicio.strftime('%Y-%m-%d'),
             'fecha_hasta': fecha_fin.strftime('%Y-%m-%d')
@@ -1003,13 +895,10 @@ class IndicadoresController:
             
             cname = p.get('cliente', {}).get('nombre') or f"Cliente {cid}"
             val = float(p.get('precio_orden', 0) or 0)
-            # Fallback calculation if price is 0
             if val == 0:
                 for item in p.get('pedido_items', []):
                     qty = float(item.get('cantidad') or 0)
-                    # Check correct nesting from get_all_with_items
                     prod = item.get('producto_nombre') 
-                    # producto_nombre is enriched with name and precio_unitario from model update
                     price = float(prod.get('precio_unitario') or 0) if isinstance(prod, dict) else 0
                     val += qty * price
             
@@ -1032,8 +921,6 @@ class IndicadoresController:
         }
 
     def _obtener_motivos_notas_credito(self, fecha_inicio, fecha_fin):
-        # Buscar todas las NC en el periodo
-        # Usamos created_at porque fecha_emision podría no estar poblado en registros antiguos
         res = self.nota_credito_model.find_all(filters={
             'created_at_gte': fecha_inicio.isoformat(),
             'created_at_lte': fecha_fin.isoformat()
@@ -1047,7 +934,7 @@ class IndicadoresController:
         if len(conteo) > 5: chart_type = 'bar'
         
         formatted_data = [{"name": k, "value": v} for k, v in top_motivos]
-        if chart_type == 'bar': # Separate lists for bar chart
+        if chart_type == 'bar': 
             formatted_data = {
                 "categories": [x[0] for x in top_motivos],
                 "values": [x[1] for x in top_motivos]
@@ -1075,11 +962,6 @@ class IndicadoresController:
         elif mes: contexto = 'mes'
         elif ano: contexto = 'ano'
         
-        # --- 1. CÁLCULO DE KPIs PARA TARJETAS ---
-        
-        # KPI 1: Ventas Totales (Facturación Emitida / Pendiente)
-        # Incluimos todos los pedidos confirmados (no cancelados, ni rechazados).
-        # Esto incluye EN_PROCESO, LISTO_PARA_ENTREGA, etc. para reflejar todo lo "Vendido" vs "Cobrado".
         estados_ventas = [
             estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
             estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
@@ -1088,10 +970,6 @@ class IndicadoresController:
         data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
         ventas_totales = sum(float(p.get('precio_orden') or 0) for p in data_ventas)
 
-        # KPI 2: Flujo de Caja Real (Recaudación de Ventas del Periodo)
-        # OPTIMIZACIÓN SOLICITADA: Usar estado_pago='Pagado' para calcular ingreso directo sin request extra.
-        # Esto cambia la definición a "Cobranza de las ventas generadas en el periodo".
-        
         flujo_caja_real = 0.0
         ids_pago_parcial = []
         
@@ -1104,7 +982,6 @@ class IndicadoresController:
             elif estado_pago == 'pagado parcialmente':
                 ids_pago_parcial.append(p['id'])
                 
-        # Consultar pagos solo para los parciales (si existen)
         from app.models.pago import PagoModel
         pago_model = PagoModel()
         
@@ -1119,18 +996,13 @@ class IndicadoresController:
             except Exception as e:
                 logger.error(f"Error consultando pagos parciales: {e}")
 
-        # KPI 3: Ingreso Pendiente (Cuentas por Cobrar)
-        # Diferencia simple dado que flujo_caja_real ahora está alineado a las mismas ventas
         ingreso_pendiente = ventas_totales - flujo_caja_real
         if ingreso_pendiente < 0: ingreso_pendiente = 0
 
-        # KPI 4: Egresos (Costos)
-        # Cálculo rápido de costo para KPI (estimado)
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         costo_total = 0.0
         dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
         
-        # Obtener costos fijos mensuales activos
         costos_fijos_res = self.costo_fijo_model.find_all(filters={'activo': True})
         monto_mensual_fijos = sum(float(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', [])) if costos_fijos_res.get('success') else 0.0
         gastos_fijos_periodo = (monto_mensual_fijos / 30) * dias_periodo
@@ -1142,7 +1014,7 @@ class IndicadoresController:
             
             costo_mp = sum(self._get_costo_producto(op['producto_id'], costos_cache) * float(op.get('cantidad_producida', 0)) for op in ordenes_data if op.get('producto_id'))
             horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
-            costo_mo = horas_prod * 15 # COSTO HORA ESTIMADO
+            costo_mo = horas_prod * 15 
             costo_total = costo_mp + costo_mo + gastos_fijos_periodo
 
         beneficio_bruto = ventas_totales - costo_total
@@ -1154,30 +1026,16 @@ class IndicadoresController:
             "ingreso_pendiente": {"valor": round(ingreso_pendiente, 2), "etiqueta": "Cuentas por Cobrar"},
             "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Egresos Totales (Est.)"},
             "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Resultado Operativo"},
-            # Mantener compatibilidad por si acaso
             "facturacion_total": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales"}
         }
 
-        # --- 2. CÁLCULO DE DATOS PARA GRÁFICOS ---
-        
-        # A. Evolución de Ingresos (Line Chart) - AHORA INCLUYE FLUJO DE CAJA
-        # Usamos obtener_facturacion_por_periodo pero adaptado al contexto
         evolucion_ingresos = self._obtener_evolucion_financiera_comparativa(fecha_inicio, fecha_fin, contexto)
-
-        # B. Egresos Básicos y Desglose (Pie Chart + Drilldown Data)
         descomposicion = self._obtener_descomposicion_costos_con_detalle(fecha_inicio, fecha_fin, gastos_fijos_periodo)
-
-        # C. Ingresos vs Egresos (Multi-line)
         ingresos_vs_egresos = self._obtener_evolucion_ingresos_vs_egresos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
-
-        # D. Evolución Costos Fijos (Line)
         evolucion_costos_fijos = self._obtener_evolucion_costos_fijos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
 
-        # E. Matriz BCG (Scatter)
-        # Llamamos al controlador de rentabilidad existente
         try:
             rentabilidad_raw = self.rentabilidad_controller.obtener_datos_matriz_rentabilidad(fecha_inicio_str, fecha_fin_str)
-            # rentabilidad_raw podría ser una tupla (data, status) si usa success_response de BaseController
             if isinstance(rentabilidad_raw, tuple):
                 rentabilidad_res = rentabilidad_raw[0]
             else:
@@ -1198,18 +1056,11 @@ class IndicadoresController:
         }
 
     def _fill_time_series_gaps(self, data_dict, start_date, end_date, frequency='day'):
-        """
-        Rellena los huecos en una serie temporal con ceros.
-        frequency: 'day', 'month'
-        data_dict: Diccionario { 'YYYY-MM-DD': valor } o { 'YYYY-MM': valor }
-        Retorna: (sorted_labels, sorted_values)
-        """
         labels = []
         values = []
         
         current = start_date
         if frequency == 'month':
-            # Alinear al primer día del mes para iterar
             current = current.replace(day=1)
             end_align = end_date.replace(day=1)
             
@@ -1217,10 +1068,9 @@ class IndicadoresController:
                 key = current.strftime('%Y-%m')
                 labels.append(key)
                 values.append(data_dict.get(key, 0.0))
-                # Avanzar un mes
                 next_month = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
                 current = next_month
-        else: # day
+        else: 
             while current <= end_date:
                 key = current.strftime('%Y-%m-%d')
                 labels.append(key)
@@ -1230,29 +1080,22 @@ class IndicadoresController:
         return labels, values
 
     def _obtener_evolucion_financiera_comparativa(self, fecha_inicio, fecha_fin, contexto):
-        """
-        Compara Ventas (Devengado) vs Flujo de Caja (Percibido) en el tiempo.
-        Alineado a la lógica de KPIs: 'Flujo de Caja' aquí representa la cobranza de las ventas de ese día.
-        """
         freq = 'month' if contexto == 'ano' else 'day'
         bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
 
-        # 1. Ventas (Ingresos devengados) - Usamos la misma base amplia
         estados_ventas = [
             estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
             estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
         ]
         
-        # Reutilizamos logic de get_ingresos_en_periodo pero asegurando traer datos crudos para procesar pago
         ventas_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio.strftime('%Y-%m-%d'), fecha_fin.strftime('%Y-%m-%d'), estados_filtro=estados_ventas)
         data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
 
         ventas_map = defaultdict(float)
         caja_map = defaultdict(float)
         
-        # IDs para consultar parciales si es necesario (optimización)
         ids_parciales = []
-        mapa_fechas_parciales = {} # id -> fecha_bucket
+        mapa_fechas_parciales = {} 
 
         for p in data_ventas:
             if not p.get('fecha_solicitud'): continue
@@ -1269,7 +1112,6 @@ class IndicadoresController:
                 ids_parciales.append(p['id'])
                 mapa_fechas_parciales[p['id']] = key
 
-        # Consultar parciales
         if ids_parciales:
             from app.models.pago import PagoModel
             pago_model = PagoModel()
@@ -1287,11 +1129,9 @@ class IndicadoresController:
             except Exception as e:
                 logger.error(f"Error sumando parciales en grafica: {e}")
 
-        # 3. Rellenar huecos
         filled_labels, filled_ventas = self._fill_time_series_gaps(dict(ventas_map), fecha_inicio, fecha_fin, freq)
         _, filled_caja = self._fill_time_series_gaps(dict(caja_map), fecha_inicio, fecha_fin, freq)
 
-        # 4. Formatear Labels
         display_labels = []
         for l in filled_labels:
             if freq == 'month':
@@ -1320,7 +1160,6 @@ class IndicadoresController:
         }
 
     def _obtener_descomposicion_costos_con_detalle(self, fecha_inicio, fecha_fin, gastos_fijos_total):
-        # Calcular MP y MO como antes
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_ordenes = ordenes_res.get('data', []) if ordenes_res.get('success') else []
         
@@ -1337,9 +1176,8 @@ class IndicadoresController:
             if op.get('fecha_inicio') and op.get('fecha_fin'):
                 horas_prod += (datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600
 
-        costo_mo = horas_prod * 15.0 # Valor fijo hora hombre estimado
+        costo_mo = horas_prod * 15.0 
         
-        # Obtener detalle de costos fijos para el drilldown
         costos_fijos_res = self.costo_fijo_model.find_all(filters={'activo': True})
         detalle_fijos = []
         total_mensual_fijos = 0.0
@@ -1350,17 +1188,15 @@ class IndicadoresController:
                 total_mensual_fijos += monto
                 detalle_fijos.append({"name": cf.get('nombre_costo', 'Varios'), "value": monto})
 
-        # Ajustar el detalle al periodo (prorrateo)
         dias = max((fecha_fin - fecha_inicio).days, 1)
         factor = dias / 30.0
         
         detalle_fijos_ajustado = [{"name": d["name"], "value": round(d["value"] * factor, 2)} for d in detalle_fijos]
 
-        # Datos principales
         main_data = [
             {"name": "Materia Prima", "value": round(costo_mp, 2)},
             {"name": "Mano de Obra", "value": round(costo_mo, 2)},
-            {"name": "Costos Fijos", "value": round(gastos_fijos_total, 2), "drilldown": True} # Flag for frontend
+            {"name": "Costos Fijos", "value": round(gastos_fijos_total, 2), "drilldown": True} 
         ]
         
         total = costo_mp + costo_mo + gastos_fijos_total
@@ -1369,14 +1205,12 @@ class IndicadoresController:
 
         return {
             "data": main_data,
-            "drilldown_data": detalle_fijos_ajustado, # Data for the secondary chart
+            "drilldown_data": detalle_fijos_ajustado,
             "insight": insight,
             "tooltip": "Desglose de los principales egresos. Haga clic en 'Costos Fijos' para ver su composición."
         }
 
     def _obtener_evolucion_ingresos_vs_egresos(self, fecha_inicio, fecha_fin, contexto, monto_mensual_fijos):
-        # 1. Obtener datos base usando la misma lógica de relleno
-        # Si el contexto es 'mes', usamos 'diario' para ver la curva. Si es 'ano', 'mensual'.
         periodo_req = 'mensual' if contexto == 'ano' else 'diario'
         res_cvg = self.obtener_costo_vs_ganancia(fecha_inicio.strftime('%Y-%m-%d'), fecha_fin.strftime('%Y-%m-%d'), periodo=periodo_req)
         
@@ -1386,13 +1220,9 @@ class IndicadoresController:
         
         freq = 'month' if contexto == 'ano' else 'day'
         
-        # Rellenar series temporales
         filled_labels, filled_ingresos = self._fill_time_series_gaps(ingresos_map, fecha_inicio, fecha_fin, freq)
         _, filled_costos_var = self._fill_time_series_gaps(costos_var_map, fecha_inicio, fecha_fin, freq)
         
-        # 2. Calcular Costo Fijo por bucket y sumar a Egresos
-        # Si es por día: monto / 30
-        # Si es por mes: monto
         fixed_cost_per_bucket = monto_mensual_fijos
         if freq == 'day':
             fixed_cost_per_bucket = monto_mensual_fijos / 30.0
@@ -1401,7 +1231,6 @@ class IndicadoresController:
         for cv in filled_costos_var:
             filled_egresos.append(round(cv + fixed_cost_per_bucket, 2))
             
-        # Insight
         total_ing = sum(filled_ingresos)
         total_egr = sum(filled_egresos)
         diff = total_ing - total_egr
@@ -1409,7 +1238,6 @@ class IndicadoresController:
         if diff > 0:
             insight = "El balance es positivo, con ingresos superando a los egresos básicos."
 
-        # Formatear labels
         display_labels = []
         for l in filled_labels:
             if freq == 'month':
@@ -1433,32 +1261,22 @@ class IndicadoresController:
         freq = 'month' if contexto == 'ano' else 'day'
         bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
 
-        # Usar la lógica histórica si está disponible
-        # Iteramos sobre cada bucket temporal y calculamos el costo fijo activo en ese momento
-        # Esto es costoso si llamamos a _calcular_costo_fijo_historico_total muchas veces.
-        # Optimizamos: traemos todo el historial y lo procesamos en memoria.
-        
         data_map = defaultdict(float)
         
         try:
-            # Obtener todos los costos fijos
             costos_res = self.costo_fijo_model.find_all()
             costos = costos_res.get('data', []) if costos_res.get('success') else []
             
-            # Obtener todo el historial de una vez (o filtrar por rango si la tabla es gigante, aquí asumimos manejable)
             historial_res = self.costo_fijo_model.db.table('historial_costos_fijos').select('*').execute()
             all_historial = historial_res.data if historial_res.data else []
             
-            # Agrupar historial por costo_fijo_id
             historial_map = defaultdict(list)
             for h in all_historial:
                 historial_map[h['costo_fijo_id']].append(h)
             
-            # Ordenar historial por fecha
             for cid in historial_map:
                 historial_map[cid].sort(key=lambda x: x['fecha_cambio'])
 
-            # Generar secuencia de fechas
             fechas_bucket = []
             current = fecha_inicio
             if freq == 'month':
@@ -1476,34 +1294,26 @@ class IndicadoresController:
             for date_point in fechas_bucket:
                 key = date_point.strftime(bucket_fmt)
                 
-                # Para este punto en el tiempo, sumar el valor vigente de cada costo fijo
                 total_dia = 0.0
                 
                 for costo in costos:
                     cid = costo['id']
                     cambios = historial_map.get(cid, [])
                     
-                    # Encontrar el valor vigente para date_point
-                    # SAFETY: Parseo robusto
                     try:
                         valor_vigente = float(costo.get('monto_mensual') or 0.0) 
                     except:
                         valor_vigente = 0.0
                     
-                    # Si hay historial, buscar el último cambio ANTERIOR o IGUAL a date_point
-                    # Si date_point es anterior al primer cambio, asumimos el valor 'monto_anterior' del primer cambio
-                    
                     point_dt = datetime.combine(date_point, datetime.min.time())
                     
                     if cambios:
                         try:
-                            # Verificar si es antes del primer cambio
                             primer_cambio_dt = datetime.fromisoformat(cambios[0]['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
                             
                             if point_dt < primer_cambio_dt:
                                 valor_vigente = float(cambios[0].get('monto_anterior') or 0.0)
                             else:
-                                # Buscar el último cambio válido
                                 for cambio in cambios:
                                     cambio_dt = datetime.fromisoformat(cambio['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
                                     if cambio_dt <= point_dt:
@@ -1513,27 +1323,23 @@ class IndicadoresController:
                         except Exception as e:
                             logger.error(f"Error procesando historial de costo {cid}: {e}")
                     
-                    # SAFETY CAP: Evitar valores corruptos gigantes que rompen la gráfica (e.g. e+234)
-                    if valor_vigente > 1_000_000_000_000: # 1 Trillón como limite absurdo
+                    if valor_vigente > 1_000_000_000_000: 
                         logger.warning(f"Valor de costo fijo {cid} anormalmente alto detectado y omitido: {valor_vigente}")
                         valor_vigente = 0.0
 
                     total_dia += valor_vigente
 
-                # Si la frecuencia es diaria, dividimos por 30. Si es mensual, tomamos el total mensual.
                 val_final = total_dia if freq == 'month' else (total_dia / 30.0)
                 data_map[key] = val_final
 
         except Exception as e:
             logger.error(f"Error calculando historial costos fijos para gráfico: {e}")
-            # Fallback a proyección plana
             val_per_unit = monto_actual if freq == 'month' else (monto_actual / 30.0)
             return self._obtener_evolucion_costos_fijos_fallback(fecha_inicio, fecha_fin, freq, val_per_unit)
 
         labels = sorted(data_map.keys())
         values = [round(data_map[k], 2) for k in labels]
         
-        # Formatear labels visuales
         display_labels = []
         for l in labels:
             if freq == 'month':
@@ -1543,7 +1349,6 @@ class IndicadoresController:
                 dt = datetime.strptime(l, "%Y-%m-%d")
                 display_labels.append(dt.strftime("%d/%m"))
 
-        # Generar insight
         insight = "Los costos fijos se mantienen estables."
         if len(values) > 1:
             first = values[0]
@@ -1586,10 +1391,9 @@ class IndicadoresController:
         }
         
     # --- CATEGORÍA: INVENTARIO ---
-    def obtener_datos_inventario(self, semana=None, mes=None, ano=None, top_n=5, **kwargs): # Periodo se ignora aquí
+    def obtener_datos_inventario(self, semana=None, mes=None, ano=None, top_n=5, **kwargs): 
         top_n = top_n if top_n else 5
         
-        # --- 1. KPIs Numeric ---
         insumos_criticos_res = self.reporte_stock_controller.obtener_insumos_stock_critico()
         insumos_criticos_list = insumos_criticos_res.get('data', []) if insumos_criticos_res.get('success') else []
         insumos_criticos_count = len(insumos_criticos_list)
@@ -1598,17 +1402,15 @@ class IndicadoresController:
         productos_cero_list = productos_cero_res.get('data', []) if productos_cero_res.get('success') else []
         productos_cero_count = len(productos_cero_list)
 
-        productos_venc_count = self.reporte_stock_controller.obtener_conteo_vencimiento_porcentual('producto', 0.15)
-        insumos_venc_count = self.reporte_stock_controller.obtener_conteo_vencimiento_porcentual('insumo', 0.15)
-
-        # Listas detalladas para gráficos/tablas
-        # Insumos próximos a vencer
+        # CORRECCIÓN: Usar las listas de "Próximos a Vencer (30 días)" para contar, 
+        # en lugar de usar la función de porcentaje consumido.
         insumos_venc_res = self.reporte_stock_controller.obtener_lotes_insumos_a_vencer(dias_horizonte=30)
         insumos_venc_list = insumos_venc_res.get('data', []) if insumos_venc_res.get('success') else []
+        insumos_venc_count = len(insumos_venc_list)
         
-        # Productos próximos a vencer
         productos_venc_res = self.reporte_stock_controller.obtener_lotes_productos_a_vencer(dias_horizonte=30)
         productos_venc_list = productos_venc_res.get('data', []) if productos_venc_res.get('success') else []
+        productos_venc_count = len(productos_venc_list)
 
         kpis_inventario = {
             "insumos_criticos": insumos_criticos_count,
@@ -1617,12 +1419,9 @@ class IndicadoresController:
             "insumos_proximos_vencimiento": insumos_venc_count
         }
 
-        # --- 2. Antiguedad Stock (Modificado para contar lotes) ---
         antiguedad_insumos = self.obtener_antiguedad_stock('insumo')
         antiguedad_productos = self.obtener_antiguedad_stock('producto')
 
-        # --- 3. Nuevos Gráficos ---
-        # Valor del stock de insumos (Top N)
         valor_insumos_res = self.reporte_stock_controller.obtener_valor_stock_insumos(top_n=top_n)
         valor_insumos_data = valor_insumos_res.get('data', {}) if valor_insumos_res.get('success') else {}
         valor_insumos_chart = {
@@ -1630,7 +1429,6 @@ class IndicadoresController:
             "data": list(valor_insumos_data.values())
         }
         
-        # Valor del stock de productos (Top N) - Agregado a pedido
         valor_productos_res = self.reporte_stock_controller.obtener_valor_stock_productos(top_n=top_n)
         valor_productos_data = valor_productos_res.get('data', {}) if valor_productos_res.get('success') else {}
         valor_productos_chart = {
@@ -1638,7 +1436,6 @@ class IndicadoresController:
             "data": list(valor_productos_data.values())
         }
 
-        # Composición del stock (Insumos)
         comp_insumos_res = self.reporte_stock_controller.obtener_composicion_stock_insumos()
         comp_insumos_data = comp_insumos_res.get('data', {}) if comp_insumos_res.get('success') else {}
         comp_insumos_chart = {
@@ -1646,7 +1443,6 @@ class IndicadoresController:
             "data": list(comp_insumos_data.values())
         }
 
-        # Distribución por estado (Productos)
         dist_estado_res = self.reporte_stock_controller.obtener_distribucion_stock_por_estado_producto()
         dist_estado_data = dist_estado_res.get('data', {}) if dist_estado_res.get('success') else {}
         dist_estado_chart = {
@@ -1654,15 +1450,12 @@ class IndicadoresController:
             "data": list(dist_estado_data.values())
         }
 
-        # Cobertura de Stock (Top Productos con menos cobertura)
         cobertura_res = self.reporte_stock_controller.obtener_cobertura_stock(dias_periodo=30)
         cobertura_data_raw = cobertura_res.get('data', {}) if cobertura_res.get('success') else {}
-        # Tomar los 5 con menor cobertura pero > 0 para alertas, o general
         cobertura_chart = {
             "labels": list(cobertura_data_raw.keys())[:10],
             "data": list(cobertura_data_raw.values())[:10]
         }
-        # Insight Cobertura
         low_coverage = [k for k, v in cobertura_data_raw.items() if v < 7]
         if low_coverage:
             insight_cobertura = f"Existen {len(low_coverage)} productos con cobertura crítica (menos de 7 días). Se sugiere revisar el plan de producción."
@@ -1670,7 +1463,6 @@ class IndicadoresController:
             insight_cobertura = "La mayoría de los productos tienen una cobertura saludable superior a una semana."
         cobertura_chart['insight'] = insight_cobertura
 
-        # Insight Valor Insumos
         total_val_ins = sum(valor_insumos_data.values())
         if valor_insumos_chart['labels']:
             top_ins = valor_insumos_chart['labels'][0]
@@ -1679,7 +1471,6 @@ class IndicadoresController:
         else:
             valor_insumos_chart['insight'] = "No hay datos de valorización."
 
-        # Insight Valor Productos
         total_val_prod = sum(valor_productos_data.values())
         if valor_productos_chart['labels']:
             top_prod = valor_productos_chart['labels'][0]
@@ -1688,7 +1479,6 @@ class IndicadoresController:
         else:
             valor_productos_chart['insight'] = "No hay datos de valorización."
 
-        # Insight Composición Insumos
         comp_labels = comp_insumos_chart['labels']
         comp_vals = comp_insumos_chart['data']
         if comp_labels:
@@ -1697,7 +1487,6 @@ class IndicadoresController:
         else:
             comp_insumos_chart['insight'] = "Sin datos de composición."
 
-        # Insight Distribución Estado
         dist_labels = dist_estado_chart['labels']
         dist_vals = dist_estado_chart['data']
         if dist_labels:
@@ -1706,27 +1495,15 @@ class IndicadoresController:
         else:
             dist_estado_chart['insight'] = "Sin datos de estado."
 
-        # Ordenar insumos críticos por importancia (frecuencia de uso)
-        # Obtenemos frecuencia de uso histórica (sin filtro de fecha para capturar importancia general)
         usage_res = self.reporte_produccion_controller.obtener_top_insumos(top_n=1000)
         usage_map = usage_res.get('data', {}) if usage_res.get('success') else {}
 
-        # Enriquecer lista con score de uso
         for insumo in insumos_criticos_list:
             nombre = insumo.get('nombre')
             insumo['usage_score'] = usage_map.get(nombre, 0)
         
-        # Ordenar: 1. Mayor uso (Desc), 2. Menor stock actual (Asc - para priorizar quiebres/0 stock)
-        # usage_score DESC => usage_score
-        # stock_actual ASC => -stock_actual (con reverse=True, esto seria stock_actual DESC, queremos ASC)
-        # Sort key normal: (usage_score, -stock_actual) with reverse=True.
-        # Usage 10, Stock 0 -> (10, 0)
-        # Usage 10, Stock 5 -> (10, -5)
-        # (10, 0) > (10, -5). So Stock 0 comes first. Correct.
         insumos_criticos_list.sort(key=lambda x: (x.get('usage_score', 0), -x.get('stock_actual', 0)), reverse=True)
 
-        # Gráficos de Stock Crítico (Barras: Actual vs Minimo)
-        # Limitamos a top N para no saturar el gráfico
         stock_critico_chart = {
             "labels": [x['nombre'] for x in insumos_criticos_list[:top_n]],
             "actual": [x['stock_actual'] for x in insumos_criticos_list[:top_n]],
@@ -1737,8 +1514,6 @@ class IndicadoresController:
         else:
             stock_critico_chart['insight'] = "Todos los insumos mantienen niveles de stock saludables."
         
-        # Gráfico de Próximos a Vencer (Barras: Días restantes)
-        # Calculamos días restantes para ordenarlos
         today = date.today()
         
         def get_days_left(date_str):
@@ -1748,12 +1523,12 @@ class IndicadoresController:
             except: return 0
 
         insumos_venc_processed = sorted([
-            {'nombre': x.get('insumo_nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
+            {'nombre': x.get('insumo_nombre') or x.get('insumos_catalogo', {}).get('nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('f_vencimiento') or x.get('fecha_vencimiento'))}
             for x in insumos_venc_list
         ], key=lambda k: k['dias'])[:top_n]
 
         productos_venc_processed = sorted([
-            {'nombre': x.get('producto_nombre') or x.get('producto', {}).get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
+            {'nombre': x.get('producto_nombre') or x.get('producto', {}).get('nombre') or x.get('nombre', 'N/A'), 'dias': get_days_left(x.get('fecha_vencimiento'))}
             for x in productos_venc_list
         ], key=lambda k: k['dias'])[:top_n]
 
@@ -1795,7 +1570,6 @@ class IndicadoresController:
     # --- MÉTODOS DE CÁLCULO OPTIMIZADOS ---
 
     def _preparar_cache_operaciones(self, receta_ids: list):
-        """Pre-carga todas las operaciones para una lista de IDs de recetas en una sola consulta."""
         if not receta_ids: return {}
         operaciones_res = self.receta_model.get_operaciones_by_receta_ids(list(set(receta_ids)))
         if not operaciones_res.get('success'): return {}
@@ -1806,7 +1580,6 @@ class IndicadoresController:
         return cache
 
     def _calcular_carga_op_con_cache(self, op_data: dict, cache_operaciones: dict) -> Decimal:
-        """Calcula la carga de una OP usando la caché de operaciones pre-cargada."""
         carga_total, receta_id, cantidad = Decimal(0), op_data.get('receta_id'), Decimal(op_data.get('cantidad_planificada', 0))
         if not receta_id or cantidad <= 0 or receta_id not in cache_operaciones:
             return carga_total
@@ -1817,13 +1590,7 @@ class IndicadoresController:
             carga_total += t_prep + (t_ejec_unit * cantidad)
         return carga_total
     
-    # --- MÉTODO _calcular_carga_op FALTANTE ---
-    # Asumo que existe o deberías agregarlo si _calcular_oee lo necesita
     def _calcular_carga_op(self, orden_produccion_data):
-        # Esta es una implementación de EJEMPLO. 
-        # Deberías tener la lógica real de esta función.
-        # Basado en la optimización, probablemente ya no uses este método
-        # y deberías quitar la llamada en _calcular_oee.
         receta_id = orden_produccion_data.get('receta_id')
         cantidad = Decimal(orden_produccion_data.get('cantidad_planificada', 0))
         if not receta_id:
@@ -1839,8 +1606,6 @@ class IndicadoresController:
             t_ejec_unit = Decimal(op_step.get('tiempo_ejecucion_unitario', 0))
             carga_total += t_prep + (t_ejec_unit * cantidad)
         return carga_total
-    # --- FIN MÉTODO FALTANTE ---
-
 
     def _calcular_oee(self, fecha_inicio, fecha_fin):
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
@@ -1848,14 +1613,11 @@ class IndicadoresController:
         if not ordenes_en_periodo:
             return {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0}
 
-        # 1. Tiempo de Producción Real (Tiempo de Carga)
         tiempo_produccion_real = sum(
             (datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds()
             for op in ordenes_en_periodo if op.get('fecha_fin') and op.get('fecha_inicio')
         )
 
-        # 2. Tiempo de Paradas
-        # Paradas de operario
         paros_operario_res = self.registro_paro_model.find_all(filters={
             'fecha_inicio_gte': fecha_inicio.isoformat(), 
             'fecha_inicio_lte': fecha_fin.isoformat()
@@ -1866,7 +1628,6 @@ class IndicadoresController:
                 if paro.get('fecha_fin') and paro.get('fecha_inicio'):
                     tiempo_paradas_operario += (datetime.fromisoformat(paro['fecha_fin']) - datetime.fromisoformat(paro['fecha_inicio'])).total_seconds()
         
-        # Bloqueos de línea/capacidad
         bloqueos_linea_res = self.bloqueo_capacidad_model.find_all(filters={
             'fecha_gte': fecha_inicio.isoformat(), 
             'fecha_lte': fecha_fin.isoformat()
@@ -1877,31 +1638,24 @@ class IndicadoresController:
         
         tiempo_paradas_total = tiempo_paradas_operario + (tiempo_paradas_linea_minutos * 60)
 
-        # 3. Tiempo Operativo
         tiempo_operativo = tiempo_produccion_real - tiempo_paradas_total
 
-        # 4. Tiempo Estándar (Ideal)
         receta_ids = [op['receta_id'] for op in ordenes_en_periodo if op.get('receta_id')]
         cache_operaciones = self._preparar_cache_operaciones(receta_ids)
         tiempo_produccion_planificado = sum(
             self._calcular_carga_op_con_cache(op, cache_operaciones) for op in ordenes_en_periodo
-        ) * 60  # a segundos
+        ) * 60 
 
-        # 5. Cálculo de Componentes OEE
-        # Disponibilidad = Tiempo Operando / Tiempo Total Disponible
         disponibilidad = tiempo_operativo / tiempo_produccion_real if tiempo_produccion_real > 0 else 0
 
-        # Rendimiento = Tiempo Teórico / Tiempo que estuvo operando
         rendimiento = float(tiempo_produccion_planificado) / tiempo_operativo if tiempo_operativo > 0 else 0
 
-        # Calidad = Unidades Buenas / Total de Unidades Producidas
         produccion_real = sum(op.get('cantidad_producida', 0) for op in ordenes_en_periodo)
         unidades_buenas_res = self.control_calidad_producto_model.get_total_unidades_aprobadas_en_periodo(fecha_inicio, fecha_fin)
         unidades_buenas = unidades_buenas_res.get('total_unidades', 0) if unidades_buenas_res.get('success') else 0
         
         calidad = unidades_buenas / produccion_real if produccion_real > 0 else 0
 
-        # 6. Cálculo Final OEE
         oee = disponibilidad * rendimiento * calidad * 100
         
         return {
@@ -1950,7 +1704,6 @@ class IndicadoresController:
         return self.receta_model.get_costo_produccion(producto_id, costos_insumos=costos_insumos_cache)
 
     def _calcular_cumplimiento_plan(self, fecha_inicio, fecha_fin):
-            # CORRECCIÓN: Filtrar por fecha_meta para obtener las órdenes que debían completarse en el período.
             filtros = {
                 'fecha_meta_desde': fecha_inicio.isoformat(),
                 'fecha_meta_hasta': fecha_fin.isoformat()
@@ -1960,28 +1713,17 @@ class IndicadoresController:
             total_ordenes_planificadas = len(ordenes_planificadas)
             ordenes_completadas_a_tiempo = 0
 
-            print("--- DEBUG: Verificando Cumplimiento del Plan de Producción ---")
             for i, orden in enumerate(ordenes_planificadas):
                 estado = orden.get('estado')
                 fecha_fin_str = orden.get('fecha_fin')
                 
-                # --- CORRECCIÓN: Usando 'fecha_meta' como indicaste ---
                 fecha_meta_str = orden.get('fecha_meta') 
                 
-                # Usamos 'id_orden_produccion' que es más probable que exista en el dict
-                print(f"Orden #{i+1}: ID={orden.get('id_orden_produccion', 'N/A')}, Estado='{estado}', Fecha Fin='{fecha_fin_str}', Fecha Meta='{fecha_meta_str}'")
-
-                # --- CORRECCIÓN: Usando la variable 'estados.OP_COMPLETADA' (más seguro) y 'fecha_meta_str' ---
                 if estado == estados.OP_COMPLETADA and fecha_fin_str and fecha_meta_str:
                     fecha_fin_dt = datetime.fromisoformat(fecha_fin_str).date()
-                    fecha_meta_dt = datetime.fromisoformat(fecha_meta_str).date() # Corregido
-                    print(f"  -> Comparando: {fecha_fin_dt} <= {fecha_meta_dt}   -->   {fecha_fin_dt <= fecha_meta_dt}")
+                    fecha_meta_dt = datetime.fromisoformat(fecha_meta_str).date()
                     if fecha_fin_dt <= fecha_meta_dt:
                         ordenes_completadas_a_tiempo += 1
-                else:
-                    print("  -> No cumple condiciones para ser 'completada a tiempo'.")
-            
-            print(f"--- Fin DEBUG: Total Planificadas={total_ordenes_planificadas}, Completadas a Tiempo={ordenes_completadas_a_tiempo} ---")
             
             cumplimiento = (ordenes_completadas_a_tiempo / total_ordenes_planificadas) * 100 if total_ordenes_planificadas > 0 else 0
             return {"valor": round(cumplimiento, 2), "completadas_a_tiempo": ordenes_completadas_a_tiempo, "planificadas": total_ordenes_planificadas}
@@ -1991,7 +1733,6 @@ class IndicadoresController:
         desperdicios_data = desperdicios_data_res.get('data', [])
         cantidad_desperdicio = sum([d.get('cantidad', 0) for d in desperdicios_data])
         
-        # Lógica mejorada para calcular el material utilizado a partir de las reservas consumidas
         consumo_res = self.reserva_insumo_model.get_consumo_total_en_periodo(fecha_inicio, fecha_fin)
         cantidad_material_utilizado = 0
         if consumo_res['success']:
@@ -2028,7 +1769,6 @@ class IndicadoresController:
         tasa = (num_reclamos / total_pedidos_entregados) * 100 if total_pedidos_entregados > 0 else 0
         return {"valor": round(tasa, 2), "reclamos": num_reclamos, "pedidos_entregados": total_pedidos_entregados}
 
-    # --- CORRECCIÓN 2: Función completada ---
     def _calcular_tasa_rechazo_proveedores(self, fecha_inicio, fecha_fin):
         lotes_rechazados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
         lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range(estados.OC_RECEPCION_COMPLETA, fecha_inicio, fecha_fin)
@@ -2038,33 +1778,6 @@ class IndicadoresController:
 
         tasa = (lotes_rechazados / lotes_recibidos) * 100 if lotes_recibidos > 0 else 0
         return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_recibidos}
-
-
-    # def _obtener_kpis_comerciales(self, fecha_inicio, fecha_fin):
-    #     # 1. Cumplimiento de Pedidos
-    #     # CORRECCIÓN: Usar el método correcto 'count_by_estados_in_date_range' para el total
-    #     estados_totales = [
-    #         estados.OV_PENDIENTE, estados.OV_EN_PROCESO, estados.OV_LISTO_PARA_ENTREGA,
-    #         estados.OV_COMPLETADO, estados.OV_CANCELADA
-    #     ]
-    #     total_pedidos_res = self.pedido_model.count_by_estados_in_date_range(estados_totales, fecha_inicio, fecha_fin)
-    #     completados_res = self.pedido_model.count_by_estado_in_date_range(estados.OV_COMPLETADO, fecha_inicio, fecha_fin)
-        
-    #     total_pedidos = total_pedidos_res.get('count', 0)
-    #     num_pedidos_completados = completados_res.get('count', 0)
-        
-    #     cumplimiento_pedidos = (num_pedidos_completados / total_pedidos) * 100 if total_pedidos > 0 else 0
-
-    #     # 2. Valor Promedio de Pedido
-    #     total_valor_res = self.pedido_model.get_total_valor_pedidos_completados(fecha_inicio, fecha_fin)
-    #     total_valor = total_valor_res.get('total_valor', 0.0)
-        
-    #     valor_promedio = total_valor / num_pedidos_completados if num_pedidos_completados > 0 else 0.0
-
-    #     return {
-    #         "cumplimiento_pedidos": {"valor": round(cumplimiento_pedidos, 2), "completados": num_pedidos_completados, "total": total_pedidos},
-    #         "valor_promedio_pedido": {"valor": round(valor_promedio, 2), "num_pedidos": num_pedidos_completados}
-    #     }
 
     def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
         try:
@@ -2131,13 +1844,9 @@ class IndicadoresController:
         ingresos_res = self.pedido_model.get_ingresos_en_periodo(fecha_inicio, fecha_fin)
         if not ingresos_res.get('success'): return {"labels": [], "data": []}
 
-        # Determinar el formato de la clave basado en el periodo solicitado
-        # Si es anual ('anual' o 'mensual' como fallback largo), agrupamos por mes
-        # Si es semanal o mensual, agrupamos por día para mostrar evolución fina
         date_format = '%Y-%m'
         if periodo in ['semanal', 'diario']:
             date_format = '%Y-%m-%d'
-        # Si es mensual, también queremos ver días
         if periodo == 'mensual':
             date_format = '%Y-%m-%d'
 
@@ -2184,7 +1893,6 @@ class IndicadoresController:
         costos_insumos_res = insumo_inventario_model.get_costos_promedio_ponderado_bulk(list(all_insumo_ids))
         costos_insumos = costos_insumos_res.get('data', {}) if costos_insumos_res.get('success') else {}
 
-        # Fallback para insumos sin costo pre-calculado
         insumos_sin_costo = all_insumo_ids - set(costos_insumos.keys())
         if insumos_sin_costo:
             fallback_res = self.insumo_model.find_all(filters={'id_insumo': list(insumos_sin_costo)})
@@ -2229,7 +1937,6 @@ class IndicadoresController:
         
         costos_cache = self._preparar_cache_costos_por_productos(list(set(producto_ids_en_ordenes)))
 
-        # Determinar formato de fecha consistente con obtener_facturacion_por_periodo
         date_format = '%Y-%m'
         if periodo in ['semanal', 'diario', 'mensual']:
             date_format = '%Y-%m-%d'
@@ -2274,8 +1981,8 @@ class IndicadoresController:
 
         horas_prod = sum((datetime.fromisoformat(op['fecha_fin']) - datetime.fromisoformat(op['fecha_inicio'])).total_seconds() / 3600 for op in ordenes_data if op.get('fecha_fin') and op.get('fecha_inicio'))
         
-        costo_mo = horas_prod * 15 # COSTO_HORA_HOMBRE
-        gastos_fijos = (5000 / 30) * (fecha_fin - fecha_inicio).days # GASTOS_FIJOS_MENSUALES
+        costo_mo = horas_prod * 15 
+        gastos_fijos = (5000 / 30) * (fecha_fin - fecha_inicio).days 
 
         return {"labels": ["Materia Prima", "Mano de Obra (Est.)", "Gastos Fijos (Est.)"], "data": [round(costo_mp, 2), round(costo_mo, 2), round(gastos_fijos, 2)]}
 
@@ -2319,12 +2026,7 @@ class IndicadoresController:
         return {"labels": labels, "data": data, "line_data": [round(p, 2) for p in acum_porc]}
 
     def obtener_antiguedad_stock(self, tipo='insumo'):
-        """
-        Devuelve el conteo de lotes por rango de antigüedad.
-        Adicionalmente, retorna información detallada para los tooltips (cantidad total).
-        """
         hoy = datetime.now().date()
-        # Estructura: {Rango: {count: int, quantity: float}}
         categorias = {
             "0-30 días": {"count": 0, "quantity": 0.0},
             "31-60 días": {"count": 0, "quantity": 0.0},
@@ -2356,7 +2058,6 @@ class IndicadoresController:
                 antiguedad = (hoy - dt).days
                 asignar_categoria(antiguedad, cantidad)
             except (ValueError, TypeError) as e:
-                # Si falla el parseo, lo contamos como 'Sin fecha' para no perder el dato
                 logger.warning(f"Error parseando fecha '{fecha_str}': {e}")
                 categorias["Sin fecha"]["count"] += 1
                 categorias["Sin fecha"]["quantity"] += cantidad
@@ -2367,15 +2068,13 @@ class IndicadoresController:
                 for lote in lotes_res.get('data', []):
                     procesar_lote(lote, 'fecha_ingreso')
 
-        else: # producto
+        else: 
             lotes_res = self.lote_producto_model.get_all_lotes_for_antiquity_view()
             if lotes_res.get('success'):
                 for lote in lotes_res.get('data', []):
-                    # Intentar con fecha_produccion o fecha_fabricacion (alias)
                     fecha_key = 'fecha_produccion' if lote.get('fecha_produccion') else 'fecha_fabricacion'
                     procesar_lote(lote, fecha_key)
             
-        # Filtrar categoría "Sin fecha" si está vacía para limpiar el gráfico
         if categorias["Sin fecha"]["count"] == 0:
             del categorias["Sin fecha"]
 
@@ -2383,7 +2082,6 @@ class IndicadoresController:
         data_counts = [categorias[k]["count"] for k in labels]
         data_quantities = [categorias[k]["quantity"] for k in labels]
         
-        # Insight Dinámico
         total_lotes = sum(data_counts)
         if total_lotes > 0:
             top_category = max(categorias, key=lambda k: categorias[k]['count'])

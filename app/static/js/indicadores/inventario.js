@@ -59,7 +59,7 @@ window.renderInventario = function(data, container, utils) {
         data.kpis_inventario.insumos_proximos_vencimiento, 
         'Próximos a vencer', 
         'bi-alarm-fill', 
-        'Lotes que han consumido >85% de su vida útil.',
+        'Lotes que vencen en los próximos 30 días.',
         'danger'
     );
     kpisInsumos += '</div>';
@@ -118,7 +118,7 @@ window.renderInventario = function(data, container, utils) {
         data.kpis_inventario.productos_proximos_vencimiento, 
         'Próximos a vencer', 
         'bi-calendar-x-fill', 
-        'Lotes que han consumido >85% de su vida útil.',
+        'Lotes que vencen en los próximos 30 días.',
         'warning'
     );
     kpisProductos += '</div>';
