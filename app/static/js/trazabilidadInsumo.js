@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function () {
         data.addRows(rows);
 
         const options = {
-            width: '100%',
+            width: 2000, // Ancho fijo para forzar scroll horizontal y mejor visualización
             height: 600, // Aumentado para mejor visualización
             sankey: {
                 node: {
@@ -195,18 +195,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (accordionElement) {
         accordionElement.addEventListener('shown.bs.collapse', function () {
             if (chart && datosCompletosCache) {
-                // Si ya tenemos los datos y el chart, redibujamos
+                // Si ya tenemos los datos y el chart, redibujamos.
                 google.charts.setOnLoadCallback(() => renderizarSankey(datosCompletosCache.diagrama));
             } else {
-                 // Si no (por ejemplo primer carga fue simple, y el diagrama se carga con simple por defecto), 
-                 // intentamos redibujar con lo que tengamos en la UI no es fácil.
-                 // Pero renderizarSankey ya fue llamado.
-                 // Mejor estrategia: si el acordeón se abre, forzamos redibujado si hay datos.
-                 // Pero `datosCompletosCache` solo se llena con nivel completo.
-                 // El diagrama se carga inicialmente con nivel 'simple'? 
-                 // `cargarDatosTrazabilidad('simple')` -> `fetch` -> `renderizarSankey`.
-                 // Así que el diagrama ya debería tener datos, pero quizás no en cache.
-                 // Vamos a disparar un evento de redibujado window resize que suele arreglar gráficos
+                 // Disparar un evento de resize para forzar el redibujado si el gráfico ya existe pero no tenemos caché completo.
                  window.dispatchEvent(new Event('resize'));
             }
         });

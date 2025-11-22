@@ -1033,9 +1033,10 @@ class IndicadoresController:
 
     def _obtener_motivos_notas_credito(self, fecha_inicio, fecha_fin):
         # Buscar todas las NC en el periodo
+        # Usamos created_at porque fecha_emision podría no estar poblado en registros antiguos
         res = self.nota_credito_model.find_all(filters={
-            'fecha_emision_gte': fecha_inicio.isoformat(),
-            'fecha_emision_lte': fecha_fin.isoformat()
+            'created_at_gte': fecha_inicio.isoformat(),
+            'created_at_lte': fecha_fin.isoformat()
         })
         data = res.get('data', []) if res.get('success') else []
         
