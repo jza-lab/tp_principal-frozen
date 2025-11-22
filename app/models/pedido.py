@@ -109,13 +109,34 @@ class PedidoModel(BaseModel):
         # Nota: Esto es una simplificación, idealmente se compara item por item.
         pedido_data['todas_ops_completadas'] = total_cantidad_producida_asignada >= total_cantidad_requerida
 
-        # 5. Obtener datos de despacho
+        # 5. Obtener datos de despacho y mapear la información del vehículo/conductor
         pedido_data['despacho'] = None
         try:
-            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
+            # Intentamos obtener el despacho junto con el vehículo asociado
+            # Nota: En Supabase, 'vehiculo:vehiculo_id(*)' hace el join con la tabla vehiculos usando la FK vehiculo_id
+            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculos(*))').eq('pedido_id', pedido_id).execute()
+            
             if item_despacho_res and item_despacho_res.data:
-                pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
-        except Exception as e: # Usamos Exception genérico si APIError no está importado
+                despacho_raw = item_despacho_res.data[0].get('despachos')
+                if despacho_raw:
+                    # Inicializamos el objeto despacho con los datos crudos de la tabla despachos
+                    pedido_data['despacho'] = despacho_raw
+                    
+                    # Extraemos el objeto vehículo (si existe)
+                    vehiculo = despacho_raw.get('vehiculo')
+                    
+                    # Mapeamos los campos del vehículo a las claves que espera la plantilla
+                    # Si el despacho ya tiene estos campos (legacy), se conservan. Si no, se usan los del vehículo.
+                    if vehiculo:
+                        pedido_data['despacho']['nombre_transportista'] = despacho_raw.get('nombre_transportista') or vehiculo.get('nombre_conductor')
+                        pedido_data['despacho']['dni_transportista'] = despacho_raw.get('dni_transportista') or vehiculo.get('dni_conductor')
+                        pedido_data['despacho']['patente_vehiculo'] = despacho_raw.get('patente_vehiculo') or vehiculo.get('patente')
+                        pedido_data['despacho']['telefono_transportista'] = despacho_raw.get('telefono_transportista') or vehiculo.get('telefono_conductor')
+                    
+                    # Aseguramos que las observaciones estén presentes
+                    pedido_data['despacho']['observaciones'] = despacho_raw.get('observaciones')
+
+        except Exception as e:
             logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {str(e)}")
 
         return {'success': True, 'data': pedido_data}
