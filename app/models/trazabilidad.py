@@ -166,7 +166,7 @@ class TrazabilidadModel:
 
         # Determinar la dirección de la trazabilidad basada en el origen
         trace_upstream = tipo_entidad_inicial in ['pedido', 'lote_producto', 'orden_produccion']
-        trace_downstream = tipo_entidad_inicial in ['orden_compra', 'lote_insumo', 'orden_produccion']
+        trace_downstream = tipo_entidad_inicial in ['orden_compra', 'lote_insumo', 'orden_produccion', 'lote_producto']
 
         while cola:
             tipo_actual, id_actual = cola.popleft()

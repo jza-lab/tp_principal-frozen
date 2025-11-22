@@ -1462,6 +1462,26 @@ class LoteProductoController(BaseController):
             logger.error(f"Excepción general al subir foto para el lote {lote_id}: {e}", exc_info=True)
             raise e
 
+    def marcar_lote_retirado_alerta(self, lote_id: int):
+        """
+        Marca un lote de producto como 'retirado' por una alerta y anula su stock.
+        """
+        try:
+            update_data = {
+                'estado': 'RETIRADO',
+                'cantidad_actual': 0,
+                'cantidad_en_cuarentena': 0,
+            }
+            result = self.model.update(lote_id, update_data, 'id_lote')
+
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            return self.success_response(message="Lote de producto marcado como retirado.")
+        except Exception as e:
+            logger.error(f"Error en marcar_lote_retirado_alerta (producto): {e}", exc_info=True)
+            return self.error_response('Error interno del servidor', 500)
+
     def liberar_lote_de_cuarentena_alerta(self, lote_id: int) -> tuple:
         """
         Libera un lote de producto de CUARENTENA, devolviéndolo a su estado previo a la alerta.

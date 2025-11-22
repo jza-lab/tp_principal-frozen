@@ -328,12 +328,16 @@ class AlertaRiesgoModel(BaseModel):
 
     def get_all_paginated(self, page: int, per_page: int, filters: dict, select_query: str = None) -> dict:
         """
-        Obtiene una lista paginada de alertas de riesgo.
+        Obtiene una lista paginada de alertas de riesgo, incluyendo datos agregados como conclusión, participantes y pendientes.
         """
         try:
             offset = (page - 1) * per_page
             
-            query = self._get_query_builder().select(select_query if select_query else '*', count='exact')
+            # Seleccionamos los campos necesarios, incluyendo conclusion_final
+            query = self._get_query_builder().select(
+                '*, creador:usuarios!alerta_riesgo_id_usuario_creador_fkey(nombre, apellido)', 
+                count='exact'
+            )
 
             if filters:
                 for key, value in filters.items():
@@ -343,10 +347,46 @@ class AlertaRiesgoModel(BaseModel):
             query = query.order('id', desc=True).range(offset, offset + per_page - 1)
             
             result = query.execute()
+            
+            alertas = result.data if result.data else []
+            
+            # Enriquecer con datos agregados (N+1 optimizado no es posible fácilmente con postgrest sin funciones RPC complejas, 
+            # pero haremos queries agrupadas si es posible o iterativas dado que la paginación limita el impacto)
+            
+            if alertas:
+                alerta_ids = [a['id'] for a in alertas]
+                
+                # 1. Contar pendientes
+                pendientes_res = self.db.table('alerta_riesgo_afectados').select('alerta_id').in_('alerta_id', alerta_ids).eq('estado', 'pendiente').execute()
+                pendientes_map = {}
+                if pendientes_res.data:
+                    for p in pendientes_res.data:
+                        pendientes_map[p['alerta_id']] = pendientes_map.get(p['alerta_id'], 0) + 1
+                
+                # 2. Obtener participantes (resolutores únicos)
+                resolutores_res = self.db.table('alerta_riesgo_afectados').select('alerta_id, usuarios!alerta_riesgo_afectados_id_usuario_resolucion_fkey(nombre, apellido)').in_('alerta_id', alerta_ids).not_.is_('id_usuario_resolucion', 'null').execute()
+                participantes_map = {}
+                if resolutores_res.data:
+                    for r in resolutores_res.data:
+                        aid = r['alerta_id']
+                        user_data = r.get('usuarios')
+                        if user_data:
+                            nombre_completo = f"{user_data.get('nombre', '')} {user_data.get('apellido', '')}".strip()
+                            if aid not in participantes_map: participantes_map[aid] = set()
+                            participantes_map[aid].add(nombre_completo)
+
+                # Asignar datos a las alertas
+                for alerta in alertas:
+                    alerta['pendientes_count'] = pendientes_map.get(alerta['id'], 0)
+                    alerta['participantes_nombres'] = list(participantes_map.get(alerta['id'], []))
+                    
+                    if alerta.get('creador'):
+                        nombre_creador = f"{alerta['creador'].get('nombre', '')} {alerta['creador'].get('apellido', '')}".strip()
+                        alerta['nombre_creador'] = nombre_creador
 
             return {
                 'success': True,
-                'data': result.data,
+                'data': alertas,
                 'count': result.count
             }
         except Exception as e:

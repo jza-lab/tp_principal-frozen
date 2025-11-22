@@ -2244,6 +2244,69 @@ class OrdenProduccionController(BaseController):
             # Como fallback seguro, mover a pendiente
             self.model.cambiar_estado(orden_id, 'PENDIENTE')
             return {'success': False, 'error': str(e)}
+        """
+        Intenta encontrar un lote de insumo de reemplazo. Si tiene éxito,
+        cambia el estado de la OP a 'LISTA PARA PRODUCIR', de lo contrario a 'PENDIENTE'.
+        """
+        from app.models.reserva_insumo import ReservaInsumoModel
+        reserva_insumo_model = ReservaInsumoModel()
+
+        try:
+            # 1. Obtener las reservas originales de la OP
+            reservas_originales_res = reserva_insumo_model.find_all({'orden_produccion_id': orden_id})
+            if not reservas_originales_res.get('success') or not reservas_originales_res.get('data'):
+                self.model.cambiar_estado(orden_id, 'PENDIENTE')
+                return {'success': True, 'message': 'OP movida a PENDIENTE ya que no tenía reservas.'}
+
+            reservas_originales = reservas_originales_res['data']
+
+            # 2. Agrupar la necesidad total por insumo_id
+            necesidad_por_insumo = {}
+            for res in reservas_originales:
+                insumo_id = res['insumo_id']
+                necesidad_por_insumo[insumo_id] = necesidad_por_insumo.get(insumo_id, 0) + float(res['cantidad_reservada'])
+
+            # 3. Verificar si hay stock de reemplazo para CADA insumo
+            nuevas_reservas_potenciales = []
+            todos_reemplazados = True
+            for insumo_id, cantidad_necesaria in necesidad_por_insumo.items():
+                lotes_disponibles = self.inventario_controller._obtener_lotes_con_disponibilidad(insumo_id)
+                stock_disponible_total = sum(lote['disponibilidad'] for lote in lotes_disponibles)
+
+                if stock_disponible_total < cantidad_necesaria:
+                    todos_reemplazados = False
+                    break
+
+                # Si hay stock, determinar de qué lotes se tomará
+                cantidad_restante = cantidad_necesaria
+                for lote in lotes_disponibles:
+                    if cantidad_restante <= 0: break
+                    cantidad_a_tomar = min(lote['disponibilidad'], cantidad_restante)
+                    nuevas_reservas_potenciales.append({
+                        'orden_produccion_id': orden_id, 'lote_inventario_id': lote['id_lote'],
+                        'insumo_id': insumo_id, 'cantidad_reservada': cantidad_a_tomar,
+                        'usuario_reserva_id': get_current_user().id if get_current_user() else 1
+                    })
+                    cantidad_restante -= cantidad_a_tomar
+
+            # 4. Actuar según el resultado
+            if todos_reemplazados:
+                # Eliminar reservas viejas
+                reserva_insumo_model.db.table('reserva_insumos').delete().eq('orden_produccion_id', orden_id).execute()
+                # Crear reservas nuevas
+                reserva_insumo_model.db.table('reserva_insumos').insert(nuevas_reservas_potenciales).execute()
+                # Cambiar estado
+                self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
+                return {'success': True, 'message': 'Reemplazo de insumos exitoso. OP lista para producir.'}
+            else:
+                self.model.cambiar_estado(orden_id, 'PENDIENTE')
+                return {'success': True, 'message': 'No se encontraron reemplazos de insumos. OP movida a pendiente.'}
+
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_a_pendiente_con_reemplazo para OP {orden_id}: {e}", exc_info=True)
+            # Como fallback seguro, mover a pendiente
+            self.model.cambiar_estado(orden_id, 'PENDIENTE')
+            return {'success': False, 'error': str(e)}
     # endregion
 
 
@@ -2319,3 +2382,88 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"[MRP Check] ERROR CRÍTICO calculando insumo en curso: {e}", exc_info=True)
             return 0.0
+    def replanificar_op_con_copia(self, orden_id: int) -> Dict:
+        """
+        Replanifica una OP creando una nueva copia en estado 'PENDIENTE'
+        y marcando la original como 'CANCELADA' (o 'REPLANIFICADA' si se prefiere,
+        pero usaremos CANCELADA para evitar estados complejos en otros módulos).
+        Manteniendo la trazabilidad del fallo en la original.
+        """
+        try:
+            # 1. Obtener la OP original
+            op_res = self.model.find_by_id(orden_id)
+            if not op_res.get('success'):
+                return {'success': False, 'error': f"OP {orden_id} no encontrada."}
+            op_original = op_res['data']
+
+            # 2. Crear datos para la nueva OP
+            # Copiamos datos clave
+            nueva_op_data = {
+                'producto_id': op_original['producto_id'],
+                'cantidad_planificada': op_original['cantidad_planificada'],
+                'receta_id': op_original['receta_id'],
+                'fecha_meta': op_original.get('fecha_meta'),
+                'prioridad': op_original.get('prioridad', 'NORMAL'),
+                'observaciones': f"Replanificación de OP-{op_original.get('codigo')} (ID: {orden_id}). Motivo: Insumo/Proceso no apto.",
+                'estado': 'PENDIENTE',
+                # Importante: No copiamos 'id_op_padre' ciegamente. Si la original era hija, la nueva también lo será.
+                'id_op_padre': op_original.get('id_op_padre'),
+                'pedido_id': op_original.get('pedido_id'), # Mantener vínculo con el pedido si existe
+                'usuario_creador_id': get_current_user().id if get_current_user() else op_original.get('usuario_creador_id')
+            }
+
+            # 3. Crear la nueva OP
+            # Usamos self.crear_orden que maneja validaciones y generación de código
+            # crear_orden espera un formato específico para 'productos' si es múltiple, o podemos usar model.create directo.
+            # Dado que crear_orden es complejo y espera un form_data, mejor preparamos el dict y llamamos a model.create
+            # pero debemos validar schema y generar código.
+            
+            # Reutilicemos lógica de crear_orden adaptada o hagamoslo manual para ser precisos.
+            # Manual es más seguro para copiar exacto.
+            
+            nueva_op_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            validated_data = self.schema.load(nueva_op_data)
+            
+            create_res = self.model.create(validated_data)
+            if not create_res.get('success'):
+                return {'success': False, 'error': f"Error al crear la nueva OP: {create_res.get('error')}"}
+            
+            nueva_op = create_res['data']
+
+            # 4. Actualizar la OP original
+            # La marcamos como CANCELADA para liberar recursos (aunque ya se consumieron insumos malos, 
+            # el estado CANCELADA es el más apropiado para 'no va a producir nada más').
+            # Agregamos una observación.
+            obs_original = op_original.get('observaciones') or ''
+            update_original = {
+                'estado': 'CANCELADA', # O podríamos usar un estado específico 'REPLANIFICADA' si el frontend lo soporta
+                'observaciones': f"{obs_original} | Replanificada a {nueva_op['codigo']}."
+            }
+            self.model.update(orden_id, update_original)
+
+            # 5. Migrar asignaciones de Pedido (Si aplica)
+            # Si la OP original tenía items de pedido asignados en `asignaciones_pedidos`, 
+            # debemos mover esas asignaciones a la nueva OP para que el pedido apunte a la activa.
+            try:
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos')\
+                    .update({'orden_produccion_id': nueva_op['id']})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+                
+                # También actualizar `pedido_items` si tienen la columna directa `orden_produccion_id`
+                self.pedido_model.db.table('pedido_items')\
+                    .update({'orden_produccion_id': nueva_op['id']})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+            except Exception as e:
+                logger.warning(f"Error al migrar asignaciones de pedido: {e}")
+
+            return {
+                'success': True, 
+                'message': f"OP Replanificada. Nueva OP: {nueva_op['codigo']}", 
+                'data': nueva_op
+            }
+
+        except Exception as e:
+            logger.error(f"Error crítico al replanificar OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}

@@ -44,6 +44,65 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
+    // Helper para bloquear/desbloquear campos
+    function toggleClientFields(isReadonly) {
+        const fields = [
+            nombreCliente, telefono, email,
+            calleFacturacion, alturaFacturacion, provinciaFacturacion,
+            localidadFacturacion, pisoFacturacion, deptoFacturacion,
+            cpFacturacion
+        ];
+
+        fields.forEach(field => {
+            if (field) {
+                if (isReadonly) {
+                    field.setAttribute('readonly', 'readonly');
+                    // Para select, readonly no funciona igual que input, a veces se usa disabled
+                    if (field.tagName === 'SELECT') {
+                         // Bootstrap style: pointer-events none + bg-light appearance
+                        field.style.pointerEvents = 'none';
+                        field.classList.add('bg-light');
+                        field.setAttribute('tabindex', '-1'); // Evita foco con tab
+                    }
+                } else {
+                    field.removeAttribute('readonly');
+                    if (field.tagName === 'SELECT') {
+                        field.style.pointerEvents = 'auto';
+                        field.classList.remove('bg-light');
+                        field.removeAttribute('tabindex');
+                    }
+                }
+            }
+        });
+    }
+
+    // Helper para mostrar error visual
+    function mostrarErrorBusqueda(mensaje) {
+        // Busca si ya existe un mensaje de error previo y elimínalo
+        limpiarErrorBusqueda();
+
+        // Crear el elemento de alerta
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-warning mt-2 mb-0 py-1 px-2 small';
+        alertDiv.id = 'search-error-msg';
+        alertDiv.innerHTML = `<i class="bi bi-exclamation-triangle me-1"></i> ${mensaje}`;
+
+        // Insertar después del input group del CUIL
+        // El input group está en cuilParte1.parentNode.parentNode normalmente (col-md-6 > input-group)
+        // Ojo: cuilParte1 está dentro de .input-group
+        const inputGroup = cuilParte1.closest('.input-group');
+        if (inputGroup) {
+            inputGroup.parentNode.insertBefore(alertDiv, inputGroup.nextSibling);
+        }
+    }
+
+    function limpiarErrorBusqueda() {
+        const existingError = document.getElementById('search-error-msg');
+        if (existingError) {
+            existingError.remove();
+        }
+    }
+
 
     // Función para limpiar campos
     function limpiarDatosCliente() {
@@ -61,12 +120,17 @@ document.addEventListener('DOMContentLoaded', function () {
         if (condicionVenta) condicionVenta.value = '';
         if (cpFacturacion) cpFacturacion.value = '';
         fetchCostoEnvio('');
+        
+        // Desbloquear campos para permitir escritura manual si no se encuentra cliente
+        toggleClientFields(false);
     }
 
     // --- Función principal de búsqueda (CORREGIDA LA LÓGICA DE LIMPIEZA) ---
     function buscarCliente() {
         const cuilConGuiones = cuilParte1.value + "-" + cuilParte2.value + "-" + cuilParte3.value;
         const cuilSoloDigitos = cuilParte1.value + cuilParte2.value + cuilParte3.value;
+        
+        limpiarErrorBusqueda(); // Limpiar errores previos al intentar buscar
 
         if (cuilConGuiones.length === 13 && /^\d{11}$/.test(cuilSoloDigitos)) {
 
@@ -79,7 +143,9 @@ document.addEventListener('DOMContentLoaded', function () {
             })
                 .then(response => {
                     if (response.status === 404) {
-                        console.log(`CUIL ${cuilConGuiones}: No se ha encontrado ningun cliente bajo ese cuil/cuit.`);
+                        const msg = `No se encontró cliente con CUIT ${cuilConGuiones}.`;
+                        console.log(msg);
+                        mostrarErrorBusqueda(msg);
                         return null;
                     }
 
@@ -92,6 +158,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 .then(cliente => {
                     if (cliente) {
                         console.log('Cliente encontrado');
+                        limpiarErrorBusqueda(); // Éxito
+
                         if (clienteIdOculto) {
                             clienteIdOculto.value = cliente.id || '';
                         }
@@ -123,6 +191,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
                             console.log(`Provincia asignada: ${provinciaFacturacion.value}`); // Verifica en consola
                         }
+                        
+                        // Bloquear campos para evitar edición accidental de datos maestros
+                        toggleClientFields(true);
 
                         //Direccion alternativa
                         const checkboxDireccion = document.getElementById('usar_direccion_alternativa');
@@ -142,19 +213,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
                     } else {
+                        // Si llegamos aqui con null (desde el 404), ya mostramos error arriba
                         limpiarDatosCliente();
                         actualizarCondicionVentaUI(false);
                     }
                 })
                 .catch(error => {
-                    console.error('Error al procesar la búsqueda del cliente (Red/Servidor 500):', error.message);
+                    console.error('Error al procesar la búsqueda del cliente:', error.message);
+                    mostrarErrorBusqueda("Error de conexión al buscar el cliente.");
                     limpiarDatosCliente();
                 });
 
         } else if (cuilSoloDigitos.length < 11 && cuilSoloDigitos.length > 0) {
             limpiarDatosCliente();
+            limpiarErrorBusqueda();
         } else if (cuilSoloDigitos.length === 0) {
             limpiarDatosCliente();
+            limpiarErrorBusqueda();
         }
     }
 

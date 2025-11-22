@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const options = {
             width: '100%',
-            height: 300, // Ajustar según sea necesario
+            height: 600, // Aumentado para mejor visualización
             sankey: {
                 node: {
                     label: { 
@@ -188,6 +188,28 @@ document.addEventListener('DOMContentLoaded', function () {
         trazabilidadTab.addEventListener('shown.bs.tab', () => {
             cargarDatosTrazabilidad('simple');
         }, { once: true });
+    }
+
+    // Redibujar el diagrama cuando se abre el acordeón para asegurar que se renderice con las dimensiones correctas
+    const accordionElement = document.getElementById('accordionDiagrama');
+    if (accordionElement) {
+        accordionElement.addEventListener('shown.bs.collapse', function () {
+            if (chart && datosCompletosCache) {
+                // Si ya tenemos los datos y el chart, redibujamos
+                google.charts.setOnLoadCallback(() => renderizarSankey(datosCompletosCache.diagrama));
+            } else {
+                 // Si no (por ejemplo primer carga fue simple, y el diagrama se carga con simple por defecto), 
+                 // intentamos redibujar con lo que tengamos en la UI no es fácil.
+                 // Pero renderizarSankey ya fue llamado.
+                 // Mejor estrategia: si el acordeón se abre, forzamos redibujado si hay datos.
+                 // Pero `datosCompletosCache` solo se llena con nivel completo.
+                 // El diagrama se carga inicialmente con nivel 'simple'? 
+                 // `cargarDatosTrazabilidad('simple')` -> `fetch` -> `renderizarSankey`.
+                 // Así que el diagrama ya debería tener datos, pero quizás no en cache.
+                 // Vamos a disparar un evento de redibujado window resize que suele arreglar gráficos
+                 window.dispatchEvent(new Event('resize'));
+            }
+        });
     }
 
     if (nivelSwitch) {
