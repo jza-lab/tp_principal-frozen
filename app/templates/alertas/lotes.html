@@ -9,34 +9,103 @@
     </a>
 </div>
 <div class="container-fluid px-4">
-    <h1 class="mt-4">Umbral de Vencimiento de Lotes</h1>
+    <h1 class="mt-4">Alertas de Lotes y Vencimientos</h1>
     <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item active">Vencimiento de Lotes de insumo y producto</li>
+        <li class="breadcrumb-item active">Configuración de parámetros para lotes</li>
     </ol>
     
-    <div class="card mb-4">
-        <div class="card-header">
-            <i class="fas fa-calendar-times me-1"></i>
-            Configurar Umbral de Vencimiento
-        </div>
-        <div class="card-body">
-            {% if 'configurar_alertas' is has_permission %}
-            <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
-                {{ csrf_form.csrf_token }}
-                <div class="mb-3">
-                    <label for="dias_vencimiento" class="form-label">Días de antelación para alerta de vencimiento</label>
-                    <input type="number" min="0" max="30" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>
-                    <div class="form-text">
-                        Esta configuración determina cuántos días antes de la fecha de vencimiento de un lote se generará una alerta.
-                    </div>
+    <!-- Explicación de la Fórmula -->
+    <div class="alert alert-info mb-4" role="alert">
+        <h5 class="alert-heading"><i class="bi bi-calculator-fill me-2"></i>¿Cómo se calcula la Vida Útil Restante?</h5>
+        <p>El porcentaje de vida útil restante se calcula utilizando la siguiente fórmula:</p>
+        <p class="text-center font-monospace bg-light p-2 rounded border border-info-subtle">
+            % Vida Restante = ((Fecha Vencimiento - Fecha Actual) / (Fecha Vencimiento - Fecha Producción)) * 100
+        </p>
+        <hr>
+        <p class="mb-0 small">
+            <i class="bi bi-exclamation-circle-fill me-1"></i> 
+            <strong>Nota Importante:</strong> Si la cantidad de días restantes es menor o igual al "Umbral de Alerta de Vencimiento" configurado abajo, el semáforo se marcará en <span class="text-danger fw-bold">ROJO</span> automáticamente, ignorando el porcentaje calculado.
+        </p>
+    </div>
+
+    <div class="row">
+        <!-- Configuración de Días de Vencimiento -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-calendar-times me-1"></i>
+                    Umbral de Alerta de Vencimiento (Urgencia)
                 </div>
-                <button type="submit" class="btn btn-primary">Guardar Configuración</button>
-            </form>
-            {% else %}
-            <div class="alert alert-warning">
-                No tiene permisos para modificar esta configuración. El umbral actual es de <strong>{{ dias_vencimiento }} días</strong>.
+                <div class="card-body">
+                    {% if 'configurar_alertas' is has_permission %}
+                    <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
+                        {{ csrf_form.csrf_token }}
+                        <div class="mb-3">
+                            <label for="dias_vencimiento" class="form-label">Días de antelación para alerta crítica</label>
+                            <input type="number" min="0" max="90" class="form-control" id="dias_vencimiento" name="dias_vencimiento" value="{{ dias_vencimiento }}" required>
+                            <div class="form-text">
+                                Si los días restantes son menores o iguales a este valor, el semáforo será <strong>ROJO</strong> independientemente del porcentaje.
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Guardar</button>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        No tiene permisos para modificar esta configuración. Valor actual: <strong>{{ dias_vencimiento }} días</strong>.
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            {% endif %}
+        </div>
+
+        <!-- Configuración de Semáforo de Vida Útil -->
+        <div class="col-xl-6">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i class="fas fa-traffic-light me-1"></i>
+                    Semáforo de Vida Útil Restante
+                </div>
+                <div class="card-body">
+                    {% if 'configurar_alertas' is has_permission %}
+                    <form action="{{ url_for('alertas.configurar_alertas_lotes') }}" method="POST">
+                        {{ csrf_form.csrf_token }}
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-success"><i class="bi bi-circle-fill text-success"></i> Umbral VERDE (Mayor a %)</label>
+                            <input type="number" min="0" max="100" class="form-control" name="sem_verde" value="{{ sem_verde }}" required>
+                            <div class="form-text">Si la vida restante supera este %, el indicador será VERDE.</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-bold text-warning"><i class="bi bi-circle-fill text-warning"></i> Umbral AMARILLO (Mayor a %)</label>
+                            <input type="number" min="0" max="100" class="form-control" name="sem_amarillo" value="{{ sem_amarillo }}" required>
+                            <div class="form-text">Si la vida restante supera este % (pero no el verde), será AMARILLO.</div>
+                        </div>
+
+                        <div class="alert alert-light border">
+                            <i class="bi bi-info-circle"></i> Cualquier valor inferior o igual al umbral amarillo será <span class="text-danger fw-bold">ROJO</span>.
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Guardar Configuración</button>
+                    </form>
+                    {% else %}
+                    <ul class="list-group">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Verde (Óptimo)
+                            <span class="badge bg-success rounded-pill">> {{ sem_verde }}%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Amarillo (Atención)
+                            <span class="badge bg-warning text-dark rounded-pill">> {{ sem_amarillo }}%</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            Rojo (Crítico)
+                            <span class="badge bg-danger rounded-pill">Resto</span>
+                        </li>
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 </div>

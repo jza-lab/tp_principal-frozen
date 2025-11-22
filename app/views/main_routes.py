@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, redirect, url_for, render_template, request
+from flask import Blueprint, jsonify, redirect, url_for, render_template, request, send_from_directory
 from flask_jwt_extended import jwt_required
 from app.models.producto import ProductoModel
 from app.models.cliente import ClienteModel
@@ -12,6 +12,13 @@ main_bp = Blueprint('main_routes', __name__)
 def index():
     """Ruta raíz que redirige al login."""
     return redirect(url_for('auth.login'))
+
+@main_bp.route('/service-worker.js')
+def service_worker():
+    """Sirve el archivo service-worker.js desde la raíz."""
+    response = send_from_directory('static', 'service-worker.js', mimetype='application/javascript')
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return response
 
 @main_bp.route('/search')
 @jwt_required()
