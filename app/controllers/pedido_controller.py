@@ -831,37 +831,91 @@ class PedidoController(BaseController):
 
     def cancelar_pedido(self, pedido_id: int) -> tuple:
         """
-        Cambia el estado de un pedido a 'CANCELADO' y libera el stock previamente reservado.
+        Cambia el estado de un pedido a 'CANCELADO' y ejecuta acciones de remediación.
         """
+        from app.controllers.orden_produccion_controller import OrdenProduccionController
+
+        logger.info(f"Iniciando cancelación compleja para Pedido ID: {pedido_id}")
+
         try:
-            # 1. Verificar que el pedido existe y no esté ya cancelado
-            pedido_existente_resp = self.model.find_by_id(pedido_id, 'id')
-            if not pedido_existente_resp.get('success') or not pedido_existente_resp.get('data'):
-                 return self.error_response(f"Pedido con ID {pedido_id} no encontrado.", 404)
+            # 1. Validar existencia y CARGAR ÍTEMS (CORRECCIÓN CLAVE)
+            # Usamos obtener_pedido_por_id para asegurar que traiga los 'items' anidados
+            pedido_existente_resp, _ = self.obtener_pedido_por_id(pedido_id)
+
+            if not pedido_existente_resp.get('success'):
+                return self.error_response(f"Pedido {pedido_id} no encontrado.", 404)
 
             pedido_actual = pedido_existente_resp.get('data')
-            if pedido_actual.get('estado') == 'CANCELADO':
-                return self.error_response("Este pedido ya ha sido cancelado.", 400)
+            estado_actual_ov = pedido_actual.get('estado')
 
-            # 2. Liberar el stock reservado
+            # 2. Validar estados
+            estados_cancelables = ['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA', 'PLANIFICADA']
+            if estado_actual_ov not in estados_cancelables and estado_actual_ov != 'CANCELADO':
+                 return self.error_response(f"No se puede cancelar un pedido en estado '{estado_actual_ov}'.", 400)
+
+            if estado_actual_ov == 'CANCELADO':
+                return self.error_response("Este pedido ya está cancelado.", 400)
+
+            # 3. Liberar Reservas de Stock
             liberacion_result = self.lote_producto_controller.liberar_stock_por_cancelacion_de_pedido(pedido_id)
             if not liberacion_result.get('success'):
-                error_msg = liberacion_result.get('error', 'Error desconocido al liberar el stock.')
-                logger.error(f"Fallo crítico al cancelar pedido {pedido_id}: No se pudo liberar el stock. Error: {error_msg}")
-                # A pesar del fallo, se continúa para marcar el pedido como cancelado, pero se advierte del problema.
-                return self.error_response(f"No se pudo liberar el stock, pero el pedido se marcará como cancelado. Contacte a soporte. Error: {error_msg}", 500)
+                logger.warning(f"Alerta en cancelación OV {pedido_id}: {liberacion_result.get('error')}")
 
-            # 3. Cambiar el estado del pedido a 'CANCELADO'
+            # 4. Orquestador de OPs
+            op_controller = OrdenProduccionController()
+            items_pedido = pedido_actual.get('items', []) # Ahora sí tendrá datos
+
+            if not items_pedido:
+                logger.warning(f"El pedido {pedido_id} no tiene ítems para procesar OPs.")
+
+            ops_procesadas = set()
+
+            for item in items_pedido:
+                op_id = item.get('orden_produccion_id')
+
+                if op_id and op_id not in ops_procesadas:
+                    ops_procesadas.add(op_id)
+
+                    op_resp = op_controller.obtener_orden_por_id(op_id)
+                    if op_resp.get('success'):
+                        op_data = op_resp.get('data')
+                        estado_op = op_data.get('estado')
+
+                        logger.info(f"Procesando OP vinculada {op_id} (Estado: {estado_op}) para OV {pedido_id}")
+
+                        if estado_op == 'PENDIENTE':
+                            motivo = f"Cancelación automática por baja del Pedido #{pedido_actual.get('codigo_ov', pedido_id)}"
+                            op_controller.rechazar_orden(op_id, motivo)
+                            logger.info(f"-> Caso 1: OP {op_id} (Pendiente) cancelada.")
+
+                        elif estado_op in ['EN ESPERA', 'EN_ESPERA']:
+                            op_controller.orden_compra_controller.desvincular_de_orden_produccion(op_id)
+                            motivo = f"Cancelación OV {pedido_id}. OCs liberadas a stock."
+                            op_controller.rechazar_orden(op_id, motivo)
+                            logger.info(f"-> Caso 2: OP {op_id} (En Espera) cancelada y OCs desvinculadas.")
+
+                        elif estado_op in ['LISTA PARA PRODUCIR', 'EN_LINEA_1', 'EN_LINEA_2', 'EN_EMPAQUETADO', 'EN_PROCESO', 'CONTROL_DE_CALIDAD']:
+                            op_controller.desvincular_orden_de_pedido(op_id, f"Pedido {pedido_id} cancelado durante producción")
+                            logger.info(f"-> Caso 3: OP {op_id} desvinculada. Continúa para stock general.")
+
+                        elif estado_op == 'COMPLETADA':
+                            op_controller.desvincular_orden_de_pedido(op_id, "Pedido cancelado post-producción")
+                            logger.info(f"-> Caso 4: OP {op_id} completada desvinculada.")
+
+            # 5. Cambiar estado a CANCELADO
             result = self.model.cambiar_estado(pedido_id, 'CANCELADO')
+
             if result.get('success'):
-                detalle = f"Se canceló el pedido de venta con ID: {pedido_id}."
+                self.model.db.table('pedido_items').update({'estado': 'CANCELADO'}).eq('pedido_id', pedido_id).execute()
+                detalle = f"Se canceló el pedido {pedido_id} (Estado previo: {estado_actual_ov}). Se ejecutaron remediaciones."
                 self.registro_controller.crear_registro(get_current_user(), 'Ordenes de venta', 'Cancelación', detalle)
-                return self.success_response(message="Pedido cancelado con éxito y stock liberado.")
+                return self.success_response(message="Pedido cancelado correctamente.")
             else:
-                return self.error_response(result.get('error', 'El stock fue liberado, pero no se pudo cambiar el estado del pedido.'), 500)
+                return self.error_response(result.get('error', 'Error al actualizar estado.'), 500)
+
         except Exception as e:
             logger.error(f"Error interno en cancelar_pedido: {e}", exc_info=True)
-            return self.error_response(f'Error interno del servidor: {str(e)}', 500)
+            return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_datos_para_formulario(self) -> tuple:
         """
@@ -1341,7 +1395,7 @@ class PedidoController(BaseController):
                     'pedido_item_id': item['id'],
                     'estado': 'RESERVADO'
                 })
-                
+
                 # Defensa contra tipos de datos incorrectos
                 try:
                     total_reservado = sum(Decimal(str(r.get('cantidad_reservada', 0))) for r in reservas_res.get('data', []))

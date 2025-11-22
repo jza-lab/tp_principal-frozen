@@ -196,6 +196,21 @@
                             </button>
                         </form>
                         {% endif %}
+                        {# ▼▼▼▼ AGREGAR ESTE BLOQUE NUEVO ▼▼▼▼ #}
+                        {# Botón Cancelar (Habilitado para estados con remediación) #}
+                        {% if pedido.estado in ['PENDIENTE', 'EN_PROCESO', 'LISTO_PARA_ENTREGA'] %}
+                        <form method="POST" action="{{ url_for('orden_venta.cancelar', id=pedido.id) }}"
+                              class="confirm-form d-inline" 
+                              data-title="Confirmar Cancelación"
+                              data-message="¿Está seguro? Se revertirán reservas y producción. Esta acción es irreversible."
+                              data-button-type="danger">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancelar Pedido">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </form>
+                        {% endif %}
+                        {# ▲▲▲▲ FIN BLOQUE NUEVO ▲▲▲▲ #}
                     </div>
                 </div> {# Fin mt-auto #}
             </div> {# Fin card-body #}
