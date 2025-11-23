@@ -90,13 +90,16 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Gastos de Envío -->
+                        <!-- KPI: Próximo a Facturar (NEW) -->
                         <div class="col-md-2">
-                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
-                                <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Gastos Envío</h6>
-                                    <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-envio">$0</p>
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4 bg-white position-relative overflow-hidden">
+                                <div class="card-body p-3 position-relative z-1">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Próximo a Facturar</h6>
+                                    <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-proximo-facturar">$0</p>
+                                    <small class="text-muted" style="font-size: 0.65rem;">Pendiente + En Proceso (Crédito)</small>
                                 </div>
+                                <!-- Subtle background to distinguish it -->
+                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10" style="background-color: rgba(108, 117, 125, 0.1);"></div>
                             </div>
                         </div>
                         <!-- KPI: Rentabilidad Neta -->
@@ -218,7 +221,7 @@
 
 <!-- Modal para Detalles del Producto -->
 <div class="modal fade" id="productoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
             <div class="modal-header border-bottom-0 pb-0">
                 <h5 class="modal-title fw-bold text-dark">Detalles del Producto</h5>
@@ -259,6 +262,15 @@
     }
     .table-hover tbody tr:hover {
         background-color: rgba(0,0,0,.02);
+    }
+    .nav-tabs .nav-link {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    .nav-tabs .nav-link.active {
+        color: #198754;
+        font-weight: 600;
+        border-bottom: 2px solid #198754;
     }
 </style>
 {% endblock %}
@@ -368,9 +380,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 desElem.innerHTML = `Dir: ${formatCurrency(g.costos_fijos_directos)} | Ind: ${formatCurrency(g.costos_fijos_indirectos)}`;
             }
 
-            document.getElementById('global-costos-envio').textContent = formatCurrency(g.costos_envio_total);
+            const envioElem = document.getElementById('global-costos-envio');
+            if (envioElem) {
+                envioElem.textContent = formatCurrency(g.costos_envio_total);
+            }
             document.getElementById('global-rentabilidad-neta').textContent = formatCurrency(g.rentabilidad_neta);
             
+            // Update New KPI: Próximo a Facturar
+            const proximoElem = document.getElementById('global-proximo-facturar');
+            if(proximoElem && g.proximo_a_facturar !== undefined) {
+                proximoElem.textContent = formatCurrency(g.proximo_a_facturar);
+            } else if (proximoElem) {
+                // Fallback for safety if undefined
+                proximoElem.textContent = formatCurrency(0);
+            }
+
             const rentElem = document.getElementById('global-rentabilidad-porcentaje');
             rentElem.textContent = `${g.rentabilidad_porcentual}%`;
             rentElem.className = g.rentabilidad_porcentual >= 0 ? 'text-success fw-bold' : 'text-danger fw-bold';
@@ -648,54 +672,91 @@ document.addEventListener('DOMContentLoaded', function () {
         // Buscar datos locales primero (ya tenemos costos calculados)
         const localProductData = fullData.productos.find(p => p.id == productoId);
 
-        fetch(`/analisis/api/rentabilidad/producto/${productoId}/evolucion`)
+        // CORRECCIÓN: Usar el endpoint general de producto para obtener pedidos relacionados
+        fetch(`/analisis/api/rentabilidad/producto/${productoId}`)
             .then(res => res.json())
-            .then(evolucionResult => {
+            .then(detallesResult => { // Renombrado para claridad
+                const result = detallesResult.data;
                 let content = '';
+                
                 if (localProductData) {
                      content += `
                         <div class="row mb-4">
                             <div class="col-md-6">
                                 <h4 class="fw-bold text-dark">${localProductData.nombre}</h4>
-                                <p class="text-muted small">Precio Venta: ${formatCurrency(localProductData.precio_venta)}</p>
+                                <p class="text-muted small">Precio Venta (Prom): ${formatCurrency(localProductData.precio_venta)}</p>
                             </div>
                             <div class="col-md-6 text-end">
                                 <h2 class="text-success fw-bold mb-0">${formatCurrency(localProductData.margen_contribucion_unitario)}</h2>
-                                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Margen Contribución Unitario</small>
+                                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Margen Contribución Unitario (Prom)</small>
                             </div>
                         </div>
-                        <div class="card bg-light border-0 rounded-4 mb-4">
-                            <div class="card-body p-3">
-                                <h6 class="card-subtitle mb-3 text-muted small fw-bold text-uppercase">Estructura de Costos Variables</h6>
-                                <div class="progress rounded-pill" style="height: 12px;">
-                                    <div class="progress-bar bg-secondary" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_materia_prima / localProductData.costo_variable_unitario * 100) || 0}%"></div>
-                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_mano_obra / localProductData.costo_variable_unitario * 100) || 0}%"></div>
-                                </div>
-                                <div class="d-flex justify-content-between mt-2 small text-muted">
-                                    <span><i class="bi bi-circle-fill text-secondary me-1" style="font-size: 0.6rem;"></i>Materia Prima: <strong>${formatCurrency(localProductData.detalles_costo.costo_materia_prima)}</strong></span>
-                                    <span><i class="bi bi-circle-fill text-warning me-1" style="font-size: 0.6rem;"></i>Mano de Obra: <strong>${formatCurrency(localProductData.detalles_costo.costo_mano_obra)}</strong></span>
+                        
+                        <ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="evolucion-tab" data-bs-toggle="tab" data-bs-target="#evolucion" type="button" role="tab">Evolución</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="pedidos-tab" data-bs-toggle="tab" data-bs-target="#pedidos" type="button" role="tab">Pedidos Relacionados</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="myTabContent">
+                            <!-- Pestaña Gráfico -->
+                            <div class="tab-pane fade show active" id="evolucion" role="tabpanel">
+                                <h6 class="fw-bold mb-3 text-dark mt-3">Evolución de Ventas (Últimos 12 Meses)</h6>
+                                <div id="evolucion-chart-container" style="width: 100%; height: 300px;"></div>
+                            </div>
+                            
+                            <!-- Pestaña Tabla Pedidos -->
+                            <div class="tab-pane fade" id="pedidos" role="tabpanel">
+                                <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Pedido</th>
+                                                <th>Cliente</th>
+                                                <th class="text-end">Cant.</th>
+                                                <th class="text-end">Precio U.</th>
+                                                <th class="text-end">Costo U.</th>
+                                                <th class="text-end">Ganancia</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${(result.pedidos_relacionados || []).map(p => `
+                                                <tr>
+                                                    <td>${p.fecha}</td>
+                                                    <td><a href="/orden-venta/${p.id}/detalle" target="_blank" class="text-decoration-none fw-bold">${p.codigo}</a></td>
+                                                    <td>${p.cliente}</td>
+                                                    <td class="text-end">${p.cantidad}</td>
+                                                    <td class="text-end text-primary">${formatCurrency(p.precio_unitario)}</td>
+                                                    <td class="text-end text-muted">${formatCurrency(p.costo_unitario)}</td>
+                                                    <td class="text-end fw-bold ${p.ganancia > 0 ? 'text-success' : 'text-danger'}">${formatCurrency(p.ganancia)}</td>
+                                                </tr>
+                                            `).join('') || '<tr><td colspan="7" class="text-center text-muted">No se encontraron pedidos.</td></tr>'}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>
                     `;
                 }
-
-                content += '<h6 class="fw-bold mb-3 text-dark">Evolución de Ventas (Últimos 12 Meses)</h6>';
-                content += '<div id="evolucion-chart-container" style="width: 100%; height: 300px;"></div>';
                 
                 modalBody.innerHTML = content;
                 
-                if (evolucionResult.success && evolucionResult.data.length > 0) {
+                // Inicializar gráfico solo si está activo el tab
+                if (detallesResult.success && result && result.historial_ventas && result.historial_ventas.length > 0) {
                     setTimeout(() => {
                         const evolucionChart = echarts.init(document.getElementById('evolucion-chart-container'));
                         const option = {
                             tooltip: { trigger: 'axis' },
                             grid: { left: '5%', right: '5%', bottom: '10%', top: '10%', containLabel: true },
-                            xAxis: { type: 'category', data: evolucionResult.data.map(item => item.mes) },
+                            xAxis: { type: 'category', data: result.historial_ventas.map(item => item.fecha ? item.fecha.split('T')[0] : '') },
                             yAxis: { type: 'value' },
                             series: [{
                                 name: 'Unidades',
-                                data: evolucionResult.data.map(item => item.unidades_vendidas),
+                                data: result.historial_ventas.map(item => item.cantidad),
                                 type: 'line',
                                 smooth: true,
                                 areaStyle: { opacity: 0.2, color: '#198754' },
@@ -704,10 +765,16 @@ document.addEventListener('DOMContentLoaded', function () {
                             }]
                         };
                         evolucionChart.setOption(option);
-                    }, 200); // Pequeño delay para asegurar render en modal
-                } else {
-                    modalBody.innerHTML += '<p class="text-center text-muted mt-3">No hay datos históricos suficientes.</p>';
-                }
+                        
+                        // Fix chart resize on tab switch
+                        const tabEl = document.querySelector('button[data-bs-target="#evolucion"]');
+                        if(tabEl){
+                            tabEl.addEventListener('shown.bs.tab', function (event) {
+                                evolucionChart.resize();
+                            });
+                        }
+                    }, 200);
+                } 
 
             }).catch(err => {
                 console.error(err);

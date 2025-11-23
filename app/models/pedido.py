@@ -186,12 +186,41 @@ class PedidoModel(BaseModel):
 
             # 2. Crear los items del pedido
             try:
+                # --- NUEVO: Obtener costos dinámicos e insertar ---
+                # Para evitar dependencias circulares, importamos aquí
+                from app.controllers.rentabilidad_controller import RentabilidadController
+                rentabilidad_controller = RentabilidadController()
+                from app.models.producto import ProductoModel
+                producto_model = ProductoModel()
+
+                # Pre-fetch de productos para obtener precio_unitario actual
+                producto_ids = [item['producto_id'] for item in items_data]
+                productos_res = producto_model.find_all(filters={'id': producto_ids})
+                productos_map = {p['id']: p for p in productos_res.get('data', [])} if productos_res.get('success') else {}
+
+                # Pre-fetch de roles para cálculo de costos (optimización)
+                roles_resp = rentabilidad_controller.rol_model.find_all()
+                roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+
                 for item in items_data:
+                    producto_id = int(item['producto_id'])
+                    producto_data_actual = productos_map.get(producto_id, {})
+                    
+                    # Calcular costo unitario actual (snapshot)
+                    costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                    costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                    
+                    # Obtener precio unitario actual (snapshot)
+                    precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+
                     item_data = {
                         'pedido_id': new_pedido_id,
-                        'producto_id': item['producto_id'],
+                        'producto_id': producto_id,
                         'cantidad': item['cantidad'],
-                        'estado': item.get('estado', 'PENDIENTE')
+                        'estado': item.get('estado', 'PENDIENTE'),
+                        # --- COLUMNAS NUEVAS ---
+                        'precio_unitario': precio_unitario_snapshot,
+                        'costo_unitario': costo_unitario_snapshot
                     }
                     item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
                     if not item_insert_result.data:
@@ -306,6 +335,16 @@ class PedidoModel(BaseModel):
                 self.db.table('pedido_items').delete().in_('id', item_ids_to_delete).execute()
 
             # --- Manejar productos añadidos o actualizados ---
+            # --- NUEVO: Obtener costos dinámicos e insertar para items NUEVOS ---
+            from app.controllers.rentabilidad_controller import RentabilidadController
+            rentabilidad_controller = RentabilidadController()
+            from app.models.producto import ProductoModel
+            producto_model = ProductoModel()
+
+            # Pre-fetch roles
+            roles_resp = rentabilidad_controller.rol_model.find_all()
+            roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+
             for pid, new_item_data in incoming_items_by_product.items():
                 nueva_cantidad_total = int(new_item_data['cantidad'])
                 existing_items = existing_items_by_product.get(pid, [])
@@ -326,8 +365,21 @@ class PedidoModel(BaseModel):
 
                 if nueva_cantidad_total > cantidad_existente_total:
                     cantidad_a_anadir = nueva_cantidad_total - cantidad_existente_total
+                    
+                    # Calcular costos snapshot para el NUEVO item
+                    producto_info_res = producto_model.find_by_id(pid)
+                    producto_data_actual = producto_info_res.get('data', {})
+                    costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                    costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                    precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+
                     self.db.table('pedido_items').insert({
-                        'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': 'PENDIENTE'
+                        'pedido_id': pedido_id, 
+                        'producto_id': pid, 
+                        'cantidad': cantidad_a_anadir, 
+                        'estado': 'PENDIENTE',
+                        'precio_unitario': precio_unitario_snapshot,
+                        'costo_unitario': costo_unitario_snapshot
                     }).execute()
 
                 elif nueva_cantidad_total < cantidad_existente_total:
@@ -343,8 +395,17 @@ class PedidoModel(BaseModel):
 
                     nueva_cantidad_pendiente = cantidad_pendiente_total - cantidad_a_reducir
                     if nueva_cantidad_pendiente > 0:
+                        # Para el item reducido, recalculamos o copiamos? Mejor crear nuevo con snapshot actual
+                        producto_info_res = producto_model.find_by_id(pid)
+                        producto_data_actual = producto_info_res.get('data', {})
+                        costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                        costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                        precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+                        
                         self.db.table('pedido_items').insert({
-                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE'
+                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE',
+                            'precio_unitario': precio_unitario_snapshot,
+                            'costo_unitario': costo_unitario_snapshot
                         }).execute()
 
             pedido_status = pedido_data.get('estado')
