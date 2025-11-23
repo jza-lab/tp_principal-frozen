@@ -315,6 +315,18 @@ class OrdenProduccionController(BaseController):
                 logger.info(msg)
                 return {'success': True, 'message': msg}
 
+            # --- NUEVA LÓGICA: Verificar si YA está cubierta (por la OC que acaba de llegar) ---
+            esta_cubierta = self.inventario_controller.verificar_cobertura_reservas_op(orden)
+
+            if esta_cubierta:
+                logger.info(f"OP {orden_produccion_id} tiene cobertura completa de reservas. Avanzando estado.")
+
+                nuevo_estado = 'LISTA PARA PRODUCIR'
+                self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+
+                return {'success': True, 'message': f"OP {orden_produccion_id} actualizada a {nuevo_estado} (Insumos ya reservados)."}
+            # -----------------------------------------------------------------------------------
+
             # 2. Verificar stock (la lógica de OCs ya se cumplió si llegamos aquí)
             logger.debug(f"Verificando stock para OP {orden_produccion_id}...")
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)

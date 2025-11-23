@@ -160,49 +160,30 @@ class InventarioController(BaseController):
 
     def consumir_stock_reservado_para_op(self, orden_produccion_id: int) -> dict:
         """
-        Consume el stock FÍSICO que fue previamente reservado para una OP.
-        Esta acción es destructiva y debe llamarse cuando la OP pasa a 'EN PROCESO'.
+        Marca el stock reservado como CONSUMIDO.
+        NO descuenta stock físico nuevamente porque ya se hizo en la 'Reserva Dura'.
         """
         try:
             reservas_res = self.reserva_insumo_model.find_all(
-                filters={'orden_produccion_id': orden_produccion_id}
+                filters={'orden_produccion_id': orden_produccion_id, 'estado': 'RESERVADO'}
             )
+
             if not reservas_res.get('success'):
-                return {'success': False, 'error': f"No se encontraron reservas para la OP {orden_produccion_id}"}
+                return {'success': False, 'error': f"Error buscando reservas: {reservas_res.get('error')}"}
 
             reservas = reservas_res.get('data', [])
             if not reservas:
-                logger.warning(f"No hay reservas que consumir para la OP {orden_produccion_id}")
-                return {'success': True}
+                logger.warning(f"No hay reservas activas para consumir en OP {orden_produccion_id}")
+                return {'success': True} # No es error, puede que no use insumos
 
-            insumos_afectados = set()
+            # Solo actualizamos el estado de la reserva
+            ids_reservas = [r['id'] for r in reservas]
+
+            # Usamos update masivo si el modelo lo soporta, o bucle
             for reserva in reservas:
-                lote_id = reserva['lote_inventario_id']
-                cantidad_a_consumir = float(reserva['cantidad_reservada'])
+                 self.reserva_insumo_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
 
-                insumos_afectados.add(reserva['insumo_id'])
-
-                lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
-                if not lote_res.get('success'):
-                    logger.error(f"No se encontró el lote {lote_id} para consumir stock de OP {orden_produccion_id}. Se omite.")
-                    continue
-
-                lote = lote_res.get('data')
-                cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
-                nueva_cantidad_lote = cantidad_actual_lote - cantidad_a_consumir
-
-                update_data = {'cantidad_actual': nueva_cantidad_lote}
-                if nueva_cantidad_lote <= 0:
-                    update_data['estado'] = 'agotado'
-
-                self.inventario_model.update(lote_id, update_data, 'id_lote')
-                self.reserva_insumo_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
-
-            # Actualizar el stock general de los insumos afectados
-            for insumo_id in insumos_afectados:
-                self.insumo_controller.actualizar_stock_insumo(insumo_id)
-
-            logger.info(f"Stock físico consumido y reservas eliminadas para la OP {orden_produccion_id}")
+            logger.info(f"Reservas para OP {orden_produccion_id} marcadas como CONSUMIDO.")
             return {'success': True}
 
         except Exception as e:
@@ -1712,3 +1693,55 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error en marcar_lote_retirado_alerta: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
+
+    def verificar_cobertura_reservas_op(self, orden_produccion: Dict) -> bool:
+        """
+        Verifica si una OP ya tiene todos sus insumos cubiertos por reservas existentes.
+        """
+        # Instanciar modelo de receta para obtener ingredientes correctamente
+        from app.models.receta import RecetaModel
+        receta_model = RecetaModel()
+
+        try:
+            receta_id = orden_produccion['receta_id']
+            op_id = orden_produccion['id']
+            cantidad_a_producir = float(orden_produccion.get('cantidad_planificada', 0))
+
+            # 1. CORRECCIÓN: Usar el modelo en lugar de query manual a tabla inexistente
+            ingredientes_result = receta_model.get_ingredientes(receta_id)
+
+            if not ingredientes_result.get('success') or not ingredientes_result.get('data'):
+                logger.warning(f"OP {op_id}: No se encontraron ingredientes para receta {receta_id}")
+                return False
+
+            ingredientes = ingredientes_result.get('data')
+
+            # 2. Obtener reservas YA existentes para esta OP
+            reservas_existentes = self.reserva_insumo_model.find_all(filters={'orden_produccion_id': op_id})
+            reservas_data = reservas_existentes.get('data', [])
+
+            # Mapa de lo que ya tenemos reservado: {insumo_id: cantidad}
+            mapa_reservado = {}
+            for res in reservas_data:
+                iid = res['insumo_id']
+                mapa_reservado[iid] = mapa_reservado.get(iid, 0) + float(res['cantidad_reservada'])
+
+            # 3. Comparar Requerido vs Reservado
+            for ingrediente in ingredientes:
+                insumo_id = ingrediente['id_insumo']
+                # get_ingredientes ya devuelve la cantidad unitaria
+                cantidad_unitaria = float(ingrediente.get('cantidad', 0))
+                cantidad_necesaria_total = cantidad_unitaria * cantidad_a_producir
+
+                cantidad_reservada = mapa_reservado.get(insumo_id, 0)
+
+                # Usamos tolerancia pequeña para floats
+                if cantidad_reservada < (cantidad_necesaria_total - 0.01):
+                    logger.info(f"OP {op_id} incompleta: Insumo {insumo_id} tiene {cantidad_reservada}, necesita {cantidad_necesaria_total}")
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error en verificar_cobertura_reservas_op: {e}", exc_info=True)
+            return False
