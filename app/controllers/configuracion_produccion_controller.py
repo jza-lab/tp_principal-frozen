@@ -62,6 +62,16 @@ class ConfiguracionProduccionController(BaseController):
 
         return {'success': True, 'data': config_map}
 
+    def get_configuracion_produccion(self):
+        """
+        Obtiene toda la configuración de producción.
+        Es un wrapper simple de find_all para compatibilidad.
+        """
+        result = self.model.find_all()
+        if result.get('success'):
+            return self.success_response(result['data'])
+        return self.error_response(result.get('error', 'Error al obtener la configuración de producción.'))
+
     def update_configuracion_produccion(self, configs_data):
         """
         Actualiza la configuración.

@@ -1,164 +1,216 @@
 {% extends "layouts/app_layout.html" %}
 
 {% block app_content %}
-<div class="container-fluid">
-    <!-- Fila del Título y Filtros -->
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Dashboard de Rentabilidad Global</h1>
-        <!-- Toolbar de Filtros (Arriba a la derecha) -->
-        <div class="btn-toolbar mb-2 mb-md-0">
-            <div id="filter-buttons" class="btn-group me-2" role="group" aria-label="Filtros de fecha">
-                <button type="button" class="btn btn-outline-primary active" data-period="30">Mes</button>
-                <button type="button" class="btn btn-outline-primary" data-period="90">Trimestre</button>
-                <button type="button" class="btn btn-outline-primary" data-period="365">Anual</button>
+<div class="container-fluid px-4 py-4">
+    
+    <!-- Header / Command Center Card -->
+    <div id="dashboard-header-card" class="card border-0 shadow rounded-4 overflow-hidden mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); transition: all 0.5s ease; border-left: 4px solid #198754 !important;">
+        <div class="card-header border-bottom-0 pt-4 pb-0 px-4 position-relative" style="background: transparent; z-index: 1;">
+            
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 position-relative z-2">
+                <div class="d-flex align-items-center mb-3 mb-md-0">
+                    <div class="icon-box bg-white text-success rounded-4 p-3 me-3 shadow-sm border hover-lift transition-transform" style="color: #198754 !important;">
+                        <i class="bi bi-graph-up-arrow fs-3"></i>
+                    </div>
+                    <div>
+                        <h4 class="fw-bold text-dark mb-1 tracking-tight">Análisis de Rentabilidad Global</h4>
+                        <p class="text-muted small mb-0 d-flex align-items-center">
+                            <span class="badge bg-success-subtle text-success rounded-pill me-2 px-2 pulse-badge">En vivo</span>
+                            Monitoreo de márgenes, costos y contribución
+                        </p>
+                    </div>
+                </div>
+                <!-- Breadcrumb / Info Area -->
+                <div class="d-none d-md-block text-end">
+                   <nav aria-label="breadcrumb">
+                      <ol class="breadcrumb mb-0 justify-content-end small">
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}" class="text-decoration-none text-muted">Inicio</a></li>
+                        <li class="breadcrumb-item active fw-semibold text-success" aria-current="page">Rentabilidad</li>
+                      </ol>
+                   </nav>
+                   <small class="text-muted font-monospace" style="font-size: 0.75rem;">
+                       <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
+                   </small>
+                </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Fila de KPIs Globales -->
-    <div class="row align-items-center mb-4">
-        <div class="col-md-12">
-            <div class="row g-2">
-                <!-- KPI: Facturación Total -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-primary border-4 shadow-sm">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Facturación Total</h6>
-                            <p class="card-text fw-bold text-primary" style="font-size: 1.1rem;" id="global-facturacion">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- KPI: Costos Variables -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-warning border-4 shadow-sm">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Costos Variables</h6>
-                            <p class="card-text fw-bold text-warning" style="font-size: 1.1rem;" id="global-costo-variable">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- KPI: Margen Contribución -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-info border-4 shadow-sm">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Margen Contribución Global</h6>
-                            <p class="card-text fw-bold text-info" style="font-size: 1.2rem;" id="global-margen-contribucion">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- KPI: Costos Fijos -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-danger border-4 shadow-sm">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Costos Fijos Totales</h6>
-                            <p class="card-text fw-bold text-danger" style="font-size: 1.1rem;" id="global-costos-fijos">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- KPI: Gastos de Envío -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-secondary border-4 shadow-sm">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Gastos de Envío</h6>
-                            <p class="card-text fw-bold text-secondary" style="font-size: 1.1rem;" id="global-costos-envio">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <!-- KPI: Rentabilidad Neta -->
-                <div class="col-md-2">
-                    <div class="card text-center h-100 border-start border-success border-4 shadow-sm bg-light">
-                        <div class="card-body p-2">
-                            <h6 class="card-subtitle mb-1 text-muted" style="font-size: 0.8rem;">Rentabilidad Neta</h6>
-                            <p class="card-text fw-bold text-success display-6" style="font-size: 1.4rem;" id="global-rentabilidad-neta">$0</p>
-                            <small id="global-rentabilidad-porcentaje" class="text-success fw-bold">0%</small>
-                        </div>
-                    </div>
+            <!-- Filter Buttons Area (Integrated in Header) -->
+            <div class="d-flex justify-content-end mt-2 mb-3 position-relative z-2">
+                <div id="filter-buttons" class="btn-group shadow-sm rounded-pill" role="group" aria-label="Filtros de fecha">
+                    <button type="button" class="btn btn-sm btn-outline-success active rounded-start-pill px-3" data-period="30">Mes</button>
+                    <button type="button" class="btn btn-sm btn-outline-success px-3" data-period="90">Trimestre</button>
+                    <button type="button" class="btn btn-sm btn-outline-success rounded-end-pill px-3" data-period="365">Anual</button>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Fila de Gráficos Principales -->
-    <div class="row">
-        <!-- Gráfico de Burbujas (Matriz BCG - Margen Contribución) -->
-        <div class="col-lg-7 mb-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header d-flex justify-content-between align-items-center bg-white">
-                    <span class="fw-bold">Matriz de Contribución (Ventas vs Margen Unitario)</span>
-                    <span class="info-tooltip text-muted" data-bs-toggle="tooltip" data-bs-placement="top" 
-                          title="Clasificación de productos según su Margen de Contribución Unitario y Volumen de Ventas.">
-                        <i class="bi bi-info-circle"></i>
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div id="rentabilidad-chart-container" style="width: 100%; height: 450px;"></div>
-                    <div id="dynamic-chart-description" class="alert alert-light mt-3 border" role="alert">
-                        Calculando análisis...
+        <!-- Main Content Area -->
+        <div class="card-body p-4" style="background-color: #f4f6f9;">
+            
+            <!-- Fila de KPIs Globales -->
+            <div class="row align-items-center mb-4">
+                <div class="col-md-12">
+                    <div class="row g-3">
+                        <!-- KPI: Facturación Total -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Facturación Total</h6>
+                                    <p class="fw-bold text-primary mb-0 display-6" style="font-size: 1.3rem;" id="global-facturacion">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Costos Variables -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Variables</h6>
+                                    <p class="fw-bold text-warning mb-0 display-6" style="font-size: 1.3rem;" id="global-costo-variable">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Margen Contribución -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Margen Contrib.</h6>
+                                    <p class="fw-bold text-info mb-0 display-6" style="font-size: 1.3rem;" id="global-margen-contribucion">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Costos Fijos -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Fijos</h6>
+                                    <p class="fw-bold text-danger mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-fijos">$0</p>
+                                    <small class="d-block text-muted mt-1" style="font-size: 0.7rem;" id="global-costos-fijos-desglose">
+                                        Dir: $0 | Ind: $0
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Gastos de Envío -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Gastos Envío</h6>
+                                    <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-envio">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Rentabilidad Neta -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow rounded-4 bg-white position-relative overflow-hidden">
+                                <div class="card-body p-3 position-relative z-1">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Rentabilidad Neta</h6>
+                                    <p class="fw-bold text-success display-6 mb-0" style="font-size: 1.5rem;" id="global-rentabilidad-neta">$0</p>
+                                    <small id="global-rentabilidad-porcentaje" class="text-success fw-bold">0%</small>
+                                </div>
+                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10 bg-success-subtle"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <!-- Leyenda y Gráficos Secundarios -->
-        <div class="col-lg-5 mb-4">
-             <!-- Leyenda Descriptiva -->
-             <div class="card mb-4 shadow-sm">
-                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <div class="d-flex align-items-start"><span style="color:#4CAF50; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Estrellas</strong><br><small class="text-muted d-block">Alto margen, altas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(> Prom. Ventas, > Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="d-flex align-items-start"><span style="color:#FFC107; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Interrogantes</strong><br><small class="text-muted d-block">Alto margen, bajas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(< Prom. Ventas, > Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-start"><span style="color:#2196F3; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Vacas</strong><br><small class="text-muted d-block">Bajo margen, altas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(> Prom. Ventas, < Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6">
-                             <div class="d-flex align-items-start"><span style="color:#F44336; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Perros</strong><br><small class="text-muted d-block">Bajo margen, bajas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(< Prom. Ventas, < Prom. Margen)</small></div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card mb-4 shadow-sm">
-                <div class="card-header bg-white fw-bold">Top 5: Mayor Margen de Contribución Total</div>
-                <div class="card-body">
-                    <div id="top-rentables-chart-container" style="width: 100%; height: 220px;"></div>
-                </div>
-            </div>
-             <div class="card shadow-sm">
-                <div class="card-header bg-white fw-bold">Desglose Costos Variables (Top 5)</div>
-                <div class="card-body">
-                    <div id="costos-chart-container" style="width: 100%; height: 250px;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Tabla de Datos Detallada -->
-    <div class="card mt-4 shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center bg-white">
-            <span class="fw-bold">Análisis Detallado por Producto</span>
-            <input type="text" id="searchInput" class="form-control w-25" placeholder="Buscar producto...">
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle" id="tabla-rentabilidad">
-                    <thead class="table-light">
-                        <tr>
-                            <th scope="col" style="width: 5%;"></th>
-                            <th scope="col" data-sort="nombre" style="cursor: pointer;">Producto ⇅</th>
-                            <th scope="col" data-sort="volumen_ventas" class="text-end" style="cursor: pointer;">Vol. Ventas ⇅</th>
-                            <th scope="col" data-sort="costo_variable_total" class="text-end" style="cursor: pointer;">Gasto Total (Var.) ⇅</th>
-                            <th scope="col" data-sort="facturacion_total" class="text-end" style="cursor: pointer;">Lo que se ganó (Ingresos) ⇅</th>
-                            <th scope="col" data-sort="margen_contribucion_total" class="text-end" style="cursor: pointer;">Ganancia Bruta Total ⇅</th>
-                            <th scope="col" data-sort="margen_porcentual" class="text-end" style="cursor: pointer;">Margen % ⇅</th>
-                            <th scope="col">Clasificación</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-rentabilidad-body">
-                        <!-- Las filas se insertarán aquí dinámicamente -->
-                    </tbody>
-                </table>
+            <!-- Fila de Gráficos Principales -->
+            <div class="row g-4">
+                <!-- Gráfico de Burbujas (Matriz BCG - Margen Contribución) -->
+                <div class="col-lg-7">
+                    <div class="card shadow border-0 h-100 rounded-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark h5">Matriz de Contribución</h6>
+                            <i class="bi bi-info-circle text-muted opacity-50" data-bs-toggle="tooltip" title="Clasificación de productos según su Margen de Contribución Unitario y Volumen de Ventas."></i>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="rentabilidad-chart-container" style="width: 100%; height: 450px;"></div>
+                            <div id="dynamic-chart-description" class="alert alert-light border-0 bg-light-subtle rounded-3 mt-3 py-2 px-3 d-flex align-items-start small text-muted">
+                                <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
+                                <span>Calculando análisis...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Leyenda y Gráficos Secundarios -->
+                <div class="col-lg-5">
+                     <!-- Leyenda Descriptiva -->
+                     <div class="card shadow border-0 rounded-4 mb-4">
+                         <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#4CAF50; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Estrellas</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, altas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#FFC107; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Interrogantes</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, bajas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#2196F3; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Vacas</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, altas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                     <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#F44336; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Perros</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, bajas ventas</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card shadow border-0 rounded-4 mb-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                            <h6 class="fw-bold mb-0 text-dark h6">Top 5: Mayor Margen Total</h6>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="top-rentables-chart-container" style="width: 100%; height: 220px;"></div>
+                        </div>
+                    </div>
+                     <div class="card shadow border-0 rounded-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                            <h6 class="fw-bold mb-0 text-dark h6">Desglose Costos Variables (Top 5)</h6>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="costos-chart-container" style="width: 100%; height: 250px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Datos Detallada -->
+            <div class="card shadow border-0 rounded-4 mt-4">
+                <div class="card-header bg-white border-bottom-0 py-4 px-4 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark h5">Análisis Detallado por Producto</h6>
+                    <input type="text" id="searchInput" class="form-control w-25 form-control-sm rounded-pill bg-light border-0 px-3" placeholder="Buscar producto...">
+                </div>
+                <div class="card-body px-0 pb-4 pt-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabla-rentabilidad">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th scope="col" class="ps-4 border-0 text-muted small fw-bold text-uppercase"></th>
+                                    <th scope="col" data-sort="nombre" style="cursor: pointer;" class="border-0 text-muted small fw-bold text-uppercase">Producto ⇅</th>
+                                    <th scope="col" data-sort="volumen_ventas" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Vol. ⇅</th>
+                                    <th scope="col" data-sort="costo_variable_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Gastos ⇅</th>
+                                    <th scope="col" data-sort="facturacion_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Ingresos ⇅</th>
+                                    <th scope="col" data-sort="margen_contribucion_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Ganancia ⇅</th>
+                                    <th scope="col" data-sort="margen_porcentual" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Margen % ⇅</th>
+                                    <th scope="col" class="pe-4 border-0 text-muted small fw-bold text-uppercase">Clasificación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-rentabilidad-body" class="border-top-0">
+                                <!-- Las filas se insertarán aquí dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -166,18 +218,49 @@
 
 <!-- Modal para Detalles del Producto -->
 <div class="modal fade" id="productoModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Detalles del Producto</h5>
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Detalles del Producto</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="modal-body-content">
+            <div class="modal-body p-4" id="modal-body-content">
                 <!-- Dinámico -->
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Styles copied/adapted from indicators dashboard for consistency */
+    .icon-box {
+        width: 60px; 
+        height: 60px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+    }
+    .hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+    .transition-transform {
+        transition: transform .3s ease;
+    }
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(25, 135, 84, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
+    }
+    .pulse-badge {
+        animation: pulse-glow 2s infinite;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,.02);
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -191,11 +274,22 @@ document.addEventListener('DOMContentLoaded', function () {
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     })
+    
+    // Update last updated time
+    const now = new Date();
+    document.getElementById('last-updated').textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     // Instancias de ECharts
     const bubbleChartInstance = echarts.init(document.getElementById('rentabilidad-chart-container'));
     const topRentablesChartInstance = echarts.init(document.getElementById('top-rentables-chart-container'));
     const costosChartInstance = echarts.init(document.getElementById('costos-chart-container'));
+
+    // Resize responsive
+    window.addEventListener('resize', function() {
+        bubbleChartInstance.resize();
+        topRentablesChartInstance.resize();
+        costosChartInstance.resize();
+    });
 
     // Estado de la aplicación
     let fullData = { productos: [], totales_globales: {}, promedios: {} };
@@ -203,7 +297,17 @@ document.addEventListener('DOMContentLoaded', function () {
     let currentFilter = '30'; // Default a Mes (30 días)
 
     // --- UTILS ---
-    const formatCurrency = (value) => `$${(value || 0).toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const formatCurrency = (value) => {
+        value = value || 0;
+        const absValue = Math.abs(value);
+        if (absValue >= 1000000) {
+            return `$${(value / 1000000).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2})}M`;
+        } else if (absValue >= 1000) {
+            return `$${(value / 1000).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2})}K`;
+        }
+        return `$${value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    };
+
     const getQuadrantInfo = (producto, promedios) => {
         const { volumen_ventas, margen_porcentual } = producto;
         const avgVentas = promedios.volumen_ventas || 0;
@@ -257,6 +361,13 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('global-costo-variable').textContent = formatCurrency(g.costo_variable_total);
             document.getElementById('global-margen-contribucion').textContent = formatCurrency(g.margen_contribucion_total);
             document.getElementById('global-costos-fijos').textContent = formatCurrency(g.costos_fijos_total);
+            
+            // Actualizar desglose de costos fijos
+            const desElem = document.getElementById('global-costos-fijos-desglose');
+            if (desElem) {
+                desElem.innerHTML = `Dir: ${formatCurrency(g.costos_fijos_directos)} | Ind: ${formatCurrency(g.costos_fijos_indirectos)}`;
+            }
+
             document.getElementById('global-costos-envio').textContent = formatCurrency(g.costos_envio_total);
             document.getElementById('global-rentabilidad-neta').textContent = formatCurrency(g.rentabilidad_neta);
             
@@ -346,10 +457,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const sortedByContrib = [...data].sort((a, b) => b.margen_contribucion_total - a.margen_contribucion_total).slice(0, 5);
 
         const rentablesOption = {
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'value' },
+            tooltip: { 
+                trigger: 'axis',
+                formatter: function(params) {
+                    let result = params[0].name + '<br/>';
+                    params.forEach(item => {
+                        result += item.marker + item.seriesName + ': ' + formatCurrency(item.value) + '<br/>';
+                    });
+                    return result;
+                }
+            },
+            xAxis: { 
+                type: 'value',
+                axisLabel: {
+                    formatter: (value) => formatCurrency(value)
+                }
+            },
             yAxis: { type: 'category', data: sortedByContrib.map(p => p.nombre).reverse(), axisLabel: { interval: 0, rotate: 0, fontSize: 10 } },
             series: [{ 
+                name: 'Margen Contribución',
                 type: 'bar', 
                 data: sortedByContrib.map(p => p.margen_contribucion_total).reverse(),
                 itemStyle: { color: '#2196F3' }
@@ -365,10 +491,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const sortedByContrib = [...data].sort((a, b) => b.margen_contribucion_total - a.margen_contribucion_total).slice(0, 5);
 
         const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            tooltip: { 
+                trigger: 'axis', 
+                axisPointer: { type: 'shadow' },
+                formatter: function(params) {
+                    let result = params[0].name + '<br/>';
+                    params.forEach(item => {
+                        result += item.marker + item.seriesName + ': ' + formatCurrency(item.value) + '<br/>';
+                    });
+                    return result;
+                }
+            },
             legend: { data: ['Materia Prima', 'Mano de Obra'] },
             grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-            xAxis: { type: 'value' },
+            xAxis: { 
+                type: 'value',
+                axisLabel: {
+                    formatter: (value) => formatCurrency(value)
+                }
+            },
             yAxis: {
                 type: 'category',
                 data: sortedByContrib.map(p => p.nombre).reverse(),
@@ -414,14 +555,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const quadrant = getQuadrantInfo(p, fullData.promedios);
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><button class="btn btn-sm btn-outline-secondary btn-detail" data-id="${p.id}"><i class="bi bi-eye"></i></button></td>
-                <td class="fw-bold">${p.nombre}</td>
+                <td class="ps-4"><button class="btn btn-sm btn-light rounded-circle shadow-sm btn-detail" data-id="${p.id}"><i class="bi bi-eye text-muted"></i></button></td>
+                <td class="fw-bold text-dark">${p.nombre}</td>
                 <td class="text-end">${p.volumen_ventas}</td>
                 <td class="text-end text-danger">${formatCurrency(p.costo_variable_total)}</td>
                 <td class="text-end text-primary">${formatCurrency(p.facturacion_total)}</td>
                 <td class="text-end fw-bold text-success">${formatCurrency(p.margen_contribucion_total)}</td>
                 <td class="text-end fw-bold ${p.margen_porcentual < 20 ? 'text-danger' : 'text-success'}">${p.margen_porcentual}%</td>
-                <td><span style="color:${quadrant.color}">●</span> ${quadrant.name}</td>
+                <td class="pe-4"><span style="color:${quadrant.color}">●</span> ${quadrant.name}</td>
             `;
             tbody.appendChild(row);
         });
@@ -454,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
             totalContrib += p.margen_contribucion_total;
         });
 
-        let analysisText = '<strong>Análisis del Período:</strong> ';
+        let analysisText = '<strong class="text-dark">Análisis del Período:</strong> ';
         const topQuadrant = Object.entries(quadrantContrib).sort((a, b) => b[1] - a[1])[0];
         
         if (topQuadrant && totalContrib > 0) {
@@ -462,11 +603,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const topVal = topQuadrant[1];
             const topCount = quadrantCounts[topName];
             const percentage = ((topVal / totalContrib) * 100).toFixed(1);
-            analysisText += `Los ${topCount} productos clasificados como '<strong>${topName}</strong>' son los más significativos, generando el <strong>${percentage}%</strong> del Margen de Contribución Total.`;
+            analysisText += `Los ${topCount} productos clasificados como '<strong class="text-dark">${topName}</strong>' son los más significativos, generando el <strong class="text-dark">${percentage}%</strong> del Margen de Contribución Total.`;
         } else {
              analysisText += "No se pudo generar un análisis concluyente con los datos actuales."
         }
-        descriptionEl.innerHTML = analysisText;
+        descriptionEl.innerHTML = `<i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i><span>${analysisText}</span>`;
     }
 
     // --- MANEJADORES DE EVENTOS ---
@@ -515,31 +656,31 @@ document.addEventListener('DOMContentLoaded', function () {
                      content += `
                         <div class="row mb-4">
                             <div class="col-md-6">
-                                <h4>${localProductData.nombre}</h4>
-                                <p class="text-muted">Precio Venta: ${formatCurrency(localProductData.precio_venta)}</p>
+                                <h4 class="fw-bold text-dark">${localProductData.nombre}</h4>
+                                <p class="text-muted small">Precio Venta: ${formatCurrency(localProductData.precio_venta)}</p>
                             </div>
                             <div class="col-md-6 text-end">
-                                <h2 class="text-success">${formatCurrency(localProductData.margen_contribucion_unitario)}</h2>
-                                <small>Margen Contribución Unitario</small>
+                                <h2 class="text-success fw-bold mb-0">${formatCurrency(localProductData.margen_contribucion_unitario)}</h2>
+                                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Margen Contribución Unitario</small>
                             </div>
                         </div>
-                        <div class="card bg-light mb-4">
-                            <div class="card-body">
-                                <h6 class="card-subtitle mb-3 text-muted">Estructura de Costos Variables</h6>
-                                <div class="progress" style="height: 25px;">
-                                    <div class="progress-bar bg-secondary" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_materia_prima / localProductData.costo_variable_unitario * 100) || 0}%">MP</div>
-                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_mano_obra / localProductData.costo_variable_unitario * 100) || 0}%">MO</div>
+                        <div class="card bg-light border-0 rounded-4 mb-4">
+                            <div class="card-body p-3">
+                                <h6 class="card-subtitle mb-3 text-muted small fw-bold text-uppercase">Estructura de Costos Variables</h6>
+                                <div class="progress rounded-pill" style="height: 12px;">
+                                    <div class="progress-bar bg-secondary" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_materia_prima / localProductData.costo_variable_unitario * 100) || 0}%"></div>
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${(localProductData.detalles_costo.costo_mano_obra / localProductData.costo_variable_unitario * 100) || 0}%"></div>
                                 </div>
-                                <div class="d-flex justify-content-between mt-2 small">
-                                    <span>Materia Prima: <strong>${formatCurrency(localProductData.detalles_costo.costo_materia_prima)}</strong></span>
-                                    <span>Mano de Obra: <strong>${formatCurrency(localProductData.detalles_costo.costo_mano_obra)}</strong></span>
+                                <div class="d-flex justify-content-between mt-2 small text-muted">
+                                    <span><i class="bi bi-circle-fill text-secondary me-1" style="font-size: 0.6rem;"></i>Materia Prima: <strong>${formatCurrency(localProductData.detalles_costo.costo_materia_prima)}</strong></span>
+                                    <span><i class="bi bi-circle-fill text-warning me-1" style="font-size: 0.6rem;"></i>Mano de Obra: <strong>${formatCurrency(localProductData.detalles_costo.costo_mano_obra)}</strong></span>
                                 </div>
                             </div>
                         </div>
                     `;
                 }
 
-                content += '<h5>Evolución de Ventas (Últimos 12 Meses)</h5>';
+                content += '<h6 class="fw-bold mb-3 text-dark">Evolución de Ventas (Últimos 12 Meses)</h6>';
                 content += '<div id="evolucion-chart-container" style="width: 100%; height: 300px;"></div>';
                 
                 modalBody.innerHTML = content;
@@ -557,7 +698,9 @@ document.addEventListener('DOMContentLoaded', function () {
                                 data: evolucionResult.data.map(item => item.unidades_vendidas),
                                 type: 'line',
                                 smooth: true,
-                                areaStyle: { opacity: 0.2 }
+                                areaStyle: { opacity: 0.2, color: '#198754' },
+                                lineStyle: { color: '#198754' },
+                                itemStyle: { color: '#198754' }
                             }]
                         };
                         evolucionChart.setOption(option);
@@ -568,7 +711,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             }).catch(err => {
                 console.error(err);
-                modalBody.innerHTML = '<div class="alert alert-danger">Error cargando detalles.</div>';
+                modalBody.innerHTML = '<div class="alert alert-danger border-0 rounded-3">Error cargando detalles.</div>';
             });
     }
 

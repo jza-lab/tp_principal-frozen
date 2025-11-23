@@ -170,20 +170,49 @@ class RentabilidadController(BaseController):
                 'detalles_costo': costos
             })
 
-        # 5. Calcular Costos Fijos Globales
+        # 5. Calcular Costos Fijos Globales (Directos + Indirectos para Rentabilidad Global)
         # Intentamos usar el cálculo histórico preciso primero
         total_costos_fijos_global = self._calcular_costo_fijo_historico_total(fecha_inicio, fecha_fin)
         
+        # Variables para desglose (solo se calculan en fallback por simplicidad, o se podrían estimar)
+        total_directos = 0.0
+        total_indirectos = 0.0
+
         # Si el cálculo histórico devuelve 0 (por ejemplo, sin datos históricos), 
         # usamos el fallback del multiplicador simple si hay costos activos
         if total_costos_fijos_global == 0.0:
              try:
                 costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
-                if costos_fijos_resp.get('success') and costos_fijos_resp.get('data'):
-                    total_mensual = sum(float(c.get('monto_mensual') or 0) for c in costos_fijos_resp.get('data', []))
+                costos_activos = [c for c in costos_fijos_resp.get('data', []) if c.get('activo') is True]
+
+                if costos_activos:
+                    total_mensual = 0.0
+                    for c in costos_activos:
+                        monto = float(c.get('monto_mensual') or 0)
+                        tipo = c.get('tipo', 'Indirecto') # Default a indirecto si no existe
+                        total_mensual += monto
+                        
+                        if tipo == 'Directo':
+                            total_directos += monto * months_duration
+                        else:
+                            total_indirectos += monto * months_duration
+
                     total_costos_fijos_global = total_mensual * months_duration
              except Exception as e:
                  logger.error(f"Error en fallback de costos fijos: {e}")
+        else:
+             # Si tenemos cálculo histórico, intentamos una aproximación del desglose
+             # (esto es imperfecto sin re-calcular el histórico por tipo, pero aceptable para visualización)
+             try:
+                costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
+                active_direct = sum(float(c['monto_mensual']) for c in costos_fijos_resp.get('data', []) if c.get('activo') is True and c.get('tipo') == 'Directo')
+                active_total = sum(float(c['monto_mensual']) for c in costos_fijos_resp.get('data', []) if c.get('activo') is True)
+                
+                ratio_direct = (active_direct / active_total) if active_total > 0 else 0
+                total_directos = total_costos_fijos_global * ratio_direct
+                total_indirectos = total_costos_fijos_global - total_directos
+             except:
+                pass
 
         # 6. Calcular Costos de Envío Globales
         total_costos_envio_global = self._calcular_costos_envio(pedidos_data_for_shipping)
@@ -204,6 +233,8 @@ class RentabilidadController(BaseController):
             'costo_variable_total': round(total_costo_variable_global, 2),
             'margen_contribucion_total': round(margen_contribucion_global, 2),
             'costos_fijos_total': round(total_costos_fijos_global, 2),
+            'costos_fijos_directos': round(total_directos, 2),
+            'costos_fijos_indirectos': round(total_indirectos, 2),
             'costos_envio_total': round(total_costos_envio_global, 2),
             'rentabilidad_neta': round(rentabilidad_neta_global, 2),
             'rentabilidad_porcentual': round(rentabilidad_porcentual_global, 2)
@@ -241,16 +272,17 @@ class RentabilidadController(BaseController):
             end_date = datetime.fromisoformat(fecha_fin_str)
 
         try:
-            # 1. Obtener todos los costos fijos (incluso inactivos si estuvieron activos en el periodo)
-            # Por simplicidad, usamos los activos actualmente o implementamos lógica más compleja luego.
-            # Lo ideal es iterar sobre todos los costos que existan.
-            costos_res = self.costo_fijo_model.find_all() # Trae activos e inactivos si el modelo lo permite, sino filtrar
+            # 1. Obtener solo los costos fijos ACTIVOS actualmente
+            # El usuario solicitó explícitamente excluir los inhabilitados del cálculo.
+            costos_res = self.costo_fijo_model.find_all(filters={'activo': True})
             if not costos_res.get('success'):
                 return 0.0
             
-            costos = costos_res.get('data', [])
+            # Verificación adicional en Python para garantizar que solo se usen activos
+            # NOTA: Aquí revertimos a TODOS los costos (Directos + Indirectos) para el análisis global
+            costos_activos = [c for c in costos_res.get('data', []) if c.get('activo') is True]
 
-            for costo in costos:
+            for costo in costos_activos:
                 costo_id = costo['id']
                 # Obtener historial ordenado por fecha
                 historial_res = self.costo_fijo_model.db.table('historial_costos_fijos')\
