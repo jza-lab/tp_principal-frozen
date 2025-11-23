@@ -42,82 +42,84 @@
                         <span class="badge bg-warning text-dark">Amarillo</span> Próximo a vencer (<= 30 días) &nbsp;
                         <span class="badge bg-danger">Rojo</span> Vencida
                     </div>
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Patente</th>
-                                <th>Tipo</th>
-                                <th>Capacidad (kg)</th>
-                                <th>Conductor</th>
-                                <th>DNI</th>
-                                <th>Teléfono</th>
-                                <th>Venc. VTV</th>
-                                <th>Venc. Licencia</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for vehiculo in vehiculos %}
-                            <tr class="{% if vehiculo.activo is defined and vehiculo.activo is false %}table-secondary text-muted{% endif %}">
-                                <td>{{ vehiculo.patente }}</td>
-                                <td>{{ vehiculo.tipo_vehiculo }}</td>
-                                <td>{{ vehiculo.capacidad_kg }}</td>
-                                <td>{{ vehiculo.nombre_conductor }}</td>
-                                <td>{{ vehiculo.dni_conductor }}</td>
-                                <td>{{ vehiculo.telefono_conductor }}</td>
-                                <td>
-                                    {% if vehiculo.vtv_vencimiento %}
-                                        {% if vehiculo.estado_vtv == 'VENCIDA' %}
-                                            <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.vtv_vencimiento }}</span>
-                                        {% elif vehiculo.estado_vtv == 'PRONTO_VENC' %}
-                                            <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.vtv_vencimiento }}</span>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Patente</th>
+                                    <th>Tipo</th>
+                                    <th>Capacidad (kg)</th>
+                                    <th>Conductor</th>
+                                    <th>DNI</th>
+                                    <th>Teléfono</th>
+                                    <th>Venc. VTV</th>
+                                    <th>Venc. Licencia</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehiculo in vehiculos %}
+                                <tr class="{% if vehiculo.activo is defined and vehiculo.activo is false %}table-secondary text-muted{% endif %}">
+                                    <td>{{ vehiculo.patente }}</td>
+                                    <td>{{ vehiculo.tipo_vehiculo }}</td>
+                                    <td>{{ vehiculo.capacidad_kg }}</td>
+                                    <td>{{ vehiculo.nombre_conductor }}</td>
+                                    <td>{{ vehiculo.dni_conductor }}</td>
+                                    <td>{{ vehiculo.telefono_conductor }}</td>
+                                    <td>
+                                        {% if vehiculo.vtv_vencimiento %}
+                                            {% if vehiculo.estado_vtv == 'VENCIDA' %}
+                                                <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.vtv_vencimiento }}</span>
+                                            {% elif vehiculo.estado_vtv == 'PRONTO_VENC' %}
+                                                <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.vtv_vencimiento }}</span>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ vehiculo.vtv_vencimiento }}</span>
+                                            {% endif %}
                                         {% else %}
-                                            <span class="badge bg-success">{{ vehiculo.vtv_vencimiento }}</span>
+                                            <span class="text-muted">-</span>
                                         {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if vehiculo.licencia_vencimiento %}
-                                        {% if vehiculo.estado_licencia == 'VENCIDA' %}
-                                            <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.licencia_vencimiento }}</span>
-                                        {% elif vehiculo.estado_licencia == 'PRONTO_VENC' %}
-                                            <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.licencia_vencimiento }}</span>
+                                    </td>
+                                    <td>
+                                        {% if vehiculo.licencia_vencimiento %}
+                                            {% if vehiculo.estado_licencia == 'VENCIDA' %}
+                                                <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.licencia_vencimiento }}</span>
+                                            {% elif vehiculo.estado_licencia == 'PRONTO_VENC' %}
+                                                <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.licencia_vencimiento }}</span>
+                                            {% else %}
+                                                <span class="badge bg-success">{{ vehiculo.licencia_vencimiento }}</span>
+                                            {% endif %}
                                         {% else %}
-                                            <span class="badge bg-success">{{ vehiculo.licencia_vencimiento }}</span>
+                                            <span class="text-muted">-</span>
                                         {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">-</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm" title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </a>
-                                    
-                                    {% if vehiculo.activo is not defined or vehiculo.activo %}
-                                        <button type="button" class="btn btn-warning btn-sm" 
-                                                onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', false)"
-                                                title="Desactivar">
-                                            <i class="fas fa-ban"></i>
-                                        </button>
-                                    {% else %}
-                                        <button type="button" class="btn btn-success btn-sm" 
-                                                onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', true)"
-                                                title="Activar">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="9" class="text-center">No hay vehículos registrados.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        
+                                        {% if vehiculo.activo is not defined or vehiculo.activo %}
+                                            <button type="button" class="btn btn-warning btn-sm" 
+                                                    onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', false)"
+                                                    title="Desactivar">
+                                                <i class="fas fa-ban"></i>
+                                            </button>
+                                        {% else %}
+                                            <button type="button" class="btn btn-success btn-sm" 
+                                                    onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', true)"
+                                                    title="Activar">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="9" class="text-center">No hay vehículos registrados.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
