@@ -165,18 +165,14 @@ class RentabilidadController(BaseController):
             cantidad = float(item.get('cantidad', 0))
             
             # --- PRECIO VENTA (Safe Access) ---
-            precio_unitario_real = item.get('precio_unitario')
-            if precio_unitario_real is None:
+            precio_unitario_real = float(item.get('precio_unitario') or 0)
+            # Si el precio es 0 (o None), usamos el precio actual del producto como fallback
+            if not precio_unitario_real:
                  precio_unitario_real = float(productos_info_actual[producto_id]['producto'].get('precio_unitario', 0) or 0)
-            else:
-                 precio_unitario_real = float(precio_unitario_real)
             
             # --- COSTO VARIABLE (Safe Access) ---
-            costo_unitario_real = item.get('costo_unitario')
-            if costo_unitario_real is None:
-                 costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
-            else:
-                 costo_unitario_real = float(costo_unitario_real)
+            # Priorizamos SIEMPRE el costo actual recalculado para arreglar reportes con costos históricos erróneos (ghost costs)
+            costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
 
             facturacion_item = cantidad * precio_unitario_real
             
@@ -438,7 +434,11 @@ class RentabilidadController(BaseController):
                 operaciones_resp = self.operacion_receta_model.find_by_receta_id(receta_id)
                 if operaciones_resp.get('success'):
                     for op in operaciones_resp.get('data', []):
-                        tiempo_minutos = float(op.get('tiempo_ejecucion_unitario') or 0)
+                        # --- AÑADIR TIEMPO DE PREPARACIÓN PARA IGUALAR LÓGICA DEL FORMULARIO ---
+                        t_prep = float(op.get('tiempo_preparacion') or 0)
+                        t_ejec = float(op.get('tiempo_ejecucion_unitario') or 0)
+                        
+                        tiempo_minutos = t_prep + t_ejec
                         tiempo_horas = tiempo_minutos / 60.0
                         
                         roles_op_resp = self.operacion_receta_rol_model.find_by_operacion_id(op['id'])
@@ -513,8 +513,12 @@ class RentabilidadController(BaseController):
                 cantidad = float(item.get('cantidad', 0))
                 
                 # Usar precio/costo histórico o fallback
-                precio = float(item.get('precio_unitario')) if item.get('precio_unitario') is not None else float(producto_data.get('precio_unitario', 0) or 0)
-                costo = float(item.get('costo_unitario')) if item.get('costo_unitario') is not None else costo_fallback
+                precio = float(item.get('precio_unitario') or 0)
+                if not precio:
+                    precio = float(producto_data.get('precio_unitario', 0) or 0)
+                
+                # Force current cost to ensure consistent reporting even with bad historical data
+                costo = costo_fallback
 
                 margen_unitario = precio - costo
                 
@@ -657,8 +661,13 @@ class RentabilidadController(BaseController):
 
             # --- VALORES REALES vs FALLBACK (handled by .get() logic) ---
             cantidad = float(item.get('cantidad', 0))
-            precio_real = float(item.get('precio_unitario')) if item.get('precio_unitario') is not None else precio_actual_prod
-            costo_real = float(item.get('costo_unitario')) if item.get('costo_unitario') is not None else costo_fallback
+            
+            precio_real = float(item.get('precio_unitario') or 0)
+            if not precio_real:
+                precio_real = precio_actual_prod
+            
+            # Force current cost for consistency
+            costo_real = costo_fallback
             
             subtotal = cantidad * precio_real
             ganancia = subtotal - (cantidad * costo_real)
