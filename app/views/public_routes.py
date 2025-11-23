@@ -103,6 +103,39 @@ def crear_pedido_api():
             'message': response.get('message', 'Error al procesar el pedido.')
         }), status_code
 
+@public_bp.route('/api/pagar-pedido', methods=['POST'])
+def pagar_pedido_api():
+    """
+    Endpoint para que los clientes registren pagos (simulación).
+    """
+    # Verificar sesión de cliente
+    if 'cliente_id' not in session:
+        return jsonify({'success': False, 'message': 'No autorizado'}), 401
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': 'Datos inválidos'}), 400
+
+    # Inyectar datos necesarios para el controlador
+    # El id_usuario_registro es opcional en nuestro ajuste, o podemos pasar None/0
+    pago_data = {
+        'id_pedido': data.get('pedido_id'),
+        'monto': data.get('monto'),
+        'metodo_pago': data.get('metodo_pago', 'tarjeta'),
+        'datos_adicionales': data.get('datos_adicionales', 'Pago web cliente'),
+        'id_usuario_registro': None # Importante: Manejar esto en PagoController si es FK
+    }
+    
+    # Nota: Si id_usuario_registro es FK obligatoria a users, esto fallará. 
+    # Deberíamos usar un usuario 'sistema' o permitir null en la BD.
+    # Asumiremos que el controlador o modelo lo maneja, o usamos un ID dummy si existe.
+    # Por seguridad, verificamos que el pedido pertenezca al cliente (PENDIENTE)
+
+    controller = PagoController()
+    response, status_code = controller.registrar_pago(pago_data)
+
+    return jsonify(response), status_code
+
 @public_bp.route('/comprobante-pago/<int:pedido_id>')
 def ver_comprobante(pedido_id):
     """

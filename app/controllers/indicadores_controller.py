@@ -392,8 +392,8 @@ class IndicadoresController:
                      if key in data_agregada: 
                          data_agregada[key] += 1
 
-        procesar_lista(data_prod, 'fecha_registro')
-        procesar_lista(data_insumo, 'created_at')
+        procesar_lista(data_prod, 'created_at')
+        procesar_lista(data_insumo, 'fecha_registro')
 
         valores = [data_agregada[k] for k in labels_ordenados]
         
