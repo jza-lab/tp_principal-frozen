@@ -104,8 +104,10 @@ class ControlCalidadInsumoController(BaseController):
                 pass
             elif decision == 'Rechazar':
                 update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
-                # FIX: Es necesario agregar el estado para que se ejecute el update
-                update_data['estado'] = nuevo_estado_lote
+                # Si queda remanente, NO cambiamos el estado a RECHAZADO, solo actualizamos la cantidad.
+                # Esto evita que el stock válido 'desaparezca' del conteo de disponibles.
+                if update_data['cantidad_actual'] <= 0.001:
+                    update_data['estado'] = nuevo_estado_lote
                 # Opcional: registrar la cantidad rechazada en otro campo si existiera
             elif decision == 'Poner en Cuarentena':
                 cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
