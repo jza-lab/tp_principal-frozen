@@ -55,6 +55,8 @@ def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
     rango_fecha = request.args.get('rango_fecha')
+    estado = request.args.get('estado')
+    search = request.args.get('search')
     
     # Prepara el diccionario de filtros que se pasará al controlador.
     filtros = {}
@@ -77,7 +79,9 @@ def listar():
     return render_template('orden_venta/listar.html',
                            pedidos=pedidos,
                            titulo="Pedidos de Venta",
-                           filtros_ui=OV_FILTROS_UI)
+                           filtros_ui=OV_FILTROS_UI,
+                           estado_actual=estado,
+                           search_actual=search)
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()
@@ -286,6 +290,10 @@ def planificar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
+    
+    active_filters = request.form.get('active_filters', '')
+    if active_filters:
+        return redirect(url_for('orden_venta.listar') + active_filters)
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
