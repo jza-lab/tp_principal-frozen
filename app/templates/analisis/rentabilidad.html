@@ -84,6 +84,9 @@
                                 <div class="card-body p-3">
                                     <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Fijos</h6>
                                     <p class="fw-bold text-danger mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-fijos">$0</p>
+                                    <small class="d-block text-muted mt-1" style="font-size: 0.7rem;" id="global-costos-fijos-desglose">
+                                        Dir: $0 | Ind: $0
+                                    </small>
                                 </div>
                             </div>
                         </div>
@@ -358,6 +361,13 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('global-costo-variable').textContent = formatCurrency(g.costo_variable_total);
             document.getElementById('global-margen-contribucion').textContent = formatCurrency(g.margen_contribucion_total);
             document.getElementById('global-costos-fijos').textContent = formatCurrency(g.costos_fijos_total);
+            
+            // Actualizar desglose de costos fijos
+            const desElem = document.getElementById('global-costos-fijos-desglose');
+            if (desElem) {
+                desElem.innerHTML = `Dir: ${formatCurrency(g.costos_fijos_directos)} | Ind: ${formatCurrency(g.costos_fijos_indirectos)}`;
+            }
+
             document.getElementById('global-costos-envio').textContent = formatCurrency(g.costos_envio_total);
             document.getElementById('global-rentabilidad-neta').textContent = formatCurrency(g.rentabilidad_neta);
             

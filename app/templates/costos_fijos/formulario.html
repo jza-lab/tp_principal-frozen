@@ -18,6 +18,14 @@
                             <input type="text" class="form-control" id="nombre_costo" name="nombre_costo" value="{{ costo.nombre_costo if is_edit else '' }}" required>
                         </div>
                         <div class="mb-3">
+                            <label for="tipo" class="form-label">Tipo de Costo</label>
+                            <select class="form-select" id="tipo" name="tipo" required>
+                                <option value="Indirecto" {% if is_edit and costo.tipo == 'Indirecto' %}selected{% endif %}>Indirecto</option>
+                                <option value="Directo" {% if is_edit and costo.tipo == 'Directo' %}selected{% endif %}>Directo</option>
+                            </select>
+                            <div class="form-text">Los costos directos se asignarán al cálculo de rentabilidad.</div>
+                        </div>
+                        <div class="mb-3">
                             <label for="monto_mensual" class="form-label">Monto Mensual</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>

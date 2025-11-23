@@ -269,7 +269,11 @@ class ProductoController(BaseController):
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
             
             # Verificación adicional en Python por si el filtro de base de datos no es estricto
-            costos_fijos_activos = [c for c in costos_fijos_res.get('data', []) if c.get('activo') is True]
+            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
+            costos_fijos_activos = [
+                c for c in costos_fijos_res.get('data', []) 
+                if c.get('activo') is True and c.get('tipo') == 'Directo'
+            ]
             
             total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
 
@@ -465,7 +469,11 @@ class ProductoController(BaseController):
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
             
             # Verificación adicional en Python por si el filtro de base de datos no es estricto
-            costos_fijos_activos = [c for c in costos_fijos_res.get('data', []) if c.get('activo') is True]
+            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
+            costos_fijos_activos = [
+                c for c in costos_fijos_res.get('data', []) 
+                if c.get('activo') is True and c.get('tipo') == 'Directo'
+            ]
             
             total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
 
