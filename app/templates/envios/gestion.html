@@ -97,19 +97,17 @@
                                     </a>
                                     
                                     {% if vehiculo.activo is not defined or vehiculo.activo %}
-                                    <form action="{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('¿Estás seguro de que deseas desactivar este vehículo/conductor?');" title="Desactivar">
+                                        <button type="button" class="btn btn-warning btn-sm" 
+                                                onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', false)"
+                                                title="Desactivar">
                                             <i class="fas fa-ban"></i>
                                         </button>
-                                    </form>
                                     {% else %}
-                                    <form action="{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                                        <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('¿Estás seguro de que deseas activar este vehículo/conductor?');" title="Activar">
+                                        <button type="button" class="btn btn-success btn-sm" 
+                                                onclick="confirmToggle('{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}', true)"
+                                                title="Activar">
                                             <i class="fas fa-check"></i>
                                         </button>
-                                    </form>
                                     {% endif %}
                                 </td>
                             </tr>
@@ -197,7 +195,7 @@
 
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -214,5 +212,54 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+
+function confirmToggle(url, isActivate) {
+    const modalEl = document.getElementById('confirmationModal');
+    const modal = new bootstrap.Modal(modalEl);
+    
+    const title = modalEl.querySelector('#modalTitle');
+    const body = modalEl.querySelector('#modalBody');
+    const confirmBtn = modalEl.querySelector('#modalConfirmButton');
+    const cancelBtn = modalEl.querySelector('#modalCancelButton');
+    
+    // Asegurar que el botón de cancelar esté visible
+    if (cancelBtn) cancelBtn.style.display = '';
+
+    if (isActivate) {
+        title.textContent = 'Activar Vehículo';
+        body.textContent = '¿Estás seguro de que deseas reactivar este vehículo/conductor?';
+        confirmBtn.textContent = 'Activar';
+        confirmBtn.className = 'btn btn-success';
+    } else {
+        title.textContent = 'Desactivar Vehículo';
+        body.textContent = '¿Estás seguro de que deseas desactivar este vehículo/conductor? Permanecerá en la lista pero marcado como inactivo.';
+        confirmBtn.textContent = 'Desactivar';
+        confirmBtn.className = 'btn btn-warning';
+    }
+    
+    // Ensure button is visible
+    confirmBtn.style.display = 'inline-block';
+
+    // Clone button to clear listeners
+    const newBtn = confirmBtn.cloneNode(true);
+    confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
+    
+    newBtn.onclick = function() {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = url;
+        
+        const csrf = document.querySelector('input[name="csrf_token"]');
+        if (csrf) {
+            form.appendChild(csrf.cloneNode(true));
+        }
+        
+        document.body.appendChild(form);
+        form.submit();
+        modal.hide();
+    };
+    
+    modal.show();
+}
 </script>
 {% endblock %}

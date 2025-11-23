@@ -458,7 +458,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (response.redirected) {
                      // Éxito por redirect
-                     alert('Vehículo creado.');
+                     if (typeof showNotificationModal === 'function') {
+                         showNotificationModal('Éxito', 'Vehículo creado correctamente.', 'success');
+                     }
                      const modal = bootstrap.Modal.getInstance(modalElement);
                      modal.hide();
                      
@@ -470,13 +472,27 @@ document.addEventListener('DOMContentLoaded', () => {
                          renderVehicleInfo(searchData.data[0]);
                      }
                 } else {
-                     const text = await response.text();
-                     if (text.includes('alert-danger')) {
-                         errorAlert.textContent = "Error al crear el vehículo. Verifique que la patente no exista ya o los datos sean válidos.";
-                         errorAlert.classList.remove('d-none');
+                     // Intentar leer como JSON primero si el content-type es json
+                     const contentType = response.headers.get("content-type");
+                     if (contentType && contentType.includes("application/json")) {
+                         const data = await response.json();
+                         if (data.error) {
+                             errorAlert.textContent = data.error;
+                             errorAlert.classList.remove('d-none');
+                         } else {
+                             errorAlert.textContent = "Error desconocido.";
+                             errorAlert.classList.remove('d-none');
+                         }
                      } else {
-                         errorAlert.textContent = "Error al procesar la solicitud.";
-                         errorAlert.classList.remove('d-none');
+                         // Fallback para HTML legacy
+                         const text = await response.text();
+                         if (text.includes('alert-danger')) {
+                             errorAlert.textContent = "Error al crear el vehículo. Verifique que la patente no exista ya o los datos sean válidos.";
+                             errorAlert.classList.remove('d-none');
+                         } else {
+                             errorAlert.textContent = "Error al procesar la solicitud.";
+                             errorAlert.classList.remove('d-none');
+                         }
                      }
                 }
             } catch (err) {

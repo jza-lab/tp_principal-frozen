@@ -8,7 +8,7 @@ class VehiculoController(BaseController):
         super().__init__()
         self.model = VehiculoModel()
 
-    def _validar_datos_vehiculo(self, data):
+    def _validar_datos_vehiculo(self, data, requerir_fechas=False):
         """
         Valida los datos de un vehículo.
         Devuelve un diccionario con {'success': True} o {'success': False, 'error': ...}
@@ -42,6 +42,13 @@ class VehiculoController(BaseController):
         if telefono_conductor and (not telefono_conductor.isdigit() or len(telefono_conductor) < 7):
             return {'success': False, 'error': 'El teléfono del conductor debe ser un número de al menos 7 dígitos.'}
             
+        # Validación de fechas obligatorias en creación
+        if requerir_fechas:
+            if not data.get('fecha_vtv_emision'):
+                return {'success': False, 'error': 'La fecha de realización de VTV es obligatoria.'}
+            if not data.get('fecha_licencia_emision'):
+                return {'success': False, 'error': 'La fecha de emisión de la Licencia es obligatoria.'}
+
         return {'success': True}
 
     def _procesar_fechas(self, data):
@@ -162,7 +169,7 @@ class VehiculoController(BaseController):
 
     def crear_vehiculo(self, data):
         # Lógica para crear un nuevo vehículo
-        validacion = self._validar_datos_vehiculo(data)
+        validacion = self._validar_datos_vehiculo(data, requerir_fechas=True)
         if not validacion['success']:
             return validacion
             
@@ -171,7 +178,15 @@ class VehiculoController(BaseController):
             return procesamiento
 
         data.pop('csrf_token', None) # Eliminar el token CSRF antes de crear
-        return self.model.create(data)
+        response = self.model.create(data)
+        
+        if not response['success']:
+            # Verificar error de duplicidad en el mensaje de error devuelto por el modelo
+            error_msg = str(response.get('error', ''))
+            if '23505' in error_msg or 'duplicate key' in error_msg:
+                return {'success': False, 'error': f'La patente {data.get("patente")} ya existe.'}
+        
+        return response
 
     def obtener_vehiculo_por_id(self, vehiculo_id):
         response = self.model.find_by_id(vehiculo_id)
@@ -189,7 +204,7 @@ class VehiculoController(BaseController):
         return response
 
     def actualizar_vehiculo(self, vehiculo_id, data):
-        validacion = self._validar_datos_vehiculo(data)
+        validacion = self._validar_datos_vehiculo(data, requerir_fechas=False)
         if not validacion['success']:
             return validacion
             
@@ -198,7 +213,14 @@ class VehiculoController(BaseController):
             return procesamiento
             
         data.pop('csrf_token', None) # Eliminar el token CSRF antes de actualizar
-        return self.model.update(vehiculo_id, data)
+        response = self.model.update(vehiculo_id, data)
+        
+        if not response['success']:
+            error_msg = str(response.get('error', ''))
+            if '23505' in error_msg or 'duplicate key' in error_msg:
+                return {'success': False, 'error': f'La patente {data.get("patente")} ya existe.'}
+        
+        return response
 
     def eliminar_vehiculo(self, vehiculo_id):
         """

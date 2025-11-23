@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from app.controllers.vehiculo_controller import VehiculoController
 # from app.utils.decorators import permission_required # TODO: Añadir permisos cuando esté definido
 
@@ -26,6 +26,8 @@ def crear_vehiculo():
             flash('Vehículo creado exitosamente.', 'success')
             return redirect(url_for('envio.gestion_envios'))
         else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify(response), 400
             flash(f"Error al crear el vehículo: {response['error']}", 'danger')
     return render_template('vehiculos/formulario.html', vehiculo=None, is_new=True)
 

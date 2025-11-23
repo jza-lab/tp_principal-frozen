@@ -57,3 +57,19 @@ class TestVehiculoController(unittest.TestCase):
         # Deben filtrarse el inactivo (2) y el vencido (3)
         self.assertEqual(len(data), 1) 
         self.assertEqual(data[0]['id'], 1)
+
+    def test_crear_vehiculo_duplicate(self):
+        # Setup
+        self.controller.model.create.return_value = {
+            'success': False, 
+            'error': "{'message': 'duplicate key value...', 'code': '23505'}"
+        }
+        
+        # Action
+        # Datos minimos validos
+        data = {'patente': 'ABC123', 'nombre_conductor': 'Juan', 'dni_conductor': '12345678', 'capacidad_kg': 200}
+        result = self.controller.crear_vehiculo(data)
+        
+        # Assert
+        self.assertFalse(result['success'])
+        self.assertIn('La patente ABC123 ya existe', result['error'])
