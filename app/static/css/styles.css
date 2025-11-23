@@ -1307,8 +1307,8 @@ h1.h2 {
 
 @media (max-width: 991px) {
     body {
-        padding-left: 40px;
-        padding-right: 40px;
+        padding-left: 15px;
+        padding-right: 15px;
     }
     .fixed-side-panel {
         /* Fuerza la posición normal para que se apile correctamente */

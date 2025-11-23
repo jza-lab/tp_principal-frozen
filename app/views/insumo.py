@@ -311,7 +311,9 @@ def api_filter_insumos():
             'busqueda': request.args.get('busqueda', None),
             'stock_status': request.args.get('stock_status', None),
             'categoria': request.args.getlist('categoria'),
-            'id_proveedor': request.args.getlist('id_proveedor')
+            'id_proveedor': request.args.getlist('id_proveedor'),
+            'sort_by': request.args.get('sort_by', 'nombre'),
+            'order': request.args.get('order', 'asc')
         }
         
         # Limpiar filtros nulos o vacíos

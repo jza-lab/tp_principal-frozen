@@ -104,8 +104,10 @@ class ControlCalidadInsumoController(BaseController):
                 pass
             elif decision == 'Rechazar':
                 update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
-                # FIX: Es necesario agregar el estado para que se ejecute el update
-                update_data['estado'] = nuevo_estado_lote
+                # Si queda remanente, NO cambiamos el estado a RECHAZADO, solo actualizamos la cantidad.
+                # Esto evita que el stock válido 'desaparezca' del conteo de disponibles.
+                if update_data['cantidad_actual'] <= 0.001:
+                    update_data['estado'] = nuevo_estado_lote
                 # Opcional: registrar la cantidad rechazada en otro campo si existiera
             elif decision == 'Poner en Cuarentena':
                 cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
@@ -386,10 +388,12 @@ class ControlCalidadInsumoController(BaseController):
                 if motivo_id and cantidad_reservada > 0:
                     desperdicio_data = {
                         'orden_produccion_id': op_id,
+                        'insumo_id': insumo_id,
                         'motivo_desperdicio_id': motivo_id,
                         'cantidad': cantidad_reservada,
                         'usuario_id': usuario_id,
-                        'comentarios': f"Rechazo del lote de insumo ID {lote_rechazado_id}"
+                        'observaciones': f"Rechazo del lote de insumo ID {lote_rechazado_id}",
+                        'fecha_registro': datetime.now().isoformat()
                     }
                     desperdicio_model.create(desperdicio_data)
                     msg = f"Se registró un desperdicio de {cantidad_reservada} para la OP {op_codigo}."

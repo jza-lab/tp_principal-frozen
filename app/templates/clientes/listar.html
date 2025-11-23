@@ -50,8 +50,8 @@
 
     <div class="row" id="client-cards-container">
         {% for cliente in clientes %}
-        <div class="col-md-4 mb-4 client-card-wrapper" data-nombre="{{ (cliente.razon_social or cliente.nombre)|lower }}"
-            data-codigo="{{ cliente.codigo.lower() or '' }}" data-cuit="{{ cliente.cuit.lower() or '' }}"
+        <div class="col-md-4 mb-4 client-card-wrapper" 
+            data-search="{{ cliente.nombre|default('', true)|lower }} {{ cliente.razon_social|default('', true)|lower if cliente.razon_social != 'None' else '' }} {{ cliente.codigo|default('', true)|lower }} {{ cliente.cuit|default('', true)|lower }}"
             data-status="{{ 'active' if cliente.activo else 'inactive' }}">
             <div class="card h-100 cliente-card {% if not cliente.activo %}insumo-inactivo{% endif %}">
                 <div class="card-body d-flex flex-column">
@@ -186,13 +186,11 @@
             let visibleCount = 0;
 
             allCardWrappers.forEach(wrapper => {
-                const nombre = wrapper.dataset.nombre;
-                const codigo = wrapper.dataset.codigo;
-                const cuit = wrapper.dataset.cuit;
+                // Use the new unified search attribute
+                const searchData = wrapper.dataset.search || '';
 
-                const matchesSearch = nombre.includes(searchTerm) ||
-                    codigo.includes(searchTerm) ||
-                    cuit.includes(searchTerm);
+                // Simple include check on the concatenated string
+                const matchesSearch = searchData.includes(searchTerm);
 
                 if (matchesSearch) {
                     wrapper.style.display = '';

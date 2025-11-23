@@ -85,6 +85,20 @@
                     </button>
                 </div>
             </div>
+             <!-- Sorting Dropdown -->
+            <div class="col-lg-12">
+                <div class="d-flex justify-content-end align-items-center mt-2">
+                    <label for="sort-select" class="me-2 text-muted small"><i class="bi bi-sort-down"></i> Ordenar por:</label>
+                    <select id="sort-select" class="form-select form-select-sm" style="width: auto;">
+                        <option value="nombre-asc">Nombre (A-Z)</option>
+                        <option value="nombre-desc">Nombre (Z-A)</option>
+                        <option value="precio_unitario-asc">Precio (Menor a Mayor)</option>
+                        <option value="precio_unitario-desc">Precio (Mayor a Menor)</option>
+                        <option value="stock_actual-asc">Stock (Menor a Mayor)</option>
+                        <option value="stock_actual-desc">Stock (Mayor a Menor)</option>
+                    </select>
+                </div>
+            </div>
         </div>
 
         <!-- Filtros Activos (Pills) y Contador -->

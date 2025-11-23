@@ -14,21 +14,55 @@
         </div>
     </div>
 
+    <!-- Filtros y Ordenamiento -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nombre o tipo...">
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="input-group">
+                 <span class="input-group-text"><i class="bi bi-sort-alpha-down"></i></span>
+                <select id="sortSelect" class="form-select">
+                    <option value="">Seleccionar orden...</option>
+                    <option value="nombre_asc">Nombre (A-Z)</option>
+                    <option value="nombre_desc">Nombre (Z-A)</option>
+                    <option value="monto_desc">Monto (Mayor a Menor)</option>
+                    <option value="monto_asc">Monto (Menor a Mayor)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card-body">
-            <table class="table table-hover">
+            <table class="table table-hover" id="costosTable">
                 <thead>
                     <tr>
                         <th scope="col">Nombre del Costo</th>
+                        <th scope="col">Tipo</th>
                         <th scope="col">Monto Mensual</th>
                         <th scope="col">Estado</th>
                         <th scope="col">Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="costosTableBody">
                     {% for costo in costos %}
-                    <tr class="{{ 'table-secondary' if not costo.activo else '' }}">
+                    <tr class="costo-row {{ 'table-secondary' if not costo.activo else '' }}" 
+                        data-nombre="{{ costo.nombre_costo }}" 
+                        data-tipo="{{ costo.tipo }}" 
+                        data-monto="{{ costo.monto_mensual }}" 
+                        data-activo="{{ '1' if costo.activo else '0' }}">
                         <td>{{ costo.nombre_costo }}</td>
+                        <td>
+                            {% if costo.tipo == 'Directo' %}
+                                <span class="badge bg-info text-dark">Directo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Indirecto</span>
+                            {% endif %}
+                        </td>
                         <td>${{ "%.2f"|format(costo.monto_mensual) }}</td>
                         <td>
                             {% if costo.activo %}
@@ -64,8 +98,8 @@
                         </td>
                     </tr>
                     {% else %}
-                    <tr>
-                        <td colspan="4" class="text-center p-4">
+                    <tr id="noRowsMessage">
+                        <td colspan="5" class="text-center p-4">
                             <div class="text-muted">
                                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                                 No hay costos fijos registrados.
@@ -75,7 +109,17 @@
                     {% endfor %}
                 </tbody>
             </table>
+            <div id="noResultsMessage" class="text-center p-4" style="display: none;">
+                <div class="text-muted">
+                    <i class="bi bi-search fs-4 d-block mb-2"></i>
+                    No se encontraron resultados para tu búsqueda.
+                </div>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/costos_fijos/listar.js') }}"></script>
 {% endblock %}

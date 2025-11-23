@@ -130,17 +130,6 @@ window.renderProduccionTab = function(data, container) {
             )}
         </div>
 
-        <!-- Gráfico 4: Evolución Desperdicios -->
-        <div class="col-lg-6 col-xl-6">
-            ${window.createSmartCardHTML(
-                'chart-evolucion-desperdicios', 
-                'Evolución Desperdicios', 
-                'Tendencia histórica de incidentes reportados.',
-                evolucion.insight, 
-                evolucion.tooltip
-            )}
-        </div>
-
         <!-- Gráfico 5: Velocidad Producción (ACTUALIZADO) -->
         <div class="col-lg-6 col-xl-6">
             ${window.createSmartCardHTML(
@@ -283,23 +272,6 @@ window.renderProduccionTab = function(data, container) {
     }
     window.createChart('chart-ranking-desperdicios', desperdiciosOption);
 
-
-    // --- CHART 4: EVOLUCIÓN DESPERDICIOS ---
-    window.createChart('chart-evolucion-desperdicios', {
-        tooltip: { trigger: 'axis' },
-        grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-        xAxis: { type: 'category', boundaryGap: false, data: evolucion.categories },
-        yAxis: { type: 'value' },
-        series: [{
-            name: 'Incidentes',
-            type: 'line',
-            smooth: true,
-            data: evolucion.values,
-            areaStyle: { opacity: 0.1, color: '#fd7e14' },
-            itemStyle: { color: '#fd7e14' },
-            lineStyle: { width: 3 }
-        }]
-    });
 
     // --- CHART 5: VELOCIDAD PRODUCCIÓN (GAUGE SIMPLE) - Usando datos nuevos ---
     const velocidadVal = velocidad.valor;

@@ -79,6 +79,9 @@
         <a href="{{ url_for('planificacion.configuracion_lineas') }}" class="btn btn-outline-info ms-2" title="Configurar capacidad y bloqueos de líneas">
             <i class="bi bi-gear-fill me-1"></i> Configurar Líneas
         </a>
+        <button type="button" class="btn btn-outline-info ms-2" id="btn-toggle-help" onclick="toggleHelpMode()" title="Activar modo de ayuda interactiva">
+            <i class="bi bi-question-circle-fill me-1"></i> Ayuda
+        </button>
     </div>
     
 </div>
@@ -946,6 +949,28 @@
 </div>
 {# --- FIN PANEL LATERAL (OFFCANVAS) --- #}
 
+{# --- MODAL DE AYUDA INTERACTIVA --- #}
+<div class="modal fade" id="helpModal" tabindex="-1" aria-labelledby="helpModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-info">
+            <div class="modal-header bg-info-subtle">
+                <h5 class="modal-title text-info-emphasis" id="helpModalLabel">
+                    <i class="bi bi-lightbulb-fill me-2"></i>
+                    <span id="helpModalTitle">Ayuda</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="helpModalBody">
+                ...
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+{# --- FIN MODAL AYUDA --- #}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -963,6 +988,7 @@
     </script>
 
     {# --- INICIO: AÑADIR INICIALIZADOR DE TOOLTIP --- #}
+    <script src="{{ url_for('static', filename='js/planificacion/planificacion_help.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Inicializar los nuevos tooltips de bloqueo

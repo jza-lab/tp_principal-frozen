@@ -37,7 +37,8 @@
                 type="text" 
                 id="searchInput" 
                 class="search-input" 
-                placeholder="Ingrese el código de pedido (ej: PED-884)">
+                placeholder="Ingrese el código de pedido (ej: PED-884)"
+                value="{{ search_actual if search_actual else '' }}">
         </div>
     </div>
 
@@ -65,12 +66,12 @@
             <i class="bi bi-funnel-fill me-1"></i>Filtrar por Estado
         </label>
         <div class="filter-buttons">
-            <button type="button" class="btn-filter-estado active" data-estado="">
+            <button type="button" class="btn-filter-estado {% if not estado_actual %}active{% endif %}" data-estado="">
                 <i class="bi bi-grid-3x3-gap-fill"></i>
                 Todos
             </button>
             {% for estado_key, estado_nombre in filtros_ui %}
-                <button type="button" class="btn-filter-estado" data-estado="{{ estado_key }}">
+                <button type="button" class="btn-filter-estado {% if estado_actual == estado_key %}active{% endif %}" data-estado="{{ estado_key }}">
                     <i class="bi bi-tag"></i> <!-- Icono genérico, se puede mejorar -->
                     {{ estado_nombre }}
                 </button>
@@ -177,6 +178,7 @@
                               data-message="Esta acción creará las Órdenes de Producción necesarias y pondrá el pedido 'En Proceso'. ¿Está seguro?"
                               data-button-type="success">
                             <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
+                            <input type="hidden" name="active_filters" class="filtros-activos-input">
                             <button type="submit" class="btn btn-sm btn-outline-success" title="Planificar y Crear OPs">
                                 <i class="bi bi-play-fill">Planificar y crear OPs</i>
                             </button>
@@ -191,6 +193,7 @@
                             data-message="¿Confirma que el cliente ha recibido el pedido?"
                             data-button-type="success">
                             <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
+                            <input type="hidden" name="active_filters" class="filtros-activos-input">
                             <button type="submit" class="btn btn-sm btn-success" title="Marcar como Completado">
                                 <i class="bi bi-check-lg me-1"></i>Completar
                             </button>
@@ -205,6 +208,7 @@
                               data-message="¿Está seguro? Se revertirán reservas y producción. Esta acción es irreversible."
                               data-button-type="danger">
                             <input type="hidden" name="csrf_token" value="{{ csrf_form.csrf_token._value() }}">
+                            <input type="hidden" name="active_filters" class="filtros-activos-input">
                             <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancelar Pedido">
                                 <i class="bi bi-x-circle"></i>
                             </button>

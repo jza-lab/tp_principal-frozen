@@ -265,8 +265,17 @@ class ProductoController(BaseController):
             total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
 
             # 4. Calcular Costos Fijos
+            # Filtramos explícitamente por 'activo': True para asegurarnos de no incluir costos deshabilitados
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
-            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', []))
+            
+            # Verificación adicional en Python por si el filtro de base de datos no es estricto
+            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
+            costos_fijos_activos = [
+                c for c in costos_fijos_res.get('data', []) 
+                if c.get('activo') is True and c.get('tipo') == 'Directo'
+            ]
+            
+            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
 
             config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
             horas_prod_config = config_prod_res.get('data', [])
@@ -456,8 +465,17 @@ class ProductoController(BaseController):
             total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
 
             # Calcular Costos Fijos
+            # Filtramos explícitamente por 'activo': True para asegurarnos de no incluir costos deshabilitados
             costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
-            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_res.get('data', []))
+            
+            # Verificación adicional en Python por si el filtro de base de datos no es estricto
+            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
+            costos_fijos_activos = [
+                c for c in costos_fijos_res.get('data', []) 
+                if c.get('activo') is True and c.get('tipo') == 'Directo'
+            ]
+            
+            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
 
             config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
             horas_prod_config = config_prod_res.get('data', [])

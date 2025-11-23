@@ -4,6 +4,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
+from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
 from marshmallow import ValidationError
 from datetime import date, datetime
 from app.utils.estados import ESTADOS_INSPECCION
@@ -48,11 +49,17 @@ def listar_lotes():
         ))
         insumos_full_data = insumos_data
 
+    # Cargar motivos de desperdicio para el modal de No Apto
+    motivo_model = MotivoDesperdicioModel()
+    motivos_res = motivo_model.find_all()
+    motivos_desperdicio = motivos_res.get('data', []) if motivos_res.get('success') else []
+
     return render_template('inventario/listar.html',
                            insumos=insumos_agrupados,
                            insumos_stock=insumos_stock,
                            insumos_full_data=insumos_full_data,
-                           estados_inspeccion=ESTADOS_INSPECCION)
+                           estados_inspeccion=ESTADOS_INSPECCION,
+                           motivos_desperdicio=motivos_desperdicio)
 
 @inventario_view_bp.route('/lote/nuevo', methods=['GET', 'POST'])
 @jwt_required()
@@ -253,15 +260,24 @@ def api_trazabilidad_lote(id_lote):
 def marcar_no_apto(lote_id):
     """
     Marca un lote de insumo como 'NO APTO' y maneja las consecuencias.
+    Soporta retiro con desperdicio o creación de alerta.
     """
     controller = InventarioController()
     usuario_id = get_jwt_identity()
     
-    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
+    # Extraer datos del formulario (maneja el nuevo modal complejo)
+    accion = request.form.get('accion_no_apto') # 'retirar' o 'alerta'
+    
+    if accion:
+        # Nuevo flujo
+        response, status_code = controller.procesar_no_apto_avanzado(lote_id, request.form, usuario_id)
+    else:
+        # Flujo legacy (por si acaso)
+        response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
 
     if response.get('success'):
-        flash(response.get('message', 'Lote marcado como No Apto.'), 'success')
+        flash(response.get('message', 'Acción realizada correctamente.'), 'success')
     else:
         flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
 
-    return redirect(url_for('inventario_view.detalle_lote', id_lote=lote_id))
+    return redirect(url_for('inventario_view.listar_lotes'))

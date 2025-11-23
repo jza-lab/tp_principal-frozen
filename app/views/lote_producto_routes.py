@@ -27,7 +27,15 @@ def listar_lotes():
 
     datos_grafico_productos = grafico_resp_dict.get('data', [])
 
-    return render_template('lotes_productos/listar.html', lotes=lotes, datos_grafico_productos=datos_grafico_productos)
+    # Cargar motivos de desperdicio para el modal de No Apto
+    motivo_model = MotivoDesperdicioLoteModel()
+    motivos_res = motivo_model.get_all()
+    motivos_desperdicio = motivos_res.get('data', []) if motivos_res.get('success') else []
+
+    return render_template('lotes_productos/listar.html', 
+                           lotes=lotes, 
+                           datos_grafico_productos=datos_grafico_productos,
+                           motivos_desperdicio=motivos_desperdicio)
 
 @lote_producto_bp.route('/<int:id_lote>/detalle')
 @permission_required(accion='almacen_consulta_stock')
@@ -274,17 +282,25 @@ def editar_lote(id_lote):
 def marcar_no_apto(lote_id):
     """
     Marca un lote de producto como 'NO APTO'.
+    Soporta retiro con desperdicio o creación de alerta.
     """
     controller = LoteProductoController()
     usuario_id = get_jwt_identity()
-    motivo = request.form.get('motivo', 'Marcado como no apto desde el inventario.') # Un default por si acaso
-    resultado_inspeccion = request.form.get('resultado_inspeccion')
     
-    response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id, motivo, resultado_inspeccion)
+    accion = request.form.get('accion_no_apto')
+    
+    if accion:
+        # Nuevo flujo
+        response, status_code = controller.procesar_no_apto_avanzado(lote_id, request.form, usuario_id)
+    else:
+        # Flujo simple anterior (fallback)
+        motivo = request.form.get('motivo', 'Marcado como no apto desde el inventario.')
+        resultado_inspeccion = request.form.get('resultado_inspeccion')
+        response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id, motivo, resultado_inspeccion)
 
     if response.get('success'):
         flash(response.get('message', 'Lote marcado como No Apto.'), 'success')
     else:
         flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
 
-    return redirect(url_for('lote_producto.detalle_lote', id_lote=lote_id))
+    return redirect(url_for('lote_producto.listar_lotes'))
