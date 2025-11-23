@@ -837,7 +837,8 @@ class InventarioController(BaseController):
     def obtener_lotes_agrupados_para_vista(self) -> tuple:
         """
         Obtiene los lotes, los agrupa por insumo y enriquece con datos del catálogo.
-        (Versión robusta para evitar errores con lotes huérfanos)
+        CORRECCIÓN: Calcula el stock total sumando los lotes físicos, ignorando el campo
+        'stock_actual' de la tabla catálogo que puede estar desactualizado.
         """
         try:
             # 1. Obtener la lista definitiva de insumos desde el catálogo
@@ -858,7 +859,9 @@ class InventarioController(BaseController):
                 if insumo_id:
                     if insumo_id not in lotes_por_insumo:
                         lotes_por_insumo[insumo_id] = []
-                    # Convertir cantidades a float
+
+                    # Convertir cantidades a float para asegurar suma correcta
+                    # IMPORTANTE: Usamos cantidad_actual (físico disponible en lote)
                     lote['cantidad_actual'] = float(lote.get('cantidad_actual') or 0)
                     lote['cantidad_en_cuarentena'] = float(lote.get('cantidad_en_cuarentena') or 0)
                     lotes_por_insumo[insumo_id].append(lote)
@@ -869,9 +872,10 @@ class InventarioController(BaseController):
                 insumo_id = insumo['id_insumo']
                 lotes_de_insumo = lotes_por_insumo.get(insumo_id, [])
 
-                # Recalcular el stock físico total directamente desde los lotes obtenidos
-                stock_fisico_calculado = sum(float(lote.get('cantidad_actual', 0)) for lote in lotes_de_insumo)
-
+                # --- CÁLCULO DE STOCK REAL ---
+                # Sumamos la cantidad física actual de todos los lotes asociados.
+                # Esto es la "única fuente de verdad" para el stock disponible.
+                stock_fisico_calculado = sum(lote['cantidad_actual'] for lote in lotes_de_insumo)
 
                 # Crear la estructura de datos para la vista
                 datos_insumo_para_vista = {
@@ -879,13 +883,16 @@ class InventarioController(BaseController):
                     'insumo_nombre': insumo.get('nombre', 'N/A'),
                     'insumo_categoria': insumo.get('categoria', 'Sin categoría'),
                     'insumo_unidad_medida': insumo.get('unidad_medida', ''),
-                    'stock_actual': float(insumo.get('stock_actual') or 0),
-                    'stock_total': stock_fisico_calculado, # Usar el valor recién calculado
-                    'lotes': lotes_de_insumo # Adjuntar lotes
+
+                    # Usamos el valor calculado para ambos campos visuales
+                    'stock_actual': stock_fisico_calculado,
+                    'stock_total': stock_fisico_calculado,
+
+                    'lotes': lotes_de_insumo
                 }
 
-                # Calcular el estado general basado en el stock disponible (actual)
-                if datos_insumo_para_vista['stock_actual'] > 0:
+                # Calcular el estado general basado en el stock disponible real
+                if stock_fisico_calculado > 0:
                     datos_insumo_para_vista['estado_general'] = 'Disponible'
                 else:
                     datos_insumo_para_vista['estado_general'] = 'Agotado'
@@ -898,7 +905,7 @@ class InventarioController(BaseController):
             return self.success_response(data=resultado_final)
 
         except Exception as e:
-            logger.error(f"Error agrupando lotes para la vista (robusto): {str(e)}")
+            logger.error(f"Error agrupando lotes para la vista (robusto): {str(e)}", exc_info=True)
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def eliminar_lote(self, id_lote: str) -> tuple:
