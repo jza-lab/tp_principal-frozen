@@ -177,7 +177,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
         
     if(downloadButton){
-        downloadButton.addEventListener('click', async function () {
+        // Remove existing listeners if possible, or use a flag.
+        // Since we can't easily remove anonymous listeners, we clone and replace the node to clear them.
+        const newDownloadButton = downloadButton.cloneNode(true);
+        downloadButton.parentNode.replaceChild(newDownloadButton, downloadButton);
+
+        newDownloadButton.addEventListener('click', async function (e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
             this.disabled = true;
             this.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Generando...';
             
@@ -202,6 +210,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
             try {
                 const logoBase64 = await getImageBase64('/static/img/icon.png');
+
+                // Re-define logic inside the new listener scope or ensure it's accessible
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                const margin = 15;
+                let yPos = 0;
+                let page = 1;
 
                 function addHeader() {
                     if (logoBase64) {

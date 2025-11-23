@@ -205,7 +205,7 @@ function formatValue(value, format) {
         switch (format) {
             case 'currency':
                 const number = parseFloat(value);
-                if (isNaN(number)) return value;
+                if (isNaN(number)) return 'N/A';
                 return `$${number.toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
             case 'date':
                 const date = new Date(value);
@@ -324,11 +324,11 @@ const CATEGORY_DESCRIPTIONS = {
 
 // --- MAPA DE CAMPOS DE ENTIDAD ---
 const ENTITY_FIELDS_MAP = {
-    'orden_compra': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Proveedor', value: data => data.proveedores?.nombre }, { label: 'CUIT', value: data => data.proveedores?.cuit }, { label: 'Fecha Creación', value: data => data.fecha_creacion, format: 'date' }, { label: 'Monto Total', value: data => data.monto_total, format: 'currency' } ],
-    'lote_insumo': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Insumo', value: data => data.insumos_catalogo?.nombre }, { label: 'Código Insumo', value: data => data.insumos_catalogo?.codigo }, { label: 'Lote Prov.', value: data => data.numero_lote_proveedor }, { label: 'Cantidad', value: data => `${data.cantidad_inicial || ''} ${data.unidad_medida || ''}`.trim() }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
+    'orden_compra': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Proveedor', value: data => data.proveedores?.nombre }, { label: 'CUIT', value: data => data.proveedores?.cuit }, { label: 'Fecha Creación', value: data => data.fecha_creacion, format: 'date' }, { label: 'Monto Total', value: data => data.total || data.monto_total, format: 'currency' } ],
+    'lote_insumo': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Insumo', value: data => data.insumos_catalogo?.nombre }, { label: 'Código Insumo', value: data => data.insumos_catalogo?.codigo || data.insumos_catalogo?.codigo_interno }, { label: 'Lote Prov.', value: data => data.numero_lote_proveedor }, { label: 'Cantidad', value: data => `${data.cantidad_inicial || ''} ${data.unidad_medida || ''}`.trim() }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
     'orden_produccion': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Cantidad Planif.', value: data => data.cantidad_planificada }, { label: 'Fecha Meta', value: data => data.fecha_meta, format: 'date' } ],
     'lote_producto': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Nro. Lote', value: data => data.numero_lote }, { label: 'Cantidad', value: data => data.cantidad_inicial }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
-    'pedido': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Cliente', value: data => data.clientes?.nombre || data.clientes?.razon_social }, { label: 'CUIT Cliente', value: data => data.clientes?.cuit }, { label: 'Fecha Entrega', value: data => data.fecha_entrega, format: 'date' }, { label: 'Monto Total', value: data => data.monto_total, format: 'currency' }, { label: 'Items', value: data => data.items?.map(i => `<li>${i.cantidad} x ${i.productos?.nombre || 'N/A'}</li>`).join('') || 'No hay items.', format: 'html'} ]
+    'pedido': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Cliente', value: data => data.clientes?.nombre || data.clientes?.razon_social }, { label: 'CUIT Cliente', value: data => data.clientes?.cuit }, { label: 'Fecha Entrega', value: data => data.fecha_entrega, format: 'date' }, { label: 'Monto Total', value: data => data.precio_orden || data.monto_total, format: 'currency' }, { label: 'Items', value: data => data.items?.map(i => `<li>${i.cantidad} x ${i.productos?.nombre || 'N/A'}</li>`).join('') || 'No hay items.', format: 'html'} ]
 };
 
 
