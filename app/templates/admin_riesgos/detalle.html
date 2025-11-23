@@ -11,11 +11,13 @@
                 Gestión de Alerta de Riesgo: {{ alerta.codigo }}
             </h4>
             <div>
-                {% if alerta.estado == 'Pendiente' %}
+                {% if alerta.estado in ['Pendiente', 'Resuelta'] %}
                     <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalFinalizarAnalisis">
                         <i class="bi bi-flag-fill me-1"></i> 
                         Finalizar Análisis
                     </button>
+                {% endif %}
+                {% if alerta.estado == 'Pendiente' %}
                     <button type="button" class="btn btn-sm btn-light" id="btn-resolver-alerta">
                         <i class="bi bi-shield-check me-1"></i> Forzar Resolución
                     </button>
@@ -177,8 +179,7 @@
                                                             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                                                             <i class="bi bi-check-circle me-1"></i> Marcar como Apto
                                                         </button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto">
-                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote-con-modal" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="no_apto">
                                                             <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
                                                         </button>
                                                     </div>
@@ -231,13 +232,22 @@
                                                 </div>
                                             </div>
                                             <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
-                                                <h6 class="text-primary mb-3">Estado</h6>
+                                                <h6 class="text-primary mb-3">Acciones</h6>
                                                 <small class="text-muted d-block mb-1">Estado Actual de OP:</small>
                                                 <h4><span class="badge bg-secondary">{{ op.estado }}</span></h4>
                                                 
                                                 {% if op.estado_resolucion == 'resuelto' %}
                                                     <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
                                                     <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% elif op.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                    <div class="d-grid gap-2 mt-3">
+                                                        <button class="btn btn-sm btn-success btn-resolver-op" data-op-id="{{ op.id }}" data-accion="continuar">
+                                                            <i class="bi bi-play-circle me-1"></i> Continuar Producción
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-op-modal" data-op-id="{{ op.id }}">
+                                                            <i class="bi bi-stop-circle me-1"></i> Cancelar / Modificar
+                                                        </button>
+                                                    </div>
                                                 {% endif %}
                                             </div>
                                         </div>
@@ -851,137 +861,300 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Acción de resolver lotes
+    // Acción de resolver lotes (Simple para Apto y Lote Producto)
     document.querySelectorAll('.btn-resolver-lote').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation(); 
-            const loteId = this.dataset.loteId;
-            const tipoLote = this.dataset.tipoLote;
-            const resolucion = this.dataset.resolucion;
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const actionContainer = this.closest('.border-start-lg');
-            const spinner = this.querySelector('.spinner-border');
-
-            // Mostrar spinner y deshabilitar botones
-            spinner.classList.remove('d-none');
-            this.disabled = true;
-            // Deshabilitar el otro botón también para evitar clics dobles
-            const otherButton = this.parentElement.querySelector(this.dataset.resolucion === 'apto' ? '[data-resolucion="no_apto"]' : '[data-resolucion="apto"]');
-            if (otherButton) otherButton.disabled = true;
-
-            let resolucionParaApi;
-            if (resolucion === 'apto') {
-                resolucionParaApi = 'Apto';
-            } else {
-                resolucionParaApi = 'No Apto';
-            }
-
-            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    accion: 'resolver_lote',
-                    data: {
-                        lote_id: loteId,
-                        tipo_lote: tipoLote,
-                        resolucion: resolucionParaApi,
-                        alerta_id: '{{ alerta.id }}'
-                    }
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotificationModal('Éxito', data.message, 'success');
-                    
-                    // Reemplazar botones con badge de resolución
-                    let resolucionTexto = resolucion.replace('_', ' ');
-                    let resolucionClase = resolucion === 'apto' ? 'success' : 'danger';
-                    actionContainer.innerHTML = `
-                        <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
-                        <p class="small text-muted">Este lote fue resuelto como:</p>
-                        <h4><span class="badge bg-${resolucionClase}">${resolucionTexto.charAt(0).toUpperCase() + resolucionTexto.slice(1)}</span></h4>
-                    `;
-                    
-                    // Actualizar el badge de estado en la info
-                    const infoContainer = actionContainer.previousElementSibling;
-                    const estadoBadge = infoContainer.querySelector('.badge.bg-warning');
-                    if(estadoBadge) {
-                        estadoBadge.classList.remove('bg-warning', 'text-dark');
-                        estadoBadge.classList.add('bg-success');
-                        estadoBadge.textContent = 'Resuelto';
-                    }
-
-                     document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => {
-                        location.reload(); // Recargar para actualizar el estado general de la alerta
-                    });
-                } else {
-                    showNotificationModal('Error', data.error, 'error');
-                }
-            })
-            .catch(error => {
-                showNotificationModal('Error', 'Error de conexión.', 'error');
-            })
-            .finally(() => {
-                // Ocultar spinner y rehabilitar botones
-                spinner.classList.add('d-none');
-                this.disabled = false;
-                if (otherButton) otherButton.disabled = false;
-            });
+            ejecutarResolucionLote(this);
         });
     });
 
-    // Acción de recibir devolución
+    // Acción de resolver lote insumo "No Apto" con modal
+    document.querySelectorAll('.btn-resolver-lote-con-modal').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const loteId = this.dataset.loteId;
+            document.getElementById('lote-insumo-id-resolucion').value = loteId;
+            new bootstrap.Modal(document.getElementById('modalResolucionInsumo')).show();
+        });
+    });
+
+    document.getElementById('btnConfirmarInsumoNoApto').addEventListener('click', function() {
+        const loteId = document.getElementById('lote-insumo-id-resolucion').value;
+        const accionDownstream = document.querySelector('input[name="accion_ops_downstream"]:checked').value;
+        
+        // Encontrar el botón original para reutilizar la lógica visual
+        const originalBtn = document.querySelector(`.btn-resolver-lote-con-modal[data-lote-id="${loteId}"]`);
+        
+        if (originalBtn) {
+            ejecutarResolucionLote(originalBtn, { accion_ops_downstream: accionDownstream });
+            bootstrap.Modal.getInstance(document.getElementById('modalResolucionInsumo')).hide();
+        }
+    });
+
+    function ejecutarResolucionLote(button, extraData = {}) {
+        const loteId = button.dataset.loteId;
+        const tipoLote = button.dataset.tipoLote;
+        const resolucion = button.dataset.resolucion;
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        const actionContainer = button.closest('.border-start-lg');
+        const spinner = button.querySelector('.spinner-border') || document.createElement('span'); // Fallback si no tiene spinner html
+
+        if(button.querySelector('.spinner-border')) button.querySelector('.spinner-border').classList.remove('d-none');
+        button.disabled = true;
+        
+        let resolucionParaApi = resolucion === 'apto' ? 'Apto' : 'No Apto';
+
+        const payload = {
+            accion: 'resolver_lote',
+            data: {
+                lote_id: loteId,
+                tipo_lote: tipoLote,
+                resolucion: resolucionParaApi,
+                alerta_id: '{{ alerta.id }}',
+                ...extraData
+            }
+        };
+
+        fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(payload)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotificationModal('Éxito', data.message, 'success');
+                let resolucionTexto = resolucion.replace('_', ' ');
+                let resolucionClase = resolucion === 'apto' ? 'success' : 'danger';
+                actionContainer.innerHTML = `
+                    <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
+                    <p class="small text-muted">Este lote fue resuelto como:</p>
+                    <h4><span class="badge bg-${resolucionClase}">${resolucionTexto.charAt(0).toUpperCase() + resolucionTexto.slice(1)}</span></h4>
+                `;
+                // Actualizar badge visualmente si existe cerca
+                const cardBody = actionContainer.closest('.card-body');
+                if(cardBody){
+                     const estadoBadge = cardBody.querySelector('.badge.bg-warning');
+                     if(estadoBadge) {
+                        estadoBadge.classList.replace('bg-warning', 'bg-success');
+                        estadoBadge.classList.remove('text-dark');
+                        estadoBadge.textContent = 'Resuelto';
+                     }
+                }
+                document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => location.reload());
+            } else {
+                showNotificationModal('Error', data.error, 'error');
+                if(button.querySelector('.spinner-border')) button.querySelector('.spinner-border').classList.add('d-none');
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            showNotificationModal('Error', 'Error de conexión.', 'error');
+            if(button.querySelector('.spinner-border')) button.querySelector('.spinner-border').classList.add('d-none');
+            button.disabled = false;
+        });
+    }
+
+    // --- Lógica de Resolución de OPs ---
+    
+    // 1. Continuar Producción (Simple)
+    document.querySelectorAll('.btn-resolver-op').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            resolverOP(this.dataset.opId, 'continuar', 'Se verificó y está en condiciones.');
+        });
+    });
+
+    // 2. Modal Cancelar/Replanificar
+    document.querySelectorAll('.btn-resolver-op-modal').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('op-id-resolucion').value = this.dataset.opId;
+            new bootstrap.Modal(document.getElementById('modalResolucionOP')).show();
+        });
+    });
+
+    // Mostrar/Ocultar opción de retirar producto al cancelar
+    document.querySelectorAll('input[name="accion_op"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const divRetirar = document.getElementById('opcion-retirar-producto');
+            if (this.value === 'cancelar') {
+                divRetirar.classList.remove('d-none');
+            } else {
+                divRetirar.classList.add('d-none');
+                document.getElementById('check_retirar_producto').checked = false;
+            }
+        });
+    });
+
+    document.getElementById('btnConfirmarResolucionOP').addEventListener('click', function() {
+        const opId = document.getElementById('op-id-resolucion').value;
+        const selectedOption = document.querySelector('input[name="accion_op"]:checked');
+        
+        if (!selectedOption) {
+            showNotificationModal('Error', 'Debe seleccionar una acción.', 'error');
+            return;
+        }
+        
+        const accion = selectedOption.value;
+        const motivo = document.getElementById('motivo-resolucion-op').value;
+        const retirarProducto = document.getElementById('check_retirar_producto').checked;
+
+        if (!motivo.trim()) {
+            showNotificationModal('Error', 'Debe ingresar un motivo.', 'error');
+            return;
+        }
+
+        resolverOP(opId, accion, motivo, retirarProducto);
+        bootstrap.Modal.getInstance(document.getElementById('modalResolucionOP')).hide();
+    });
+
+    function resolverOP(opId, accion, motivo, retirarProducto) {
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        
+        fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({
+                accion: 'resolver_op_individual',
+                data: {
+                    op_id: opId,
+                    sub_accion: accion,
+                    motivo: motivo,
+                    retirar_lote_producto: retirarProducto
+                }
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotificationModal('Éxito', data.message, 'success');
+                document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => location.reload());
+            } else {
+                showNotificationModal('Error', data.error, 'error');
+            }
+        })
+        .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
+    }
+
+    // Acción de recibir devolución (Ahora con Modal)
     document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
             const loteId = this.dataset.loteId;
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const resolutionContainer = this.closest('.border-start-lg');
             const spinner = this.querySelector('.spinner-border');
-
-            spinner.classList.remove('d-none');
+            
+            // Mostrar spinner mientras cargamos datos
+            if (spinner) spinner.classList.remove('d-none');
             this.disabled = true;
 
-            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    accion: 'recibir_devolucion',
-                    data: {
-                        lote_id: loteId
-                    }
-                })
-            })
-            .then(response => response.json())
+            fetch(`/api/riesgos/lote_producto/${loteId}/pedidos_afectados`)
+            .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    showNotificationModal('Éxito', data.message, 'success');
-                    // Reemplazar todo el contenido de resolución con el estado final
+                    const container = document.getElementById('lista-pedidos-devolucion');
+                    container.innerHTML = '';
+                    document.getElementById('lote-id-devolucion').value = loteId;
+                    
+                    if (data.data.length === 0) {
+                        container.innerHTML = '<div class="alert alert-warning">No se encontraron pedidos asociados para este lote.</div>';
+                    } else {
+                        data.data.forEach(p => {
+                            const row = document.createElement('div');
+                            row.className = 'row mb-2 align-items-center';
+                            row.innerHTML = `
+                                <div class="col-md-6">
+                                    <strong>${p.pedido_codigo}</strong> <br>
+                                    <small class="text-muted">${p.cliente_nombre}</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">Enviado: ${p.cantidad_reservada}</span>
+                                        <input type="number" class="form-control input-cantidad-devolucion" 
+                                            data-pedido-id="${p.pedido_id}" 
+                                            value="${p.cantidad_reservada}" 
+                                            max="${p.cantidad_reservada}" min="0" step="any">
+                                    </div>
+                                </div>
+                            `;
+                            container.appendChild(row);
+                        });
+                    }
+                    new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
+                } else {
+                    showNotificationModal('Error', 'No se pudieron cargar los pedidos: ' + data.error, 'error');
+                }
+            })
+            .catch(err => {
+                showNotificationModal('Error', 'Error de conexión al cargar pedidos.', 'error');
+            })
+            .finally(() => {
+                if (spinner) spinner.classList.add('d-none');
+                this.disabled = false;
+            });
+        });
+    });
+
+    document.getElementById('btnConfirmarDevolucion').addEventListener('click', function() {
+        const loteId = document.getElementById('lote-id-devolucion').value;
+        const inputs = document.querySelectorAll('.input-cantidad-devolucion');
+        const devoluciones = [];
+        let totalRecibido = 0;
+
+        inputs.forEach(inp => {
+            const cant = parseFloat(inp.value) || 0;
+            if (cant > 0) {
+                devoluciones.push({
+                    pedido_id: inp.dataset.pedidoId,
+                    cantidad: cant
+                });
+                totalRecibido += cant;
+            }
+        });
+
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        
+        // Buscar el contenedor para actualizar la UI
+        const btnOriginal = document.querySelector(`.btn-recibir-devolucion[data-lote-id="${loteId}"]`);
+        const resolutionContainer = btnOriginal ? btnOriginal.closest('.border-start-lg') : null;
+
+        fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                accion: 'recibir_devolucion',
+                data: {
+                    lote_id: loteId,
+                    devoluciones: devoluciones
+                }
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotificationModal('Éxito', data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('modalRecibirDevolucion')).hide();
+                
+                if (resolutionContainer) {
                     resolutionContainer.innerHTML = `
                         <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
                         <p class="small text-muted">Este lote fue resuelto como:</p>
-                        <h4><span class="badge bg-danger">Retirado</span></h4>
+                        <h4><span class="badge bg-secondary">Retirado (${totalRecibido}u Recibidas)</span></h4>
                     `;
                 } else {
-                    showNotificationModal('Error', data.error, 'error');
+                    // Si no encontramos el contenedor, recargamos por seguridad
+                    location.reload();
                 }
-            })
-            .catch(error => {
-                showNotificationModal('Error', 'Error de conexión.', 'error');
-            })
-            .finally(() => {
-                // El botón se elimina, por lo que no es necesario volver a habilitarlo
-                // pero en caso de error, sí.
-                spinner.classList.add('d-none');
-                this.disabled = false;
-            });
+            } else {
+                showNotificationModal('Error', data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showNotificationModal('Error', 'Error de conexión.', 'error');
         });
     });
     
@@ -1010,6 +1183,13 @@ document.addEventListener('DOMContentLoaded', function () {
             border-left: 1px solid #dee2e6 !important;
             padding-left: 1rem !important;
         }
+    }
+    
+    /* Fix responsive badges */
+    .badge {
+        white-space: normal;
+        text-align: left;
+        line-height: 1.2;
     }
 
     /* === INICIO: Estilos para Vista Previa de NC === */
@@ -1205,7 +1385,7 @@ document.addEventListener('DOMContentLoaded', function () {
 {% set placeholder_text = "Ej: Falso positivo, se contactó al cliente y se confirmó que el producto estaba en buen estado." %}
 {% set ns = namespace(has_no_apto=false) %}
 {% for lote in (alerta.afectados_detalle.lotes_insumo or []) + (alerta.afectados_detalle.lotes_producto or []) %}
-    {% if lote.resolucion_aplicada and 'no_apto' in lote.resolucion_aplicada %}
+    {% if lote.resolucion_aplicada and 'no apto' in lote.resolucion_aplicada | lower %}
         {% set ns.has_no_apto = true %}
     {% endif %}
 {% endfor %}
@@ -1240,5 +1420,133 @@ document.addEventListener('DOMContentLoaded', function () {
       </div>
     </div>
   </div>
+</div>
+
+<!-- Modal Resolución OP -->
+<div class="modal fade" id="modalResolucionOP" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill me-2"></i>Gestionar Orden de Producción</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formResolucionOP">
+                    <input type="hidden" id="op-id-resolucion">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Acción a tomar:</label>
+                        <div class="alert alert-info small">
+                            <i class="bi bi-info-circle-fill me-1"></i> Antes de tomar una decisión, <strong>revise los insumos y el estado de las máquinas</strong>.
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="radio" name="accion_op" id="accion_continuar" value="continuar">
+                            <label class="form-check-label fw-bold text-success" for="accion_continuar">
+                                Continuar Producción
+                            </label>
+                            <div class="form-text ms-2">
+                                Seleccione esta opción solo si las pruebas de calidad son satisfactorias. Se deberán revisar exhaustivamente los productos terminados.
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="radio" name="accion_op" id="accion_replanificar" value="replanificar">
+                            <label class="form-check-label fw-bold text-primary" for="accion_replanificar">
+                                Volver a Pendiente (Replanificar)
+                            </label>
+                            <div class="form-text ms-2">
+                                La orden actual se cancelará y se creará una copia en estado "Pendiente" para iniciar el proceso desde cero con nuevos insumos.
+                            </div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="radio" name="accion_op" id="accion_cancelar" value="cancelar">
+                            <label class="form-check-label fw-bold text-danger" for="accion_cancelar">
+                                Cancelar OP Definitivamente
+                            </label>
+                            <div class="form-text ms-2">
+                                La producción se detendrá permanentemente. 
+                            </div>
+                            <!-- Opción anidada para retirar productos -->
+                            <div class="mt-2 ms-3 d-none" id="opcion-retirar-producto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="check_retirar_producto">
+                                    <label class="form-check-label text-danger" for="check_retirar_producto">
+                                        Retirar lote de productos afectados (si existe)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivo-resolucion-op" class="form-label">Motivo / Comentarios <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="motivo-resolucion-op" rows="3" required placeholder="Ej: Máquinas contaminadas, se cancela producción y retira lote."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarResolucionOP">Confirmar Acción</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Resolución Insumo No Apto -->
+<div class="modal fade" id="modalResolucionInsumo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="bi bi-exclamation-circle-fill me-2"></i>Confirmar Lote No Apto</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Está a punto de marcar este lote de insumos como <strong>NO APTO (Retirado)</strong>.</p>
+                <p>Este insumo afecta a Órdenes de Producción asociadas. ¿Qué desea hacer con ellas?</p>
+                <form id="formResolucionInsumo">
+                    <input type="hidden" id="lote-insumo-id-resolucion">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Acción sobre OPs afectadas:</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_replanificar" value="replanificar" checked>
+                            <label class="form-check-label" for="op_replanificar">
+                                Replanificar OPs (Volver a Pendiente para buscar otro insumo)
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_dejar" value="dejar">
+                            <label class="form-check-label" for="op_dejar">
+                                Dejar OPs como están (Solo marcar insumo)
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarInsumoNoApto">Confirmar No Apto</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Recibir Devolución -->
+<div class="modal fade" id="modalRecibirDevolucion" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="bi bi-box-seam me-2"></i>Recibir Devolución</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Confirme las cantidades recibidas por cada pedido asociado. Los productos devueltos se marcarán como <strong>RETIRADOS</strong> (Stock no disponible).</p>
+                <input type="hidden" id="lote-id-devolucion">
+                <div id="lista-pedidos-devolucion">
+                    <!-- Se llena dinámicamente -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-info text-white" id="btnConfirmarDevolucion">Confirmar Recepción</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

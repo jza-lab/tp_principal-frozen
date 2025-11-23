@@ -114,13 +114,15 @@ class InsumoController(BaseController):
             return self.error_response(f'Error interno: {str(e)}', 500)
 
     def obtener_insumos(self, filtros: Optional[Dict] = None) -> tuple:
-        """Obtener lista de insumos con filtros, incluyendo filtro por stock bajo."""
+        """Obtener lista de insumos con filtros, incluyendo filtro por stock bajo y ordenamiento."""
         try:
             self.inventario_model.calcular_y_actualizar_stock_general()
             self._revisar_y_generar_ocs_automaticas()
             
             filtros = filtros or {}
             stock_status_filter = filtros.pop('stock_status', None)
+            sort_by = filtros.pop('sort_by', 'nombre')
+            order = filtros.pop('order', 'asc')
 
             # Primero, obtenemos todos los insumos (o los filtrados por otros criterios)
             result = self.insumo_model.find_all(filtros)
@@ -145,7 +147,27 @@ class InsumoController(BaseController):
                 # Si no hay filtro de stock, usar todos los datos
                 final_data = all_insumos
 
-            sorted_data = sorted(final_data, key=lambda x: x.get('activo', False), reverse=True)
+            # --- LÓGICA DE ORDENAMIENTO ---
+            # Separar activos e inactivos (Regla: Inactivos siempre al final)
+            active_items = [i for i in final_data if i.get('activo')]
+            inactive_items = [i for i in final_data if not i.get('activo')]
+            
+            def get_sort_key(item):
+                val = item.get(sort_by)
+                if val is None: 
+                    # Manejo de nulos: 0 para números, string vacía para texto
+                    return 0 if sort_by != 'nombre' else '' 
+                if isinstance(val, str): 
+                    return val.lower()
+                return val
+            
+            reverse_sort = (order == 'desc')
+            
+            active_items.sort(key=get_sort_key, reverse=reverse_sort)
+            inactive_items.sort(key=get_sort_key, reverse=reverse_sort)
+            
+            sorted_data = active_items + inactive_items
+            
             serialized_data = self.schema.dump(sorted_data, many=True)
             return self.success_response(data=serialized_data)
 

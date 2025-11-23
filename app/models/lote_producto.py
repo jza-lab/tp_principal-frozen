@@ -3,6 +3,9 @@ from datetime import date, datetime, timedelta
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
 import logging
+from app.models.configuracion import ConfiguracionModel
+from app.utils.vida_util import calcular_semaforo
+from app.controllers.configuracion_controller import DIAS_ALERTA_VENCIMIENTO_LOTE, DEFAULT_DIAS_ALERTA
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,7 @@ class LoteProductoModel(BaseModel):
         """
         from app.models.receta import RecetaModel # Importación local
         receta_model = RecetaModel()
-        
+
         try:
             query = self.db.table(self.get_table_name()).select(
                 'fecha_produccion, cantidad_actual, producto_id, fecha_vencimiento'
@@ -48,7 +51,7 @@ class LoteProductoModel(BaseModel):
                     costo = receta_model.get_costo_produccion(producto_id)
                     costos_cache[producto_id] = costo
                     lote['costo_unitario'] = costo
-                
+
                 # Renombrar para consistencia
                 lote['cantidad'] = lote.pop('cantidad_actual')
                 # Proveer alias 'fecha_fabricacion' para mantener compatibilidad si alguien lo usa
@@ -86,11 +89,15 @@ class LoteProductoModel(BaseModel):
     def find_lotes_disponibles(self) -> Dict:
         """Busca lotes disponibles (no vencidos y con stock)."""
         try:
+            # FILTRO MEJORADO: Excluir explícitamente los que vencen hoy o antes
+            fecha_hoy = date.today().isoformat()
+
             result = (
                 self.db.table(self.get_table_name())
                 .select('*')
                 .eq('estado', 'DISPONIBLE')
                 .gt('cantidad_actual', 0)
+                .gt('fecha_vencimiento', fecha_hoy) # Solo vencimiento futuro estricto (> HOY)
                 .execute()
             )
             return {'success': True, 'data': result.data}
@@ -128,8 +135,8 @@ class LoteProductoModel(BaseModel):
 
     def get_all_lotes_for_view(self, filtros: Optional[Dict] = None):
         """
-        Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto y cantidad reservada)
-        para ser mostrados en la vista de listado.
+        Obtiene todos los lotes de productos con datos enriquecidos (nombre del producto,
+        cantidad reservada y semáforo de vida útil) para ser mostrados en la vista de listado.
         """
         try:
             query = self.db.table(self.get_table_name()).select(
@@ -139,7 +146,7 @@ class LoteProductoModel(BaseModel):
             if filtros:
                 for key, value in filtros.items():
                     query = query.eq(key, value)
-            
+
             lotes_result = query.order('created_at', desc=True).execute()
 
             if not hasattr(lotes_result, 'data'):
@@ -147,22 +154,38 @@ class LoteProductoModel(BaseModel):
 
             lotes_data = lotes_result.data
 
-            # 2. Obtener todas las reservas activas
+            # 1. Obtener configuración de semáforos
+            config_model = ConfiguracionModel()
+            try:
+                umbral_verde = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_VERDE', 75))
+            except (ValueError, TypeError):
+                umbral_verde = 75.0
+
+            try:
+                umbral_amarillo = float(config_model.obtener_valor('UMBRAL_VIDA_UTIL_AMARILLO', 50))
+            except (ValueError, TypeError):
+                umbral_amarillo = 50.0
+
+            # Obtener configuración de días de alerta
+            try:
+                dias_alerta_str = config_model.obtener_valor(DIAS_ALERTA_VENCIMIENTO_LOTE, str(DEFAULT_DIAS_ALERTA))
+                dias_alerta = int(dias_alerta_str)
+            except (ValueError, TypeError):
+                dias_alerta = DEFAULT_DIAS_ALERTA
+
+            # 2. Obtener todas las reservas activas para calcular disponibilidad real
             reservas_result = self.db.table('reservas_productos').select(
                 'lote_producto_id, cantidad_reservada'
             ).eq('estado', 'RESERVADO').execute()
 
-            if not hasattr(reservas_result, 'data'):
-                 raise Exception("La consulta de reservas no devolvió datos.")
-
-            # 3. Mapear las reservas a cada lote
             reservas_map = {}
-            for reserva in reservas_result.data:
-                lote_id = reserva['lote_producto_id']
-                cantidad = reserva.get('cantidad_reservada', 0)
-                reservas_map[lote_id] = reservas_map.get(lote_id, 0) + cantidad
+            if hasattr(reservas_result, 'data'):
+                for reserva in reservas_result.data:
+                    lote_id = reserva['lote_producto_id']
+                    cantidad = reserva.get('cantidad_reservada', 0)
+                    reservas_map[lote_id] = reservas_map.get(lote_id, 0) + cantidad
 
-            # 4. Enriquecer los datos de los lotes
+            # 3. Enriquecer los datos de los lotes
             enriched_data = []
             for lote in lotes_data:
                 # Aplanar nombre del producto
@@ -170,10 +193,65 @@ class LoteProductoModel(BaseModel):
                     lote['producto_nombre'] = lote['producto']['nombre']
                 else:
                     lote['producto_nombre'] = 'Producto no encontrado'
-                del lote['producto']
+                # Limpiar el objeto anidado para evitar problemas de serialización
+                if 'producto' in lote:
+                    del lote['producto']
 
                 # Añadir cantidad reservada
                 lote['cantidad_reservada'] = reservas_map.get(lote.get('id_lote'), 0)
+
+                # --- CONVERSIÓN DE FECHAS (CRÍTICO PARA LA VISTA) ---
+                # Convertir strings de fecha a objetos datetime/date para que .strftime funcione en Jinja
+
+                # A. Fecha de Producción
+                if lote.get('fecha_produccion') and isinstance(lote['fecha_produccion'], str):
+                    try:
+                        # Extraer solo la parte de la fecha YYYY-MM-DD
+                        lote['fecha_produccion'] = datetime.fromisoformat(lote['fecha_produccion'].split('T')[0])
+                    except ValueError:
+                        pass # Mantener como string si falla
+
+                # B. Fecha de Vencimiento
+                if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
+                    try:
+                        lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'].split('T')[0])
+                    except ValueError:
+                        pass
+
+                # C. Fecha de Creación (Created At)
+                if lote.get('created_at') and isinstance(lote['created_at'], str):
+                    try:
+                        lote['created_at'] = datetime.fromisoformat(lote['created_at'])
+                    except ValueError:
+                        pass
+
+                # --- CALCULO SEMAFORO ---
+                semaforo = calcular_semaforo(
+                    lote.get('fecha_produccion'),
+                    lote.get('fecha_vencimiento'),
+                    umbral_verde=umbral_verde,
+                    umbral_amarillo=umbral_amarillo,
+                    dias_alerta=dias_alerta
+                )
+                lote['semaforo_color'] = semaforo['color']
+                lote['vida_util_percent'] = semaforo['percent']
+
+                # --- CORRECCIÓN VISUAL DE ESTADO ---
+                # Si vence HOY o ya venció, forzamos el estado visual a 'VENCIDO'
+                # (Esto es visual, no cambia la DB hasta que corra el proceso batch)
+                if lote.get('fecha_vencimiento'):
+                    try:
+                        venc = lote['fecha_vencimiento']
+                        # Asegurarnos de comparar date con date
+                        if isinstance(venc, datetime):
+                            venc = venc.date()
+
+                        if venc <= date.today() and lote.get('estado') != 'RETIRADO':
+                            lote['estado'] = 'VENCIDO'
+                            lote['semaforo_color'] = 'danger' # Forzar rojo
+                            lote['vida_util_percent'] = 0.0
+                    except Exception as e_date:
+                        logger.warning(f"Error comparando fecha vencimiento lote {lote.get('id_lote')}: {e_date}")
 
                 enriched_data.append(lote)
 
@@ -193,7 +271,7 @@ class LoteProductoModel(BaseModel):
                 '*, producto:productos(nombre, codigo), orden_produccion:orden_produccion_id(id, codigo)'
             ).eq('id_lote', id_lote).single().execute()
             # ... (Manejo de 'item' y 'producto' sin cambios) ...
-            
+
             if not lote_result.data:
                 return {'success': False, 'error': 'Lote no encontrado'}
             item = lote_result.data
@@ -217,19 +295,19 @@ class LoteProductoModel(BaseModel):
 
                 if insumos_result.data:
                     item['insumos_utilizados'] = insumos_result.data
-                                        
+
                     # Extraer los códigos de OC y buscar las OCs
                     codigos_oc = {
-                        res['lote']['documento_ingreso'] 
-                        for res in insumos_result.data 
+                        res['lote']['documento_ingreso']
+                        for res in insumos_result.data
                         if res.get('lote') and res['lote'].get('documento_ingreso')
                     }
-                    
+
                     if codigos_oc:
                         ocs_result = self.db.table('ordenes_compra').select(
                             'id, codigo_oc, proveedores:proveedor_id(nombre)'
                         ).in_('codigo_oc', list(codigos_oc)).execute()
-                        
+
                         if ocs_result.data:
                             # Usar un diccionario para evitar duplicados y facilitar el acceso
                             item['ordenes_compra_asociadas'] = {oc['codigo_oc']: oc for oc in ocs_result.data}.values()
@@ -325,7 +403,7 @@ class LoteProductoModel(BaseModel):
             productos_response = self.db.table('productos').select('nombre, precio_unitario').execute()
             if not productos_response.data:
                 return []
-            
+
             valores = []
             for producto in productos_response.data:
                 nombre = producto.get('nombre')
@@ -359,7 +437,7 @@ class LoteProductoModel(BaseModel):
                     stock_por_estado[estado] += cantidad
                 else:
                     stock_por_estado[estado] = cantidad
-            
+
             return {'success': True, 'data': stock_por_estado}
         except Exception as e:
             logger.error(f"Error obteniendo stock de productos por estado: {str(e)}")

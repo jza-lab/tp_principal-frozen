@@ -4,7 +4,9 @@ document.addEventListener('DOMContentLoaded', function () {
         busqueda: '',
         categorias: [],
         proveedores: [],
-        stock_status: ''
+        stock_status: '',
+        sort_by: 'nombre',
+        order: 'asc'
     };
     let suggestionsDebounceTimer;
     let filterDebounceTimer;
@@ -12,6 +14,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // DOM Elements
     const searchInput = document.getElementById('busqueda-filtro');
+    const sortSelect = document.getElementById('sort-select');
     const suggestionsContainer = document.getElementById('suggestions-container');
     const categoryCheckboxes = document.querySelectorAll('.category-checkbox');
     const proveedorCheckboxes = document.querySelectorAll('.proveedor-checkbox');
@@ -113,6 +116,13 @@ document.addEventListener('DOMContentLoaded', function () {
         fetchInsumos();
     });
 
+    sortSelect.addEventListener('change', () => {
+        const [sortBy, order] = sortSelect.value.split('-');
+        activeFilters.sort_by = sortBy;
+        activeFilters.order = order;
+        fetchInsumos();
+    });
+
     activeFiltersContainer.addEventListener('click', (e) => {
         if (e.target.classList.contains('remove-filter-btn')) {
             const type = e.target.dataset.filterType;
@@ -175,6 +185,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (activeFilters.stock_status) {
             params.append('stock_status', activeFilters.stock_status);
         }
+        params.append('sort_by', activeFilters.sort_by);
+        params.append('order', activeFilters.order);
+
         activeFilters.categorias.forEach(cat => {
             params.append('categoria', cat);
         });

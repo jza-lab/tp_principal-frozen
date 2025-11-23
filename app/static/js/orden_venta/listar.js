@@ -16,6 +16,55 @@ document.addEventListener('DOMContentLoaded', function () {
         search: ''
     };
 
+    // --- Inicialización desde URL y Elementos activos ---
+    function initFilters() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeBtn = document.querySelector('.btn-filter-estado.active');
+        
+        // Prioridad: URL > Botón activo (que ya viene del servidor)
+        if (urlParams.has('estado')) {
+            activeFilters.estado = urlParams.get('estado');
+        } else if (activeBtn) {
+            activeFilters.estado = activeBtn.dataset.estado || '';
+        }
+
+        if (urlParams.has('search')) {
+            activeFilters.search = urlParams.get('search');
+        } else if (searchInput) {
+            activeFilters.search = searchInput.value.trim();
+        }
+        
+        updateFormsWithFilters();
+    }
+
+    function updateURL() {
+        const url = new URL(window.location.href);
+        
+        if (activeFilters.estado) {
+            url.searchParams.set('estado', activeFilters.estado);
+        } else {
+            url.searchParams.delete('estado');
+        }
+
+        if (activeFilters.search) {
+            url.searchParams.set('search', activeFilters.search);
+        } else {
+            url.searchParams.delete('search');
+        }
+
+        // Usar replaceState para no llenar el historial con cada letra
+        window.history.replaceState({}, '', url);
+        
+        updateFormsWithFilters();
+    }
+
+    function updateFormsWithFilters() {
+        const filterString = window.location.search; // Esto incluye ?estado=...&search=...
+        document.querySelectorAll('.filtros-activos-input').forEach(input => {
+            input.value = filterString;
+        });
+    }
+
     const totalPedidos = pedidoCards.length;
     if (totalCountEl) {
         totalCountEl.textContent = totalPedidos;
@@ -75,6 +124,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.classList.add('active');
             activeFilters.estado = this.dataset.estado;
             applyClientFilters();
+            updateURL(); // Actualizar URL al cambiar filtro
         });
     });
 
@@ -85,6 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
             searchTimeout = setTimeout(() => {
                 activeFilters.search = this.value.trim();
                 applyClientFilters();
+                updateURL(); // Actualizar URL al buscar
             }, 300);
         });
     }
@@ -120,5 +171,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    initFilters(); // Inicializar filtros al cargar
     applyClientFilters();
 });

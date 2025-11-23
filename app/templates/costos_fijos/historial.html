@@ -1,0 +1,102 @@
+{% extends "layouts/app_layout.html" %}
+
+{% block title %}Historial de Cambios - {{ costo.nombre_costo }} - Sistema Frozen{% endblock %}
+
+{% block app_content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Historial de Costos: {{ costo.nombre_costo }}</h3>
+        <div>
+            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalAgregarHistorial">
+                <i class="bi bi-plus-circle me-2"></i>Agregar Registro Mensual
+            </button>
+            <a href="{{ url_for('costos_fijos.listar') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left me-2"></i>Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-light">
+            <strong>Valor Actual:</strong> ${{ "%.2f"|format(costo.monto_mensual) }}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            {% if historial %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Fecha del Cambio</th>
+                                <th>Monto Anterior</th>
+                                <th>Monto Nuevo</th>
+                                <th>Diferencia</th>
+                                <th>Usuario</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for h in historial %}
+                            <tr>
+                                <td>{{ h.fecha_cambio | datetime_format }}</td>
+                                <td>${{ "%.2f"|format(h.monto_anterior) }}</td>
+                                <td>${{ "%.2f"|format(h.monto_nuevo) }}</td>
+                                {% set diff = h.monto_nuevo - h.monto_anterior %}
+                                <td class="{{ 'text-success' if diff < 0 else 'text-danger' }}">
+                                    {{ "+" if diff > 0 else "" }}{{ "%.2f"|format(diff) }}
+                                </td>
+                                <td>
+                                    {% if h.usuario %}
+                                        {{ h.usuario.nombre }} {{ h.usuario.apellido }}
+                                    {% else %}
+                                        Sistema/Desconocido
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-clock-history fs-2 d-block mb-2"></i>
+                    No hay registros históricos para este costo fijo.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Agregar Registro Histórico -->
+<div class="modal fade" id="modalAgregarHistorial" tabindex="-1" aria-labelledby="modalAgregarHistorialLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAgregarHistorialLabel">Ratificar/Agregar Costo Mensual</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('costos_fijos.historial_nuevo', id=costo.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <small>Seleccione el mes y el valor del costo. Esto registrará el costo para el inicio de ese mes.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="fecha" class="form-label">Mes de Vigencia</label>
+                        <input type="month" class="form-control" id="fecha" name="fecha" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="monto" class="form-label">Monto Mensual ($)</label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="monto" name="monto" value="{{ costo.monto_mensual }}" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

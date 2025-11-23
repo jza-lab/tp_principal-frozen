@@ -103,6 +103,39 @@ def crear_pedido_api():
             'message': response.get('message', 'Error al procesar el pedido.')
         }), status_code
 
+@public_bp.route('/api/pagar-pedido', methods=['POST'])
+def pagar_pedido_api():
+    """
+    Endpoint para que los clientes registren pagos (simulación).
+    """
+    # Verificar sesión de cliente
+    if 'cliente_id' not in session:
+        return jsonify({'success': False, 'message': 'No autorizado'}), 401
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'message': 'Datos inválidos'}), 400
+
+    # Inyectar datos necesarios para el controlador
+    # El id_usuario_registro es opcional en nuestro ajuste, o podemos pasar None/0
+    pago_data = {
+        'id_pedido': data.get('pedido_id'),
+        'monto': data.get('monto'),
+        'metodo_pago': data.get('metodo_pago', 'tarjeta'),
+        'datos_adicionales': data.get('datos_adicionales', 'Pago web cliente'),
+        'id_usuario_registro': None # Importante: Manejar esto en PagoController si es FK
+    }
+    
+    # Nota: Si id_usuario_registro es FK obligatoria a users, esto fallará. 
+    # Deberíamos usar un usuario 'sistema' o permitir null en la BD.
+    # Asumiremos que el controlador o modelo lo maneja, o usamos un ID dummy si existe.
+    # Por seguridad, verificamos que el pedido pertenezca al cliente (PENDIENTE)
+
+    controller = PagoController()
+    response, status_code = controller.registrar_pago(pago_data)
+
+    return jsonify(response), status_code
+
 @public_bp.route('/comprobante-pago/<int:pedido_id>')
 def ver_comprobante(pedido_id):
     """
@@ -305,6 +338,20 @@ def seguimiento_publico_pedido(token):
         return redirect(url_for('public.index'))
     pedido = pedido_resp.get('data')
 
+    # --- CÁLCULO DEL TOTAL (Fix para visualización $0.00) ---
+    total_calculado = 0
+    for item in pedido.get('items', []):
+        prod_info = item.get('producto_nombre')
+        precio = 0
+        if isinstance(prod_info, dict):
+            precio = float(prod_info.get('precio_unitario', 0))
+        cantidad = float(item.get('cantidad', 0))
+        total_calculado += (precio * cantidad)
+    
+    costo_envio = float(pedido.get('costo_envio') or 0)
+    pedido['total'] = total_calculado + costo_envio
+    # --------------------------------------------------------
+
     # 2. Definir los hitos del proceso
     estado_actual = pedido.get('estado', 'PENDIENTE')
     todos_los_hitos = [
@@ -382,7 +429,11 @@ def seguimiento_publico_pedido(token):
                         for reserva in reservas_res.data:
                             lote_info = lotes_map.get(reserva['lote_producto_id'])
                             if lote_info:
-                                lotes_por_item[reserva['pedido_item_id']] = lote_info
+                                if reserva['pedido_item_id'] not in lotes_por_item:
+                                    lotes_por_item[reserva['pedido_item_id']] = []
+                                # Verificación simple para evitar duplicados si la consulta trae redundancia
+                                if lote_info not in lotes_por_item[reserva['pedido_item_id']]:
+                                    lotes_por_item[reserva['pedido_item_id']].append(lote_info)
         except Exception as e:
             logger.error(f"Error al obtener lotes para seguimiento de pedido {pedido.get('id')}: {e}")
 

@@ -109,13 +109,34 @@ class PedidoModel(BaseModel):
         # Nota: Esto es una simplificación, idealmente se compara item por item.
         pedido_data['todas_ops_completadas'] = total_cantidad_producida_asignada >= total_cantidad_requerida
 
-        # 5. Obtener datos de despacho
+        # 5. Obtener datos de despacho y mapear la información del vehículo/conductor
         pedido_data['despacho'] = None
         try:
-            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculo_id(*))').eq('pedido_id', pedido_id).execute()
+            # Intentamos obtener el despacho junto con el vehículo asociado
+            # Nota: En Supabase, 'vehiculo:vehiculo_id(*)' hace el join con la tabla vehiculos usando la FK vehiculo_id
+            item_despacho_res = self.db.table('despacho_items').select('despachos(*, vehiculo:vehiculos(*))').eq('pedido_id', pedido_id).execute()
+            
             if item_despacho_res and item_despacho_res.data:
-                pedido_data['despacho'] = item_despacho_res.data[0].get('despachos')
-        except Exception as e: # Usamos Exception genérico si APIError no está importado
+                despacho_raw = item_despacho_res.data[0].get('despachos')
+                if despacho_raw:
+                    # Inicializamos el objeto despacho con los datos crudos de la tabla despachos
+                    pedido_data['despacho'] = despacho_raw
+                    
+                    # Extraemos el objeto vehículo (si existe)
+                    vehiculo = despacho_raw.get('vehiculo')
+                    
+                    # Mapeamos los campos del vehículo a las claves que espera la plantilla
+                    # Si el despacho ya tiene estos campos (legacy), se conservan. Si no, se usan los del vehículo.
+                    if vehiculo:
+                        pedido_data['despacho']['nombre_transportista'] = despacho_raw.get('nombre_transportista') or vehiculo.get('nombre_conductor')
+                        pedido_data['despacho']['dni_transportista'] = despacho_raw.get('dni_transportista') or vehiculo.get('dni_conductor')
+                        pedido_data['despacho']['patente_vehiculo'] = despacho_raw.get('patente_vehiculo') or vehiculo.get('patente')
+                        pedido_data['despacho']['telefono_transportista'] = despacho_raw.get('telefono_transportista') or vehiculo.get('telefono_conductor')
+                    
+                    # Aseguramos que las observaciones estén presentes
+                    pedido_data['despacho']['observaciones'] = despacho_raw.get('observaciones')
+
+        except Exception as e:
             logger.warning(f"No se pudieron obtener datos de despacho para el pedido {pedido_id}. Error: {str(e)}")
 
         return {'success': True, 'data': pedido_data}
@@ -165,12 +186,41 @@ class PedidoModel(BaseModel):
 
             # 2. Crear los items del pedido
             try:
+                # --- NUEVO: Obtener costos dinámicos e insertar ---
+                # Para evitar dependencias circulares, importamos aquí
+                from app.controllers.rentabilidad_controller import RentabilidadController
+                rentabilidad_controller = RentabilidadController()
+                from app.models.producto import ProductoModel
+                producto_model = ProductoModel()
+
+                # Pre-fetch de productos para obtener precio_unitario actual
+                producto_ids = [item['producto_id'] for item in items_data]
+                productos_res = producto_model.find_all(filters={'id': producto_ids})
+                productos_map = {p['id']: p for p in productos_res.get('data', [])} if productos_res.get('success') else {}
+
+                # Pre-fetch de roles para cálculo de costos (optimización)
+                roles_resp = rentabilidad_controller.rol_model.find_all()
+                roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+
                 for item in items_data:
+                    producto_id = int(item['producto_id'])
+                    producto_data_actual = productos_map.get(producto_id, {})
+                    
+                    # Calcular costo unitario actual (snapshot)
+                    costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                    costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                    
+                    # Obtener precio unitario actual (snapshot)
+                    precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+
                     item_data = {
                         'pedido_id': new_pedido_id,
-                        'producto_id': item['producto_id'],
+                        'producto_id': producto_id,
                         'cantidad': item['cantidad'],
-                        'estado': item.get('estado', 'PENDIENTE')
+                        'estado': item.get('estado', 'PENDIENTE'),
+                        # --- COLUMNAS NUEVAS ---
+                        'precio_unitario': precio_unitario_snapshot,
+                        'costo_unitario': costo_unitario_snapshot
                     }
                     item_insert_result = self.db.table('pedido_items').insert(item_data).execute()
                     if not item_insert_result.data:
@@ -285,6 +335,16 @@ class PedidoModel(BaseModel):
                 self.db.table('pedido_items').delete().in_('id', item_ids_to_delete).execute()
 
             # --- Manejar productos añadidos o actualizados ---
+            # --- NUEVO: Obtener costos dinámicos e insertar para items NUEVOS ---
+            from app.controllers.rentabilidad_controller import RentabilidadController
+            rentabilidad_controller = RentabilidadController()
+            from app.models.producto import ProductoModel
+            producto_model = ProductoModel()
+
+            # Pre-fetch roles
+            roles_resp = rentabilidad_controller.rol_model.find_all()
+            roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
+
             for pid, new_item_data in incoming_items_by_product.items():
                 nueva_cantidad_total = int(new_item_data['cantidad'])
                 existing_items = existing_items_by_product.get(pid, [])
@@ -305,8 +365,21 @@ class PedidoModel(BaseModel):
 
                 if nueva_cantidad_total > cantidad_existente_total:
                     cantidad_a_anadir = nueva_cantidad_total - cantidad_existente_total
+                    
+                    # Calcular costos snapshot para el NUEVO item
+                    producto_info_res = producto_model.find_by_id(pid)
+                    producto_data_actual = producto_info_res.get('data', {})
+                    costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                    costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                    precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+
                     self.db.table('pedido_items').insert({
-                        'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': cantidad_a_anadir, 'estado': 'PENDIENTE'
+                        'pedido_id': pedido_id, 
+                        'producto_id': pid, 
+                        'cantidad': cantidad_a_anadir, 
+                        'estado': 'PENDIENTE',
+                        'precio_unitario': precio_unitario_snapshot,
+                        'costo_unitario': costo_unitario_snapshot
                     }).execute()
 
                 elif nueva_cantidad_total < cantidad_existente_total:
@@ -322,8 +395,17 @@ class PedidoModel(BaseModel):
 
                     nueva_cantidad_pendiente = cantidad_pendiente_total - cantidad_a_reducir
                     if nueva_cantidad_pendiente > 0:
+                        # Para el item reducido, recalculamos o copiamos? Mejor crear nuevo con snapshot actual
+                        producto_info_res = producto_model.find_by_id(pid)
+                        producto_data_actual = producto_info_res.get('data', {})
+                        costos = rentabilidad_controller._calcular_costos_unitarios_dinamicos(producto_data_actual, roles_map)
+                        costo_unitario_snapshot = costos.get('costo_variable_unitario', 0.0)
+                        precio_unitario_snapshot = float(producto_data_actual.get('precio_unitario', 0.0) or 0.0)
+                        
                         self.db.table('pedido_items').insert({
-                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE'
+                            'pedido_id': pedido_id, 'producto_id': pid, 'cantidad': nueva_cantidad_pendiente, 'estado': 'PENDIENTE',
+                            'precio_unitario': precio_unitario_snapshot,
+                            'costo_unitario': costo_unitario_snapshot
                         }).execute()
 
             pedido_status = pedido_data.get('estado')

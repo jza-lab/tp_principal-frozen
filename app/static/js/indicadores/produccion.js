@@ -25,7 +25,7 @@ window.renderProduccionTab = function(data, container) {
                 <div class="card-body position-relative p-2">
                     <h6 class="text-center text-muted fw-bold text-uppercase mt-3 mb-0" style="letter-spacing: 1px;">OEE Global</h6>
                     <div id="oee-gauge-chart" style="height: 250px;"></div>
-                    <div class="text-center position-absolute w-100" style="bottom: 20px;">
+                    <div class="text-center position-absolute w-100 start-0" style="bottom: 20px;">
                         <span class="badge bg-light text-dark border shadow-sm py-2 px-3 rounded-pill" data-bs-toggle="tooltip" title="Calculado como Disponibilidad × Rendimiento × Calidad">
                             <i class="bi bi-info-circle me-1 text-primary"></i> Eficiencia General
                         </span>
@@ -45,9 +45,6 @@ window.renderProduccionTab = function(data, container) {
                 
                 ${window.renderKpiCard('Calidad', `${(oeeData.calidad * 100).toFixed(1)}%`, 'Piezas Buenas vs Totales', 'bi-check-circle', 
                     '<b>Fórmula:</b> (Piezas Buenas / Piezas Totales) <br>Porcentaje de producción que cumple con los estándares de calidad (sin defectos).', 'success')}
-                
-                ${window.renderKpiCard('Cumplimiento Plan', `${cumplimiento.valor.toFixed(1)}%`, `${cumplimiento.completadas_a_tiempo} órdenes a tiempo`, 'bi-calendar-check', 
-                    'Porcentaje de Órdenes de Producción que se completaron antes o en la fecha meta prometida.', 'indigo')}
             </div>
         </div>
     </div>
@@ -130,17 +127,6 @@ window.renderProduccionTab = function(data, container) {
                 'Principales motivos de pérdida de material.',
                 ranking.insight, 
                 ranking.tooltip
-            )}
-        </div>
-
-        <!-- Gráfico 4: Evolución Desperdicios -->
-        <div class="col-lg-6 col-xl-6">
-            ${window.createSmartCardHTML(
-                'chart-evolucion-desperdicios', 
-                'Evolución Desperdicios', 
-                'Tendencia histórica de incidentes reportados.',
-                evolucion.insight, 
-                evolucion.tooltip
             )}
         </div>
 
@@ -286,23 +272,6 @@ window.renderProduccionTab = function(data, container) {
     }
     window.createChart('chart-ranking-desperdicios', desperdiciosOption);
 
-
-    // --- CHART 4: EVOLUCIÓN DESPERDICIOS ---
-    window.createChart('chart-evolucion-desperdicios', {
-        tooltip: { trigger: 'axis' },
-        grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-        xAxis: { type: 'category', boundaryGap: false, data: evolucion.categories },
-        yAxis: { type: 'value' },
-        series: [{
-            name: 'Incidentes',
-            type: 'line',
-            smooth: true,
-            data: evolucion.values,
-            areaStyle: { opacity: 0.1, color: '#fd7e14' },
-            itemStyle: { color: '#fd7e14' },
-            lineStyle: { width: 3 }
-        }]
-    });
 
     // --- CHART 5: VELOCIDAD PRODUCCIÓN (GAUGE SIMPLE) - Usando datos nuevos ---
     const velocidadVal = velocidad.valor;

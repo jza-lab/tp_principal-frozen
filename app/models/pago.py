@@ -45,7 +45,7 @@ class PagoModel(BaseModel):
         Busca un pago por su ID.
         """
         try:
-            query = self.db.table(self.get_table_name()).select("*").eq("id", id_pago).maybe_single()
+            query = self.db.table(self.get_table_name()).select("*").eq("id_pago", id_pago).maybe_single()
             result = query.execute()
             
             if result.data:

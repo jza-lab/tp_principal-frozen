@@ -55,6 +55,8 @@ def listar():
     """Muestra la lista de todos los pedidos de venta con ordenamiento por estado."""
     controller = PedidoController()
     rango_fecha = request.args.get('rango_fecha')
+    estado = request.args.get('estado')
+    search = request.args.get('search')
     
     # Prepara el diccionario de filtros que se pasará al controlador.
     filtros = {}
@@ -77,7 +79,9 @@ def listar():
     return render_template('orden_venta/listar.html',
                            pedidos=pedidos,
                            titulo="Pedidos de Venta",
-                           filtros_ui=OV_FILTROS_UI)
+                           filtros_ui=OV_FILTROS_UI,
+                           estado_actual=estado,
+                           search_actual=search)
 
 @orden_venta_bp.route('/nueva', methods=['GET', 'POST'])
 @jwt_required()
@@ -218,7 +222,7 @@ def detalle(id):
     if pedido_data.get('updated_at') and isinstance(pedido_data['updated_at'], str):
         pedido_data['updated_at'] = datetime.fromisoformat(pedido_data['updated_at'])
         
-    return render_template('orden_venta/detalle.html', pedido=pedido_data, pagos=pagos)
+    return render_template('orden_venta/detalle.html', pedido=pedido_data, pagos=pagos, token_seguimiento=token_seguimiento)
 
 @orden_venta_bp.route('/<int:id>/cancelar', methods=['POST'])
 @permission_required(accion='logistica_gestion_ov') # ANTES: 'modificar_orden_de_venta'
@@ -286,6 +290,10 @@ def planificar(id):
         flash(response.get('message'), 'success')
     else:
         flash(response.get('error'), 'error')
+    
+    active_filters = request.form.get('active_filters', '')
+    if active_filters:
+        return redirect(url_for('orden_venta.listar') + active_filters)
     return redirect(url_for('orden_venta.detalle', id=id))
 
 @orden_venta_bp.route('/<int:id>/iniciar_proceso', methods=['POST'])
@@ -586,7 +594,7 @@ def generar_documento_pdf(tipo, id_documento):
 
             template_name = 'orden_venta/_comprobante_pago.html'
             context = {'pedido': pedido, 'pago': pago}
-            filename = f"Recibo_Pago_{pago['id']}.pdf"
+            filename = f"Recibo_Pago_{pago.get('id_pago', pago.get('id'))}.pdf"
 
         elif tipo == 'nc':
             from app.controllers.nota_credito_controller import NotaCreditoController

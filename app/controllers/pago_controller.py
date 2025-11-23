@@ -105,3 +105,8 @@ class PagoController(BaseController):
             return self.error_response("Error al obtener los pagos del pedido.", 500)
         return self.success_response(pagos_res.get('data', []))
 
+    def get_pago_by_id(self, id_pago):
+        result = self.pago_model.find_by_id(id_pago)
+        if not result.get('success'):
+             return self.error_response("Pago no encontrado.", 404)
+        return self.success_response(result.get('data'))

@@ -67,9 +67,11 @@
                         <tr>
                             <th>Producto</th>
                             <th>N° Lote</th>
-                            <th class="text-end">Cantidad</th> 
-                            <th>Fecha Creación</th>
-                            <th>Fecha Vencimiento</th>
+                            <th class="text-end">Cantidad</th>
+                            
+                            <th>Fecha Producción</th> 
+                            
+                            <th>Fecha Creación</th> <th>Fecha Vencimiento</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -93,6 +95,11 @@
                                     {{ lote.cantidad_actual | round(1) }} <small class="text-muted" style="font-size: 0.8em;">unid.</small>
                                 {% endif %}
                             </td>
+
+                            <td>
+                                {{ lote.fecha_produccion.strftime('%Y-%m-%d') if lote.fecha_produccion else 'N/A' }}
+                            </td>
+
                             <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
                             <td>
                                 {% if lote.fecha_vencimiento %}
@@ -159,7 +166,9 @@
                                         data-bs-toggle="modal"
                                         data-bs-target="#modalNoApto"
                                         data-lote-id="{{ lote.id_lote }}"
-                                        data-lote-numero="{{ lote.numero_lote }}">
+                                        data-lote-numero="{{ lote.numero_lote }}"
+                                        data-lote-cantidad-total="{{ (lote.cantidad_actual | float) + (lote.cantidad_en_cuarentena | float) }}"
+                                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                                     <i class="bi bi-slash-circle"></i>
                                 </button>
                             </td>
@@ -222,8 +231,20 @@
                     </div>
                     
                     <div class="mb-3">
-                        <label for="motivo_cuarentena" class="form-label">Motivo (Requerido):</label>
-                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" required></textarea>
+                        <label for="resultado_inspeccion" class="form-label">Motivo (Requerido):</label>
+                        <select class="form-select" id="resultado_inspeccion" name="resultado_inspeccion" required>
+                            <option value="" selected disabled>Seleccione un motivo...</option>
+                            <option value="Cuarentena por calidad">Cuarentena por calidad</option>
+                            <option value="Sospecha de contaminación">Sospecha de contaminación</option>
+                            <option value="Defecto de empaque">Defecto de empaque</option>
+                            <option value="Etiquetado incorrecto">Etiquetado incorrecto</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="motivo_cuarentena" class="form-label">Comentarios:</label>
+                        <textarea class="form-control" id="motivo_cuarentena" name="motivo_cuarentena" rows="3" placeholder="Detalles adicionales..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -274,27 +295,99 @@
 <script src="{{ url_for('static', filename='js/productos/graficosInventario.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inventario/filtros.js') }}"></script>
 
-<!-- Modal de Confirmación para Marcar como No Apto -->
+<!-- Modal de Gestión de Lote No Apto -->
 <div class="modal fade" id="modalNoApto" tabindex="-1" aria-labelledby="modalNoAptoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
-                <h5 class="modal-title" id="modalNoAptoLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Confirmar Acción Crítica</h5>
+                <h5 class="modal-title" id="modalNoAptoLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Gestión de Lote No Apto</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <p>Lote de Producto: <strong id="loteNumeroNoApto"></strong></p>
-                <p>Está a punto de marcar este lote de producto terminado como <strong>"No Apto"</strong>. Esta acción es irreversible y lo pondrá en cuarentena para su revisión.</p>
-                <hr>
-                <p class="mb-0">¿Está seguro de que desea continuar?</p>
-            </div>
-            <div class="modal-footer">
-                <form id="formNoApto" method="POST">
+            <form id="formNoApto" method="POST">
+                <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
+                    <p>Lote de Producto: <strong id="loteNumeroNoApto"></strong></p>
+                    <p class="text-muted small">Seleccione la acción a realizar con este lote.</p>
+
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Acción a realizar:</label>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="radio" name="accion_no_apto" id="accionRetirar" value="retirar" checked>
+                            <label class="form-check-label" for="accionRetirar">
+                                <strong>Retirar (Registrar Desperdicio)</strong>
+                                <div class="text-muted small">El lote (o una parte) se retira del inventario y se registra como desperdicio.</div>
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="accion_no_apto" id="accionAlerta" value="alerta">
+                            <label class="form-check-label" for="accionAlerta">
+                                <strong>Crear Alerta de Riesgo</strong>
+                                <div class="text-muted small">Se inicia un caso de alerta de riesgo para investigar el problema (Calidad, Seguridad, etc.).</div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Sección RETIRAR -->
+                    <div id="seccionRetirar" class="p-3 bg-light border rounded mb-3">
+                        <h6 class="text-danger mb-3"><i class="bi bi-trash me-2"></i>Datos del Retiro</h6>
+                        
+                        <div class="mb-3">
+                            <label for="cantidad_retiro" class="form-label">Cantidad a retirar:</label>
+                            <input type="number" class="form-control" id="cantidad_retiro" name="cantidad_retiro" step="0.01" min="0.01">
+                            <div class="form-text">
+                                Stock disponible/cuarentena: <span id="stockMaximoRetiro">0</span> unidades.
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="motivo_desperdicio_id" class="form-label">Motivo del Desperdicio:</label>
+                            <select class="form-select" id="motivo_desperdicio_id" name="motivo_desperdicio_id">
+                                <option value="" selected disabled>Seleccione un motivo...</option>
+                                {% for motivo in motivos_desperdicio %}
+                                <option value="{{ motivo.id }}">{{ motivo.motivo or motivo.descripcion or motivo.nombre or 'Motivo ' ~ loop.index }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                         <div class="mb-3">
+                            <label for="resultado_inspeccion" class="form-label">Detalle/Resultado Inspección:</label>
+                            <textarea class="form-control" id="resultado_inspeccion" name="resultado_inspeccion" rows="2" placeholder="Opcional"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="comentarios_retiro" class="form-label">Comentarios Adicionales:</label>
+                            <textarea class="form-control" id="comentarios_retiro" name="comentarios_retiro" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Sección ALERTA -->
+                    <div id="seccionAlerta" class="p-3 bg-light border rounded mb-3" style="display: none;">
+                        <h6 class="text-warning-emphasis mb-3"><i class="bi bi-shield-exclamation me-2"></i>Datos de la Alerta</h6>
+                        
+                        <div class="mb-3">
+                            <label for="motivo_alerta" class="form-label">Motivo de la Alerta:</label>
+                            <select class="form-select" id="motivo_alerta" name="motivo_alerta">
+                                <option value="" selected disabled>Seleccione un motivo...</option>
+                                {% for motivo in motivos_desperdicio %}
+                                {% set motivo_texto = motivo.motivo or motivo.descripcion or motivo.nombre or 'Motivo ' ~ loop.index %}
+                                <option value="{{ motivo_texto }}">{{ motivo_texto }}</option>
+                                {% endfor %}
+                                <option value="Otro">Otro</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="descripcion_alerta" class="form-label">Descripción detallada:</label>
+                            <textarea class="form-control" id="descripcion_alerta" name="descripcion_alerta" rows="4" placeholder="Describa el incidente..."></textarea>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-danger">Sí, Marcar como No Apto</button>
-                </form>
-            </div>
+                    <button type="submit" class="btn btn-danger" id="btnSubmitNoApto">Confirmar Acción</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
@@ -363,16 +456,76 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Manejador para el modal MARCAR COMO NO APTO ---
     var modalNoApto = document.getElementById('modalNoApto');
     if (modalNoApto) {
+        const radioRetirar = modalNoApto.querySelector('#accionRetirar');
+        const radioAlerta = modalNoApto.querySelector('#accionAlerta');
+        const seccionRetirar = modalNoApto.querySelector('#seccionRetirar');
+        const seccionAlerta = modalNoApto.querySelector('#seccionAlerta');
+        
+        const inputCantidad = modalNoApto.querySelector('#cantidad_retiro');
+        const selectMotivo = modalNoApto.querySelector('#motivo_desperdicio_id');
+        const inputMotivoAlerta = modalNoApto.querySelector('#motivo_alerta');
+        const inputDescAlerta = modalNoApto.querySelector('#descripcion_alerta');
+
+        function toggleSections() {
+            if (radioRetirar.checked) {
+                seccionRetirar.style.display = 'block';
+                seccionAlerta.style.display = 'none';
+                
+                inputCantidad.required = true;
+                selectMotivo.required = true;
+                inputMotivoAlerta.required = false;
+                inputDescAlerta.required = false;
+            } else {
+                seccionRetirar.style.display = 'none';
+                seccionAlerta.style.display = 'block';
+
+                inputCantidad.required = false;
+                selectMotivo.required = false;
+                inputMotivoAlerta.required = true;
+                inputDescAlerta.required = true;
+            }
+        }
+
+        radioRetirar.addEventListener('change', toggleSections);
+        radioAlerta.addEventListener('change', toggleSections);
+
         modalNoApto.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var loteId = button.getAttribute('data-lote-id');
             var loteNumero = button.getAttribute('data-lote-numero');
             
+            // En productos, a veces la cantidad está en atributos o solo texto.
+            // Vamos a asumir que agregaremos los atributos en el botón como hicimos en insumos.
+            // El botón está en la tabla `lotes_productos/listar.html`.
+            // Necesitamos agregar data-lote-cantidad-total y data-lote-cantidad-cuarentena al botón.
+            
+            // Por ahora, leemos lo que haya, y luego parchamos el botón HTML abajo.
+            var cantidadTotal = parseFloat(button.getAttribute('data-lote-cantidad-total') || '0');
+            var cantidadCuarentena = parseFloat(button.getAttribute('data-lote-cantidad-cuarentena') || '0');
+            
+            // Si no vienen los atributos, intentamos leer del atributo simple
+            if (!cantidadTotal && !cantidadCuarentena) {
+                 // Algunos botones tienen data-lote-cantidad (que suele ser el disponible)
+                 var cantDisp = parseFloat(button.getAttribute('data-lote-cantidad') || '0');
+                 cantidadTotal = cantDisp; // fallback
+            }
+
+            var maxStock = cantidadCuarentena > 0 ? cantidadCuarentena : cantidadTotal;
+
             var form = modalNoApto.querySelector('#formNoApto');
             var actionUrl = `{{ url_for('lote_producto.listar_lotes') }}${loteId}/marcar-no-apto`;
             form.setAttribute('action', actionUrl);
             
             modalNoApto.querySelector('#loteNumeroNoApto').textContent = loteNumero;
+            
+            const spanStock = modalNoApto.querySelector('#stockMaximoRetiro');
+            spanStock.textContent = maxStock;
+            
+            inputCantidad.max = maxStock;
+            inputCantidad.value = maxStock;
+
+            radioRetirar.checked = true;
+            toggleSections();
         });
 
         var formNoApto = document.getElementById('formNoApto');

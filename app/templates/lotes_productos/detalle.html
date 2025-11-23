@@ -215,6 +215,12 @@
     </div>
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
+        
+        <div class="d-flex justify-content-end mb-3">
+            <button id="export-trazabilidad-pdf" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Exportar a PDF
+            </button>
+        </div>
 
         <div id="resumen-trazabilidad-contenedor" class="card mb-4">
             <div class="card-header">
@@ -474,9 +480,13 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
 <script>
        window.LOTE_PRODUCTO_ID = "{{ lote.id_lote | safe }}";
-
+       window.ENTITY_TYPE = "lote_producto";
+       window.ENTITY_ID = "{{ lote.id_lote | safe }}";
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadProducto.js') }}?v=1.0"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.1"></script>
 
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 

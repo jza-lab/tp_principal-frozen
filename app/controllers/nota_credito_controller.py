@@ -1,4 +1,5 @@
 from decimal import ROUND_HALF_UP, Decimal
+from datetime import datetime
 from app.controllers.base_controller import BaseController
 from app.models.nota_credito import NotaCreditoModel
 from app.models.pedido import PedidoModel
@@ -77,6 +78,7 @@ class NotaCreditoController(BaseController):
 
                 validated_data = self.schema.load(nc_data)
                 validated_data['monto'] = str(validated_data['monto'])
+                validated_data['fecha_emision'] = datetime.now().isoformat()
                 create_res = self.model.create_with_items(validated_data, items_afectados_para_nc)
                 if create_res.get('success'):
                     notas_creadas.append(create_res.get('data'))

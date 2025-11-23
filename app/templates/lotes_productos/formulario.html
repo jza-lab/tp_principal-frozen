@@ -45,6 +45,20 @@
                         </div>
                         
                         <div class="col-md-6">
+                            <label for="fecha_produccion" class="form-label">Fecha de Producción <span class="text-danger">*</span></label>
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-calendar-event"></i></span>
+                                <input type="date" class="form-control" 
+                                       id="fecha_produccion" 
+                                       name="fecha_produccion" 
+                                       value="{{ today }}" 
+                                       max="{{ today }}" 
+                                       required>
+                            </div>
+                            <div class="form-text text-muted">Fecha en la que se fabricó el lote.</div>
+                        </div>
+
+                        <div class="col-md-6">
                             <label for="fecha_vencimiento" class="form-label">Fecha de Vencimiento</label>
                             <div class="input-group">
                                 <span class="input-group-text"><i class="bi bi-calendar-x"></i></span>
@@ -63,4 +77,22 @@
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputProduccion = document.getElementById('fecha_produccion');
+        const inputVencimiento = document.getElementById('fecha_vencimiento');
+
+        // Cuando cambia la fecha de producción, actualizamos el mínimo del vencimiento
+        inputProduccion.addEventListener('change', function() {
+            inputVencimiento.min = this.value;
+            
+            // Si la fecha de vencimiento actual es menor a la nueva de producción, limpiarla
+            if (inputVencimiento.value && inputVencimiento.value < this.value) {
+                inputVencimiento.value = '';
+            }
+        });
+    });
+</script>
 {% endblock %}

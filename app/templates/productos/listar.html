@@ -26,12 +26,12 @@
     <div class="card-body card-filter">
         <form id="filter-form" method="get" action="{{ url_for('productos.obtener_productos') }}">
             <div class="row g-3 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-5">
                     <label for="busqueda" class="form-label">Buscar</label>
                     <input type="text" name="busqueda" id="busqueda" class="form-control"
                         placeholder="Nombre o código..." value="{{ request.args.get('busqueda', '') }}">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-4">
                     <label for="categoria" class="form-label">Filtrar por Categoría</label>
                     <select name="categoria" id="categoria" class="form-select">
                         <option value="">Todas las categorías</option>
@@ -41,11 +41,6 @@
                         </option>
                         {% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2 align-self-end">
-                    <button type="submit" class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-search"></i> Buscar
-                    </button>
                 </div>
                 <div class="col-md-3">
                     <div class="text-muted small text-end">

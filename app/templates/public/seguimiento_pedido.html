@@ -1,117 +1,547 @@
 {% extends "public/base.html" %} 
-{% block title %}Seguimiento de tu Pedido{% endblock %} 
+{% block title %}Seguimiento de Orden{% endblock %} 
+
 {% block extra_css %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
-  .estado-pasado {
-    opacity: 0.7;
-  }
-  
-  .estado-futuro {
-    opacity: 0.6;
-  }
+    /* Global Styles for Tracking Page */
+    .tracking-container {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: #495057;
+        background: linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 16px;
+        padding: 2.5rem;
+        min-height: 85vh;
+        border: 1px solid #e9ecef;
+    }
+
+    .tracking-header {
+        font-weight: 800;
+        color: #2c3e50;
+        margin-bottom: 2.5rem;
+        text-align: left;
+        position: relative;
+        padding-bottom: 1rem;
+    }
+    
+    .tracking-header::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 60px;
+        height: 4px;
+        background: #0d6efd; /* Bootstrap Primary */
+        border-radius: 2px;
+    }
+
+    /* KPI Cards / Info Bar - Modern Style */
+    .kpi-card {
+        background: #fff;
+        border: none;
+        border-radius: 12px;
+        padding: 1.5rem;
+        height: 100%;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    
+    .kpi-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+    }
+
+    .kpi-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: #868e96;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .kpi-value {
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: #212529;
+    }
+
+    /* Status Stepper - Clean & Modern */
+    .stepper-container {
+        margin: 4rem 0;
+        position: relative;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 0 1rem;
+    }
+
+    .stepper-track {
+        position: absolute;
+        top: 20px; /* Centered with circle */
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: #e9ecef;
+        z-index: 1;
+        width: 100%;
+        border-radius: 4px;
+    }
+
+    .stepper-item {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .stepper-circle {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: #fff;
+        border: 3px solid #dee2e6;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy effect */
+        font-size: 1.1rem;
+        color: #adb5bd;
+    }
+
+    .stepper-item.active .stepper-circle,
+    .stepper-item.completed .stepper-circle {
+        border-color: #198754; /* Bootstrap Success */
+        background: #198754;
+        color: #fff;
+        transform: scale(1.1);
+        box-shadow: 0 0 0 5px rgba(25, 135, 84, 0.1);
+    }
+
+    .stepper-title {
+        font-size: 0.8rem;
+        color: #adb5bd;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: color 0.3s;
+    }
+
+    .stepper-item.active .stepper-title,
+    .stepper-item.completed .stepper-title {
+        color: #198754;
+        font-weight: 700;
+    }
+
+    /* Sections */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #343a40;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: center;
+    }
+
+    .section-header i {
+        margin-right: 0.75rem;
+        color: #0d6efd;
+    }
+
+    .info-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 1.5rem;
+        border: 1px solid #f1f3f5;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        height: 100%;
+    }
+
+    .detail-row {
+        margin-bottom: 1.2rem;
+        border-bottom: 1px solid #f8f9fa;
+        padding-bottom: 1rem;
+    }
+    
+    .detail-row:last-child {
+        margin-bottom: 0;
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .detail-label {
+        font-weight: 600;
+        color: #868e96;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .detail-text {
+        color: #495057;
+        font-size: 1rem;
+        font-weight: 500;
+    }
+
+    .map-wrapper {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #dee2e6;
+        height: 100%;
+        min-height: 350px;
+        background-color: #e9ecef;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+
+    /* Product Cards (Grid Layout) */
+    .product-card {
+        background: #fff;
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .product-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+
+    .product-card-stripe {
+        width: 6px;
+        background: #0d6efd;
+    }
+
+    .product-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #343a40;
+    }
+
+    .product-badge {
+        font-size: 0.8rem;
+        padding: 0.4em 0.8em;
+    }
+
+    /* Lot Styling */
+    .lot-item {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem;
+        margin-bottom: 0.5rem;
+        transition: background-color 0.2s;
+    }
+    
+    .lot-item:hover {
+        background-color: #fff;
+        border-color: #dee2e6;
+    }
+
+    .lot-chip {
+        display: inline-flex;
+        align-items: center;
+        background: #e7f5ff;
+        color: #0d6efd;
+        font-weight: 700;
+        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        margin-right: 0.5rem;
+    }
+
+    @media (max-width: 768px) {
+        .tracking-container {
+            padding: 1.5rem;
+        }
+        .stepper-title {
+            display: none; /* Hide titles on very small screens if needed, or reduce font */
+        }
+        .stepper-circle {
+            width: 32px;
+            height: 32px;
+            font-size: 0.9rem;
+        }
+    }
 </style>
 {% endblock %} 
+
 {% block content %}
-<div class="container my-5">
-  <div class="card shadow-sm">
-    <div class="card-header bg-primary text-white">
-      <h2 class="mb-0">Seguimiento de tu Pedido</h2>
-    </div>
-    <div class="card-body">
-      <div class="row mb-4">
-        <div class="col-md-4">
-          <h5>Número de Pedido</h5>
-          <p class="lead">#{{ pedido.codigo_pedido or pedido.id }}</p>
-        </div>
-        <div class="col-md-4">
-          <h5>Fecha Estimada de Entrega</h5>
-          <p class="lead">{{ pedido.fecha_requerido | format_date }}</p>
-        </div>
-        <div class="col-md-4">
-          <h5>Destino</h5>
-          <p class="lead">{{ pedido.direccion.localidad }}, {{ pedido.direccion.provincia }}</p>
-        </div>
-      </div>
-
-      <h4 class="mb-3">Estado Actual</h4>
-      <ul class="list-unstyled">
-        {% for hito in hitos %}
-        {% set clase_estado = '' %}
-        {% set badge_text = '' %}
-        {% set badge_class = '' %}
+<div class="container py-5">
+    <div class="tracking-container">
         
-        {% if hito.estado == 'activo' %}
-          {# Estado actual #}
-          {% set badge_text = 'Actualmente' %}
-          {% set badge_class = 'bg-warning text-dark' %}
-        {% elif hito.estado == 'inactivo' %}
-          {# Estado futuro #}
-          {% set clase_estado = 'estado-futuro' %}
-          {% set badge_text = 'Próximamente' %}
-          {% set badge_class = 'bg-danger' %}
-        {% else %}
-          {# Estado pasado (completado) #}
-          {% set clase_estado = 'estado-pasado' %}
-          {% set badge_text = 'Hecho' %}
-          {% set badge_class = 'bg-success' %}
-        {% endif %}
-        
-        <li class="mb-4 {{ clase_estado }}">
-          <div class="d-flex align-items-start">
-            <div class="me-3">
-              <i class="bi bi-circle-fill" style="font-size: 12px;"></i>
+        <!-- Header -->
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+            <div>
+                <h2 class="tracking-header mb-1 border-0 p-0">Seguimiento de Orden</h2>
+                <div class="text-muted fs-5">#{{ pedido.codigo_pedido or pedido.id }}</div>
             </div>
-            <div class="flex-grow-1">
-              <h5 class="mb-1">
-                {{ hito.titulo }}
-                {% if badge_text %}
-                <span class="badge {{ badge_class }}">{{ badge_text }}</span>
-                {% endif %}
-              </h5>
-              <p class="mb-1">{{ hito.descripcion }}</p>
-              {% if hito.fecha %}
-              <small class="text-muted">
-                <i class="bi bi-clock"></i> {{ hito.fecha | format_datetime }}
-              </small>
-              {% endif %}
+            <div class="mt-3 mt-md-0">
+                <a href="{{ url_for('public.index') }}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">
+                    <i class="bi bi-arrow-left me-1"></i> Volver al Inicio
+                </a>
             </div>
-          </div>
-        </li>
-        {% endfor %}
-      </ul>
+        </div>
 
-      <hr class="my-4">
+        <!-- KPI Grid -->
+        <div class="row g-3 mb-5">
+            <div class="col-6 col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-label">Fecha Solicitud</div>
+                    <div class="kpi-value">{{ pedido.fecha_solicitud | format_date if pedido.fecha_solicitud else pedido.created_at | format_date }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Orden</div>
+                    <div class="kpi-value text-primary">${{ "{:,.2f}".format(pedido.total or 0) }}</div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-label">Cliente</div>
+                    <div class="kpi-value text-truncate" style="font-size: 1.1rem;">
+                         {% if pedido.cliente and pedido.cliente.nombre %}
+                            {{ pedido.cliente.nombre }} {{ pedido.cliente.apellido or '' }}
+                        {% else %}
+                            {{ pedido.cliente_nombre or 'Cliente' }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="kpi-card">
+                    <div class="kpi-label">Estado</div>
+                    <div class="kpi-value text-capitalize" style="font-size: 1.1rem;">
+                        {% if pedido.estado == 'COMPLETADO' %}
+                            <span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Entregado</span>
+                        {% elif pedido.estado == 'CANCELADO' %}
+                            <span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>Cancelado</span>
+                        {% else %}
+                            <span class="text-primary">{{ pedido.estado | replace('_', ' ') | lower }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
 
-      <h4 class="mb-3">Resumen de tu Compra</h4>
-      <div class="table-responsive">
-        <table class="table table-hover">
-          <thead>
-            <tr>
-              <th>Producto</th>
-              <th>Cantidad</th>
-              <th>Lote</th>
-              <th>Elaboración</th>
-              <th>Vencimiento</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in pedido['items'] %}
-            <tr>
-              <td>{{ item.producto_nombre.nombre or 'Producto Desconocido' }}</td>
-              <td>{{ item.cantidad }}</td>
-              <td>{{ lotes_por_item[item.id].numero_lote if lotes_por_item.get(item.id) else 'N/A' }}</td>
-              <td>{{ lotes_por_item[item.id].fecha_produccion | format_date if lotes_por_item.get(item.id) else 'N/A' }}</td>
-              <td>{{ lotes_por_item[item.id].fecha_vencimiento | format_date if lotes_por_item.get(item.id) else 'N/A' }}</td>
-            </tr>
+        <!-- Status Stepper -->
+        {% if pedido.estado != 'CANCELADO' %}
+        <div class="stepper-container">
+            <div class="stepper-track"></div>
+            
+            {% set steps = [
+                {'id': 'PENDIENTE', 'label': 'Recibido', 'icon': 'bi-file-text'},
+                {'id': 'PLANIFICADA', 'label': 'Planificado', 'icon': 'bi-clipboard-data'},
+                {'id': 'EN_PROCESO', 'label': 'Producción', 'icon': 'bi-gear-wide-connected'},
+                {'id': 'LISTO_PARA_ENTREGA', 'label': 'Listo', 'icon': 'bi-box-seam'},
+                {'id': 'EN_TRANSITO', 'label': 'En Camino', 'icon': 'bi-truck'},
+                {'id': 'COMPLETADO', 'label': 'Entregado', 'icon': 'bi-house-check'}
+            ] %}
+
+            {% set current_state_found = false %}
+            {% set active_index = -1 %}
+            
+            {# Determine active index based on current state #}
+            {% if pedido.estado == 'PENDIENTE' %} {% set active_index = 0 %}
+            {% elif pedido.estado == 'PLANIFICADA' %} {% set active_index = 1 %}
+            {% elif pedido.estado == 'EN_PROCESO' %} {% set active_index = 2 %}
+            {% elif pedido.estado == 'LISTO_PARA_ENTREGA' %} {% set active_index = 3 %}
+            {% elif pedido.estado == 'EN_TRANSITO' %} {% set active_index = 4 %}
+            {% elif pedido.estado == 'COMPLETADO' %} {% set active_index = 5 %}
+            {% endif %}
+
+            {% for step in steps %}
+                <div class="stepper-item {% if loop.index0 < active_index %}completed{% elif loop.index0 == active_index %}active{% endif %}">
+                    <div class="stepper-circle">
+                        {% if loop.index0 < active_index %}
+                            <i class="bi bi-check-lg"></i>
+                        {% else %}
+                            <i class="bi {{ step.icon }}"></i>
+                        {% endif %}
+                    </div>
+                    <div class="stepper-title">{{ step.label }}</div>
+                </div>
             {% endfor %}
-          </tbody>
-        </table>
-      </div>
+        </div>
+        {% else %}
+        <div class="alert alert-danger d-flex align-items-center mb-5 rounded-3 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-triangle-fill fs-4 me-3"></i>
+            <div>
+                <strong>Pedido Cancelado</strong>
+                <div class="small">Este pedido ha sido cancelado. Por favor, contáctenos para más información.</div>
+            </div>
+        </div>
+        {% endif %}
 
-      <div class="alert alert-info mt-4" role="alert">
-        <i class="bi bi-info-circle"></i> Gracias por confiar en Frozen.
-      </div>
+        <!-- Info & Map Row -->
+        <div class="row mb-5 g-4">
+            <div class="col-lg-4">
+                <div class="d-flex flex-column h-100">
+                    <div class="section-header">
+                        <i class="bi bi-info-circle-fill"></i> Detalles de Envío
+                    </div>
+                    <div class="info-card">
+                        <div class="detail-row">
+                            <div class="detail-label">Dirección de Entrega</div>
+                            <div class="detail-text">
+                                {% if pedido.direccion and pedido.direccion is mapping %}
+                                    {{ pedido.direccion.calle }} {{ pedido.direccion.numero }}<br>
+                                    <span class="text-muted small">
+                                        {% if pedido.direccion.piso %}{{ pedido.direccion.piso }} - {{ pedido.direccion.depto }},{% endif %}
+                                        {{ pedido.direccion.localidad }}, {{ pedido.direccion.provincia or '' }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted fst-italic">Dirección no disponible</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">Logística</div>
+                            <div class="detail-text">
+                                Logistica tercerizada
+                            </div>
+                        </div>
+
+                        <div class="detail-row">
+                            <div class="detail-label">Fecha Estimada</div>
+                            <div class="detail-text text-primary">
+                                {{ pedido.fecha_requerido | format_date }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="d-flex flex-column h-100">
+                    <div class="section-header">
+                        <i class="bi bi-geo-alt-fill"></i> Ubicación del Destino
+                    </div>
+                    <div class="map-wrapper">
+                        <div id="map" style="width: 100%; height: 100%; min-height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Grid (Indicadores Style) -->
+        <div class="mb-4">
+            <div class="section-header border-bottom pb-2 mb-4">
+                <i class="bi bi-box-fill"></i> Productos en la Orden
+            </div>
+            
+            <div class="row g-4">
+                {% for item in pedido['items'] %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="product-card d-flex position-relative h-100">
+                        <div class="product-card-stripe"></div>
+                        <div class="p-4 w-100 d-flex flex-column">
+                            <!-- Header -->
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div class="icon-box bg-light text-primary rounded-circle p-2 me-3 d-flex align-items-center justify-content-center" style="width: 48px; height: 48px; flex-shrink: 0;">
+                                    <i class="bi bi-box-seam fs-5"></i>
+                                </div>
+                                <span class="badge bg-light text-dark border product-badge rounded-pill">
+                                    x{{ item.cantidad }} {{ item.unidad_medida or 'u' }}
+                                </span>
+                            </div>
+                            
+                            <!-- Title -->
+                            <h5 class="product-title mb-3 text-truncate-2">
+                                {{ item.producto_nombre.nombre or item.producto_nombre or 'Producto Desconocido' }}
+                            </h5>
+                            
+                            <!-- Trazabilidad / Lotes -->
+                            <div class="mt-auto">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-qr-code text-muted me-2 small"></i>
+                                    <span class="text-uppercase text-muted fw-bold" style="font-size: 0.7rem;">Trazabilidad de Lotes</span>
+                                </div>
+                                
+                                {% set lotes = lotes_por_item.get(item.id) %}
+                                {% if lotes %}
+                                    <div class="d-flex flex-column">
+                                    {% for lote in lotes %}
+                                        <div class="lot-item">
+                                            <div class="d-flex align-items-center justify-content-between mb-1">
+                                                <div class="lot-chip">#{{ lote.numero_lote }}</div>
+                                            </div>
+                                            <div class="row g-0 text-muted" style="font-size: 0.75rem;">
+                                                {% if lote.fecha_produccion %}
+                                                <div class="col-6" title="Fecha Elaboración">
+                                                    <i class="bi bi-calendar-event me-1"></i>{{ lote.fecha_produccion }}
+                                                </div>
+                                                {% endif %}
+                                                {% if lote.fecha_vencimiento %}
+                                                <div class="col-6" title="Fecha Vencimiento">
+                                                    <i class="bi bi-hourglass-split me-1"></i>{{ lote.fecha_vencimiento }}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="bg-light rounded p-2 text-center text-muted small border border-dashed">
+                                        En espera de asignación
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
     </div>
-  </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Coordenadas por defecto (Centro de Distribución o Buenos Aires)
+        const defaultLat = -34.6037;
+        const defaultLng = -58.3816;
+
+        // Intentar obtener coordenadas del pedido
+        // Jinja renderiza esto como números o null
+        const pedidoLat = {{ pedido.direccion.latitud if (pedido.direccion and pedido.direccion.latitud) else 'null' }};
+        const pedidoLng = {{ pedido.direccion.longitud if (pedido.direccion and pedido.direccion.longitud) else 'null' }};
+
+        const hasCoords = (pedidoLat !== null && pedidoLng !== null);
+        
+        const lat = hasCoords ? pedidoLat : defaultLat;
+        const lng = hasCoords ? pedidoLng : defaultLng;
+
+        var map = L.map('map').setView([lat, lng], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        const marker = L.marker([lat, lng]).addTo(map);
+        
+        if (hasCoords) {
+            marker.bindPopup('<b>Ubicación de Entrega</b><br>Cliente').openPopup();
+        } else {
+            marker.bindPopup('<b>Centro de Distribución</b><br>(Ubicación de entrega no disponible)').openPopup();
+        }
+    });
+</script>
 {% endblock %}

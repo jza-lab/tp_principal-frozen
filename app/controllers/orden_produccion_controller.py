@@ -315,6 +315,18 @@ class OrdenProduccionController(BaseController):
                 logger.info(msg)
                 return {'success': True, 'message': msg}
 
+            # --- NUEVA LÓGICA: Verificar si YA está cubierta (por la OC que acaba de llegar) ---
+            esta_cubierta = self.inventario_controller.verificar_cobertura_reservas_op(orden)
+
+            if esta_cubierta:
+                logger.info(f"OP {orden_produccion_id} tiene cobertura completa de reservas. Avanzando estado.")
+
+                nuevo_estado = 'LISTA PARA PRODUCIR'
+                self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+
+                return {'success': True, 'message': f"OP {orden_produccion_id} actualizada a {nuevo_estado} (Insumos ya reservados)."}
+            # -----------------------------------------------------------------------------------
+
             # 2. Verificar stock (la lógica de OCs ya se cumplió si llegamos aquí)
             logger.debug(f"Verificando stock para OP {orden_produccion_id}...")
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
@@ -494,12 +506,15 @@ class OrdenProduccionController(BaseController):
         logger.info(summary_message)
         return {'success': True, 'message': summary_message, 'data': {'actualizadas': ordenes_actualizadas_count, 'errores': len(errores)}}
 
-    # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
     def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
-        """
-        Wrapper que delega la verificación de stock de insumos al controlador de inventario.
-        """
-        return self.inventario_controller.verificar_stock_para_op(orden_simulada)
+        # Extraer fecha para pasarla explícitamente
+        fecha_uso = None
+        f_str = orden_simulada.get('fecha_inicio_planificada') or orden_simulada.get('fecha_meta')
+        if f_str:
+             try: fecha_uso = date.fromisoformat(f_str.split('T')[0])
+             except: pass
+
+        return self.inventario_controller.verificar_stock_para_op(orden_simulada, fecha_requisito=fecha_uso)
 
     # --- MÉTODO CORREGIDO ---
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
@@ -537,7 +552,27 @@ class OrdenProduccionController(BaseController):
             if error_response:
                 return error_response
 
-            verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
+            # --- INICIO CORRECCIÓN ---
+            # Obtener la fecha real de uso (Planificada > Meta > Hoy)
+            fecha_uso_str = orden_produccion.get('fecha_inicio_planificada') or orden_produccion.get('fecha_meta')
+            fecha_uso = date.today()
+
+            if fecha_uso_str:
+                try:
+                    fecha_limpia = fecha_uso_str.split('T')[0]
+                    fecha_uso = date.fromisoformat(fecha_limpia)
+                except ValueError:
+                    pass
+
+            logger.info(f"Verificando stock para OP {orden_id} con fecha de requisito: {fecha_uso}")
+
+            # Pasar la fecha explícitamente
+            verificacion_result = self.inventario_controller.verificar_stock_para_op(
+                orden_produccion,
+                fecha_requisito=fecha_uso # <--- CLAVE
+            )
+            # --- FIN CORRECCIÓN ---
+
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
@@ -1825,11 +1860,11 @@ class OrdenProduccionController(BaseController):
             # 2. Simular la distribución del stock bueno de la OP Padre (FIFO)
             #    Esto es crucial porque en este punto la OP Padre aún no ha reservado stock físicamente,
             #    pero sabemos que producirá una cierta cantidad "Buena" que cubrirá a los primeros pedidos.
-            
+
             # Calcular stock bueno estimado del padre (Planificado - Desperdicio reportado en la hija)
             cantidad_planificada_padre = Decimal(str(op_padre.get('cantidad_planificada', '0')))
             stock_bueno_estimado_padre = cantidad_planificada_padre - cantidad_op_hija
-            
+
             logger.info(f"Simulando asignación FIFO para OP Padre {op_padre_id}. Stock Bueno Est: {stock_bueno_estimado_padre}. Desperdicio (OP Hija): {cantidad_op_hija}")
 
             # Ordenar items por antigüedad del pedido (FIFO)
@@ -1843,23 +1878,23 @@ class OrdenProduccionController(BaseController):
 
             for item in items_asociados:
                 cantidad_requerida = Decimal(str(item.get('cantidad', '0')))
-                
+
                 # 1. Verificar cuánto YA estaba reservado previamente (por si acaso hubo entregas parciales anteriores)
                 reservas_previas_res = self.lote_producto_controller.reserva_model.find_all({'pedido_item_id': item['id'], 'estado': 'RESERVADO'})
                 cantidad_ya_entregada = sum(Decimal(r.get('cantidad_reservada', '0')) for r in reservas_previas_res.get('data', []))
-                
+
                 pendiente_real = cantidad_requerida - cantidad_ya_entregada
-                
+
                 if pendiente_real <= 0:
                     continue
 
                 # 2. Simular cuánto cubre el Padre
                 cubierto_por_padre = min(pendiente_real, stock_padre_remanente)
                 stock_padre_remanente -= cubierto_por_padre
-                
+
                 # 3. Calcular qué falta y debe cubrir la Hija
                 falta_para_hija = pendiente_real - cubierto_por_padre
-                
+
                 logger.info(f"Item {item['id']} (Req: {cantidad_requerida}): Cubierto por Padre: {cubierto_por_padre}. Falta: {falta_para_hija}.")
 
                 if falta_para_hija > 0.01:
@@ -1876,7 +1911,7 @@ class OrdenProduccionController(BaseController):
             # 3. Distribuir la cantidad de la OP hija
             cantidad_a_distribuir = cantidad_op_hija
             nuevas_asignaciones = []
-            
+
             for item_faltante in items_para_op_hija:
                 if cantidad_a_distribuir <= 0:
                     break
@@ -1890,7 +1925,7 @@ class OrdenProduccionController(BaseController):
                 })
                 cantidad_a_distribuir -= cantidad_a_asignar
                 logger.info(f"Herencia de asignación: Se asignarán {cantidad_a_asignar} unidades de la OP hija {op_hija_id} al item {item_faltante['item_id']}.")
-            
+
             # 4. Insertar las nuevas asignaciones.
             if nuevas_asignaciones:
                 logger.info(f"Creando {len(nuevas_asignaciones)} nueva(s) asignacion(es) para la OP hija {op_hija_id}, cubriendo los faltantes.")
@@ -2244,6 +2279,69 @@ class OrdenProduccionController(BaseController):
             # Como fallback seguro, mover a pendiente
             self.model.cambiar_estado(orden_id, 'PENDIENTE')
             return {'success': False, 'error': str(e)}
+        """
+        Intenta encontrar un lote de insumo de reemplazo. Si tiene éxito,
+        cambia el estado de la OP a 'LISTA PARA PRODUCIR', de lo contrario a 'PENDIENTE'.
+        """
+        from app.models.reserva_insumo import ReservaInsumoModel
+        reserva_insumo_model = ReservaInsumoModel()
+
+        try:
+            # 1. Obtener las reservas originales de la OP
+            reservas_originales_res = reserva_insumo_model.find_all({'orden_produccion_id': orden_id})
+            if not reservas_originales_res.get('success') or not reservas_originales_res.get('data'):
+                self.model.cambiar_estado(orden_id, 'PENDIENTE')
+                return {'success': True, 'message': 'OP movida a PENDIENTE ya que no tenía reservas.'}
+
+            reservas_originales = reservas_originales_res['data']
+
+            # 2. Agrupar la necesidad total por insumo_id
+            necesidad_por_insumo = {}
+            for res in reservas_originales:
+                insumo_id = res['insumo_id']
+                necesidad_por_insumo[insumo_id] = necesidad_por_insumo.get(insumo_id, 0) + float(res['cantidad_reservada'])
+
+            # 3. Verificar si hay stock de reemplazo para CADA insumo
+            nuevas_reservas_potenciales = []
+            todos_reemplazados = True
+            for insumo_id, cantidad_necesaria in necesidad_por_insumo.items():
+                lotes_disponibles = self.inventario_controller._obtener_lotes_con_disponibilidad(insumo_id)
+                stock_disponible_total = sum(lote['disponibilidad'] for lote in lotes_disponibles)
+
+                if stock_disponible_total < cantidad_necesaria:
+                    todos_reemplazados = False
+                    break
+
+                # Si hay stock, determinar de qué lotes se tomará
+                cantidad_restante = cantidad_necesaria
+                for lote in lotes_disponibles:
+                    if cantidad_restante <= 0: break
+                    cantidad_a_tomar = min(lote['disponibilidad'], cantidad_restante)
+                    nuevas_reservas_potenciales.append({
+                        'orden_produccion_id': orden_id, 'lote_inventario_id': lote['id_lote'],
+                        'insumo_id': insumo_id, 'cantidad_reservada': cantidad_a_tomar,
+                        'usuario_reserva_id': get_current_user().id if get_current_user() else 1
+                    })
+                    cantidad_restante -= cantidad_a_tomar
+
+            # 4. Actuar según el resultado
+            if todos_reemplazados:
+                # Eliminar reservas viejas
+                reserva_insumo_model.db.table('reserva_insumos').delete().eq('orden_produccion_id', orden_id).execute()
+                # Crear reservas nuevas
+                reserva_insumo_model.db.table('reserva_insumos').insert(nuevas_reservas_potenciales).execute()
+                # Cambiar estado
+                self.model.cambiar_estado(orden_id, 'LISTA PARA PRODUCIR')
+                return {'success': True, 'message': 'Reemplazo de insumos exitoso. OP lista para producir.'}
+            else:
+                self.model.cambiar_estado(orden_id, 'PENDIENTE')
+                return {'success': True, 'message': 'No se encontraron reemplazos de insumos. OP movida a pendiente.'}
+
+        except Exception as e:
+            logger.error(f"Error en cambiar_estado_a_pendiente_con_reemplazo para OP {orden_id}: {e}", exc_info=True)
+            # Como fallback seguro, mover a pendiente
+            self.model.cambiar_estado(orden_id, 'PENDIENTE')
+            return {'success': False, 'error': str(e)}
     # endregion
 
 
@@ -2319,3 +2417,167 @@ class OrdenProduccionController(BaseController):
         except Exception as e:
             logger.error(f"[MRP Check] ERROR CRÍTICO calculando insumo en curso: {e}", exc_info=True)
             return 0.0
+
+    def replanificar_op_con_copia(self, orden_id: int) -> Dict:
+        """
+        Replanifica una OP creando una nueva copia en estado 'PENDIENTE'
+        y marcando la original como 'CANCELADA' (o 'REPLANIFICADA' si se prefiere,
+        pero usaremos CANCELADA para evitar estados complejos en otros módulos).
+        Manteniendo la trazabilidad del fallo en la original.
+        """
+        try:
+            # 1. Obtener la OP original
+            op_res = self.model.find_by_id(orden_id)
+            if not op_res.get('success'):
+                return {'success': False, 'error': f"OP {orden_id} no encontrada."}
+            op_original = op_res['data']
+
+            # 2. Crear datos para la nueva OP
+            # Copiamos datos clave
+            nueva_op_data = {
+                'producto_id': op_original['producto_id'],
+                'cantidad_planificada': op_original['cantidad_planificada'],
+                'receta_id': op_original['receta_id'],
+                'fecha_meta': op_original.get('fecha_meta'),
+                'prioridad': op_original.get('prioridad', 'NORMAL'),
+                'observaciones': f"Replanificación de OP-{op_original.get('codigo')} (ID: {orden_id}). Motivo: Insumo/Proceso no apto.",
+                'estado': 'PENDIENTE',
+                # Importante: No copiamos 'id_op_padre' ciegamente. Si la original era hija, la nueva también lo será.
+                'id_op_padre': op_original.get('id_op_padre'),
+                'pedido_id': op_original.get('pedido_id'), # Mantener vínculo con el pedido si existe
+                'usuario_creador_id': get_current_user().id if get_current_user() else op_original.get('usuario_creador_id')
+            }
+
+            # 3. Crear la nueva OP
+            # Usamos self.crear_orden que maneja validaciones y generación de código
+            # crear_orden espera un formato específico para 'productos' si es múltiple, o podemos usar model.create directo.
+            # Dado que crear_orden es complejo y espera un form_data, mejor preparamos el dict y llamamos a model.create
+            # pero debemos validar schema y generar código.
+
+            # Reutilicemos lógica de crear_orden adaptada o hagamoslo manual para ser precisos.
+            # Manual es más seguro para copiar exacto.
+
+            # Validar datos sin campos de solo lectura
+            validated_data = self.schema.load(nueva_op_data)
+
+            # Agregar campos generados por el sistema post-validación
+            validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
+            # usuario_creador_id está marcado como dump_only en el schema, por lo que load() lo ignora.
+            # Lo agregamos manualmente aquí.
+            if 'usuario_creador_id' in nueva_op_data:
+                validated_data['usuario_creador_id'] = nueva_op_data['usuario_creador_id']
+
+            create_res = self.model.create(validated_data)
+            if not create_res.get('success'):
+                return {'success': False, 'error': f"Error al crear la nueva OP: {create_res.get('error')}"}
+
+            nueva_op = create_res['data']
+
+            # 4. Actualizar la OP original
+            # La marcamos como CANCELADA para liberar recursos (aunque ya se consumieron insumos malos,
+            # el estado CANCELADA es el más apropiado para 'no va a producir nada más').
+            # Agregamos una observación.
+            obs_original = op_original.get('observaciones') or ''
+            update_original = {
+                'estado': 'CANCELADA', # O podríamos usar un estado específico 'REPLANIFICADA' si el frontend lo soporta
+                'observaciones': f"{obs_original} | Replanificada a {nueva_op['codigo']}."
+            }
+            self.model.update(orden_id, update_original)
+
+            # 5. Migrar asignaciones de Pedido (Si aplica)
+            # Si la OP original tenía items de pedido asignados en `asignaciones_pedidos`,
+            # debemos mover esas asignaciones a la nueva OP para que el pedido apunte a la activa.
+            try:
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos')\
+                    .update({'orden_produccion_id': nueva_op['id']})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+
+                # También actualizar `pedido_items` si tienen la columna directa `orden_produccion_id`
+                self.pedido_model.db.table('pedido_items')\
+                    .update({'orden_produccion_id': nueva_op['id']})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+            except Exception as e:
+                logger.warning(f"Error al migrar asignaciones de pedido: {e}")
+
+            return {
+                'success': True,
+                'message': f"OP Replanificada. Nueva OP: {nueva_op['codigo']}",
+                'data': nueva_op
+            }
+
+        except Exception as e:
+            logger.error(f"Error crítico al replanificar OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+
+    def desvincular_orden_de_pedido(self, orden_id: int, motivo: str = "") -> Dict:
+        """
+        Caso 3 y 4: Desvincula una OP de un Pedido.
+        LIMPIEZA TOTAL:
+        1. Quita link en tabla ordenes_produccion.
+        2. Borra asignaciones intermedias.
+        3. Cancela reservas existentes.
+        4. (NUEVO) Quita el link en pedido_items para evitar reservas futuras.
+        """
+        try:
+            # 1. Obtener datos actuales
+            op_actual_res = self.model.find_by_id(orden_id)
+            if not op_actual_res.get('success'):
+                return {'success': False, 'error': "OP no encontrada."}
+
+            op_actual = op_actual_res.get('data')
+            pedido_id_asociado = op_actual.get('pedido_id')
+
+            # 2. Desvincular en la tabla de OPs (Header)
+            obs_actual = op_actual.get('observaciones') or ''
+            nueva_obs = f"{obs_actual}\n[Desvinculada de Pedido Cancelado]: {motivo}".strip()
+
+            update_data = {
+                'pedido_id': None,
+                'observaciones': nueva_obs
+            }
+            result = self.model.update(orden_id, update_data)
+
+            # 3. Limpiar tabla intermedia asignaciones_pedidos
+            try:
+                self.asignacion_pedido_model.db.table('asignaciones_pedidos')\
+                    .delete().eq('orden_produccion_id', orden_id).execute()
+            except Exception as e_assign:
+                logger.warning(f"No se pudo limpiar asignaciones_pedidos para OP {orden_id}: {e_assign}")
+
+            # 4. Limpiar Reservas Físicas Existentes (si las hubiera)
+            if pedido_id_asociado:
+                lotes_op_res = self.lote_producto_controller.model.find_all({'orden_produccion_id': orden_id})
+                if lotes_op_res.get('success'):
+                    for lote in lotes_op_res.get('data', []):
+                        reservas_lote = self.lote_producto_controller.reserva_model.find_all({
+                            'lote_producto_id': lote['id_lote'],
+                            'pedido_id': pedido_id_asociado,
+                            'estado': 'RESERVADO'
+                        })
+                        if reservas_lote.get('success'):
+                            for reserva in reservas_lote.get('data', []):
+                                self.lote_producto_controller.liberar_reserva_especifica(reserva['id'])
+
+            # 5. (NUEVO CRÍTICO) Desvincular items del pedido para evitar reservas futuras
+            # Esto asegura que cuando la OP termine, no encuentre estos items esperando.
+            try:
+                self.pedido_model.db.table('pedido_items')\
+                    .update({'orden_produccion_id': None})\
+                    .eq('orden_produccion_id', orden_id)\
+                    .execute()
+                logger.info(f"Items de pedido desvinculados de la OP {orden_id}.")
+            except Exception as e_items:
+                logger.error(f"Error desvinculando items de pedido de la OP {orden_id}: {e_items}")
+
+            if result.get('success'):
+                logger.info(f"OP {orden_id} desvinculada exitosamente. Pasa a Stock General.")
+                return {'success': True, 'data': result.get('data')}
+            return result
+
+        except Exception as e:
+            logger.error(f"Error desvinculando OP {orden_id}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+

@@ -38,11 +38,11 @@
             <i class="bi bi-camera me-1"></i>Ver Foto
         </button>
         {% endif %}
-        {% set can_edit = 'modificar_materias_primas' is has_permission %}
+        {# {% set can_edit = 'modificar_materias_primas' is has_permission %}
         <a href="{{ url_for('insumos_api.editar_lote', id_insumo=lote.id_insumo, id_lote=lote.id_lote) if can_edit else '#' }}"
             class="btn btn-primary {% if not can_edit %}disabled{% endif %}">
             <i class="bi bi-pencil-square me-1"></i>Editar Lote
-        </a>
+        </a> #}
     </div>
 </div>
 
@@ -246,7 +246,11 @@
 
     <div class="tab-pane fade" id="trazabilidad-content" role="tabpanel" aria-labelledby="trazabilidad-tab">
 
-        
+        <div class="d-flex justify-content-end mb-3">
+            <button id="export-trazabilidad-pdf" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-file-earmark-pdf me-1"></i> Exportar a PDF
+            </button>
+        </div>
 
         <div class="row">
             <div class="col-lg-8">
@@ -299,10 +303,12 @@
                             <li><i class="bi bi-mouse me-2"></i> <strong>Interactividad:</strong> Clic en un nodo para
                                 ver su detalle.</li>
                         </ul>
-                        <div id="sankey_trazabilidad" style="width: 100%; min-height: 400px;">
-                            <div class="d-flex justify-content-center align-items-center h-100">
-                                <div class="spinner-border text-primary" role="status">
-                                    <span class="visually-hidden">Cargando gráfico...</span>
+                        <div style="overflow-x: auto;">
+                            <div id="sankey_trazabilidad" style="min-width: 100%; height: 600px;">
+                                <div class="d-flex justify-content-center align-items-center h-100">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando gráfico...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -321,7 +327,12 @@
 
 <script>
     window.LOTE_ID = "{{ lote.id_lote | safe }}";
+    window.ENTITY_TYPE = "lote_insumo";
+    window.ENTITY_ID = "{{ lote.id_lote | safe }}";
 </script>
 <script src="{{ url_for('static', filename='js/trazabilidadInsumo.js') }}?v=1.1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.1"></script>
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
 {% endblock %}

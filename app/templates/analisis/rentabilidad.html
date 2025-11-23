@@ -1,173 +1,278 @@
 {% extends "layouts/app_layout.html" %}
 
 {% block app_content %}
-<div class="container-fluid">
-    <!-- Fila del Título -->
-    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2">Dashboard de Rentabilidad</h1>
-    </div>
+<div class="container-fluid px-4 py-4">
+    
+    <!-- Header / Command Center Card -->
+    <div id="dashboard-header-card" class="card border-0 shadow rounded-4 overflow-hidden mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); transition: all 0.5s ease; border-left: 4px solid #198754 !important;">
+        <div class="card-header border-bottom-0 pt-4 pb-0 px-4 position-relative" style="background: transparent; z-index: 1;">
+            
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 position-relative z-2">
+                <div class="d-flex align-items-center mb-3 mb-md-0">
+                    <div class="icon-box bg-white text-success rounded-4 p-3 me-3 shadow-sm border hover-lift transition-transform" style="color: #198754 !important;">
+                        <i class="bi bi-graph-up-arrow fs-3"></i>
+                    </div>
+                    <div>
+                        <h4 class="fw-bold text-dark mb-1 tracking-tight">Análisis de Rentabilidad Global</h4>
+                        <p class="text-muted small mb-0 d-flex align-items-center">
+                            <span class="badge bg-success-subtle text-success rounded-pill me-2 px-2 pulse-badge">En vivo</span>
+                            Monitoreo de márgenes, costos y contribución
+                        </p>
+                    </div>
+                </div>
+                <!-- Breadcrumb / Info Area -->
+                <div class="d-none d-md-block text-end">
+                   <nav aria-label="breadcrumb">
+                      <ol class="breadcrumb mb-0 justify-content-end small">
+                        <li class="breadcrumb-item"><a href="{{ url_for('admin_dashboard.index') }}" class="text-decoration-none text-muted">Inicio</a></li>
+                        <li class="breadcrumb-item active fw-semibold text-success" aria-current="page">Rentabilidad</li>
+                      </ol>
+                   </nav>
+                   <small class="text-muted font-monospace" style="font-size: 0.75rem;">
+                       <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
+                   </small>
+                </div>
+            </div>
 
-    <!-- Fila de Filtros y KPIs -->
-    <div class="row align-items-center mb-4">
-        <div class="col-md-5">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Seleccionar Período</h5>
-                    <div id="filter-buttons" class="btn-group" role="group" aria-label="Filtros de fecha">
-                        <button type="button" class="btn btn-outline-primary active" data-period="90">Últimos 90 días</button>
-                        <button type="button" class="btn btn-outline-primary" data-period="365">Último Año</button>
-                        <button type="button" class="btn btn-outline-primary" data-period="all">Histórico</button>
-                    </div>
+            <!-- Filter Buttons Area (Integrated in Header) -->
+            <div class="d-flex justify-content-end mt-2 mb-3 position-relative z-2">
+                <div id="filter-buttons" class="btn-group shadow-sm rounded-pill" role="group" aria-label="Filtros de fecha">
+                    <button type="button" class="btn btn-sm btn-outline-success active rounded-start-pill px-3" data-period="30">Mes</button>
+                    <button type="button" class="btn btn-sm btn-outline-success px-3" data-period="90">Trimestre</button>
+                    <button type="button" class="btn btn-sm btn-outline-success rounded-end-pill px-3" data-period="365">Anual</button>
                 </div>
             </div>
         </div>
-        <div class="col-md-7">
-            <div class="row">
-                <div class="col-6">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Ganancia Bruta Total</h6>
-                            <p class="card-text h3" id="kpi-ganancia-total">$0</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="card text-center">
-                        <div class="card-body">
-                            <h6 class="card-subtitle mb-2 text-muted">Margen de Ganancia Promedio</h6>
-                            <p class="card-text h3" id="kpi-margen-promedio">0%</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Fila de Gráficos Principales -->
-    <div class="row">
-        <!-- Gráfico de Burbujas (Matriz BCG) -->
-        <div class="col-lg-7 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Matriz de Rentabilidad (Ventas vs Margen)</span>
-                    <span class="info-tooltip" data-bs-toggle="tooltip" data-bs-placement="top" 
-                          title="Esta matriz clasifica productos para decidir estrategias. Las líneas discontinuas representan el promedio de ventas y margen de los productos con ventas en el período, definiendo los cuatro cuadrantes.">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-info-circle" viewBox="0 0 16 16">
-                          <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                          <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.064.293.006.399.287.47l.45.083.082.38-2.29-.287-.082-.38.45-.083a.392.392 0 0 0 .288-.469L6.637 8.14c-.064-.293-.006-.399-.287-.47l-.45-.083-.082-.38 2.29.287zM8 5.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-                        </svg>
-                    </span>
-                </div>
-                <div class="card-body">
-                    <div id="rentabilidad-chart-container" style="width: 100%; height: 450px;"></div>
-                    <div id="dynamic-chart-description" class="alert alert-info mt-3" role="alert">
-                        Calculando análisis...
+        <!-- Main Content Area -->
+        <div class="card-body p-4" style="background-color: #f4f6f9;">
+            
+            <!-- Fila de KPIs Globales -->
+            <div class="row align-items-center mb-4">
+                <div class="col-md-12">
+                    <div class="row g-3">
+                        <!-- KPI: Facturación Total -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Facturación Total</h6>
+                                    <p class="fw-bold text-primary mb-0 display-6" style="font-size: 1.3rem;" id="global-facturacion">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Costos Variables -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Variables</h6>
+                                    <p class="fw-bold text-warning mb-0 display-6" style="font-size: 1.3rem;" id="global-costo-variable">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Margen Contribución -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Margen Contrib.</h6>
+                                    <p class="fw-bold text-info mb-0 display-6" style="font-size: 1.3rem;" id="global-margen-contribucion">$0</p>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Costos Fijos -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4">
+                                <div class="card-body p-3">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Fijos</h6>
+                                    <p class="fw-bold text-danger mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-fijos">$0</p>
+                                    <small class="d-block text-muted mt-1" style="font-size: 0.7rem;" id="global-costos-fijos-desglose">
+                                        Dir: $0 | Ind: $0
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KPI: Próximo a Facturar (NEW) -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow-sm rounded-4 bg-white position-relative overflow-hidden">
+                                <div class="card-body p-3 position-relative z-1">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Próximo a Facturar</h6>
+                                    <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-proximo-facturar">$0</p>
+                                    <small class="text-muted" style="font-size: 0.65rem;">Pendiente + En Proceso (Crédito)</small>
+                                </div>
+                                <!-- Subtle background to distinguish it -->
+                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10" style="background-color: rgba(108, 117, 125, 0.1);"></div>
+                            </div>
+                        </div>
+                        <!-- KPI: Rentabilidad Neta -->
+                        <div class="col-md-2">
+                            <div class="card text-center h-100 border-0 shadow rounded-4 bg-white position-relative overflow-hidden">
+                                <div class="card-body p-3 position-relative z-1">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Rentabilidad Neta</h6>
+                                    <p class="fw-bold text-success display-6 mb-0" style="font-size: 1.5rem;" id="global-rentabilidad-neta">$0</p>
+                                    <small id="global-rentabilidad-porcentaje" class="text-success fw-bold">0%</small>
+                                </div>
+                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10 bg-success-subtle"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        <!-- Leyenda y Gráficos Secundarios -->
-        <div class="col-lg-5 mb-4">
-            <!-- Nueva Leyenda Descriptiva -->
-            <div class="card mb-4">
-                 <div class="card-body">
-                    <div class="row">
-                        <div class="col-6 mb-3">
-                            <div class="d-flex align-items-start"><span style="color:#4CAF50; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Estrellas</strong><br><small class="text-muted d-block">Alto margen, altas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(> Prom. Ventas, > Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="d-flex align-items-start"><span style="color:#FFC107; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Interrogantes</strong><br><small class="text-muted d-block">Alto margen, bajas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(< Prom. Ventas, > Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6">
-                            <div class="d-flex align-items-start"><span style="color:#2196F3; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Vaca</strong><br><small class="text-muted d-block">Bajo margen, altas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(> Prom. Ventas, < Prom. Margen)</small></div></div>
-                        </div>
-                        <div class="col-6">
-                             <div class="d-flex align-items-start"><span style="color:#F44336; font-size: 1.5rem; margin-right: 8px;">●</span><div><strong>Perros</strong><br><small class="text-muted d-block">Bajo margen, bajas ventas.</small><small class="text-primary d-block fw-bold" style="font-size: 0.75rem;">(< Prom. Ventas, < Prom. Margen)</small></div></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="card mb-4">
-                <div class="card-header">Top 5 Productos</div>
-                <div class="card-body">
-                    <div id="top-rentables-chart-container" style="width: 100%; height: 220px;"></div>
-                    <div id="top-vendidos-chart-container" style="width: 100%; height: 220px;"></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-header">Desglose de Costo Unitario (Top 5 Rentables)</div>
-                <div class="card-body">
-                    <div id="costos-chart-container" style="width: 100%; height: 250px;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Tabla de Datos Detallada -->
-    <div class="card mt-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <span>Análisis Detallado de Productos</span>
-            <input type="text" id="searchInput" class="form-control w-25" placeholder="Buscar producto...">
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover" id="tabla-rentabilidad">
-                    <thead>
-                        <tr>
-                            <th scope="col"><input type="checkbox" id="selectAllCheckbox"></th>
-                            <th scope="col" data-sort="nombre" style="cursor: pointer;">Producto ⇅</th>
-                            <th scope="col" data-sort="volumen_ventas" style="cursor: pointer;">Volumen Ventas ⇅</th>
-                            <th scope="col" data-sort="facturacion_total" style="cursor: pointer;">Facturación Total ⇅</th>
-                            <th scope="col" data-sort="costo_total" style="cursor: pointer;">Costo Total ⇅</th>
-                            <th scope="col" data-sort="ganancia_bruta" style="cursor: pointer;">Ganancia Bruta ⇅</th>
-                            <th scope="col" data-sort="margen_ganancia" style="cursor: pointer;">Margen (%) ⇅</th>
-                            <th scope="col">Clasificación</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tabla-rentabilidad-body">
-                        <!-- Las filas se insertarán aquí dinámicamente -->
-                    </tbody>
-                </table>
+            <!-- Fila de Gráficos Principales -->
+            <div class="row g-4">
+                <!-- Gráfico de Burbujas (Matriz BCG - Margen Contribución) -->
+                <div class="col-lg-7">
+                    <div class="card shadow border-0 h-100 rounded-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark h5">Matriz de Contribución</h6>
+                            <i class="bi bi-info-circle text-muted opacity-50" data-bs-toggle="tooltip" title="Clasificación de productos según su Margen de Contribución Unitario y Volumen de Ventas."></i>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="rentabilidad-chart-container" style="width: 100%; height: 450px;"></div>
+                            <div id="dynamic-chart-description" class="alert alert-light border-0 bg-light-subtle rounded-3 mt-3 py-2 px-3 d-flex align-items-start small text-muted">
+                                <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
+                                <span>Calculando análisis...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Leyenda y Gráficos Secundarios -->
+                <div class="col-lg-5">
+                     <!-- Leyenda Descriptiva -->
+                     <div class="card shadow border-0 rounded-4 mb-4">
+                         <div class="card-body p-4">
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#4CAF50; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Estrellas</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, altas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#FFC107; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Interrogantes</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, bajas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#2196F3; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Vacas</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, altas ventas</span></div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                     <div class="d-flex align-items-start">
+                                        <span class="rounded-circle me-2 mt-1" style="background-color:#F44336; width:10px; height:10px;"></span>
+                                        <div><strong class="d-block small text-dark">Perros</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, bajas ventas</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card shadow border-0 rounded-4 mb-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                            <h6 class="fw-bold mb-0 text-dark h6">Top 5: Mayor Margen Total</h6>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="top-rentables-chart-container" style="width: 100%; height: 220px;"></div>
+                        </div>
+                    </div>
+                     <div class="card shadow border-0 rounded-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                            <h6 class="fw-bold mb-0 text-dark h6">Desglose Costos Variables (Top 5)</h6>
+                        </div>
+                        <div class="card-body px-4 pb-4">
+                            <div id="costos-chart-container" style="width: 100%; height: 250px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabla de Datos Detallada -->
+            <div class="card shadow border-0 rounded-4 mt-4">
+                <div class="card-header bg-white border-bottom-0 py-4 px-4 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark h5">Análisis Detallado por Producto</h6>
+                    <input type="text" id="searchInput" class="form-control w-25 form-control-sm rounded-pill bg-light border-0 px-3" placeholder="Buscar producto...">
+                </div>
+                <div class="card-body px-0 pb-4 pt-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tabla-rentabilidad">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th scope="col" class="ps-4 border-0 text-muted small fw-bold text-uppercase"></th>
+                                    <th scope="col" data-sort="nombre" style="cursor: pointer;" class="border-0 text-muted small fw-bold text-uppercase">Producto ⇅</th>
+                                    <th scope="col" data-sort="volumen_ventas" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Vol. ⇅</th>
+                                    <th scope="col" data-sort="costo_variable_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Gastos ⇅</th>
+                                    <th scope="col" data-sort="facturacion_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Ingresos ⇅</th>
+                                    <th scope="col" data-sort="margen_contribucion_total" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Ganancia ⇅</th>
+                                    <th scope="col" data-sort="margen_porcentual" class="text-end border-0 text-muted small fw-bold text-uppercase" style="cursor: pointer;">Margen % ⇅</th>
+                                    <th scope="col" class="pe-4 border-0 text-muted small fw-bold text-uppercase">Clasificación</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabla-rentabilidad-body" class="border-top-0">
+                                <!-- Las filas se insertarán aquí dinámicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
 <!-- Modal para Detalles del Producto -->
-<div class="modal fade" id="productoModal" tabindex="-1" aria-labelledby="productoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="productoModalLabel">Detalles del Producto</h5>
+<div class="modal fade" id="productoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold text-dark">Detalles del Producto</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="modal-body-content">
-                <!-- El contenido se genera dinámicamente -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+            <div class="modal-body p-4" id="modal-body-content">
+                <!-- Dinámico -->
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
-<!-- Modal para Comparación de Productos -->
-<div class="modal fade" id="comparisonModal" tabindex="-1" aria-labelledby="comparisonModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="comparisonModalLabel">Comparación de Productos</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="comparison-modal-body">
-                <!-- Contenido de la comparación generado por JS -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-            </div>
-        </div>
-    </div>
-</div>
+{% block extra_css %}
+<style>
+    /* Styles copied/adapted from indicators dashboard for consistency */
+    .icon-box {
+        width: 60px; 
+        height: 60px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+    }
+    .hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+    .transition-transform {
+        transition: transform .3s ease;
+    }
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(25, 135, 84, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(25, 135, 84, 0); }
+    }
+    .pulse-badge {
+        animation: pulse-glow 2s infinite;
+    }
+    .table-hover tbody tr:hover {
+        background-color: rgba(0,0,0,.02);
+    }
+    .nav-tabs .nav-link {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    .nav-tabs .nav-link.active {
+        color: #198754;
+        font-weight: 600;
+        border-bottom: 2px solid #198754;
+    }
+</style>
 {% endblock %}
 
 {% block extra_js %}
@@ -181,28 +286,50 @@ document.addEventListener('DOMContentLoaded', function () {
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl)
     })
+    
+    // Update last updated time
+    const now = new Date();
+    document.getElementById('last-updated').textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     // Instancias de ECharts
     const bubbleChartInstance = echarts.init(document.getElementById('rentabilidad-chart-container'));
     const topRentablesChartInstance = echarts.init(document.getElementById('top-rentables-chart-container'));
-    const topVendidosChartInstance = echarts.init(document.getElementById('top-vendidos-chart-container'));
     const costosChartInstance = echarts.init(document.getElementById('costos-chart-container'));
 
+    // Resize responsive
+    window.addEventListener('resize', function() {
+        bubbleChartInstance.resize();
+        topRentablesChartInstance.resize();
+        costosChartInstance.resize();
+    });
+
     // Estado de la aplicación
-    let fullData = { productos: [], promedios: {} };
-    let sortConfig = { key: 'ganancia_bruta', direction: 'desc' };
-    let currentFilter = '90';
-    let selectedProducts = new Set();
+    let fullData = { productos: [], totales_globales: {}, promedios: {} };
+    let sortConfig = { key: 'margen_contribucion_total', direction: 'desc' };
+    let currentFilter = '30'; // Default a Mes (30 días)
 
     // --- UTILS ---
-    const formatCurrency = (value) => `$${(value || 0).toFixed(2).replace(/\d(?=(\d{3})+\.)/g, '$&,')}`;
+    const formatCurrency = (value) => {
+        value = value || 0;
+        const absValue = Math.abs(value);
+        if (absValue >= 1000000) {
+            return `$${(value / 1000000).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2})}M`;
+        } else if (absValue >= 1000) {
+            return `$${(value / 1000).toLocaleString('es-AR', {minimumFractionDigits: 1, maximumFractionDigits: 2})}K`;
+        }
+        return `$${value.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    };
+
     const getQuadrantInfo = (producto, promedios) => {
-        const { volumen_ventas, margen_ganancia } = producto;
-        if (volumen_ventas >= promedios.volumen_ventas && margen_ganancia >= promedios.margen_ganancia) {
+        const { volumen_ventas, margen_porcentual } = producto;
+        const avgVentas = promedios.volumen_ventas || 0;
+        const avgMargen = promedios.margen_ganancia || 0;
+
+        if (volumen_ventas >= avgVentas && margen_porcentual >= avgMargen) {
             return { name: 'Estrella', color: '#4CAF50' };
-        } else if (volumen_ventas >= promedios.volumen_ventas && margen_ganancia < promedios.margen_ganancia) {
+        } else if (volumen_ventas >= avgVentas && margen_porcentual < avgMargen) {
             return { name: 'Vaca', color: '#2196F3' };
-        } else if (volumen_ventas < promedios.volumen_ventas && margen_ganancia >= promedios.margen_ganancia) {
+        } else if (volumen_ventas < avgVentas && margen_porcentual >= avgMargen) {
             return { name: 'Interrogante', color: '#FFC107' };
         } else {
             return { name: 'Perro', color: '#F44336' };
@@ -210,7 +337,7 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     // --- LÓGICA DE CARGA DE DATOS ---
-    function loadData(period = '90') {
+    function loadData(period = '30') {
         let url = '/analisis/api/rentabilidad/datos';
         if (period !== 'all') {
             const endDate = new Date();
@@ -238,12 +365,46 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- LÓGICA DE RENDERIZADO ---
     function updateDashboard(filteredProducts = null) {
         const productsToRender = filteredProducts || fullData.productos;
+        
+        // Actualizar KPIs Globales
+        const g = fullData.totales_globales;
+        if (g) {
+            document.getElementById('global-facturacion').textContent = formatCurrency(g.facturacion_total);
+            document.getElementById('global-costo-variable').textContent = formatCurrency(g.costo_variable_total);
+            document.getElementById('global-margen-contribucion').textContent = formatCurrency(g.margen_contribucion_total);
+            document.getElementById('global-costos-fijos').textContent = formatCurrency(g.costos_fijos_total);
+            
+            // Actualizar desglose de costos fijos
+            const desElem = document.getElementById('global-costos-fijos-desglose');
+            if (desElem) {
+                desElem.innerHTML = `Dir: ${formatCurrency(g.costos_fijos_directos)} | Ind: ${formatCurrency(g.costos_fijos_indirectos)}`;
+            }
+
+            const envioElem = document.getElementById('global-costos-envio');
+            if (envioElem) {
+                envioElem.textContent = formatCurrency(g.costos_envio_total);
+            }
+            document.getElementById('global-rentabilidad-neta').textContent = formatCurrency(g.rentabilidad_neta);
+            
+            // Update New KPI: Próximo a Facturar
+            const proximoElem = document.getElementById('global-proximo-facturar');
+            if(proximoElem && g.proximo_a_facturar !== undefined) {
+                proximoElem.textContent = formatCurrency(g.proximo_a_facturar);
+            } else if (proximoElem) {
+                // Fallback for safety if undefined
+                proximoElem.textContent = formatCurrency(0);
+            }
+
+            const rentElem = document.getElementById('global-rentabilidad-porcentaje');
+            rentElem.textContent = `${g.rentabilidad_porcentual}%`;
+            rentElem.className = g.rentabilidad_porcentual >= 0 ? 'text-success fw-bold' : 'text-danger fw-bold';
+        }
+
         renderBubbleChart(productsToRender, fullData.promedios);
         renderTopCharts(fullData.productos);
         renderCostosChart(fullData.productos);
         renderTable(productsToRender);
-        updateKPIs(productsToRender);
-        updateDynamicDescription(fullData.productos, fullData.promedios);
+        updateDynamicDescription(productsToRender, fullData.promedios);
     }
     
     function renderBubbleChart(data, promedios) {
@@ -257,16 +418,17 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const maxFacturacion = Math.max(...filteredData.map(p => p.facturacion_total), 0);
-        const minRadius = 5, maxRadius = 50;
+        const maxVenta = Math.max(...filteredData.map(p => p.volumen_ventas), 0);
+        const minRadius = 10, maxRadius = 60;
         
         const seriesData = filteredData.map(p => {
             const quadrant = getQuadrantInfo(p, promedios);
+            // Eje X: Ventas, Eje Y: Margen Unitario %
             return {
                 name: p.nombre,
-                value: [p.volumen_ventas, p.margen_ganancia, p.facturacion_total, p.id],
+                value: [p.volumen_ventas, p.margen_porcentual, p.margen_contribucion_total, p.id],
                 itemStyle: { color: quadrant.color },
-                symbolSize: maxFacturacion > 0 ? ((Math.sqrt(p.facturacion_total) / Math.sqrt(maxFacturacion)) * (maxRadius - minRadius)) + minRadius : minRadius,
+                symbolSize: maxVenta > 0 ? ((p.volumen_ventas / maxVenta) * (maxRadius - minRadius)) + minRadius : minRadius,
             };
         });
 
@@ -274,58 +436,37 @@ document.addEventListener('DOMContentLoaded', function () {
             tooltip: {
                 trigger: 'item',
                 formatter: (params) => {
-                    if (params.componentType === 'markLine') { return params.name; }
-                    return `<b>${params.name}</b><br/>Ventas: ${params.value[0]} unid.<br/>Margen: ${params.value[1]}%<br/>Facturación: ${formatCurrency(params.value[2])}`;
+                    return `<b>${params.name}</b><br/>Ventas: ${params.value[0]} u.<br/>Margen Unit: ${params.value[1]}%<br/>Contrib. Total: ${formatCurrency(params.value[2])}`;
                 }
             },
-            xAxis: { type: 'log', name: 'Volumen de Ventas (Log)', splitLine: { show: false } },
-            yAxis: { name: 'Margen de Ganancia (%)', splitLine: { show: false } },
+            xAxis: { name: 'Volumen de Ventas', splitLine: { show: false } },
+            yAxis: { name: 'Margen Contribución (%)', splitLine: { show: true } },
             series: [{
                 type: 'scatter', data: seriesData, z: 2,
                 markLine: {
                     z: 1, silent: false, symbol: 'none', lineStyle: { type: 'dashed' },
                     data: [
-                        { xAxis: promedios.volumen_ventas, name: `Promedio de Ventas: ${promedios.volumen_ventas.toFixed(2)} unidades` },
-                        { yAxis: promedios.margen_ganancia, name: `Promedio de Margen: ${promedios.margen_ganancia.toFixed(2)}%` }
+                        { xAxis: promedios.volumen_ventas, name: `Prom. Ventas: ${promedios.volumen_ventas.toFixed(0)}` },
+                        { yAxis: promedios.margen_ganancia, name: `Prom. Margen: ${promedios.margen_ganancia.toFixed(1)}%` }
                     ]
                 },
                 markArea: {
-                    silent: true, itemStyle: { opacity: 0.1 },
+                    silent: true, itemStyle: { opacity: 0.05 },
                     data: [
-                        [
-                            { 
-                                name: 'Estrellas', 
-                                itemStyle: { color: '#4CAF50' }, 
-                                xAxis: promedios.volumen_ventas, 
-                                yAxis: promedios.margen_ganancia 
-                            }, 
+                         [
+                            { name: 'Estrellas', xAxis: promedios.volumen_ventas, yAxis: promedios.margen_ganancia }, 
                             { xAxis: 'max', yAxis: 'max' }
                         ],
                         [
-                            { 
-                                name: 'Vaca', 
-                                itemStyle: { color: '#2196F3' }, 
-                                xAxis: promedios.volumen_ventas, 
-                                yAxis: promedios.margen_ganancia
-                            }, 
+                            { name: 'Vacas', xAxis: promedios.volumen_ventas, yAxis: promedios.margen_ganancia }, 
                             { xAxis: 'max', yAxis: 'min' }
                         ],
                         [
-                            { 
-                                name: 'Interrogantes', 
-                                itemStyle: { color: '#FFC107' }, 
-                                xAxis: promedios.volumen_ventas, 
-                                yAxis: promedios.margen_ganancia
-                            }, 
+                            { name: 'Interrogantes', xAxis: promedios.volumen_ventas, yAxis: promedios.margen_ganancia }, 
                             { xAxis: 'min', yAxis: 'max' }
                         ],
                         [
-                            { 
-                                name: 'Perros', 
-                                itemStyle: { color: '#F44336' }, 
-                                xAxis: promedios.volumen_ventas, 
-                                yAxis: promedios.margen_ganancia
-                            }, 
+                            { name: 'Perros', xAxis: promedios.volumen_ventas, yAxis: promedios.margen_ganancia }, 
                             { xAxis: 'min', yAxis: 'min' }
                         ]
                     ]
@@ -336,42 +477,66 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderTopCharts(data) {
-        const sortedByRentabilidad = [...data].sort((a, b) => b.ganancia_bruta - a.ganancia_bruta).slice(0, 5);
-        const sortedByVentas = [...data].sort((a, b) => b.volumen_ventas - a.volumen_ventas).slice(0, 5);
+        // Top 5 por Margen de Contribución Total Absoluto
+        const sortedByContrib = [...data].sort((a, b) => b.margen_contribucion_total - a.margen_contribucion_total).slice(0, 5);
 
         const rentablesOption = {
-            title: { text: 'Por Rentabilidad', textStyle: { fontSize: 14 } },
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'value' },
-            yAxis: { type: 'category', data: sortedByRentabilidad.map(p => p.nombre).reverse(), axisLabel: { interval: 0, rotate: 0, fontSize: 10 } },
-            series: [{ type: 'bar', data: sortedByRentabilidad.map(p => p.ganancia_bruta).reverse() }],
-            grid: { left: '30%', right: '5%', bottom: '10%' }
-        };
-
-        const vendidosOption = {
-            title: { text: 'Por Volumen de Ventas', textStyle: { fontSize: 14 } },
-            tooltip: { trigger: 'axis' },
-            xAxis: { type: 'value' },
-            yAxis: { type: 'category', data: sortedByVentas.map(p => p.nombre).reverse(), axisLabel: { interval: 0, rotate: 0, fontSize: 10 } },
-            series: [{ type: 'bar', data: sortedByVentas.map(p => p.volumen_ventas).reverse() }],
+            tooltip: { 
+                trigger: 'axis',
+                formatter: function(params) {
+                    let result = params[0].name + '<br/>';
+                    params.forEach(item => {
+                        result += item.marker + item.seriesName + ': ' + formatCurrency(item.value) + '<br/>';
+                    });
+                    return result;
+                }
+            },
+            xAxis: { 
+                type: 'value',
+                axisLabel: {
+                    formatter: (value) => formatCurrency(value)
+                }
+            },
+            yAxis: { type: 'category', data: sortedByContrib.map(p => p.nombre).reverse(), axisLabel: { interval: 0, rotate: 0, fontSize: 10 } },
+            series: [{ 
+                name: 'Margen Contribución',
+                type: 'bar', 
+                data: sortedByContrib.map(p => p.margen_contribucion_total).reverse(),
+                itemStyle: { color: '#2196F3' }
+            }],
             grid: { left: '30%', right: '5%', bottom: '10%' }
         };
 
         topRentablesChartInstance.setOption(rentablesOption);
-        topVendidosChartInstance.setOption(vendidosOption);
     }
 
     function renderCostosChart(data) {
-        const sortedByRentabilidad = [...data].sort((a, b) => b.ganancia_bruta - a.ganancia_bruta).slice(0, 5);
+        // Usamos los mismos Top 5 por contribución para mostrar sus costos
+        const sortedByContrib = [...data].sort((a, b) => b.margen_contribucion_total - a.margen_contribucion_total).slice(0, 5);
 
         const option = {
-            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-            legend: { data: ['Materia Prima', 'Mano de Obra', 'Costos Fijos'] },
+            tooltip: { 
+                trigger: 'axis', 
+                axisPointer: { type: 'shadow' },
+                formatter: function(params) {
+                    let result = params[0].name + '<br/>';
+                    params.forEach(item => {
+                        result += item.marker + item.seriesName + ': ' + formatCurrency(item.value) + '<br/>';
+                    });
+                    return result;
+                }
+            },
+            legend: { data: ['Materia Prima', 'Mano de Obra'] },
             grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-            xAxis: { type: 'value' },
+            xAxis: { 
+                type: 'value',
+                axisLabel: {
+                    formatter: (value) => formatCurrency(value)
+                }
+            },
             yAxis: {
                 type: 'category',
-                data: sortedByRentabilidad.map(p => p.nombre).reverse(),
+                data: sortedByContrib.map(p => p.nombre).reverse(),
                 axisLabel: { interval: 0, rotate: 0, fontSize: 10 }
             },
             series: [
@@ -379,25 +544,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     name: 'Materia Prima',
                     type: 'bar',
                     stack: 'total',
-                    label: { show: true, formatter: (p) => formatCurrency(p.value) },
-                    emphasis: { focus: 'series' },
-                    data: sortedByRentabilidad.map(p => p.costos_unitarios.costo_materia_prima).reverse()
+                    label: { show: true, formatter: (p) => `$${Math.round(p.value)}` },
+                    data: sortedByContrib.map(p => p.detalles_costo.costo_materia_prima).reverse()
                 },
                 {
                     name: 'Mano de Obra',
                     type: 'bar',
                     stack: 'total',
-                    label: { show: true, formatter: (p) => formatCurrency(p.value) },
-                    emphasis: { focus: 'series' },
-                    data: sortedByRentabilidad.map(p => p.costos_unitarios.costo_mano_obra).reverse()
-                },
-                {
-                    name: 'Costos Fijos',
-                    type: 'bar',
-                    stack: 'total',
-                    label: { show: true, formatter: (p) => formatCurrency(p.value) },
-                    emphasis: { focus: 'series' },
-                    data: sortedByRentabilidad.map(p => p.costos_unitarios.costo_fijos).reverse()
+                    label: { show: true, formatter: (p) => `$${Math.round(p.value)}` },
+                    data: sortedByContrib.map(p => p.detalles_costo.costo_mano_obra).reverse()
                 }
             ]
         };
@@ -407,7 +562,6 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderTable(data) {
         const tbody = document.getElementById('tabla-rentabilidad-body');
         tbody.innerHTML = '';
-        updateCompareButton();
 
         data.sort((a, b) => {
             let valA = a[sortConfig.key];
@@ -424,28 +578,60 @@ document.addEventListener('DOMContentLoaded', function () {
         data.forEach(p => {
             const quadrant = getQuadrantInfo(p, fullData.promedios);
             const row = document.createElement('tr');
-            const isChecked = selectedProducts.has(p.id.toString());
             row.innerHTML = `
-                <td><input type="checkbox" class="product-checkbox" data-id="${p.id}" ${isChecked ? 'checked' : ''}></td>
-                <td>${p.nombre}</td>
-                <td>${p.volumen_ventas}</td>
-                <td>${formatCurrency(p.facturacion_total)}</td>
-                <td>${formatCurrency(p.costo_total)}</td>
-                <td>${formatCurrency(p.ganancia_bruta)}</td>
-                <td>${p.margen_ganancia}%</td>
-                <td><span style="color:${quadrant.color}">●</span> ${quadrant.name}</td>
+                <td class="ps-4"><button class="btn btn-sm btn-light rounded-circle shadow-sm btn-detail" data-id="${p.id}"><i class="bi bi-eye text-muted"></i></button></td>
+                <td class="fw-bold text-dark">${p.nombre}</td>
+                <td class="text-end">${p.volumen_ventas}</td>
+                <td class="text-end text-danger">${formatCurrency(p.costo_variable_total)}</td>
+                <td class="text-end text-primary">${formatCurrency(p.facturacion_total)}</td>
+                <td class="text-end fw-bold text-success">${formatCurrency(p.margen_contribucion_total)}</td>
+                <td class="text-end fw-bold ${p.margen_porcentual < 20 ? 'text-danger' : 'text-success'}">${p.margen_porcentual}%</td>
+                <td class="pe-4"><span style="color:${quadrant.color}">●</span> ${quadrant.name}</td>
             `;
             tbody.appendChild(row);
         });
+
+        // Re-attach event listeners for details
+        document.querySelectorAll('.btn-detail').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = e.currentTarget.dataset.id;
+                cargarDetallesProducto(id);
+            });
+        });
     }
 
-    function updateKPIs(data) {
-        const totalGanancia = data.reduce((sum, p) => sum + p.ganancia_bruta, 0);
-        const totalFacturacion = data.reduce((sum, p) => sum + p.facturacion_total, 0);
-        const avgMargen = totalFacturacion > 0 ? (totalGanancia / totalFacturacion) * 100 : 0;
+    function updateDynamicDescription(data, promedios) {
+        const descriptionEl = document.getElementById('dynamic-chart-description');
+        const productsWithSales = data.filter(p => p.volumen_ventas > 0);
+        if (productsWithSales.length === 0) {
+            descriptionEl.textContent = 'No hay suficientes datos de ventas en este período para un análisis detallado.';
+            return;
+        }
 
-        document.getElementById('kpi-ganancia-total').textContent = formatCurrency(totalGanancia);
-        document.getElementById('kpi-margen-promedio').textContent = `${avgMargen.toFixed(2)}%`;
+        const quadrantCounts = { 'Estrella': 0, 'Vaca': 0, 'Interrogante': 0, 'Perro': 0 };
+        const quadrantContrib = { 'Estrella': 0, 'Vaca': 0, 'Interrogante': 0, 'Perro': 0 };
+        let totalContrib = 0;
+
+        productsWithSales.forEach(p => {
+            const quadrant = getQuadrantInfo(p, promedios);
+            quadrantCounts[quadrant.name]++;
+            quadrantContrib[quadrant.name] += p.margen_contribucion_total;
+            totalContrib += p.margen_contribucion_total;
+        });
+
+        let analysisText = '<strong class="text-dark">Análisis del Período:</strong> ';
+        const topQuadrant = Object.entries(quadrantContrib).sort((a, b) => b[1] - a[1])[0];
+        
+        if (topQuadrant && totalContrib > 0) {
+            const topName = topQuadrant[0];
+            const topVal = topQuadrant[1];
+            const topCount = quadrantCounts[topName];
+            const percentage = ((topVal / totalContrib) * 100).toFixed(1);
+            analysisText += `Los ${topCount} productos clasificados como '<strong class="text-dark">${topName}</strong>' son los más significativos, generando el <strong class="text-dark">${percentage}%</strong> del Margen de Contribución Total.`;
+        } else {
+             analysisText += "No se pudo generar un análisis concluyente con los datos actuales."
+        }
+        descriptionEl.innerHTML = `<i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i><span>${analysisText}</span>`;
     }
 
     // --- MANEJADORES DE EVENTOS ---
@@ -458,7 +644,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    document.querySelectorAll('#tabla-rentabilidad th').forEach(header => {
+    document.querySelectorAll('#tabla-rentabilidad th[data-sort]').forEach(header => {
         header.addEventListener('click', () => {
             const sortKey = header.getAttribute('data-sort');
             if (sortConfig.key === sortKey) {
@@ -477,205 +663,123 @@ document.addEventListener('DOMContentLoaded', function () {
         renderTable(filtered);
     });
 
-    document.getElementById('tabla-rentabilidad-body').addEventListener('change', (e) => {
-        if (e.target.classList.contains('product-checkbox')) {
-            const productId = e.target.dataset.id;
-            if (e.target.checked) {
-                selectedProducts.add(productId);
-            } else {
-                selectedProducts.delete(productId);
-            }
-            updateCompareButton();
-        }
-    });
-
-    document.getElementById('selectAllCheckbox').addEventListener('change', (e) => {
-        const checkboxes = document.querySelectorAll('.product-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.checked = e.target.checked;
-            const productId = checkbox.dataset.id;
-            if (e.target.checked) {
-                selectedProducts.add(productId);
-            } else {
-                selectedProducts.delete(productId);
-            }
-        });
-        updateCompareButton();
-    });
-
-    function updateCompareButton() {
-        let compareBtn = document.getElementById('compareBtn');
-        if (!compareBtn) {
-            compareBtn = document.createElement('button');
-            compareBtn.id = 'compareBtn';
-            compareBtn.className = 'btn btn-info ms-3';
-            compareBtn.addEventListener('click', showComparisonModal);
-            document.querySelector('.card-header.d-flex').appendChild(compareBtn);
-        }
-        
-        compareBtn.textContent = `Comparar (${selectedProducts.size})`;
-        compareBtn.style.display = selectedProducts.size >= 2 ? 'block' : 'none';
-    }
-
-    function showComparisonModal() {
-        const productsToCompare = fullData.productos.filter(p => selectedProducts.has(p.id.toString()));
-        const modalBody = document.getElementById('comparison-modal-body');
-        
-        let tableHTML = '<div class="table-responsive"><table class="table table-bordered">';
-        
-        // Headers
-        tableHTML += '<thead><tr><th>Métrica</th>';
-        productsToCompare.forEach(p => tableHTML += `<th>${p.nombre}</th>`);
-        tableHTML += '</tr></thead>';
-
-        // Body
-        tableHTML += '<tbody>';
-        const metrics = [
-            { label: 'Volumen Ventas', key: 'volumen_ventas' },
-            { label: 'Facturación Total', key: 'facturacion_total', format: 'currency' },
-            { label: 'Ganancia Bruta', key: 'ganancia_bruta', format: 'currency' },
-            { label: 'Margen (%)', key: 'margen_ganancia', suffix: '%' },
-            { label: 'Costo Total de Ventas', key: 'costo_total', format: 'currency' },
-            { label: 'Costo Unit. Materia Prima', key: 'costos_unitarios.costo_materia_prima', format: 'currency' },
-            { label: 'Costo Unit. Mano de Obra', key: 'costos_unitarios.costo_mano_obra', format: 'currency' },
-            { label: 'Costos Fijos Unit.', key: 'costos_unitarios.costo_fijos', format: 'currency' },
-        ];
-
-        metrics.forEach(metric => {
-            tableHTML += `<tr><td><strong>${metric.label}</strong></td>`;
-            productsToCompare.forEach(p => {
-                let value = metric.key.includes('.') ? p.costos_unitarios[metric.key.split('.')[1]] : p[metric.key];
-                if (metric.format === 'currency') value = formatCurrency(value);
-                if (metric.suffix) value += metric.suffix;
-                tableHTML += `<td>${value}</td>`;
-            });
-            tableHTML += '</tr>';
-        });
-
-        tableHTML += '</tbody></table></div>';
-        modalBody.innerHTML = tableHTML;
-
-        const comparisonModal = new bootstrap.Modal(document.getElementById('comparisonModal'));
-        comparisonModal.show();
-    }
-
-    bubbleChartInstance.on('click', (params) => {
-        const productoId = params.value[3];
-        if (productoId) {
-            cargarDetallesProducto(productoId);
-        }
-    });
-
-    function createTopChartClickHandler(chartInstance, dataKey) {
-        chartInstance.on('click', (params) => {
-            const topProducts = [...fullData.productos].sort((a, b) => b[dataKey] - a[dataKey]).slice(0, 5);
-            const selectedProduct = topProducts.find(p => p.nombre === params.name);
-            if (selectedProduct) {
-                updateDashboard([selectedProduct]);
-            }
-        });
-    }
-    createTopChartClickHandler(topRentablesChartInstance, 'ganancia_bruta');
-    createTopChartClickHandler(topVendidosChartInstance, 'volumen_ventas');
-
-    function updateDynamicDescription(data, promedios) {
-        const descriptionEl = document.getElementById('dynamic-chart-description');
-        const productsWithSales = data.filter(p => p.volumen_ventas > 0);
-        if (productsWithSales.length === 0) {
-            descriptionEl.textContent = 'No hay suficientes datos de ventas en este período para un análisis detallado.';
-            return;
-        }
-
-        const quadrantCounts = { 'Estrella': 0, 'Vaca': 0, 'Interrogante': 0, 'Perro': 0 };
-        const quadrantProfits = { 'Estrella': 0, 'Vaca': 0, 'Interrogante': 0, 'Perro': 0 };
-        let totalProfit = 0;
-
-        productsWithSales.forEach(p => {
-            const quadrant = getQuadrantInfo(p, promedios);
-            quadrantCounts[quadrant.name]++;
-            quadrantProfits[quadrant.name] += p.ganancia_bruta;
-            totalProfit += p.ganancia_bruta;
-        });
-
-        let analysisText = '<strong>Análisis del Período:</strong> ';
-        const topQuadrant = Object.entries(quadrantProfits).sort((a, b) => b[1] - a[1])[0];
-        
-        if (topQuadrant && totalProfit > 0) {
-            const topName = topQuadrant[0];
-            const topProfit = topQuadrant[1];
-            const topCount = quadrantCounts[topName];
-            const percentage = ((topProfit / totalProfit) * 100).toFixed(1);
-            analysisText += `Los ${topCount} producto(s) clasificados como '<strong>${topName}</strong>' son los más significativos, generando el <strong>${percentage}%</strong> de la ganancia total.`;
-        } else {
-             analysisText += "No se pudo generar un análisis concluyente con los datos actuales."
-        }
-        descriptionEl.innerHTML = analysisText;
-    }
-
     function cargarDetallesProducto(productoId) {
         const modalBody = document.getElementById('modal-body-content');
-        modalBody.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
+        modalBody.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"></div></div>';
         const productoModal = new bootstrap.Modal(document.getElementById('productoModal'));
         productoModal.show();
 
-        // 1. Cargar detalles básicos
-        const detallesPromise = fetch(`/analisis/api/rentabilidad/producto/${productoId}`).then(res => res.json());
-        // 2. Cargar evolución histórica
-        const evolucionPromise = fetch(`/analisis/api/rentabilidad/producto/${productoId}/evolucion`).then(res => res.json());
+        // Buscar datos locales primero (ya tenemos costos calculados)
+        const localProductData = fullData.productos.find(p => p.id == productoId);
 
-        Promise.all([detallesPromise, evolucionPromise]).then(([detallesResult, evolucionResult]) => {
-            let content = '';
-            // Renderizar detalles
-            if (detallesResult.success) {
-                const d = detallesResult.data;
-                content += `<h4>${d.nombre_producto || 'Producto'}</h4>`;
-                if (d.costos) {
-                    content += `<div class="card bg-light mb-3"><div class="card-body">
-                        <h5 class="card-title mb-3">Desglose de Costo Unitario</h5>
-                        <div class="d-flex justify-content-around text-center">
-                            <div><p class="mb-0 text-muted">Materia Prima</p><p class="h5">${formatCurrency(d.costos.costo_materia_prima)}</p></div>
-                            <div><p class="mb-0 text-muted">Mano de Obra</p><p class="h5">${formatCurrency(d.costos.costo_mano_obra)}</p></div>
-                            <div><p class="mb-0 text-muted">Costos Fijos</p><p class="h5">${formatCurrency(d.costos.costo_fijos)}</p></div>
-                            <div><p class="mb-0 text-muted">Costo Total</p><p class="h5"><strong>${formatCurrency(d.costos.costo_total)}</strong></p></div>
-                        </div></div></div>`;
+        // CORRECCIÓN: Usar el endpoint general de producto para obtener pedidos relacionados
+        fetch(`/analisis/api/rentabilidad/producto/${productoId}`)
+            .then(res => res.json())
+            .then(detallesResult => { // Renombrado para claridad
+                const result = detallesResult.data;
+                let content = '';
+                
+                if (localProductData) {
+                     content += `
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <h4 class="fw-bold text-dark">${localProductData.nombre}</h4>
+                                <p class="text-muted small">Precio Venta (Prom): ${formatCurrency(localProductData.precio_venta)}</p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <h2 class="text-success fw-bold mb-0">${formatCurrency(localProductData.margen_contribucion_unitario)}</h2>
+                                <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Margen Contribución Unitario (Prom)</small>
+                            </div>
+                        </div>
+                        
+                        <ul class="nav nav-tabs mb-3" id="myTab" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="evolucion-tab" data-bs-toggle="tab" data-bs-target="#evolucion" type="button" role="tab">Evolución</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="pedidos-tab" data-bs-toggle="tab" data-bs-target="#pedidos" type="button" role="tab">Pedidos Relacionados</button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content" id="myTabContent">
+                            <!-- Pestaña Gráfico -->
+                            <div class="tab-pane fade show active" id="evolucion" role="tabpanel">
+                                <h6 class="fw-bold mb-3 text-dark mt-3">Evolución de Ventas (Últimos 12 Meses)</h6>
+                                <div id="evolucion-chart-container" style="width: 100%; height: 300px;"></div>
+                            </div>
+                            
+                            <!-- Pestaña Tabla Pedidos -->
+                            <div class="tab-pane fade" id="pedidos" role="tabpanel">
+                                <div class="table-responsive mt-3" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Fecha</th>
+                                                <th>Pedido</th>
+                                                <th>Cliente</th>
+                                                <th class="text-end">Cant.</th>
+                                                <th class="text-end">Precio U.</th>
+                                                <th class="text-end">Costo U.</th>
+                                                <th class="text-end">Ganancia</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${(result.pedidos_relacionados || []).map(p => `
+                                                <tr>
+                                                    <td>${p.fecha}</td>
+                                                    <td><a href="/orden-venta/${p.id}/detalle" target="_blank" class="text-decoration-none fw-bold">${p.codigo}</a></td>
+                                                    <td>${p.cliente}</td>
+                                                    <td class="text-end">${p.cantidad}</td>
+                                                    <td class="text-end text-primary">${formatCurrency(p.precio_unitario)}</td>
+                                                    <td class="text-end text-muted">${formatCurrency(p.costo_unitario)}</td>
+                                                    <td class="text-end fw-bold ${p.ganancia > 0 ? 'text-success' : 'text-danger'}">${formatCurrency(p.ganancia)}</td>
+                                                </tr>
+                                            `).join('') || '<tr><td colspan="7" class="text-center text-muted">No se encontraron pedidos.</td></tr>'}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
                 }
-                content += '<h5>Clientes Principales (Período Seleccionado)</h5>';
-                if (d.clientes_principales.length > 0) {
-                    content += '<ul class="list-group mb-3">';
-                    d.clientes_principales.slice(0, 5).forEach(c => { // Limitar a 5 para no saturar
-                        content += `<li class="list-group-item d-flex justify-content-between align-items-center">${c[0]} <span class="badge bg-primary rounded-pill">${formatCurrency(c[1].facturacion)}</span></li>`;
-                    });
-                    content += '</ul>';
-                } else { content += '<p>No hay datos de clientes en este período.</p>'; }
-            } else {
-                content += '<p>Error al cargar los detalles del producto.</p>';
-            }
+                
+                modalBody.innerHTML = content;
+                
+                // Inicializar gráfico solo si está activo el tab
+                if (detallesResult.success && result && result.historial_ventas && result.historial_ventas.length > 0) {
+                    setTimeout(() => {
+                        const evolucionChart = echarts.init(document.getElementById('evolucion-chart-container'));
+                        const option = {
+                            tooltip: { trigger: 'axis' },
+                            grid: { left: '5%', right: '5%', bottom: '10%', top: '10%', containLabel: true },
+                            xAxis: { type: 'category', data: result.historial_ventas.map(item => item.fecha ? item.fecha.split('T')[0] : '') },
+                            yAxis: { type: 'value' },
+                            series: [{
+                                name: 'Unidades',
+                                data: result.historial_ventas.map(item => item.cantidad),
+                                type: 'line',
+                                smooth: true,
+                                areaStyle: { opacity: 0.2, color: '#198754' },
+                                lineStyle: { color: '#198754' },
+                                itemStyle: { color: '#198754' }
+                            }]
+                        };
+                        evolucionChart.setOption(option);
+                        
+                        // Fix chart resize on tab switch
+                        const tabEl = document.querySelector('button[data-bs-target="#evolucion"]');
+                        if(tabEl){
+                            tabEl.addEventListener('shown.bs.tab', function (event) {
+                                evolucionChart.resize();
+                            });
+                        }
+                    }, 200);
+                } 
 
-            // Contenedor para el gráfico de evolución
-            content += '<h5>Evolución de Ventas (Últimos 12 Meses)</h5>';
-            content += '<div id="evolucion-chart-container" style="width: 100%; height: 250px;"></div>';
-            modalBody.innerHTML = content;
-            
-            // Renderizar gráfico de evolución
-            if (evolucionResult.success) {
-                const evolucionChart = echarts.init(document.getElementById('evolucion-chart-container'));
-                const option = {
-                    tooltip: { trigger: 'axis' },
-                    xAxis: { type: 'category', data: evolucionResult.data.map(item => item.mes) },
-                    yAxis: { type: 'value', name: 'Unidades Vendidas' },
-                    series: [{
-                        data: evolucionResult.data.map(item => item.unidades_vendidas),
-                        type: 'line',
-                        smooth: true
-                    }]
-                };
-                evolucionChart.setOption(option);
-            }
-
-        }).catch(error => {
-            modalBody.innerHTML = '<p class="text-danger">Ocurrió un error al cargar la información.</p>';
-            console.error(error);
-        });
+            }).catch(err => {
+                console.error(err);
+                modalBody.innerHTML = '<div class="alert alert-danger border-0 rounded-3">Error cargando detalles.</div>';
+            });
     }
 
     // Carga inicial
