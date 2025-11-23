@@ -141,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     const updateListView = () => {
+        // Sync row checkboxes
         document.querySelectorAll('#list-view .pedido-checkbox').forEach(checkbox => {
             const pedidoId = parseInt(checkbox.value, 10);
             const row = checkbox.closest('tr');
@@ -152,6 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     checkbox.checked = false;
                     row.classList.remove('table-primary');
                 }
+            }
+        });
+        
+        // Sync header "select all" checkboxes
+        document.querySelectorAll('input[id^="select-all-"]').forEach(headerCheckbox => {
+            const table = headerCheckbox.closest('table');
+            if (table) {
+                const checkboxes = Array.from(table.querySelectorAll('.pedido-checkbox'));
+                const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+                const someChecked = checkboxes.some(cb => cb.checked);
+                headerCheckbox.checked = allChecked;
+                headerCheckbox.indeterminate = someChecked && !allChecked;
             }
         });
 
@@ -267,16 +280,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return optimized;
     };
 
-    // --- MANEJADORES DE EVENTOS ---
-    const handlePedidoSelection = (pedidoId) => {
-        if (selectedPedidos.has(pedidoId)) {
-            selectedPedidos.delete(pedidoId);
-        } else {
-            selectedPedidos.add(pedidoId);
-        }
+    const updateRouteAndRender = () => {
         const selectedPedidosData = pedidosSimulados.filter(p => selectedPedidos.has(p.id));
         sortedRoute = optimizeRoute(selectedPedidosData);
         render();
+    };
+
+    // --- MANEJADORES DE EVENTOS ---
+    const handlePedidoSelection = (pedidoId, forceState = null) => {
+        if (forceState !== null) {
+            if (forceState) selectedPedidos.add(pedidoId);
+            else selectedPedidos.delete(pedidoId);
+        } else {
+            if (selectedPedidos.has(pedidoId)) {
+                selectedPedidos.delete(pedidoId);
+            } else {
+                selectedPedidos.add(pedidoId);
+            }
+        }
+        updateRouteAndRender();
     };
 
     // --- NUEVA LÓGICA DE BÚSQUEDA ---
@@ -288,61 +310,43 @@ document.addEventListener('DOMContentLoaded', () => {
          vehiculoDni.textContent = vehiculo.dni_conductor || 'No especificado';
          vehiculoCapacidad.textContent = vehiculo.capacidad_kg;
          
-         // Helper para badges
-         const getBadge = (estado, texto) => {
-             if (estado === 'VENCIDA') return `<span class="badge bg-danger doc-badge mt-1">VENCIDA</span>`;
-             if (estado === 'PRONTO_VENC') return `<span class="badge bg-warning text-dark doc-badge mt-1">PRONTO VENC.</span>`;
-             return `<span class="badge bg-success doc-badge mt-1">AL DÍA</span>`;
+         // Helper interno para actualizar badges sin romper referencias DOM
+         const updateBadge = (element, estado) => {
+             element.className = 'badge doc-badge mt-1'; // Reset classes
+             if (estado === 'VENCIDA') {
+                 element.classList.add('bg-danger');
+                 element.textContent = 'VENCIDA';
+             } else if (estado === 'PRONTO_VENC') {
+                 element.classList.add('bg-warning', 'text-dark');
+                 element.textContent = 'PRONTO VENC.';
+             } else if (estado === 'AL_DIA' || !estado) {
+                  element.classList.add('bg-success');
+                  element.textContent = 'AL DÍA';
+             }
          };
 
          // Docs VTV
         if (vehiculo.vtv_vencimiento) {
             vehiculoVtvVenc.textContent = vehiculo.vtv_vencimiento;
             vehiculoVtvEmision.textContent = vehiculo.vtv_emision_estimada || '-';
-            vehiculoVtvBadge.outerHTML = `<span id="vehiculo-vtv-badge">${getBadge(vehiculo.estado_vtv)}</span>`;
-            // Recapturar referencia tras replace
-            const badge = document.getElementById('vehiculo-vtv-badge');
-            badge.className = 'badge doc-badge mt-1';
-            if(vehiculo.estado_vtv === 'VENCIDA') {
-                badge.classList.add('bg-danger');
-                badge.textContent = 'VENCIDA';
-            } else if (vehiculo.estado_vtv === 'PRONTO_VENC') {
-                badge.classList.add('bg-warning', 'text-dark');
-                badge.textContent = 'PRONTO VENC.';
-            } else {
-                badge.classList.add('bg-success');
-                badge.textContent = 'AL DÍA';
-            }
+            updateBadge(vehiculoVtvBadge, vehiculo.estado_vtv);
         } else {
             vehiculoVtvVenc.textContent = '-';
             vehiculoVtvEmision.textContent = '-';
-            const badge = document.getElementById('vehiculo-vtv-badge');
-            badge.className = 'badge bg-secondary doc-badge mt-1';
-            badge.textContent = 'N/A';
+            vehiculoVtvBadge.className = 'badge bg-secondary doc-badge mt-1';
+            vehiculoVtvBadge.textContent = 'N/A';
         }
 
         // Docs Licencia
         if (vehiculo.licencia_vencimiento) {
             vehiculoLicenciaVenc.textContent = vehiculo.licencia_vencimiento;
             vehiculoLicenciaEmision.textContent = vehiculo.licencia_emision_estimada || '-';
-             const badge = document.getElementById('vehiculo-licencia-badge');
-             badge.className = 'badge doc-badge mt-1';
-            if(vehiculo.estado_licencia === 'VENCIDA') {
-                badge.classList.add('bg-danger');
-                badge.textContent = 'VENCIDA';
-            } else if (vehiculo.estado_licencia === 'PRONTO_VENC') {
-                badge.classList.add('bg-warning', 'text-dark');
-                badge.textContent = 'PRONTO VENC.';
-            } else {
-                badge.classList.add('bg-success');
-                badge.textContent = 'AL DÍA';
-            }
+            updateBadge(vehiculoLicenciaBadge, vehiculo.estado_licencia);
         } else {
             vehiculoLicenciaVenc.textContent = '-';
             vehiculoLicenciaEmision.textContent = '-';
-            const badge = document.getElementById('vehiculo-licencia-badge');
-            badge.className = 'badge bg-secondary doc-badge mt-1';
-            badge.textContent = 'N/A';
+            vehiculoLicenciaBadge.className = 'badge bg-secondary doc-badge mt-1';
+            vehiculoLicenciaBadge.textContent = 'N/A';
         }
          
          updateInfoPanel();
@@ -392,6 +396,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         patenteInput.addEventListener('input', function() {
             const query = this.value.trim();
+            
+            // Si el usuario modifica el input, reseteamos el vehículo seleccionado
+            if (vehiculo) {
+                vehiculo = null;
+                vehiculoInfo.style.display = 'none';
+                selectedPedidos.clear();
+                updateRouteAndRender();
+            }
+
             clearTimeout(debounceTimer);
             
             // Permitir búsqueda vacía (reset) o búsqueda por término
@@ -620,9 +633,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     listView.addEventListener('change', (e) => {
-        if (e.target.classList.contains('pedido-checkbox')) {
+        if (e.target.matches('input[id^="select-all-"]')) {
+            const isChecked = e.target.checked;
+            const table = e.target.closest('table');
+            if (table) {
+                table.querySelectorAll('.pedido-checkbox').forEach(cb => {
+                    const id = parseInt(cb.value, 10);
+                    if (isChecked) selectedPedidos.add(id);
+                    else selectedPedidos.delete(id);
+                });
+                updateRouteAndRender();
+            }
+        } else if (e.target.classList.contains('pedido-checkbox')) {
             const id = parseInt(e.target.value, 10);
-            handlePedidoSelection(id);
+            handlePedidoSelection(id, e.target.checked);
         }
     });
     

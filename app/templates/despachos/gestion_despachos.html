@@ -362,21 +362,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             const tab = urlParams.get('tab');
             gestionarTab(tab);
-
-            // Lógica para "Seleccionar Todos"
-            document.querySelectorAll('input[id^="select-all-"]').forEach(headerCheckbox => {
-                headerCheckbox.addEventListener('change', function(e) {
-                    const isChecked = e.target.checked;
-                    const table = e.target.closest('table');
-                    if (table) {
-                        table.querySelectorAll('.pedido-checkbox').forEach(rowCheckbox => {
-                            rowCheckbox.checked = isChecked;
-                            // Disparamos el evento 'change' para que la lógica de cálculo de peso se actualice
-                            rowCheckbox.dispatchEvent(new Event('change'));
-                        });
-                    }
-                });
-            });
         });
     </script>
     <script src="{{ url_for('static', filename='js/despachos/gestion_despachos.js') }}"></script>
