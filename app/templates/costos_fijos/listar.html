@@ -20,6 +20,7 @@
                 <thead>
                     <tr>
                         <th scope="col">Nombre del Costo</th>
+                        <th scope="col">Tipo</th>
                         <th scope="col">Monto Mensual</th>
                         <th scope="col">Estado</th>
                         <th scope="col">Acciones</th>
@@ -29,6 +30,13 @@
                     {% for costo in costos %}
                     <tr class="{{ 'table-secondary' if not costo.activo else '' }}">
                         <td>{{ costo.nombre_costo }}</td>
+                        <td>
+                            {% if costo.tipo == 'Directo' %}
+                                <span class="badge bg-info text-dark">Directo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Indirecto</span>
+                            {% endif %}
+                        </td>
                         <td>${{ "%.2f"|format(costo.monto_mensual) }}</td>
                         <td>
                             {% if costo.activo %}
@@ -65,7 +73,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center p-4">
+                        <td colspan="5" class="text-center p-4">
                             <div class="text-muted">
                                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                                 No hay costos fijos registrados.

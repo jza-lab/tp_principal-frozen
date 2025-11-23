@@ -172,11 +172,10 @@ class RentabilidadController(BaseController):
 
         # 5. Calcular Costos Fijos Globales (Directos + Indirectos para Rentabilidad Global)
         # Intentamos usar el cálculo histórico preciso primero
-        total_costos_fijos_global = self._calcular_costo_fijo_historico_total(fecha_inicio, fecha_fin)
-        
-        # Variables para desglose (solo se calculan en fallback por simplicidad, o se podrían estimar)
-        total_directos = 0.0
-        total_indirectos = 0.0
+        resultados_costos_fijos = self._calcular_costo_fijo_historico_total(fecha_inicio, fecha_fin)
+        total_costos_fijos_global = resultados_costos_fijos['total']
+        total_directos = resultados_costos_fijos['directos']
+        total_indirectos = resultados_costos_fijos['indirectos']
 
         # Si el cálculo histórico devuelve 0 (por ejemplo, sin datos históricos), 
         # usamos el fallback del multiplicador simple si hay costos activos
@@ -200,19 +199,6 @@ class RentabilidadController(BaseController):
                     total_costos_fijos_global = total_mensual * months_duration
              except Exception as e:
                  logger.error(f"Error en fallback de costos fijos: {e}")
-        else:
-             # Si tenemos cálculo histórico, intentamos una aproximación del desglose
-             # (esto es imperfecto sin re-calcular el histórico por tipo, pero aceptable para visualización)
-             try:
-                costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
-                active_direct = sum(float(c['monto_mensual']) for c in costos_fijos_resp.get('data', []) if c.get('activo') is True and c.get('tipo') == 'Directo')
-                active_total = sum(float(c['monto_mensual']) for c in costos_fijos_resp.get('data', []) if c.get('activo') is True)
-                
-                ratio_direct = (active_direct / active_total) if active_total > 0 else 0
-                total_directos = total_costos_fijos_global * ratio_direct
-                total_indirectos = total_costos_fijos_global - total_directos
-             except:
-                pass
 
         # 6. Calcular Costos de Envío Globales
         total_costos_envio_global = self._calcular_costos_envio(pedidos_data_for_shipping)
@@ -253,11 +239,12 @@ class RentabilidadController(BaseController):
         
         return self.success_response(data=respuesta)
 
-    def _calcular_costo_fijo_historico_total(self, fecha_inicio_str: str, fecha_fin_str: str) -> float:
+    def _calcular_costo_fijo_historico_total(self, fecha_inicio_str: str, fecha_fin_str: str) -> Dict:
         """
         Calcula el costo fijo total acumulado en un rango de fechas, considerando el historial de cambios.
+        Devuelve un diccionario con {'total', 'directos', 'indirectos'}.
         """
-        total_acumulado = 0.0
+        resultado = {'total': 0.0, 'directos': 0.0, 'indirectos': 0.0}
         
         # Definir el rango de fechas
         if not fecha_inicio_str:
@@ -276,14 +263,15 @@ class RentabilidadController(BaseController):
             # El usuario solicitó explícitamente excluir los inhabilitados del cálculo.
             costos_res = self.costo_fijo_model.find_all(filters={'activo': True})
             if not costos_res.get('success'):
-                return 0.0
+                return resultado
             
             # Verificación adicional en Python para garantizar que solo se usen activos
-            # NOTA: Aquí revertimos a TODOS los costos (Directos + Indirectos) para el análisis global
             costos_activos = [c for c in costos_res.get('data', []) if c.get('activo') is True]
 
             for costo in costos_activos:
                 costo_id = costo['id']
+                es_directo = costo.get('tipo') == 'Directo'
+                
                 # Obtener historial ordenado por fecha
                 historial_res = self.costo_fijo_model.db.table('historial_costos_fijos')\
                     .select('*').eq('costo_fijo_id', costo_id).order('fecha_cambio', desc=False).execute()
@@ -348,13 +336,17 @@ class RentabilidadController(BaseController):
                         # Prorrateo mensual (30 días)
                         costo_acumulado_item += (days / 30.0) * value
                 
-                total_acumulado += costo_acumulado_item
+                resultado['total'] += costo_acumulado_item
+                if es_directo:
+                    resultado['directos'] += costo_acumulado_item
+                else:
+                    resultado['indirectos'] += costo_acumulado_item
 
         except Exception as e:
             logger.error(f"Error en cálculo histórico de costos fijos: {e}", exc_info=True)
-            return 0.0
+            return resultado
             
-        return total_acumulado
+        return resultado
 
     def _calcular_costos_envio(self, pedidos_data: List[Dict]) -> float:
         """
