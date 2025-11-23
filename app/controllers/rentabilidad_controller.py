@@ -178,9 +178,14 @@ class RentabilidadController(BaseController):
         # usamos el fallback del multiplicador simple si hay costos activos
         if total_costos_fijos_global == 0.0:
              try:
+                # Filtramos explícitamente por 'activo': True
                 costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
-                if costos_fijos_resp.get('success') and costos_fijos_resp.get('data'):
-                    total_mensual = sum(float(c.get('monto_mensual') or 0) for c in costos_fijos_resp.get('data', []))
+                
+                # Verificación adicional en Python para garantizar que solo se usen activos
+                costos_activos = [c for c in costos_fijos_resp.get('data', []) if c.get('activo') is True]
+
+                if costos_activos:
+                    total_mensual = sum(float(c.get('monto_mensual') or 0) for c in costos_activos)
                     total_costos_fijos_global = total_mensual * months_duration
              except Exception as e:
                  logger.error(f"Error en fallback de costos fijos: {e}")
@@ -241,16 +246,16 @@ class RentabilidadController(BaseController):
             end_date = datetime.fromisoformat(fecha_fin_str)
 
         try:
-            # 1. Obtener todos los costos fijos (incluso inactivos si estuvieron activos en el periodo)
-            # Por simplicidad, usamos los activos actualmente o implementamos lógica más compleja luego.
-            # Lo ideal es iterar sobre todos los costos que existan.
-            costos_res = self.costo_fijo_model.find_all() # Trae activos e inactivos si el modelo lo permite, sino filtrar
+            # 1. Obtener solo los costos fijos ACTIVOS actualmente
+            # El usuario solicitó explícitamente excluir los inhabilitados del cálculo.
+            costos_res = self.costo_fijo_model.find_all(filters={'activo': True})
             if not costos_res.get('success'):
                 return 0.0
             
-            costos = costos_res.get('data', [])
+            # Verificación adicional en Python para garantizar que solo se usen activos
+            costos_activos = [c for c in costos_res.get('data', []) if c.get('activo') is True]
 
-            for costo in costos:
+            for costo in costos_activos:
                 costo_id = costo['id']
                 # Obtener historial ordenado por fecha
                 historial_res = self.costo_fijo_model.db.table('historial_costos_fijos')\
