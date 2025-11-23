@@ -13,24 +13,31 @@
         <div class="card-body">
             <form id="form-vehiculo" method="POST" novalidate>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="return_url" value="{{ request.args.get('return_url', '') }}"/>
                 
                 <div class="row">
                     <div class="col-md-6">
                         <h5 class="mb-3">Datos del Vehículo</h5>
                         <div class="mb-3">
-                            <label for="patente" class="form-label">Patente</label>
+                            <label for="patente" class="form-label">Patente *</label>
                             <input type="text" class="form-control" id="patente" name="patente" value="{{ vehiculo.patente if vehiculo else '' }}" required>
                             <small class="form-text text-muted">Formato: LLLNNN o LLNNNLL.</small>
                             <div class="invalid-feedback" id="patente-error"></div>
                         </div>
                         <div class="mb-3">
-                            <label for="tipo_vehiculo" class="form-label">Tipo de Vehículo</label>
-                            <input type="text" class="form-control" id="tipo_vehiculo" name="tipo_vehiculo" value="{{ vehiculo.tipo_vehiculo if vehiculo else '' }}">
+                            <label for="tipo_vehiculo" class="form-label">Tipo de Vehículo *</label>
+                            <select class="form-select" id="tipo_vehiculo" name="tipo_vehiculo" required>
+                                <option value="">Seleccione un tipo</option>
+                                <option value="Camioneta / Utilitario" {% if vehiculo and vehiculo.tipo_vehiculo == 'Camioneta / Utilitario' %}selected{% endif %}>Camioneta / Utilitario</option>
+                                <option value="Combi / Furgon" {% if vehiculo and vehiculo.tipo_vehiculo == 'Combi / Furgon' %}selected{% endif %}>Combi / Furgon</option>
+                                <option value="Camión (Liviano)" {% if vehiculo and vehiculo.tipo_vehiculo == 'Camión (Liviano)' %}selected{% endif %}>Camión (Liviano)</option>
+                            </select>
+                            <div class="invalid-feedback" id="tipo_vehiculo-error"></div>
                         </div>
                         <div class="mb-3">
-                            <label for="capacidad_kg" class="form-label">Capacidad (kg)</label>
+                            <label for="capacidad_kg" class="form-label">Capacidad (kg) *</label>
                             <input type="number" step="0.01" class="form-control" id="capacidad_kg" name="capacidad_kg" value="{{ vehiculo.capacidad_kg if vehiculo else '' }}" required>
-                            <small class="form-text text-muted">Debe ser un número entre 100 y 500.</small>
+                            <small class="form-text text-muted" id="capacidad-help">Seleccione un tipo de vehículo para ver el rango permitido.</small>
                             <div class="invalid-feedback" id="capacidad_kg-error"></div>
                         </div>
 
@@ -50,13 +57,13 @@
                     <div class="col-md-6">
                         <h5 class="mb-3">Datos del Conductor</h5>
                         <div class="mb-3">
-                            <label for="nombre_conductor" class="form-label">Nombre y Apellido</label>
+                            <label for="nombre_conductor" class="form-label">Nombre y Apellido *</label>
                             <input type="text" class="form-control" id="nombre_conductor" name="nombre_conductor" value="{{ vehiculo.nombre_conductor if vehiculo else '' }}" required>
                             <small class="form-text text-muted">Mínimo 3 caracteres, no debe contener números.</small>
                             <div class="invalid-feedback" id="nombre_conductor-error"></div>
                         </div>
                         <div class="mb-3">
-                            <label for="dni_conductor" class="form-label">DNI</label>
+                            <label for="dni_conductor" class="form-label">DNI *</label>
                             <input type="text" class="form-control" id="dni_conductor" name="dni_conductor" value="{{ vehiculo.dni_conductor if vehiculo else '' }}" required>
                             <small class="form-text text-muted">Debe ser un número de 7 u 8 dígitos.</small>
                             <div class="invalid-feedback" id="dni_conductor-error"></div>
@@ -86,7 +93,7 @@
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-save"></i> Guardar
                     </button>
-                    <a href="{{ url_for('vehiculo.listar_vehiculos') }}" class="btn btn-secondary">
+                    <a href="{{ request.args.get('return_url') or url_for('vehiculo.listar_vehiculos') }}" class="btn btn-secondary">
                         <i class="fas fa-times"></i> Cancelar
                     </a>
                 </div>

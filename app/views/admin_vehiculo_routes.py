@@ -21,10 +21,11 @@ def listar_vehiculos():
 def crear_vehiculo():
     if request.method == 'POST':
         data = request.form.to_dict()
+        return_url = data.pop('return_url', None)
         response = vehiculo_controller.crear_vehiculo(data)
         if response['success']:
             flash('Vehículo creado exitosamente.', 'success')
-            return redirect(url_for('envio.gestion_envios'))
+            return redirect(return_url or url_for('envio.gestion_envios'))
         else:
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify(response), 400
@@ -36,17 +37,19 @@ def crear_vehiculo():
 def editar_vehiculo(vehiculo_id):
     if request.method == 'POST':
         data = request.form.to_dict()
+        return_url = data.pop('return_url', None)
         response = vehiculo_controller.actualizar_vehiculo(vehiculo_id, data)
         if response['success']:
             flash('Vehículo actualizado exitosamente.', 'success')
-            return redirect(url_for('envio.gestion_envios'))
+            return redirect(return_url or url_for('envio.gestion_envios'))
         else:
             flash(f"Error al actualizar el vehículo: {response['error']}", 'danger')
 
     response = vehiculo_controller.obtener_vehiculo_por_id(vehiculo_id)
     if not response['success']:
         flash(response['error'], 'danger')
-        return redirect(url_for('envio.gestion_envios'))
+        # Si falla al cargar, intentamos volver a donde vino o a gestion
+        return redirect(request.args.get('return_url') or url_for('envio.gestion_envios'))
     
     vehiculo = response['data']
     return render_template('vehiculos/formulario.html', vehiculo=vehiculo, is_new=False)

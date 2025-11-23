@@ -4,10 +4,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const fields = {
         patente: document.getElementById('patente'),
+        tipo_vehiculo: document.getElementById('tipo_vehiculo'),
         capacidad_kg: document.getElementById('capacidad_kg'),
         nombre_conductor: document.getElementById('nombre_conductor'),
         dni_conductor: document.getElementById('dni_conductor'),
         telefono_conductor: document.getElementById('telefono_conductor')
+    };
+
+    // Rangos de capacidad según tipo de vehículo
+    const capacityRanges = {
+        "Camioneta / Utilitario": { min: 600, max: 1000 },
+        "Combi / Furgon": { min: 1500, max: 2500 },
+        "Camión (Liviano)": { min: 3500, max: 6000 }
     };
 
     // --- Funciones de Feedback (UI) ---
@@ -30,6 +38,35 @@ document.addEventListener('DOMContentLoaded', function () {
             errorDiv.textContent = '';
         }
     };
+
+    const updateCapacityLimits = () => {
+        const tipoSelect = fields.tipo_vehiculo;
+        const capacidadInput = fields.capacidad_kg;
+        const capacidadHelp = document.getElementById('capacidad-help');
+
+        if (!tipoSelect || !capacidadInput) return;
+
+        const selectedType = tipoSelect.value;
+        const range = capacityRanges[selectedType];
+
+        if (range) {
+            capacidadInput.min = range.min;
+            capacidadInput.max = range.max;
+            if (capacidadHelp) {
+                capacidadHelp.textContent = `Rango permitido para ${selectedType}: ${range.min} - ${range.max} kg.`;
+            }
+            // Re-validar si ya tiene valor
+            if (capacidadInput.value) {
+                validators.capacidad_kg(capacidadInput);
+            }
+        } else {
+            capacidadInput.removeAttribute('min');
+            capacidadInput.removeAttribute('max');
+            if (capacidadHelp) {
+                capacidadHelp.textContent = 'Seleccione un tipo de vehículo para ver el rango permitido.';
+            }
+        }
+    };
     
     // --- Lógica de Validación Específica ---
     const validators = {
@@ -46,17 +83,44 @@ document.addEventListener('DOMContentLoaded', function () {
             showSuccess(inputElement);
             return true;
         },
+        tipo_vehiculo: (inputElement) => {
+            if (!inputElement.value) {
+                showError(inputElement, 'Debe seleccionar un tipo de vehículo.');
+                return false;
+            }
+            showSuccess(inputElement);
+            return true;
+        },
         capacidad_kg: (inputElement) => {
             const value = inputElement.value;
             if (value === '' || value === null) {
                 showError(inputElement, 'La capacidad es requerida.');
                 return false;
             }
+            
+            const tipoSelect = fields.tipo_vehiculo;
+            if (!tipoSelect || !tipoSelect.value) {
+                 showError(inputElement, 'Seleccione primero el tipo de vehículo.');
+                 return false;
+            }
+
+            const range = capacityRanges[tipoSelect.value];
+            if (!range) {
+                // Fallback si algo falla
+                return true; 
+            }
+
             const numberValue = parseFloat(value);
-            if (isNaN(numberValue) || numberValue < 100 || numberValue > 500) {
-                showError(inputElement, 'Debe ser un valor entre 100 y 500.');
+            if (isNaN(numberValue)) {
+                showError(inputElement, 'Debe ser un número válido.');
                 return false;
             }
+
+            if (numberValue < range.min || numberValue > range.max) {
+                showError(inputElement, `Debe ser un valor entre ${range.min} y ${range.max} kg.`);
+                return false;
+            }
+            
             showSuccess(inputElement);
             return true;
         },
@@ -105,11 +169,23 @@ document.addEventListener('DOMContentLoaded', function () {
     for (const fieldName in fields) {
         const inputElement = fields[fieldName];
         const validator = validators[fieldName];
-        if (inputElement && validator) {
-            inputElement.addEventListener('input', () => {
-                validator(inputElement);
-            });
+        if (inputElement) {
+             if (fieldName === 'tipo_vehiculo') {
+                inputElement.addEventListener('change', () => {
+                    updateCapacityLimits();
+                    validator(inputElement);
+                });
+            } else {
+                inputElement.addEventListener('input', () => {
+                    validator(inputElement);
+                });
+            }
         }
+    }
+
+    // Inicializar límites si ya hay un valor seleccionado (edición)
+    if (fields.tipo_vehiculo && fields.tipo_vehiculo.value) {
+        updateCapacityLimits();
     }
 
     // Validación final al intentar enviar el formulario

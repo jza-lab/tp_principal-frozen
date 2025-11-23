@@ -415,16 +415,74 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnGuardar = document.getElementById('btn-guardar-vehiculo');
         const errorAlert = document.getElementById('modal-error-alert');
         
+        // Elementos dinámicos
+        const modalTipo = document.getElementById('modal_tipo');
+        const modalCapacidad = document.getElementById('modal_capacidad');
+        const modalCapacidadHelp = document.getElementById('modal-capacidad-help');
+        
+        // Rangos de capacidad
+        const capacityRanges = {
+            "Camioneta / Utilitario": { min: 600, max: 1000 },
+            "Combi / Furgon": { min: 1500, max: 2500 },
+            "Camión (Liviano)": { min: 3500, max: 6000 }
+        };
+        
+        // Update capacity logic for Modal
+        if (modalTipo && modalCapacidad) {
+            modalTipo.addEventListener('change', () => {
+                const selectedType = modalTipo.value;
+                const range = capacityRanges[selectedType];
+                
+                if (range) {
+                    modalCapacidad.min = range.min;
+                    modalCapacidad.max = range.max;
+                    modalCapacidadHelp.textContent = `Rango permitido: ${range.min} - ${range.max} kg.`;
+                    
+                    // Validar si ya hay valor
+                    if (modalCapacidad.value) {
+                         const val = parseFloat(modalCapacidad.value);
+                         if (val < range.min || val > range.max) {
+                             modalCapacidad.setCustomValidity(`Debe estar entre ${range.min} y ${range.max} kg.`);
+                         } else {
+                             modalCapacidad.setCustomValidity('');
+                         }
+                    }
+                } else {
+                    modalCapacidad.removeAttribute('min');
+                    modalCapacidad.removeAttribute('max');
+                    modalCapacidadHelp.textContent = 'Seleccione un tipo de vehículo.';
+                    modalCapacidad.setCustomValidity('');
+                }
+            });
+            
+            modalCapacidad.addEventListener('input', () => {
+                const selectedType = modalTipo.value;
+                const range = capacityRanges[selectedType];
+                if(range) {
+                     const val = parseFloat(modalCapacidad.value);
+                     if (val < range.min || val > range.max) {
+                         modalCapacidad.setCustomValidity(`Debe estar entre ${range.min} y ${range.max} kg.`);
+                     } else {
+                         modalCapacidad.setCustomValidity('');
+                     }
+                }
+            });
+        }
+
         // Función auxiliar validación frontend
         const validateForm = () => {
             const dni = document.getElementById('modal_dni').value;
             const tel = document.getElementById('modal_telefono').value;
+            const tipo = modalTipo.value;
             
             if (dni && !/^\d{7,8}$/.test(dni)) {
                 return "El DNI debe tener 7 u 8 dígitos numéricos.";
             }
             if (tel && !/^\d{7,}$/.test(tel)) {
                 return "El teléfono debe tener al menos 7 dígitos numéricos.";
+            }
+            if (!tipo) {
+                return "Debe seleccionar un tipo de vehículo.";
             }
             return null;
         };
@@ -433,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
             errorAlert.classList.add('d-none');
             errorAlert.textContent = '';
             
-            // Validación HTML5 nativa
+            // Forzar validación de capacidad si está seteada la customValidity
             if (!modalForm.checkValidity()) {
                 modalForm.reportValidity();
                 return;

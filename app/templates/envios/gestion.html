@@ -31,7 +31,7 @@
                 <div class="card-header">
                     <i class="fas fa-car me-1"></i>
                     Listado de Vehículos
-                    <a href="{{ url_for('vehiculo.crear_vehiculo') }}" class="btn btn-primary btn-sm float-end">
+                    <a href="{{ url_for('vehiculo.crear_vehiculo', return_url=url_for('envio.gestion_envios')) }}" class="btn btn-primary btn-sm float-end">
                         <i class="fas fa-plus"></i> Nuevo Vehículo
                     </a>
                 </div>

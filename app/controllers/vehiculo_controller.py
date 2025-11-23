@@ -19,11 +19,24 @@ class VehiculoController(BaseController):
             return {'success': False, 'error': 'El formato de la patente no es válido. Use LLLNNN o LLNNNLL.'}
         data['patente'] = patente # Guardar formato normalizado
 
-        # Validación de capacidad_kg
+        # Validación de tipo_vehiculo y capacidad_kg
+        tipo_vehiculo = data.get('tipo_vehiculo', '')
+        valid_types = ["Camioneta / Utilitario", "Combi / Furgon", "Camión (Liviano)"]
+        if tipo_vehiculo not in valid_types:
+             return {'success': False, 'error': 'Tipo de vehículo inválido.'}
+
+        capacity_ranges = {
+            "Camioneta / Utilitario": (600, 1000),
+            "Combi / Furgon": (1500, 2500),
+            "Camión (Liviano)": (3500, 6000)
+        }
+
         try:
             capacidad_kg = float(data.get('capacidad_kg'))
-            if not 100 <= capacidad_kg <= 500:
-                return {'success': False, 'error': 'La capacidad de carga debe estar entre 100 y 500 kg.'}
+            min_cap, max_cap = capacity_ranges[tipo_vehiculo]
+            
+            if not min_cap <= capacidad_kg <= max_cap:
+                return {'success': False, 'error': f'La capacidad para {tipo_vehiculo} debe estar entre {min_cap} y {max_cap} kg.'}
         except (ValueError, TypeError):
             return {'success': False, 'error': 'La capacidad de carga debe ser un número válido.'}
 

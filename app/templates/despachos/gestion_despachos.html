@@ -274,17 +274,23 @@
                         <div class="col-md-6">
                             <h6 class="mb-3">Datos Vehículo</h6>
                             <div class="mb-3">
-                                <label for="modal_patente" class="form-label">Patente</label>
+                                <label for="modal_patente" class="form-label">Patente *</label>
                                 <input type="text" class="form-control" id="modal_patente" name="patente" required pattern="^[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2}$">
                                 <small class="text-muted">Formato: LLLNNN o LLNNNLL</small>
                             </div>
                             <div class="mb-3">
-                                <label for="modal_tipo" class="form-label">Tipo</label>
-                                <input type="text" class="form-control" id="modal_tipo" name="tipo_vehiculo" placeholder="Ej: Camioneta, Camión">
+                                <label for="modal_tipo" class="form-label">Tipo *</label>
+                                <select class="form-select" id="modal_tipo" name="tipo_vehiculo" required>
+                                    <option value="">Seleccione un tipo</option>
+                                    <option value="Camioneta / Utilitario">Camioneta / Utilitario</option>
+                                    <option value="Combi / Furgon">Combi / Furgon</option>
+                                    <option value="Camión (Liviano)">Camión (Liviano)</option>
+                                </select>
                             </div>
                             <div class="mb-3">
-                                <label for="modal_capacidad" class="form-label">Capacidad (kg)</label>
-                                <input type="number" step="0.01" class="form-control" id="modal_capacidad" name="capacidad_kg" required min="100" max="5000">
+                                <label for="modal_capacidad" class="form-label">Capacidad (kg) *</label>
+                                <input type="number" step="0.01" class="form-control" id="modal_capacidad" name="capacidad_kg" required>
+                                <small class="text-muted" id="modal-capacidad-help">Seleccione un tipo de vehículo.</small>
                             </div>
                              <div class="mb-3">
                                 <label for="modal_vtv_emision" class="form-label">Fecha Realización VTV</label>
@@ -294,11 +300,11 @@
                         <div class="col-md-6">
                             <h6 class="mb-3">Datos Conductor</h6>
                             <div class="mb-3">
-                                <label for="modal_nombre" class="form-label">Nombre y Apellido</label>
+                                <label for="modal_nombre" class="form-label">Nombre y Apellido *</label>
                                 <input type="text" class="form-control" id="modal_nombre" name="nombre_conductor" required minlength="3">
                             </div>
                             <div class="mb-3">
-                                <label for="modal_dni" class="form-label">DNI</label>
+                                <label for="modal_dni" class="form-label">DNI *</label>
                                 <input type="text" class="form-control" id="modal_dni" name="dni_conductor" required pattern="\d{7,8}" title="7 u 8 dígitos">
                             </div>
                             <div class="mb-3">
