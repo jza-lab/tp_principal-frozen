@@ -64,10 +64,21 @@ def eliminar_vehiculo(vehiculo_id):
 # @permission_required('crear_despachos') # O el permiso que corresponda
 def api_buscar_vehiculo():
     patente = request.args.get('patente')
-    if not patente:
-        return {'success': False, 'error': 'La patente es requerida'}, 400
+    search = request.args.get('search')
     
-    response = vehiculo_controller.buscar_por_patente(patente)
+    if not patente and search is None:
+        return {'success': False, 'error': 'Parámetro de búsqueda requerido'}, 400
+    
+    # Si viene 'search' (incluso vacío), devolvemos lista (sugerencias)
+    if search is not None:
+        response = vehiculo_controller.buscar_por_patente(search=search)
+        if response['success']:
+            return {'success': True, 'data': response['data']} # Devuelve lista
+        else:
+             return {'success': False, 'error': response['error']}, 500
+
+    # Si viene 'patente', comportamiento legacy (exacto) o devolvemos el primero si hay varios (aunque patente deberia ser unique)
+    response = vehiculo_controller.buscar_por_patente(patente=patente)
     if response['success'] and response['data']:
         return {'success': True, 'data': response['data'][0]}
     elif response['success']:

@@ -16,7 +16,7 @@
                 
                 <div class="row">
                     <div class="col-md-6">
-                        <h5>Datos del Vehículo</h5>
+                        <h5 class="mb-3">Datos del Vehículo</h5>
                         <div class="mb-3">
                             <label for="patente" class="form-label">Patente</label>
                             <input type="text" class="form-control" id="patente" name="patente" value="{{ vehiculo.patente if vehiculo else '' }}" required>
@@ -33,9 +33,22 @@
                             <small class="form-text text-muted">Debe ser un número entre 100 y 500.</small>
                             <div class="invalid-feedback" id="capacidad_kg-error"></div>
                         </div>
+
+                        <h5 class="mb-3 mt-4">Documentación Vehículo (VTV)</h5>
+                        {% if vehiculo and vehiculo.vtv_vencimiento %}
+                            <div class="alert alert-info py-2">
+                                <i class="fas fa-calendar-check me-1"></i> Vence el: <strong>{{ vehiculo.vtv_vencimiento }}</strong>
+                            </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label for="fecha_vtv_emision" class="form-label">Fecha Realización VTV</label>
+                            <input type="date" class="form-control" id="fecha_vtv_emision" name="fecha_vtv_emision">
+                            <small class="form-text text-muted">Ingrese la fecha de realización. El sistema calculará la validez por 1 año.</small>
+                        </div>
                     </div>
+                    
                     <div class="col-md-6">
-                        <h5>Datos del Conductor</h5>
+                        <h5 class="mb-3">Datos del Conductor</h5>
                         <div class="mb-3">
                             <label for="nombre_conductor" class="form-label">Nombre y Apellido</label>
                             <input type="text" class="form-control" id="nombre_conductor" name="nombre_conductor" value="{{ vehiculo.nombre_conductor if vehiculo else '' }}" required>
@@ -54,6 +67,18 @@
                             <small class="form-text text-muted">Opcional. Mínimo 7 dígitos.</small>
                             <div class="invalid-feedback" id="telefono_conductor-error"></div>
                         </div>
+
+                        <h5 class="mb-3 mt-4">Licencia de Conducir</h5>
+                         {% if vehiculo and vehiculo.licencia_vencimiento %}
+                            <div class="alert alert-info py-2">
+                                <i class="fas fa-id-card me-1"></i> Vence el: <strong>{{ vehiculo.licencia_vencimiento }}</strong>
+                            </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label for="fecha_licencia_emision" class="form-label">Fecha Emisión Licencia</label>
+                            <input type="date" class="form-control" id="fecha_licencia_emision" name="fecha_licencia_emision">
+                            <small class="form-text text-muted">Ingrese la fecha de emisión. El sistema calculará la validez por 5 años.</small>
+                        </div>
                     </div>
                 </div>
 
@@ -70,6 +95,4 @@
     </div>
 </div>
 <script src="{{ url_for('static', filename='js/vehiculos/validar.js') }}"></script>
-
 {% endblock %}
-

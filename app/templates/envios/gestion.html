@@ -45,6 +45,8 @@
                                 <th>Conductor</th>
                                 <th>DNI</th>
                                 <th>Teléfono</th>
+                                <th>Venc. VTV</th>
+                                <th>Venc. Licencia</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -58,6 +60,32 @@
                                 <td>{{ vehiculo.dni_conductor }}</td>
                                 <td>{{ vehiculo.telefono_conductor }}</td>
                                 <td>
+                                    {% if vehiculo.vtv_vencimiento %}
+                                        {% if vehiculo.estado_vtv == 'VENCIDA' %}
+                                            <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.vtv_vencimiento }}</span>
+                                        {% elif vehiculo.estado_vtv == 'PRONTO_VENC' %}
+                                            <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.vtv_vencimiento }}</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ vehiculo.vtv_vencimiento }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if vehiculo.licencia_vencimiento %}
+                                        {% if vehiculo.estado_licencia == 'VENCIDA' %}
+                                            <span class="badge bg-danger" title="Vencida"><i class="fas fa-exclamation-circle"></i> {{ vehiculo.licencia_vencimiento }}</span>
+                                        {% elif vehiculo.estado_licencia == 'PRONTO_VENC' %}
+                                            <span class="badge bg-warning text-dark" title="Pronto Vencimiento"><i class="fas fa-exclamation-triangle"></i> {{ vehiculo.licencia_vencimiento }}</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ vehiculo.licencia_vencimiento }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
                                     <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
                                         <i class="fas fa-edit"></i>
                                     </a>
@@ -69,7 +97,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="7" class="text-center">No hay vehículos registrados.</td>
+                                <td colspan="9" class="text-center">No hay vehículos registrados.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
