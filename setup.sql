@@ -713,6 +713,9 @@ CREATE TABLE public.vehiculos (
   telefono_conductor character varying,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  vtv_vencimiento date,
+  licencia_vencimiento date,
+  activo boolean DEFAULT true,
   CONSTRAINT vehiculos_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.zonas (

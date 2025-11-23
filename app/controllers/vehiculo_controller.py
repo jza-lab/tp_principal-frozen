@@ -201,7 +201,30 @@ class VehiculoController(BaseController):
         return self.model.update(vehiculo_id, data)
 
     def eliminar_vehiculo(self, vehiculo_id):
+        """
+        OBSOLETO: Usar cambiar_estado.
+        Mantenido temporalmente o redirigido a cambiar_estado si se requiere conservar la ruta.
+        Por ahora, mantenemos la eliminación física si se llama explícitamente a este método,
+        pero la UI usará cambiar_estado.
+        """
         return self.model.delete(vehiculo_id)
+
+    def cambiar_estado(self, vehiculo_id):
+        """
+        Alterna el estado activo/inactivo de un vehículo.
+        """
+        response = self.model.find_by_id(vehiculo_id)
+        if not response['success'] or not response['data']:
+            return {'success': False, 'error': 'Vehículo no encontrado.'}
+        
+        # Obtener estado actual, default True si es None
+        estado_actual = response['data'].get('activo')
+        if estado_actual is None: 
+            estado_actual = True
+            
+        nuevo_estado = not estado_actual
+        
+        return self.model.update(vehiculo_id, {'activo': nuevo_estado})
 
     def buscar_por_patente(self, patente=None, search=None):
         """
@@ -233,9 +256,10 @@ class VehiculoController(BaseController):
             for v in response['data']:
                 vtv_ok = v.get('estado_vtv') != 'VENCIDA'
                 lic_ok = v.get('estado_licencia') != 'VENCIDA'
+                activo_ok = v.get('activo', True)
                 
-                # Si ambas están OK (no vencidas), se agrega
-                if vtv_ok and lic_ok:
+                # Si ambas están OK (no vencidas) y el vehículo está activo
+                if vtv_ok and lic_ok and activo_ok:
                     vehiculos_validos.append(v)
             
             response['data'] = vehiculos_validos

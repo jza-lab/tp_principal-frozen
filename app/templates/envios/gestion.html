@@ -36,6 +36,12 @@
                     </a>
                 </div>
                 <div class="card-body">
+                    <div class="mb-3">
+                        <small class="text-muted fw-bold">Referencia de vencimientos:</small><br>
+                        <span class="badge bg-success">Verde</span> Documentación al día (> 30 días) &nbsp;
+                        <span class="badge bg-warning text-dark">Amarillo</span> Próximo a vencer (<= 30 días) &nbsp;
+                        <span class="badge bg-danger">Rojo</span> Vencida
+                    </div>
                     <table class="table table-striped">
                         <thead>
                             <tr>
@@ -52,7 +58,7 @@
                         </thead>
                         <tbody>
                             {% for vehiculo in vehiculos %}
-                            <tr>
+                            <tr class="{% if vehiculo.activo is defined and vehiculo.activo is false %}table-secondary text-muted{% endif %}">
                                 <td>{{ vehiculo.patente }}</td>
                                 <td>{{ vehiculo.tipo_vehiculo }}</td>
                                 <td>{{ vehiculo.capacidad_kg }}</td>
@@ -86,13 +92,25 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm">
+                                    <a href="{{ url_for('vehiculo.editar_vehiculo', vehiculo_id=vehiculo.id) }}" class="btn btn-secondary btn-sm" title="Editar">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" 
-                                            data-url="{{ url_for('vehiculo.eliminar_vehiculo', vehiculo_id=vehiculo.id) }}" data-type="Vehículo">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    
+                                    {% if vehiculo.activo is not defined or vehiculo.activo %}
+                                    <form action="{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-warning btn-sm" onclick="return confirm('¿Estás seguro de que deseas desactivar este vehículo/conductor?');" title="Desactivar">
+                                            <i class="fas fa-ban"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <form action="{{ url_for('vehiculo.cambiar_estado_vehiculo', vehiculo_id=vehiculo.id) }}" method="POST" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                        <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('¿Estás seguro de que deseas activar este vehículo/conductor?');" title="Activar">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% else %}

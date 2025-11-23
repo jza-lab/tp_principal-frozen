@@ -59,6 +59,16 @@ def eliminar_vehiculo(vehiculo_id):
         flash(f"Error al eliminar el vehículo: {response['error']}", 'danger')
     return redirect(url_for('envio.gestion_envios'))
 
+@vehiculo_bp.route('/<int:vehiculo_id>/cambiar_estado', methods=['POST'])
+# @permission_required('gestionar_flota')
+def cambiar_estado_vehiculo(vehiculo_id):
+    response = vehiculo_controller.cambiar_estado(vehiculo_id)
+    if response['success']:
+        flash('Estado del vehículo actualizado exitosamente.', 'success')
+    else:
+        flash(f"Error al actualizar estado: {response['error']}", 'danger')
+    return redirect(request.referrer or url_for('vehiculo.listar_vehiculos'))
+
 # --- API Endpoints ---
 @vehiculo_bp.route('/api/buscar', methods=['GET'])
 # @permission_required('crear_despachos') # O el permiso que corresponda
