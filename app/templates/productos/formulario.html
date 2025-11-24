@@ -288,21 +288,21 @@ Agregar nuevo producto al catálogo
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costo Materia Prima</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Suma del costo de todos los insumos de la receta."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-materia-prima" data-bs-toggle="tooltip" title="Suma del costo de todos los insumos de la receta."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_materia_prima">$ 0.00</p>
                                         </div>
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costo Mano de Obra</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Suma de (horas * costo/h) de cada rol asignado."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-mano-obra" data-bs-toggle="tooltip" title="Suma de (horas * costo/h) de cada rol asignado."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_mano_obra">$ {{ "%.2f"|format(producto.costo_mano_obra|float) if producto else '0.00' }}</p>
                                         </div>
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costos Fijos Aplicados</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Porción de los costos fijos mensuales distribuida según las horas de producción."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-costos-fijos" data-bs-toggle="tooltip" title="Porción de los costos fijos mensuales distribuida según las horas de producción."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_fijos">$ {{ "%.2f"|format(producto.costo_fijos|float) if producto else '0.00' }}</p>
                                         </div>

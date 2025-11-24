@@ -485,9 +485,26 @@ class ProductoController(BaseController):
             tasa_costo_fijo_por_hora = total_costos_fijos_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else Decimal(0)
             costo_fijos_aplicado = tasa_costo_fijo_por_hora * total_horas_mano_obra
 
+            # Generar detalle de Mano de Obra
+            detalle_mano_obra = []
+            for op in operaciones_data:
+                nombre_op = op.get('nombre_operacion', 'Paso')
+                tiempo = Decimal(op.get('tiempo_preparacion', 0)) + Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                # Calcular el costo por hora para este paso sumando los roles
+                costo_hora_paso = sum(roles_costo_map.get(rol_id, 0) for rol_id in op.get('roles', []))
+                if tiempo > 0 and costo_hora_paso > 0:
+                    detalle_mano_obra.append(f"{nombre_op}: {float(tiempo):.2f} min * ${float(costo_hora_paso):.2f}/h")
+            
+            str_detalle_mano_obra = " + ".join(detalle_mano_obra) if detalle_mano_obra else "Sin costos de mano de obra"
+
+            # Generar detalle de Costos Fijos
+            str_detalle_costos_fijos = f"(${float(total_costos_fijos_mensual):.2f} Total / {float(total_horas_prod_mes):.2f} Horas Mes) * {float(total_horas_mano_obra):.2f} Horas Prod."
+
             return self.success_response({
                 'costo_mano_obra': float(costo_mano_obra),
-                'costo_fijos_aplicado': float(costo_fijos_aplicado)
+                'costo_fijos_aplicado': float(costo_fijos_aplicado),
+                'detalle_mano_obra': str_detalle_mano_obra,
+                'detalle_costos_fijos': str_detalle_costos_fijos
             })
 
         except Exception as e:

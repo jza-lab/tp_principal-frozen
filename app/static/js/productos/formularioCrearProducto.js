@@ -230,13 +230,34 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function calcularTotales() {
         let costoMateriaPrima = 0;
+        let detalleMateriaPrima = [];
+
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
             const precio = limpiarFormatoDinero(row.querySelector('.precio_unitario').value);
             const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
             const subtotal = cantidad * precio;
+            
+            const insumoSelector = row.querySelector('.insumo-selector');
+            const insumoNombre = insumoSelector.options[insumoSelector.selectedIndex]?.text || 'Insumo';
+            
             row.querySelector('.subtotal-item').value = formatearADinero(subtotal);
             costoMateriaPrima += subtotal;
+
+            if (subtotal > 0) {
+                detalleMateriaPrima.push(`${insumoNombre} (${formatearADinero(subtotal)})`);
+            }
         });
+
+        // Actualizar Tooltip de Materia Prima
+        const tooltipMateriaPrima = document.getElementById('tooltip-materia-prima');
+        if (tooltipMateriaPrima) {
+            const nuevoTitulo = detalleMateriaPrima.length > 0 ? detalleMateriaPrima.join(' + ') : 'Sin insumos seleccionados';
+            tooltipMateriaPrima.setAttribute('title', nuevoTitulo);
+            
+            // Re-inicializar el tooltip para que Bootstrap tome el cambio
+            bootstrap.Tooltip.getInstance(tooltipMateriaPrima)?.dispose();
+            new bootstrap.Tooltip(tooltipMateriaPrima);
+        }
 
         const costoManoObra = limpiarFormatoDinero(displayCostoManoObra.textContent);
         const costoFijos = limpiarFormatoDinero(displayCostoFijos.textContent);
@@ -256,6 +277,7 @@ document.addEventListener('DOMContentLoaded', function () {
     async function actualizarCostosDinamicos() {
         const operaciones = [];
         operacionesContainer.querySelectorAll('.operacion-row').forEach(row => {
+            const nombre = row.querySelector('input[name="operacion_nombre[]"]').value; // Agregamos nombre para la API
             const prep = row.querySelector('input[name="operacion_prep[]"]').value;
             const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
             const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
@@ -263,6 +285,7 @@ document.addEventListener('DOMContentLoaded', function () {
             
             if (prep && ejec && roles.length > 0) {
                 operaciones.push({
+                    nombre_operacion: nombre, // Enviamos el nombre
                     tiempo_preparacion: parseFloat(prep),
                     tiempo_ejecucion_unitario: parseFloat(ejec),
                     roles: roles.map(Number) // Asegurarse de que los IDs de rol sean números
@@ -283,6 +306,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (result.success) {
                     displayCostoManoObra.textContent = formatearADinero(result.data.costo_mano_obra);
                     displayCostoFijos.textContent = formatearADinero(result.data.costo_fijos_aplicado);
+                    
+                    // Actualizar Tooltips de Mano de Obra y Costos Fijos
+                    const tooltipManoObra = document.getElementById('tooltip-mano-obra');
+                    if (tooltipManoObra) {
+                        tooltipManoObra.setAttribute('title', result.data.detalle_mano_obra || 'Calculando...');
+                        bootstrap.Tooltip.getInstance(tooltipManoObra)?.dispose();
+                        new bootstrap.Tooltip(tooltipManoObra);
+                    }
+
+                    const tooltipCostosFijos = document.getElementById('tooltip-costos-fijos');
+                    if (tooltipCostosFijos) {
+                        tooltipCostosFijos.setAttribute('title', result.data.detalle_costos_fijos || 'Calculando...');
+                        bootstrap.Tooltip.getInstance(tooltipCostosFijos)?.dispose();
+                        new bootstrap.Tooltip(tooltipCostosFijos);
+                    }
+
                     calcularTotales();
                 }
             }
