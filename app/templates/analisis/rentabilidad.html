@@ -1,7 +1,7 @@
 {% extends "layouts/app_layout.html" %}
 
 {% block app_content %}
-<div class="container-fluid px-4 py-4">
+<div class="container-fluid px-4 py-4" id="rentabilidad-content">
     
     <!-- Header / Command Center Card -->
     <div id="dashboard-header-card" class="card border-0 shadow rounded-4 overflow-hidden mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); transition: all 0.5s ease; border-left: 4px solid #198754 !important;">
@@ -28,18 +28,31 @@
                         <li class="breadcrumb-item active fw-semibold text-success" aria-current="page">Rentabilidad</li>
                       </ol>
                    </nav>
-                   <small class="text-muted font-monospace" style="font-size: 0.75rem;">
-                       <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
-                   </small>
+                   <div class="d-flex align-items-center justify-content-end mt-1">
+                       <button onclick="exportToPDF()" class="btn btn-sm btn-outline-dark rounded-pill me-3 d-print-none">
+                            <i class="bi bi-file-earmark-pdf me-1"></i> Guardar Reporte (PDF)
+                       </button>
+                       <small class="text-muted font-monospace" style="font-size: 0.75rem;">
+                           <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
+                       </small>
+                   </div>
                 </div>
             </div>
 
-            <!-- Filter Buttons Area (Integrated in Header) -->
-            <div class="d-flex justify-content-end mt-2 mb-3 position-relative z-2">
-                <div id="filter-buttons" class="btn-group shadow-sm rounded-pill" role="group" aria-label="Filtros de fecha">
-                    <button type="button" class="btn btn-sm btn-outline-success active rounded-start-pill px-3" data-period="30">Mes</button>
-                    <button type="button" class="btn btn-sm btn-outline-success px-3" data-period="90">Trimestre</button>
-                    <button type="button" class="btn btn-sm btn-outline-success rounded-end-pill px-3" data-period="365">Anual</button>
+            <!-- Disclaimer and Filters -->
+            <div class="row align-items-center mb-3 position-relative z-2">
+                <div class="col-md-8">
+                     <div class="alert alert-warning border-0 bg-warning-subtle text-warning-emphasis rounded-3 py-2 px-3 small mb-0 d-flex align-items-center shadow-sm">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <span><strong>Nota:</strong> Este análisis aplica la <u>estructura de costos actual</u> sobre el volumen de ventas del período seleccionado. Sirve como simulador de rentabilidad presente.</span>
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex justify-content-end">
+                    <div id="filter-buttons" class="btn-group shadow-sm rounded-pill" role="group" aria-label="Filtros de fecha">
+                        <button type="button" class="btn btn-sm btn-outline-success active rounded-start-pill px-3" data-period="30">Vol. Mes</button>
+                        <button type="button" class="btn btn-sm btn-outline-success px-3" data-period="90">Vol. Trimestre</button>
+                        <button type="button" class="btn btn-sm btn-outline-success rounded-end-pill px-3" data-period="365">Vol. Anual</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -237,6 +250,102 @@
 
 {% block extra_css %}
 <style>
+    @media print {
+        /* Global Reset */
+        body {
+            background-color: white !important;
+            color: black !important;
+            font-size: 10pt; /* Slightly smaller for more data */
+        }
+        
+        /* Hide Navigation and Interactive Elements */
+        #dashboard-sidebar, .navbar, .btn, #searchInput, .modal, footer, 
+        .breadcrumb, #filter-buttons, .tooltip, .toast {
+            display: none !important;
+        }
+
+        /* Full Width Layout */
+        #layoutSidenav_content {
+            margin-left: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+        }
+        .container-fluid {
+            padding: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+        
+        /* Card Improvements */
+        .card {
+            border: 1px solid #ddd !important;
+            box-shadow: none !important;
+            break-inside: avoid; /* Prevent splitting cards across pages */
+            margin-bottom: 15px !important;
+            page-break-inside: avoid;
+        }
+        .card-header {
+            background-color: #f8f9fa !important;
+            border-bottom: 1px solid #ddd !important;
+            padding: 10px !important;
+        }
+        .card-body {
+            padding: 10px !important;
+        }
+
+        /* Specific Page Break Management */
+        /* Force page break before the detailed table if necessary */
+        .card:last-child {
+            page-break-before: auto; 
+        }
+
+        /* Ensure Charts fit horizontally */
+        canvas {
+            max-width: 100% !important;
+            width: 100% !important;
+            height: auto !important;
+        }
+        /* Override fixed heights for charts to be responsive to print width */
+        #rentabilidad-chart-container, 
+        #top-rentables-chart-container, 
+        #costos-chart-container {
+            width: 100% !important;
+        }
+        
+        /* Table Optimization */
+        .table-responsive {
+            overflow: visible !important; /* Show full table */
+        }
+        table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+        }
+        th, td {
+            border: 1px solid #ddd !important;
+            padding: 4px !important;
+        }
+        
+        /* Typography */
+        h4, h5, h6 {
+            color: black !important;
+            margin-top: 0 !important;
+        }
+        .text-muted {
+            color: #666 !important;
+        }
+        
+        /* KPI Cards Compactness */
+        .row.g-3 {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        .col-md-2 {
+            flex: 0 0 16%; /* Fit 6 cards in one row */
+            max-width: 16%;
+        }
+    }
+
     /* Styles copied/adapted from indicators dashboard for consistency */
     .icon-box {
         width: 60px; 
@@ -278,8 +387,100 @@
 {% block extra_js %}
 <!-- ECharts CDN -->
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<!-- HTML2Canvas & jsPDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
+    // PDF Export Function
+    window.exportToPDF = function() {
+        const { jsPDF } = window.jspdf;
+        const btn = document.querySelector('.btn-outline-dark');
+        const originalText = btn.innerHTML;
+        
+        // Visual feedback
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generando...';
+
+        // Target the specific container
+        const element = document.getElementById('rentabilidad-content');
+
+        // Force a specific desktop capture width
+        const captureWidth = 1920;
+
+        html2canvas(element, {
+            scale: 2, 
+            useCORS: true,
+            logging: true,
+            scrollY: -window.scrollY, 
+            windowWidth: captureWidth, // Force the browser window width simulation
+            width: captureWidth,       // Force the canvas capture width
+            x: 0,                      // Start from left
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            if (canvas.height === 0 || canvas.width === 0) {
+                alert("Error: El contenido capturado está vacío.");
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                return;
+            }
+
+            const imgData = canvas.toDataURL('image/png');
+            
+            // Initialize jsPDF in Landscape ('l'), unit: mm, format: a4
+            const pdf = new jsPDF('l', 'mm', 'a4');
+            const pageWidth = 297; 
+            const pageHeight = 210;
+            
+            // Add a small margin (e.g., 5mm each side)
+            const margin = 5;
+            const pdfContentWidth = pageWidth - (margin * 2);
+
+            const imgProps = pdf.getImageProperties(imgData);
+            
+            // Scale content to fit the PDF content width
+            const pdfImgWidth = pdfContentWidth;
+            const pdfImgHeight = (imgProps.height * pdfImgWidth) / imgProps.width;
+            
+            // Single page logic if it fits, else split
+            if (pdfImgHeight <= (pageHeight - (margin * 2))) {
+                pdf.addImage(imgData, 'PNG', margin, margin, pdfImgWidth, pdfImgHeight);
+            } else {
+                // Multi-page logic
+                let heightLeft = pdfImgHeight;
+                let position = margin;
+                
+                // First page
+                pdf.addImage(imgData, 'PNG', margin, position, pdfImgWidth, pdfImgHeight);
+                heightLeft -= (pageHeight - (margin * 2));
+                
+                // Subsequent pages
+                while (heightLeft > 0) {
+                    // Start next page content at top margin, offset by how much we've already shown
+                    // Position needs to move up by the full page content height
+                    position = position - pageHeight; 
+                    
+                    pdf.addPage();
+                    // We paste the same huge image, but shifted up
+                    pdf.addImage(imgData, 'PNG', margin, position, pdfImgWidth, pdfImgHeight);
+                    heightLeft -= pageHeight;
+                }
+            }
+
+            const dateStr = new Date().toISOString().split('T')[0];
+            pdf.save(`Reporte_Rentabilidad_${dateStr}.pdf`);
+
+            // Restore button
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }).catch(err => {
+            console.error("PDF generation failed:", err);
+            alert("Hubo un error generando el PDF. Por favor intente nuevamente.");
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+    };
+
 document.addEventListener('DOMContentLoaded', function () {
     // Inicializar tooltips de Bootstrap
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
