@@ -334,7 +334,18 @@
                                                     </td>
                                                     <td class="text-end">{{ item.cantidad_solicitada }}</td>
                                                     <td class="text-center" style="max-width: 150px;">
-                                                        <input type="number" name="cantidad_recibida[]" class="form-control form-control-sm text-center" value="{{ item.cantidad_solicitada }}" min="0" step="any" required>
+                                                        
+                                                        <input type="number" 
+                                                               name="cantidad_recibida[]" 
+                                                               class="form-control form-control-sm text-center input-recibido" 
+                                                               value="{{ item.cantidad_solicitada }}" 
+                                                               min="0" 
+                                                               max="{{ item.cantidad_solicitada }}" 
+                                                               step="any" 
+                                                               required
+                                                               oninput="validarMaximo(this)">
+                                                        <div class="invalid-feedback">Excede lo solicitado.</div>
+
                                                     </td>
                                                 </tr>
                                                 {% endfor %}
@@ -614,6 +625,18 @@
 function submitGestionManual() {
     document.getElementById('formGestionManual').submit();
 }
+function validarMaximo(input) {
+        const max = parseFloat(input.getAttribute('max'));
+        const val = parseFloat(input.value);
+
+        if (val > max) {
+            input.classList.add('is-invalid');
+            // Opcional: Forzar el valor al máximo automáticamente
+            // input.value = max; 
+        } else {
+            input.classList.remove('is-invalid');
+        }
+    }
 
 document.addEventListener('DOMContentLoaded', function () {
     // Variable global para que el JS de trazabilidad pueda acceder al ID
@@ -879,6 +902,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }, 1000);
         
     {% endif %}
+
+    
 
 });
 </script>
