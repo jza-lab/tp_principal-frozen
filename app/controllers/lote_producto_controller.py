@@ -1456,91 +1456,38 @@ class LoteProductoController(BaseController):
             return self.error_response('Error interno del servidor', 500)
 
     def _procesar_retiro_producto(self, lote, form_data, usuario_id):
-        """Lógica para retirar stock de producto y registrar desperdicio."""
+        """Lógica para retirar stock de producto y registrar desperdicio (Usando Controller Reutilizable)."""
+        from app.controllers.registro_desperdicio_lote_producto_controller import RegistroDesperdicioLoteProductoController
         
         try:
-            cantidad_retiro = float(form_data.get('cantidad_retiro'))
-            motivo_id = form_data.get('motivo_desperdicio_id')
-            comentarios = form_data.get('comentarios_retiro')
-            resultado_inspeccion = form_data.get('resultado_inspeccion')
-
-            if cantidad_retiro <= 0:
-                return self.error_response("La cantidad debe ser mayor a 0.", 400)
-            if not motivo_id:
-                return self.error_response("Debe seleccionar un motivo de desperdicio.", 400)
-
-            stock_disp = float(lote.get('cantidad_actual', 0))
-            stock_cuar = float(lote.get('cantidad_en_cuarentena', 0))
-            stock_total = stock_disp + stock_cuar
-
-            if cantidad_retiro > stock_total:
-                return self.error_response(f"La cantidad a retirar ({cantidad_retiro}) excede el stock total del lote ({stock_total}).", 400)
-
-            # 1. Registrar Desperdicio
-            # Usamos el modelo RegistroDesperdicioLoteProductoModel
-            desperdicio_model = RegistroDesperdicioLoteProductoModel()
-            
-            # El modelo requiere 'detalle', usaremos resultado_inspeccion, comentarios o un default
-            detalle_final = resultado_inspeccion or comentarios or "Retiro manual de producto"
-
-            datos_desperdicio = {
-                'lote_producto_id': lote['id_lote'],
-                'motivo_id': motivo_id,
-                'cantidad': cantidad_retiro,
-                'usuario_id': usuario_id,
-                'detalle': detalle_final,
-                'comentarios': comentarios, # Agregar comentarios también si el modelo lo soporta
-                'created_at': datetime.now().isoformat()
+            # Mapear datos del formulario al formato esperado por el controlador de desperdicios
+            mapped_data = {
+                'cantidad': form_data.get('cantidad_retiro'),
+                'motivo_id': form_data.get('motivo_desperdicio_id'),
+                'detalle': form_data.get('resultado_inspeccion') or form_data.get('comentarios_retiro') or "Retiro manual de producto",
+                'comentarios': form_data.get('comentarios_retiro')
             }
+
+            # Instanciar y llamar al controlador de desperdicios
+            desperdicio_controller = RegistroDesperdicioLoteProductoController()
+            # Pasamos file=None porque en este flujo no hay subida de foto
+            response_tuple = desperdicio_controller.registrar_desperdicio(
+                lote_id=lote['id_lote'],
+                form_data=mapped_data,
+                usuario_id=usuario_id,
+                file=None 
+            )
             
-            res_desperdicio = desperdicio_model.create(datos_desperdicio)
-            if not res_desperdicio.get('success'):
-                return self.error_response(f"Error al registrar desperdicio: {res_desperdicio.get('error')}", 500)
+            # registrar_desperdicio devuelve (response_dict, status_code)
+            response_data = response_tuple[0] if isinstance(response_tuple, tuple) else response_tuple
+            status_code = response_tuple[1] if isinstance(response_tuple, tuple) else 200
 
-            # 2. Actualizar Stock del Lote
-            nueva_cantidad_cuar = stock_cuar
-            nueva_cantidad_disp = stock_disp
-            remanente_a_descontar = cantidad_retiro
+            if not response_data.get('success'):
+                return self.error_response(response_data.get('error', 'Error desconocido al registrar desperdicio.'), status_code)
 
-            # Prioridad: Descontar de cuarentena primero
-            # Fix TypeError: stock_cuar (float) must handle None
-            stock_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
-
-            if stock_cuar > 0:
-                descuento_cuar = min(stock_cuar, remanente_a_descontar)
-                nueva_cantidad_cuar -= descuento_cuar
-                remanente_a_descontar -= descuento_cuar
+            # Opcional: Crear registro de Control de Calidad para trazabilidad extra (si se requiere redundancia)
+            # El controlador de desperdicio ya actualiza el stock y estado.
             
-            if remanente_a_descontar > 0:
-                nueva_cantidad_disp -= remanente_a_descontar
-
-            nuevo_estado = lote['estado']
-            if (nueva_cantidad_cuar + nueva_cantidad_disp) <= 0:
-                if cantidad_retiro >= stock_total:
-                    nuevo_estado = 'RETIRADO'
-                else:
-                    nuevo_estado = 'AGOTADO'
-            
-            update_data = {
-                'cantidad_actual': nueva_cantidad_disp,
-                'cantidad_en_cuarentena': nueva_cantidad_cuar,
-                'estado': nuevo_estado
-            }
-            
-            self.model.update(lote['id_lote'], update_data, 'id_lote')
-
-            # 3. Crear registro de Control de Calidad para trazabilidad (opcional pero recomendado)
-            cc_data = {
-                'lote_producto_id': lote['id_lote'],
-                'usuario_supervisor_id': usuario_id,
-                'decision_final': 'RETIRADO' if nuevo_estado == 'RETIRADO' else 'APROBADO', # Parcial?
-                'comentarios': f"Retiro manual de {cantidad_retiro}. {comentarios}",
-                'resultado_inspeccion': resultado_inspeccion or 'Retiro por desperdicio',
-                'cantidad_inspeccionada': cantidad_retiro
-            }
-            # Solo creamos registro si fue un retiro relevante, para dejar constancia
-            self.control_calidad_producto_controller.crear_registro_control_calidad(cc_data)
-
             return self.success_response(message="Lote de producto retirado y desperdicio registrado correctamente.")
 
         except ValueError:

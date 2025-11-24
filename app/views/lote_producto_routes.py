@@ -6,6 +6,7 @@ from app.controllers.lote_producto_controller import LoteProductoController
 from app.controllers.producto_controller import ProductoController
 from app.utils.decorators import permission_required
 from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
+from app.utils.estados import ESTADOS_INSPECCION
 import logging
 from datetime import date
 from flask import jsonify
@@ -35,7 +36,8 @@ def listar_lotes():
     return render_template('lotes_productos/listar.html', 
                            lotes=lotes, 
                            datos_grafico_productos=datos_grafico_productos,
-                           motivos_desperdicio=motivos_desperdicio)
+                           motivos_desperdicio=motivos_desperdicio,
+                           estados_inspeccion=ESTADOS_INSPECCION)
 
 @lote_producto_bp.route('/<int:id_lote>/detalle')
 @permission_required(accion='almacen_consulta_stock')

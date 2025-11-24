@@ -268,44 +268,11 @@ Agregar nuevo producto al catálogo
 <div class="card my-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="mb-0">Pasos de Producción</h5>
-        <button type="button" class="btn btn-sm btn-outline-success" id="add-operacion-btn">
-            <i class="bi bi-plus-circle me-1"></i>Añadir Paso
-        </button>
+        <!-- Botón de añadir paso eliminado -->
     </div>
     <div class="card-body">
         <div id="operaciones-container" class="list-group">
             <!-- Las filas de operaciones se añadirán aquí dinámicamente -->
-            {% if receta and receta.operaciones %}
-                {% for operacion in receta.operaciones %}
-                <div class="list-group-item operacion-row mb-3" data-secuencia="{{ loop.index }}">
-                    <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">Paso {{ loop.index }}: <input type="text" class="form-control form-control-sm d-inline-block w-auto" name="operacion_nombre[]" value="{{ operacion.nombre_operacion }}" placeholder="Nombre del Paso" required></h6>
-                        <button type="button" class="btn-close" aria-label="Close" onclick="removeOperacion(this)"></button>
-                    </div>
-                    <div class="row g-2 mt-2">
-                        <div class="col-md-3">
-                            <label class="form-label">Roles Asignados</label>
-                            <select class="form-select select2" name="operacion_roles_{{ loop.index }}[]" multiple required>
-                                {% for rol in roles %}
-                                <option value="{{ rol.id }}" {% if rol.id in operacion.roles_asignados %}selected{% endif %}>{{ rol.nombre }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">T. Preparación (min)</label>
-                            <input type="number" class="form-control" name="operacion_prep[]" value="{{ operacion.tiempo_preparacion }}" min="0" step="1" required>
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">T. Ejecución (min/u)</label>
-                            <input type="number" class="form-control" name="operacion_ejec[]" value="{{ operacion.tiempo_ejecucion_unitario }}" min="0" step="0.01" required>
-                        </div>
-                        <div class="col-md-3 align-self-end">
-                             <input type="hidden" name="operacion_secuencia[]" value="{{ loop.index }}">
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            {% endif %}
         </div>
     </div>
 </div>
@@ -321,21 +288,21 @@ Agregar nuevo producto al catálogo
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costo Materia Prima</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Suma del costo de todos los insumos de la receta."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-materia-prima" data-bs-toggle="tooltip" title="Suma del costo de todos los insumos de la receta."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_materia_prima">$ 0.00</p>
                                         </div>
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costo Mano de Obra</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Suma de (horas * costo/h) de cada rol asignado."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-mano-obra" data-bs-toggle="tooltip" title="Suma de (horas * costo/h) de cada rol asignado."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_mano_obra">$ {{ "%.2f"|format(producto.costo_mano_obra|float) if producto else '0.00' }}</p>
                                         </div>
                                         <div class="list-group-item">
                                             <div class="d-flex w-100 justify-content-between">
                                                 <h6 class="mb-1">Costos Fijos Aplicados</h6>
-                                                <small><i class="bi bi-info-circle" data-bs-toggle="tooltip" title="Porción de los costos fijos mensuales distribuida según las horas de producción."></i></small>
+                                                <small><i class="bi bi-info-circle" id="tooltip-costos-fijos" data-bs-toggle="tooltip" title="Porción de los costos fijos mensuales distribuida según las horas de producción."></i></small>
                                             </div>
                                             <p class="mb-1" id="display_costo_fijos">$ {{ "%.2f"|format(producto.costo_fijos|float) if producto else '0.00' }}</p>
                                         </div>
@@ -415,6 +382,8 @@ Agregar nuevo producto al catálogo
     const isEditBoolean = IS_EDIT == 'True';
     const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
     const ROLES_DATA = JSON.parse('{{ roles | tojson | safe | replace("\n", "") | replace("\r", "") }}');
+    const RECETA_OPERACIONES = JSON.parse('{{ (receta.operaciones if receta and receta.operaciones else []) | tojson | safe | replace("\n", "") | replace("\r", "") }}');
+    const COSTOS_FIJOS_DATA = JSON.parse('{{ (costos_fijos if costos_fijos else []) | tojson | safe | replace("\n", "") | replace("\r", "") }}');
 
     document.addEventListener('DOMContentLoaded', function () {
         const unidadMedidaSelect = document.getElementById('unidad_medida');
