@@ -269,8 +269,9 @@ def marcar_no_apto(lote_id):
     accion = request.form.get('accion_no_apto') # 'retirar' o 'alerta'
     
     if accion:
-        # Nuevo flujo
-        response, status_code = controller.procesar_no_apto_avanzado(lote_id, request.form, usuario_id)
+        # Nuevo flujo: Pasamos también request.files para manejar la imagen
+        foto_file = request.files.get('foto_no_apto')
+        response, status_code = controller.procesar_no_apto_avanzado(lote_id, request.form, usuario_id, foto_file)
     else:
         # Flujo legacy (por si acaso)
         response, status_code = controller.marcar_lote_como_no_apto(lote_id, usuario_id)
@@ -281,3 +282,45 @@ def marcar_no_apto(lote_id):
         flash(response.get('error', 'Error al procesar la solicitud.'), 'danger')
 
     return redirect(url_for('inventario_view.listar_lotes'))
+
+@inventario_view_bp.route('/api/lote/<lote_id>/ops_afectadas')
+@jwt_required()
+def obtener_ops_afectadas(lote_id):
+    """
+    Devuelve las Órdenes de Producción que tienen reservado stock de este lote.
+    """
+    from app.models.reserva_insumo import ReservaInsumoModel
+    from app.models.orden_produccion import OrdenProduccionModel
+    
+    reserva_model = ReservaInsumoModel()
+    op_model = OrdenProduccionModel()
+    
+    try:
+        # Buscar reservas
+        reservas = reserva_model.find_all(filters={'lote_inventario_id': lote_id}).get('data', [])
+        
+        if not reservas:
+            return jsonify({'success': True, 'data': []}), 200
+            
+        op_ids = list(set(r['orden_produccion_id'] for r in reservas))
+        
+        # Buscar detalles de las OPs
+        ops_data = []
+        if op_ids:
+            ops_res = op_model.find_all(filters={'id': ('in', op_ids)})
+            if ops_res.get('success'):
+                # Filtrar solo OPs activas (Case Insensitive)
+                ops_data = [
+                    {
+                        'id': op['id'], 
+                        'codigo': op.get('codigo', f"ID {op['id']}"),
+                        'estado': op.get('estado')
+                    } 
+                    for op in ops_res['data'] 
+                    if str(op.get('estado', '')).upper() not in ['COMPLETADA', 'FINALIZADA', 'CANCELADA', 'RECHAZADA', 'CONSOLIDADA']
+                ]
+        
+        return jsonify({'success': True, 'data': ops_data}), 200
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -1,5 +1,5 @@
 from app.models.base_model import BaseModel
-from typing import Dict, List
+from typing import Dict, List, Union
 
 class OperacionRecetaRolModel(BaseModel):
     """
@@ -18,14 +18,26 @@ class OperacionRecetaRolModel(BaseModel):
         """
         return self.find_all(filters={'operacion_receta_id': operacion_receta_id})
 
-    def bulk_create_for_operacion(self, operacion_receta_id: int, rol_ids: List[int]) -> Dict:
+    def bulk_create_for_operacion(self, operacion_receta_id: int, roles_data: List[Union[int, Dict]]) -> Dict:
         """
         Crea múltiples asignaciones de roles para una operacion de receta.
+        soporta lista de IDs [1, 2] o lista de dicts [{'rol_id': 1, 'porcentaje_participacion': 50}, ...]
         """
-        records = [
-            {'operacion_receta_id': operacion_receta_id, 'rol_id': rol_id}
-            for rol_id in rol_ids
-        ]
+        records = []
+        
+        for item in roles_data:
+            if isinstance(item, int):
+                records.append({
+                    'operacion_receta_id': operacion_receta_id, 
+                    'rol_id': item,
+                    'porcentaje_participacion': 100 # Default a 100 si no se especifica
+                })
+            elif isinstance(item, dict):
+                records.append({
+                    'operacion_receta_id': operacion_receta_id,
+                    'rol_id': item['rol_id'],
+                    'porcentaje_participacion': item.get('porcentaje_participacion', 100)
+                })
 
         if not records:
             return {'success': True, 'data': []}

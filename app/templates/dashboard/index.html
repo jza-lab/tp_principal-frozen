@@ -4,649 +4,731 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard/dashboard.css') }}">
+<style>
+    /* Styles adapted from indicators/rentabilidad dashboard for consistency */
+    .icon-box {
+        width: 60px; 
+        height: 60px; 
+        display: flex; 
+        align-items: center; 
+        justify-content: center;
+    }
+    .hover-lift:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+    }
+    .transition-transform {
+        transition: transform .3s ease;
+    }
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(13, 110, 253, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(13, 110, 253, 0); }
+    }
+    .pulse-badge {
+        animation: pulse-glow 2s infinite;
+    }
+    /* Ensure carousel fits within the new layout */
+    .alert-carousel-wrapper {
+        margin-bottom: 2rem;
+    }
+</style>
 {% endblock %}
 
 {% block app_content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">Dashboard</h1>
-</div>
-
-<div class="alert-carousel-wrapper">
-    <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
-        
-    {# 1. CLIENTES PENDIENTES (CRÍTICA/DANGER) #}
-    {% if 'gestionar_clientes' is has_permission %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if pending_client_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('clientes_proveedores.listar_solicitudes_clientes') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">CLIENTES PENDIENTES</div>
-                            <div class="small text-muted">Solicitudes de aprobación:</div>
-                            <div class="stat-value text-{{ 'danger' if pending_client_count > 0 else 'success' }}">{{ pending_client_count }}</div>
-                            <div class="small text-{{ 'danger' if pending_client_count > 0 else 'success' }}" style="min-height: 50px;">
-                                {% if pending_client_count > 0 %}
-                                    <i class="bi bi-arrow-right-short"></i> Ir a Solicitudes
-                                {% else %}
-                                    Todas las solicitudes al día.
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="text-{{ 'danger' if pending_client_count > 0 else 'success' }}">
-                            <i class="bi bi-person-plus-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 2. CONSULTAS PENDIENTES (CRÍTICA/DANGER) #}
-    {% if has_permission('admin_acceder_consultas') %}
-     <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
-            <a href="{{ url_for('consulta_admin.listar_consultas') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">Atención Requerida</div>
-                            <div class="small text-muted">Consultas de clientes sin responder:</div>
-                            <div class="stat-value text-danger">{{ conteo_consultas_pendientes }}</div>
-                            <div class="small text-danger" style="min-height: 50px;">
-                                <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Consultas
-                            </div>
-                        </div>
-                        <div class="text-danger">
-                            <i class="bi bi-question-circle-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 3. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
-    {% if has_permission('gestionar_reclamos') and conteo_reclamos_pendientes > 0 %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm glow-on-load">
-            <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">Atención Requerida</div>
-                            <div class="small text-muted">Reclamos de clientes sin responder:</div>
-                            <div class="stat-value text-danger">{{ conteo_reclamos_pendientes }}</div>
-                            <div class="small text-danger" style="min-height: 50px;">
-                                <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Reclamos
-                            </div>
-                        </div>
-                        <div class="text-danger">
-                            <i class="bi bi-chat-right-quote-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 3. PRODUCTOS SIN STOCK (CRÍTICA/DANGER) #}
-    {% if 'produccion_consulta' is has_permission and current_user.rol and current_user.rol != 'OPERARIO' %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        {% if productos_sin_lotes_count == 0 %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Stock Productos Finales</div>
-                                <div class="small text-muted">Productos sin lotes asociados</div>
-                                <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
-                                <div class="small text-success">¡Inventario de productos completo!</div>
-                            </div>
-                            <div class="text-success">
-                                <i class="bi bi-check-circle-fill fs-1"></i>
-                            </div>
-                        {% else %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">PRODUCTOS SIN STOCK</div>
-                                <div class="small text-muted">Se requieren lotes para:</div>
-                                <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
-                                
-                                <ul class="text-danger small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for producto in productos_sin_lotes_list[:3] %}
-                                    <li class="text-truncate" title="{{ producto.nombre }}">{{ producto.nombre }}</li>
-                                {% endfor %}
-                                {% if productos_sin_lotes_count > 3 %}
-                                    <li class="small">y {{ productos_sin_lotes_count - 3 }} más...</li>
-                                {% endif %}
-                                </ul>
-
-                            </div>
-                            <div class="text-danger">
-                                <i class="bi bi-box-fill fs-1"></i>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 4. ÓRDENES DE VENTA PENDIENTES (CRÍTICA/DANGER) #}
-    {% if 'logistica_gestion_ov' is has_permission %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
-                             <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
-                            {% if ordenesventa_pendientes_list %}
-                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for orden in ordenesventa_pendientes_list[:3] %}
-                                <li class="text-truncate">
-                                    <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-danger text-decoration-underline">Ver Orden: {{ orden.id }}</a>
-                                </li>
-                                {% endfor %}
-                                {% if ordenesventa_pendientes > 3 %}
-                                <li class="small">y {{ ordenesventa_pendientes - 3 }} más...</li>
-                                {% endif %}
-                            </ul>
-                            {% else %}
-                            <div class="small text-muted">Sin OVs pendientes</div>
-                            {% endif %}
-                        </div>
-                        <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
-                            <i class="bi bi-hourglass-split fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 5. ALERTAS DE STOCK INSUMOS (CRÍTICA/WARNING) #}
-    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        {% if alertas_stock_count == 0 %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
-                                <div class="small text-muted">Insumos por debajo del mínimo</div>
-                                <div class="stat-value text-success">{{ alertas_stock_count }}</div>
-                                <div class="small text-success">¡Todo en orden, contas con stock!</div>
-                            </div>
-                            <div class="text-success">
-                                <i class="bi bi-check-circle fs-1"></i>
-                            </div>
-                        {% else %}
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
-                                <div class="small text-muted">Insumos con stock bajo/crítico:</div>
-                                <div class="stat-value text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">{{ alertas_stock_count }}</div>
-                                
-                                <ul class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }} small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for insumo in insumos_bajo_stock_list[:3] %}
-                                    <li class="text-truncate" title="{{ insumo.nombre }}">
-                                        {{ insumo.nombre }} (Min: {{ insumo.stock_min|round(0) }})
-                                    </li>
-                                {% endfor %}
-                                {% if alertas_stock_count > 3 %}
-                                    <li class="small">y {{ alertas_stock_count - 3 }} más...</li>
-                                {% endif %}
-                                </ul>
-
-                            </div>
-                            <div class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">
-                                <i class="bi bi-exclamation-triangle-fill fs-1"></i>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 6. RIESGO PROD. VENCIMIENTO (WARNING) #}
-    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'OPERARIO'  %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">RIESGO PROD. VENCIMIENTO</div>
-                            <div class="small text-muted">Lotes de productos que estan pronto a vencerse:</div>
-                            <div class="stat-value text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">{{ lotes_producto_vencimiento_count }}</div>
-                            <div class="small text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
-                                {% if lotes_producto_vencimiento_lista %}
-                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                    {% for lote in lotes_producto_vencimiento_lista[:3] %}
-                                    <li class="text-truncate">
-                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
-                                            {{ lote.producto_nombre }} - Vence: {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') }}
-                                        </a>
-                                    </li>
-                                    {% endfor %}
-                                    {% if lotes_producto_vencimiento_count > 3 %}
-                                    <li class="small">y {{ lotes_producto_vencimiento_count - 3 }} más...</li>
-                                    {% endif %}
-                                </ul>
-                                {% elif lotes_producto_vencimiento_count > 0 %}
-                                    <i class="bi bi-box-fill me-1"></i> ¡Priorizar despacho!
-                                {% else %}
-                                    Lotes estables.
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">
-                            <i class="bi bi-calendar-x-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
+<div class="container-fluid px-4 py-4">
     
-    {# 7. RIESGO DE VENCIMIENTO INSUMOS (WARNING) #}
-    {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) and not is_operario %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm {% if lotes_vencimiento_count > 0 %}glow-on-load{% endif %}">
-            <a href="{{ url_for('inventario_view.listar_lotes') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">RIESGO DE VENCIMIENTO INSUMOS</div>
-                            <div class="small text-muted">Lotes de insumos que estan pronto a vencerse:</div>
-                            <div class="stat-value text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">{{ lotes_vencimiento_count }}</div>
-                            <div class="small text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
-                                {% if lotes_vencimiento_count > 0 %}
-                                    <i class="bi bi-calendar-x me-1"></i> ¡Priorizar consumo!
-                                {% else %}
-                                    Lotes estables.
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">
-                            <i class="bi bi-calendar-x-fill fs-1"></i>
-                        </div>
+    <!-- Header / Command Center Card -->
+    <!-- Unified "Mother Card" structure -->
+    <div id="dashboard-header-card" class="card border-0 shadow rounded-4 overflow-hidden mb-4" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%); transition: all 0.5s ease; border-left: 4px solid #0d6efd !important;">
+        <div class="card-header border-bottom-0 pt-4 pb-0 px-4 position-relative" style="background: transparent; z-index: 1;">
+            
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3 position-relative z-2">
+                <div class="d-flex align-items-center mb-3 mb-md-0">
+                    <div class="icon-box bg-white text-primary rounded-4 p-3 me-3 shadow-sm border hover-lift transition-transform">
+                        <i class="bi bi-grid-1x2-fill fs-3"></i>
                     </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 8. ÓRDENES DE PRODUCCIÓN EN PROCESO (INFORMATIVA) #}
-    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' and not is_supervisor_calidad %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm">
-            <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
-                            <div class="stat-value text-primary">{{ ordenesproduccion_proceso_count }}</div>
-                            {% if ordenesproduccion_proceso_list %}
-                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for orden in ordenesproduccion_proceso_list[:3] %}
-                                <li class="text-truncate">
-                                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.codigo }}</a>
-                                </li>
-                                {% endfor %}
-                                {% if ordenesproduccion_proceso_count > 3 %}
-                                <li class="small">y {{ ordenesproduccion_proceso_count - 3 }} más...</li>
-                                {% endif %}
-                            </ul>
-                            {% else %}
-                            <div class="small text-muted">Ninguna orden en proceso</div>
-                            {% endif %}
-                        </div>
-                        <div class="text-primary">
-                            <i class="bi bi-gear-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    {# 9. ÓRDENES DE VENTA RECHAZADAS (INFORMATIVA) #}
-    {% if 'logistica_gestion_ov' is has_permission %}
-    <div class="stat-card-item">
-        <div class="card stat-card h-100 border-0 shadow-sm">
-            <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" style="text-decoration: none;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="stat-label mb-1 text-muted">Órdenes de Venta Rechazadas</div>
-                            <div class="stat-value text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">{{ ordenesventa_rechazadas }}</div>
-                            {% if ordenesventa_rechazadas_list %}
-                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                {% for orden in ordenesventa_rechazadas_list[:3] %}
-                                <li class="text-truncate">
-                                    <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.id }}</a>
-                                </li>
-                                {% endfor %}
-                                {% if ordenesventa_rechazadas > 3 %}
-                                <li class="small">y {{ ordenesventa_rechazadas - 3 }} más...</li>
-                                {% endif %}
-                            </ul>
-                            {% else %}
-                            <div class="small text-muted">Sin OVs rechazadas</div>
-                            {% endif %}
-                        </div>
-                        <div class="text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">
-                            <i class="bi bi-cart-x-fill fs-1"></i>
-                        </div>
-                    </div>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-    {# START: Supervisor de Calidad Indicators #}
-    {% if has_permission('controlar_calidad_lotes') or has_permission('produccion_control_proceso') %}
-        {# Lotes pendientes de control #}
-        <div class="stat-card-item">
-            <div class="card stat-card h-100 border-0 shadow-sm">
-                <a href="{{ url_for('lote_producto.listar_lotes', estado='PENDIENTE_CALIDAD') }}" style="text-decoration: none;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Lotes Pendientes de Control</div>
-                                <div class="stat-value text-warning">{{ lotes_pendientes_control }}</div>
-                                {% if lotes_pendientes_control_lista %}
-                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                    {% for lote in lotes_pendientes_control_lista[:3] %}
-                                    <li class="text-truncate">
-                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
-                                            {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
-                                        </a>
-                                    </li>
-                                    {% endfor %}
-                                    {% if lotes_pendientes_control > 3 %}
-                                    <li class="small">y {{ lotes_pendientes_control - 3 }} más...</li>
-                                    {% endif %}
-                                </ul>
-                                {% endif %}
-                            </div>
-                            <div class="text-warning"><i class="bi bi-clipboard-data fs-1"></i></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        {# Insumos en Cuarentena #}
-        <div class="stat-card-item">
-            <div class="card stat-card h-100 border-0 shadow-sm">
-                <a href="{{ url_for('inventario_view.listar_lotes', estado='cuarentena') }}" style="text-decoration: none;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Insumos en Cuarentena</div>
-                                <div class="stat-value text-warning">{{ insumos_en_cuarentena }}</div>
-                                {% if insumos_en_cuarentena_lista %}
-                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                    {% for lote in insumos_en_cuarentena_lista[:3] %}
-                                    <li class="text-truncate">
-                                        <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
-                                            {{ lote.insumo_nombre }} - Lote: {{ lote.numero_lote_proveedor }}
-                                        </a>
-                                    </li>
-                                    {% endfor %}
-                                    {% if insumos_en_cuarentena > 3 %}
-                                    <li class="small">y {{ insumos_en_cuarentena - 3 }} más...</li>
-                                    {% endif %}
-                                </ul>
-                                {% endif %}
-                            </div>
-                            <div class="text-warning"><i class="bi bi-shield-slash fs-1"></i></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        {# Lotes Rechazados / Cuarentena #}
-        <div class="stat-card-item">
-            <div class="card stat-card h-100 border-0 shadow-sm">
-                <a href="{{ url_for('lote_producto.listar_lotes', estado='CUARENTENA') }}" style="text-decoration: none;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Lotes Rechazados / Cuarentena</div>
-                                <div class="stat-value text-danger">{{ productos_rechazados }}</div>
-                                {% if productos_rechazados_lista %}
-                                <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
-                                    {% for lote in productos_rechazados_lista[:3] %}
-                                    <li class="text-truncate">
-                                        <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-danger text-decoration-underline">
-                                            {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
-                                        </a>
-                                    </li>
-                                    {% endfor %}
-                                    {% if productos_rechazados > 3 %}
-                                    <li class="small">y {{ productos_rechazados - 3 }} más...</li>
-                                    {% endif %}
-                                </ul>
-                                {% endif %}
-                            </div>
-                            <div class="text-danger"><i class="bi bi-x-circle fs-1"></i></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        {# Lotes sin trazabilidad #}
-        <div class="stat-card-item">
-            <div class="card stat-card h-100 border-0 shadow-sm">
-                <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Lotes sin Trazabilidad</div>
-                                <div class="stat-value text-info">{{ lotes_sin_trazabilidad }}</div>
-                            </div>
-                            <div class="text-info"><i class="bi bi-diagram-3 fs-1"></i></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        {# Órdenes reabiertas #}
-        {% if not is_supervisor_calidad %}
-        <div class="stat-card-item">
-            <div class="card stat-card h-100 border-0 shadow-sm">
-                <a href="{{ url_for('orden_produccion.listar', estado='REPROCESO') }}" style="text-decoration: none;">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="stat-label mb-1 text-muted">Órdenes Reabiertas</div>
-                                <div class="stat-value text-primary">{{ ordenes_reabiertas }}</div>
-                            </div>
-                            <div class="text-primary"><i class="bi bi-arrow-counterclockwise fs-1"></i></div>
-                        </div>
-                    </div>
-                </a>
-            </div>
-        </div>
-        {% endif %}
-    {% endif %}
-    {# END: Supervisor de Calidad Indicators #}
-    </div>
-
-    <button id="prevAlertBtn" class="carousel-nav-btn prev-btn" aria-label="Anterior">
-        <i class="bi bi-chevron-left"></i>
-    </button>
-    <button id="nextAlertBtn" class="carousel-nav-btn next-btn" aria-label="Siguiente">
-        <i class="bi bi-chevron-right"></i>
-    </button>
-</div>
-<div class="row">
-    {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
-    <div class="col-lg-7 mb-4"> 
-        <div class="card h-100 shadow-sm">
-            <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0 text-dark">
-                    <i class="bi bi-clock-history text-primary me-2"></i>
-                    Órdenes de Producción Aprobadas
-                </h5>
-                <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-primary btn-sm">
-                    Ver todas
-                </a>
-            </div>
-            <div class="card-body p-0">
-                {% if ordenes_aprobadas %}
-                <div class="list-group list-group-flush">
-                    {% for orden in ordenes_aprobadas %}
-                    <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 d-flex justify-content-between align-items-center">
-                        
-                        <div class="me-3" style="flex-grow: 1;">
-                            <h6 class="mb-1 fw-bold text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
-                            <p class="mb-1 small text-muted">
-                                <span class="badge bg-secondary-subtle text-secondary me-2">
-                                    <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
-                                </span>
-                                <span class="badge bg-primary-subtle text-primary">
-                                    <i class="bi bi-person me-1"></i> {{ orden.supervisor_nombre or 'N/A' }}
-                                </span>
-                            </p>
-                            <small class="text-muted">
-                                <i class="bi bi-calendar-event me-1"></i> Planificada: {{ orden.fecha_planificada }}
-                            </small>
-                        </div>
-                        
-                        <div>
-                            <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
-                                style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
-                                data-message="¿Está seguro de que desea iniciar esta orden de producción?"
-                                data-button-type="success">
-                                {{ csrf_form.csrf_token }}
-                                <button type="submit" class="btn btn-sm btn-success shadow-sm" title="Iniciar Orden" style="min-width: 80px;">
-                                    <i class="bi bi-play-fill"></i> Iniciar
-                                </button>
-                            </form>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="card-body text-center py-5">
-                    <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
-                    <h5>Sistema en Orden</h5>
-                    <p class="text-muted mb-0">No ordenes aprobadas para su inicio en este momento</p>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
-    <div class="col-lg-5 mb-4">
-        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
-        <div class="card stat-card mb-4 border-0 shadow-sm">
-            <div class="card-body py-3">
-                <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <div class="stat-label mb-1 text-muted">ASISTENCIA GENERAL HOY</div>
-                        <div class="stat-value text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }} display-4 fw-bold"> 
-                            {{ asistencia }}%
-                        </div>
-                        <div class="small text-muted">Porcentaje de personal en planta</div>
+                        <h4 class="fw-bold text-dark mb-1 tracking-tight">Panel de Control Principal</h4>
+                        <p class="text-muted small mb-0 d-flex align-items-center">
+                            <span class="badge bg-primary-subtle text-primary rounded-pill me-2 px-2 pulse-badge">En vivo</span>
+                            Resumen operativo y alertas en tiempo real
+                        </p>
                     </div>
-                    <div class="text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }}">
-                        <i class="bi bi-person-check-fill fs-1"></i>
-                    </div>
+                </div>
+                <!-- Breadcrumb / Info Area -->
+                <div class="d-none d-md-block text-end">
+                   <nav aria-label="breadcrumb">
+                      <ol class="breadcrumb mb-0 justify-content-end small">
+                        <li class="breadcrumb-item active fw-semibold text-primary" aria-current="page">Inicio</li>
+                      </ol>
+                   </nav>
+                   <small class="text-muted font-monospace" style="font-size: 0.75rem;">
+                       <i class="bi bi-clock me-1"></i>Actualizado: <span id="last-updated" class="fw-bold">Hoy</span>
+                   </small>
                 </div>
             </div>
         </div>
-        {% endif %}
-        
-        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
-        <div class="card mb-4 border-0 shadow-sm"> 
-            <div class="card-header bg-white border-bottom pb-2 d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0 text-dark">
-                    <i class="bi bi-bell-fill me-2 text-danger"></i>
-                    Notificaciones Recientes
-                    <span class="badge bg-danger ms-2">{{ notificaciones|length }}</span>
-                </h5>
-            </div>
-            <div class="card-body p-0" style="max-height: 250px; overflow-y: auto;">
-                {% if notificaciones %}
-                <ul class="list-group list-group-flush border-0">
-                    {% for notificacion in notificaciones[:5] %} <li class="list-group-item d-flex align-items-start py-2 border-0">
-                        <span class="me-2 text-{{ 'danger' if notificacion.tipo == 'TARDANZA' else 'info' }}">
-                            <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} mt-1"></i>
-                        </span>
-                        <div class="flex-grow-1">
-                            <h6 class="mb-1 fw-bold text-truncate-2" title="{{ notificacion.mensaje }}">
-                                {{ notificacion.tipo | title }}: {{ notificacion.mensaje }}
-                            </h6>
-                            <small class="text-muted d-block" style="font-size: 0.75rem;">
-                                {{ notificacion.created_at | format_datetime('%d/%m %H:%M') }}
-                            </small>
+
+        <!-- Main Content Area (Now inside the mother card) -->
+        <div class="card-body p-4" style="background-color: #f4f6f9;">
+            
+            <!-- Alert Carousel Section -->
+            <div class="alert-carousel-wrapper">
+                <div class="alert-carousel-container mb-4" id="alertCarouselContainer">
+                    
+                {# 1. CLIENTES PENDIENTES (CRÍTICA/DANGER) #}
+                {% if 'gestionar_clientes' is has_permission %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if pending_client_count > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('clientes_proveedores.listar_solicitudes_clientes') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">CLIENTES PENDIENTES</div>
+                                        <div class="small text-muted">Solicitudes de aprobación:</div>
+                                        <div class="stat-value text-{{ 'danger' if pending_client_count > 0 else 'success' }}">{{ pending_client_count }}</div>
+                                        <div class="small text-{{ 'danger' if pending_client_count > 0 else 'success' }}" style="min-height: 50px;">
+                                            {% if pending_client_count > 0 %}
+                                                <i class="bi bi-arrow-right-short"></i> Ir a Solicitudes
+                                            {% else %}
+                                                Todas las solicitudes al día.
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="text-{{ 'danger' if pending_client_count > 0 else 'success' }}">
+                                        <i class="bi bi-person-plus-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 2. CONSULTAS PENDIENTES (CRÍTICA/DANGER) #}
+                {% if has_permission('admin_acceder_consultas') %}
+                 <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 glow-on-load">
+                        <a href="{{ url_for('consulta_admin.listar_consultas') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">Atención Requerida</div>
+                                        <div class="small text-muted">Consultas de clientes sin responder:</div>
+                                        <div class="stat-value text-danger">{{ conteo_consultas_pendientes }}</div>
+                                        <div class="small text-danger" style="min-height: 50px;">
+                                            <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Consultas
+                                        </div>
+                                    </div>
+                                    <div class="text-danger">
+                                        <i class="bi bi-question-circle-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 3. RECLAMOS PENDIENTES (CRÍTICA/DANGER) #}
+                {% if has_permission('gestionar_reclamos') and conteo_reclamos_pendientes > 0 %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 glow-on-load">
+                        <a href="{{ url_for('admin_reclamo.listar_reclamos', estado='pendiente') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">Atención Requerida</div>
+                                        <div class="small text-muted">Reclamos de clientes sin responder:</div>
+                                        <div class="stat-value text-danger">{{ conteo_reclamos_pendientes }}</div>
+                                        <div class="small text-danger" style="min-height: 50px;">
+                                            <i class="bi bi-arrow-right-short"></i> Ir a Gestionar Reclamos
+                                        </div>
+                                    </div>
+                                    <div class="text-danger">
+                                        <i class="bi bi-chat-right-quote-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 3. PRODUCTOS SIN STOCK (CRÍTICA/DANGER) #}
+                {% if 'produccion_consulta' is has_permission and current_user.rol and current_user.rol != 'OPERARIO' %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if productos_sin_lotes_count > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    {% if productos_sin_lotes_count == 0 %}
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Stock Productos Finales</div>
+                                            <div class="small text-muted">Productos sin lotes asociados</div>
+                                            <div class="stat-value text-success">{{ productos_sin_lotes_count }}</div>
+                                            <div class="small text-success">¡Inventario de productos completo!</div>
+                                        </div>
+                                        <div class="text-success">
+                                            <i class="bi bi-check-circle-fill fs-1"></i>
+                                        </div>
+                                    {% else %}
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">PRODUCTOS SIN STOCK</div>
+                                            <div class="small text-muted">Se requieren lotes para:</div>
+                                            <div class="stat-value text-danger">{{ productos_sin_lotes_count }}</div>
+                                            
+                                            <ul class="text-danger small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                            {% for producto in productos_sin_lotes_list[:3] %}
+                                                <li class="text-truncate" title="{{ producto.nombre }}">{{ producto.nombre }}</li>
+                                            {% endfor %}
+                                            {% if productos_sin_lotes_count > 3 %}
+                                                <li class="small">y {{ productos_sin_lotes_count - 3 }} más...</li>
+                                            {% endif %}
+                                            </ul>
+
+                                        </div>
+                                        <div class="text-danger">
+                                            <i class="bi bi-box-fill fs-1"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 4. ÓRDENES DE VENTA PENDIENTES (CRÍTICA/DANGER) #}
+                {% if 'logistica_gestion_ov' is has_permission %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if ordenesventa_pendientes > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Pendientes</div>
+                                         <div class="stat-value text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">{{ ordenesventa_pendientes }}</div>
+                                        {% if ordenesventa_pendientes_list %}
+                                        <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                            {% for orden in ordenesventa_pendientes_list[:3] %}
+                                            <li class="text-truncate">
+                                                <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-danger text-decoration-underline">Ver Orden: {{ orden.id }}</a>
+                                            </li>
+                                            {% endfor %}
+                                            {% if ordenesventa_pendientes > 3 %}
+                                            <li class="small">y {{ ordenesventa_pendientes - 3 }} más...</li>
+                                            {% endif %}
+                                        </ul>
+                                        {% else %}
+                                        <div class="small text-muted">Sin OVs pendientes</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }}">
+                                        <i class="bi bi-hourglass-split fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 5. ALERTAS DE STOCK INSUMOS (CRÍTICA/WARNING) #}
+                {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if alertas_stock_count > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    {% if alertas_stock_count == 0 %}
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
+                                            <div class="small text-muted">Insumos por debajo del mínimo</div>
+                                            <div class="stat-value text-success">{{ alertas_stock_count }}</div>
+                                            <div class="small text-success">¡Todo en orden, contas con stock!</div>
+                                        </div>
+                                        <div class="text-success">
+                                            <i class="bi bi-check-circle fs-1"></i>
+                                        </div>
+                                    {% else %}
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Alertas de Stock Insumos</div>
+                                            <div class="small text-muted">Insumos con stock bajo/crítico:</div>
+                                            <div class="stat-value text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">{{ alertas_stock_count }}</div>
+                                            
+                                            <ul class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }} small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                            {% for insumo in insumos_bajo_stock_list[:3] %}
+                                                <li class="text-truncate" title="{{ insumo.nombre }}">
+                                                    {{ insumo.nombre }} (Min: {{ insumo.stock_min|round(0) }})
+                                                </li>
+                                            {% endfor %}
+                                            {% if alertas_stock_count > 3 %}
+                                                <li class="small">y {{ alertas_stock_count - 3 }} más...</li>
+                                            {% endif %}
+                                            </ul>
+
+                                        </div>
+                                        <div class="text-{{ 'warning' if alertas_stock_count <= 10 else 'danger' }}">
+                                            <i class="bi bi-exclamation-triangle-fill fs-1"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 6. RIESGO PROD. VENCIMIENTO (WARNING) #}
+                {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'OPERARIO'  %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if lotes_producto_vencimiento_count > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">RIESGO PROD. VENCIMIENTO</div>
+                                        <div class="small text-muted">Lotes de productos que estan pronto a vencerse:</div>
+                                        <div class="stat-value text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">{{ lotes_producto_vencimiento_count }}</div>
+                                        <div class="small text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
+                                            {% if lotes_producto_vencimiento_lista %}
+                                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                                {% for lote in lotes_producto_vencimiento_lista[:3] %}
+                                                <li class="text-truncate">
+                                                    <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                                        {{ lote.producto_nombre }} - Vence: {{ lote.fecha_vencimiento.strftime('%Y-%m-%d') }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                                {% if lotes_producto_vencimiento_count > 3 %}
+                                                <li class="small">y {{ lotes_producto_vencimiento_count - 3 }} más...</li>
+                                                {% endif %}
+                                            </ul>
+                                            {% elif lotes_producto_vencimiento_count > 0 %}
+                                                <i class="bi bi-box-fill me-1"></i> ¡Priorizar despacho!
+                                            {% else %}
+                                                Lotes estables.
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="text-{{ 'warning' if lotes_producto_vencimiento_count > 0 else 'success' }}">
+                                        <i class="bi bi-calendar-x-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {# 7. RIESGO DE VENCIMIENTO INSUMOS (WARNING) #}
+                {% if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) and not is_operario %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4 {% if lotes_vencimiento_count > 0 %}glow-on-load{% endif %}">
+                        <a href="{{ url_for('inventario_view.listar_lotes') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">RIESGO DE VENCIMIENTO INSUMOS</div>
+                                        <div class="small text-muted">Lotes de insumos que estan pronto a vencerse:</div>
+                                        <div class="stat-value text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">{{ lotes_vencimiento_count }}</div>
+                                        <div class="small text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}" style="min-height: 20px;">
+                                            {% if lotes_vencimiento_count > 0 %}
+                                                <i class="bi bi-calendar-x me-1"></i> ¡Priorizar consumo!
+                                            {% else %}
+                                                Lotes estables.
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <div class="text-{{ 'warning' if lotes_vencimiento_count > 0 else 'success' }}">
+                                        <i class="bi bi-calendar-x-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 8. ÓRDENES DE PRODUCCIÓN EN PROCESO (INFORMATIVA) #}
+                {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' and not is_supervisor_calidad %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4">
+                        <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
+                                        <div class="stat-value text-primary">{{ ordenesproduccion_proceso_count }}</div>
+                                        {% if ordenesproduccion_proceso_list %}
+                                        <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                            {% for orden in ordenesproduccion_proceso_list[:3] %}
+                                            <li class="text-truncate">
+                                                <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.codigo }}</a>
+                                            </li>
+                                            {% endfor %}
+                                            {% if ordenesproduccion_proceso_count > 3 %}
+                                            <li class="small">y {{ ordenesproduccion_proceso_count - 3 }} más...</li>
+                                            {% endif %}
+                                        </ul>
+                                        {% else %}
+                                        <div class="small text-muted">Ninguna orden en proceso</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-primary">
+                                        <i class="bi bi-gear-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
+                {# 9. ÓRDENES DE VENTA RECHAZADAS (INFORMATIVA) #}
+                {% if 'logistica_gestion_ov' is has_permission %}
+                <div class="stat-card-item">
+                    <div class="card stat-card h-100 border-0 shadow rounded-4">
+                        <a href="{{ url_for('orden_venta.listar', estado='CANCELADO') }}" style="text-decoration: none;">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <div class="stat-label mb-1 text-muted">Órdenes de Venta Rechazadas</div>
+                                        <div class="stat-value text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">{{ ordenesventa_rechazadas }}</div>
+                                        {% if ordenesventa_rechazadas_list %}
+                                        <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                            {% for orden in ordenesventa_rechazadas_list[:3] %}
+                                            <li class="text-truncate">
+                                                <a href="{{ url_for('orden_venta.detalle', id=orden.id) }}" class="text-primary text-decoration-underline">Ver Orden: {{ orden.id }}</a>
+                                            </li>
+                                            {% endfor %}
+                                            {% if ordenesventa_rechazadas > 3 %}
+                                            <li class="small">y {{ ordenesventa_rechazadas - 3 }} más...</li>
+                                            {% endif %}
+                                        </ul>
+                                        {% else %}
+                                        <div class="small text-muted">Sin OVs rechazadas</div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-{{ 'dark' if ordenesventa_rechazadas > 0 else 'success' }}">
+                                        <i class="bi bi-cart-x-fill fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+                {# START: Supervisor de Calidad Indicators #}
+                {% if has_permission('controlar_calidad_lotes') or has_permission('produccion_control_proceso') %}
+                    {# Lotes pendientes de control #}
+                    <div class="stat-card-item">
+                        <div class="card stat-card h-100 border-0 shadow rounded-4">
+                            <a href="{{ url_for('lote_producto.listar_lotes', estado='PENDIENTE_CALIDAD') }}" style="text-decoration: none;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Lotes Pendientes de Control</div>
+                                            <div class="stat-value text-warning">{{ lotes_pendientes_control }}</div>
+                                            {% if lotes_pendientes_control_lista %}
+                                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                                {% for lote in lotes_pendientes_control_lista[:3] %}
+                                                <li class="text-truncate">
+                                                    <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                                        {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                                {% if lotes_pendientes_control > 3 %}
+                                                <li class="small">y {{ lotes_pendientes_control - 3 }} más...</li>
+                                                {% endif %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-warning"><i class="bi bi-clipboard-data fs-1"></i></div>
+                                    </div>
+                                </div>
+                            </a>
                         </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="text-center text-muted py-4 mb-0">No hay notificaciones nuevas.</p>
+                    </div>
+                    {# Insumos en Cuarentena #}
+                    <div class="stat-card-item">
+                        <div class="card stat-card h-100 border-0 shadow rounded-4">
+                            <a href="{{ url_for('inventario_view.listar_lotes', estado='cuarentena') }}" style="text-decoration: none;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Insumos en Cuarentena</div>
+                                            <div class="stat-value text-warning">{{ insumos_en_cuarentena }}</div>
+                                            {% if insumos_en_cuarentena_lista %}
+                                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                                {% for lote in insumos_en_cuarentena_lista[:3] %}
+                                                <li class="text-truncate">
+                                                    <a href="{{ url_for('inventario_view.detalle_lote', id_lote=lote.id_lote) }}" class="text-warning text-decoration-underline">
+                                                        {{ lote.insumo_nombre }} - Lote: {{ lote.numero_lote_proveedor }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                                {% if insumos_en_cuarentena > 3 %}
+                                                <li class="small">y {{ insumos_en_cuarentena - 3 }} más...</li>
+                                                {% endif %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-warning"><i class="bi bi-shield-slash fs-1"></i></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    {# Lotes Rechazados / Cuarentena #}
+                    <div class="stat-card-item">
+                        <div class="card stat-card h-100 border-0 shadow rounded-4">
+                            <a href="{{ url_for('lote_producto.listar_lotes', estado='CUARENTENA') }}" style="text-decoration: none;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Lotes Rechazados / Cuarentena</div>
+                                            <div class="stat-value text-danger">{{ productos_rechazados }}</div>
+                                            {% if productos_rechazados_lista %}
+                                            <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
+                                                {% for lote in productos_rechazados_lista[:3] %}
+                                                <li class="text-truncate">
+                                                    <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="text-danger text-decoration-underline">
+                                                        {{ lote.producto_nombre }} - Lote: {{ lote.numero_lote }}
+                                                    </a>
+                                                </li>
+                                                {% endfor %}
+                                                {% if productos_rechazados > 3 %}
+                                                <li class="small">y {{ productos_rechazados - 3 }} más...</li>
+                                                {% endif %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-danger"><i class="bi bi-x-circle fs-1"></i></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    {# Lotes sin trazabilidad #}
+                    <div class="stat-card-item">
+                        <div class="card stat-card h-100 border-0 shadow rounded-4">
+                            <a href="{{ url_for('lote_producto.listar_lotes') }}" style="text-decoration: none;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Lotes sin Trazabilidad</div>
+                                            <div class="stat-value text-info">{{ lotes_sin_trazabilidad }}</div>
+                                        </div>
+                                        <div class="text-info"><i class="bi bi-diagram-3 fs-1"></i></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    {# Órdenes reabiertas #}
+                    {% if not is_supervisor_calidad %}
+                    <div class="stat-card-item">
+                        <div class="card stat-card h-100 border-0 shadow rounded-4">
+                            <a href="{{ url_for('orden_produccion.listar', estado='REPROCESO') }}" style="text-decoration: none;">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="stat-label mb-1 text-muted">Órdenes Reabiertas</div>
+                                            <div class="stat-value text-primary">{{ ordenes_reabiertas }}</div>
+                                        </div>
+                                        <div class="text-primary"><i class="bi bi-arrow-counterclockwise fs-1"></i></div>
+                                    </div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                {% endif %}
+                {# END: Supervisor de Calidad Indicators #}
+                </div>
+
+                <button id="prevAlertBtn" class="carousel-nav-btn prev-btn" aria-label="Anterior">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button id="nextAlertBtn" class="carousel-nav-btn next-btn" aria-label="Siguiente">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+
+            <!-- Bottom Row: Orders and Notifications -->
+            <div class="row g-4">
+                {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
+                <div class="col-lg-7"> 
+                    <div class="card h-100 shadow border-0 rounded-4">
+                        <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 text-dark fw-bold">
+                                <i class="bi bi-clock-history text-primary me-2"></i>
+                                Órdenes de Producción Aprobadas
+                            </h5>
+                            <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+                                Ver todas
+                            </a>
+                        </div>
+                        <div class="card-body px-0 pb-3">
+                            {% if ordenes_aprobadas %}
+                            <div class="list-group list-group-flush">
+                                {% for orden in ordenes_aprobadas %}
+                                <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 px-4 d-flex justify-content-between align-items-center border-0 hover-bg-light">
+                                    
+                                    <div class="me-3" style="flex-grow: 1;">
+                                        <h6 class="mb-1 fw-bold text-dark text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
+                                        <p class="mb-1 small text-muted">
+                                            <span class="badge bg-light text-secondary border me-2">
+                                                <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
+                                            </span>
+                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                                                <i class="bi bi-person me-1"></i> {{ orden.supervisor_nombre or 'N/A' }}
+                                            </span>
+                                        </p>
+                                        <small class="text-muted">
+                                            <i class="bi bi-calendar-event me-1"></i> Planificada: {{ orden.fecha_planificada }}
+                                        </small>
+                                    </div>
+                                    
+                                    <div>
+                                        <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
+                                            style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
+                                            data-message="¿Está seguro de que desea iniciar esta orden de producción?"
+                                            data-button-type="success">
+                                            {{ csrf_form.csrf_token }}
+                                            <button type="submit" class="btn btn-sm btn-success shadow-sm rounded-pill px-3" title="Iniciar Orden">
+                                                <i class="bi bi-play-fill me-1"></i> Iniciar
+                                            </button>
+                                        </form>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <div class="text-center py-5">
+                                <div class="bg-light rounded-circle d-inline-flex p-3 mb-3 text-success">
+                                    <i class="bi bi-check-circle-fill fs-1"></i>
+                                </div>
+                                <h5 class="text-dark fw-bold">Sistema en Orden</h5>
+                                <p class="text-muted mb-0">No hay órdenes pendientes de inicio.</p>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
+                <div class="col-lg-5">
+                    <div class="row g-4">
+                        <!-- Asistencia Card -->
+                        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
+                        <div class="col-12">
+                            <div class="card border-0 shadow rounded-4 overflow-hidden">
+                                <div class="card-body py-4 px-4">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="text-uppercase small fw-bold text-muted mb-1">Asistencia General Hoy</div>
+                                            <div class="stat-value text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }} display-4 fw-bold"> 
+                                                {{ asistencia }}%
+                                            </div>
+                                            <div class="small text-muted">Porcentaje de personal en planta</div>
+                                        </div>
+                                        <div class="text-{{ 'success' if asistencia >= 80 else 'warning' if asistencia > 50 else 'danger' }} opacity-25">
+                                            <i class="bi bi-person-check-fill" style="font-size: 4rem;"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Notifications Card -->
+                        {% if 'admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission %}
+                        <div class="col-12">
+                            <div class="card border-0 shadow rounded-4 h-100"> 
+                                <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                                    <h5 class="card-title mb-0 text-dark fw-bold">
+                                        <i class="bi bi-bell-fill me-2 text-danger"></i>
+                                        Notificaciones Recientes
+                                    </h5>
+                                    <span class="badge bg-danger rounded-pill">{{ notificaciones|length }}</span>
+                                </div>
+                                <div class="card-body px-0 pb-3" style="max-height: 300px; overflow-y: auto;">
+                                    {% if notificaciones %}
+                                    <ul class="list-group list-group-flush border-0">
+                                        {% for notificacion in notificaciones[:5] %} 
+                                        <li class="list-group-item d-flex align-items-start py-3 px-4 border-0 hover-bg-light">
+                                            <span class="me-3 mt-1 text-{{ 'danger' if notificacion.tipo == 'TARDANZA' else 'info' }}">
+                                                <i class="bi bi-{{ 'clock-fill' if notificacion.tipo == 'TARDANZA' else 'info-circle' }} fs-5"></i>
+                                            </span>
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1 fw-bold text-dark text-truncate-2" title="{{ notificacion.mensaje }}">
+                                                    {{ notificacion.tipo | title }}: {{ notificacion.mensaje }}
+                                                </h6>
+                                                <small class="text-muted d-block">
+                                                    {{ notificacion.created_at | format_datetime('%d/%m %H:%M') }}
+                                                </small>
+                                            </div>
+                                        </li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <p class="text-center text-muted py-4 mb-0">No hay notificaciones nuevas.</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Risks Summary -->
+                        {% if ('admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission) and current_user.roles.codigo != 'RRHH' %}
+                        <div class="col-12">
+                            <div class="card border-0 shadow rounded-4">
+                                <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+                                    <h5 class="mb-0 text-dark fw-bold">
+                                        <i class="bi bi-exclamation-octagon-fill text-warning me-2"></i>
+                                        Resumen de Riesgos
+                                    </h5>
+                                </div>
+                                <div class="card-body p-3">
+                                    <div class="list-group list-group-flush small rounded-3 overflow-hidden">
+                                        
+                                        <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center border-bottom-0 hover-bg-light {% if not ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}disabled{% endif %}">
+                                            <span class="text-muted fw-medium"><i class="bi bi-dot me-2"></i>Insumos Críticos con Stock Bajo</span>
+                                            <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill px-3">
+                                                {{ alertas_stock_count }}
+                                            </span>
+                                        </a>
+                                        
+                                        <a href="{{ url_for('lote_producto.listar_lotes') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center border-bottom-0 hover-bg-light {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}">
+                                            <span class="text-muted fw-medium"><i class="bi bi-dot me-2"></i>Productos sin Lotes</span>
+                                            <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill px-3">
+                                                {{ productos_sin_lotes_count }}
+                                            </span>
+                                        </a>
+
+                                        <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-3 d-flex justify-content-between align-items-center border-bottom-0 hover-bg-light {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}">
+                                            <span class="text-muted fw-medium"><i class="bi bi-dot me-2"></i>Órdenes de Venta Pendientes</span>
+                                            <span class="badge bg-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }} rounded-pill px-3">
+                                                {{ ordenesventa_pendientes }}
+                                            </span>
+                                        </a>      
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
                 {% endif %}
             </div>
         </div>
-        {% endif %}
-
-        {% if ('admin_gestion_personal' is has_permission or 'admin_configuracion_sistema' is has_permission) and current_user.roles.codigo != 'RRHH' %}
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-white border-bottom pb-2">
-                <h5 class="mb-0 text-dark">
-                    <i class="bi bi-exclamation-octagon-fill text-warning me-2"></i>
-                    Resumen de Riesgos
-                </h5>
-            </div>
-            <div class="card-body d-flex flex-column justify-content-around py-3 px-3">
-                <div class="list-group list-group-flush small">
-                    
-                    <a href="{{ url_for('insumos_api.obtener_insumos', stock_status='bajo') if ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('almacen_consulta_stock' is has_permission or 'gestionar_inventario' is has_permission) else 'false' }}">
-                        <span class="text-muted">Insumos Críticos con Stock Bajo:</span>
-                        <span class="badge bg-{{ 'danger' if alertas_stock_count > 0 else 'success' }} rounded-pill fs-6">
-                            {{ alertas_stock_count }}
-                        </span>
-                    </a>
-                    
-                    <a href="{{ url_for('lote_producto.listar_lotes') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else 'false' }}">
-                        <span class="text-muted">Productos sin Lotes (Producción Requerida):</span>
-                        <span class="badge bg-{{ 'danger' if productos_sin_lotes_count > 0 else 'success' }} rounded-pill fs-6">
-                            {{ productos_sin_lotes_count }}
-                        </span>
-                    </a>
-
-                    <a href="{{ url_for('orden_venta.listar', estado='PENDIENTE') if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else '#' }}" class="list-group-item list-group-item-action p-2 d-flex justify-content-between align-items-center border-0 {% if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) %}disabled{% endif %}" aria-disabled="{{ 'true' if not ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) else 'false' }}">
-                        <span class="text-muted">Órdenes de Venta Pendientes:</span>
-                        <span class="badge bg-{{ 'danger' if ordenesventa_pendientes > 0 else 'success' }} rounded-pill fs-6">
-                            {{ ordenesventa_pendientes }}
-                        </span>
-                    </a>      
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 {% if alertas %}
@@ -657,26 +739,22 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const now = new Date();
+    document.getElementById('last-updated').textContent = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
     const glowingCards = document.querySelectorAll('.glow-on-load');
-    const animationDuration = 3000; // La duración total que quieres que la tarjeta brille.
-    const fadeOutDuration = 500;    // Duración de la transición de salida (debe coincidir con el CSS).
+    const animationDuration = 3000; 
+    const fadeOutDuration = 500;
 
     glowingCards.forEach(card => {
-        // Temporizador para iniciar el desvanecimiento (500ms antes de que se cumplan 3s)
         setTimeout(() => {
-            // Añade la clase que dispara el desvanecimiento gradual en el CSS
             card.classList.add('glow-fade-out');
-
-            // Pausa la animación para evitar saltos visuales durante el fade-out
             card.style.animationPlayState = 'paused';
-
-            // Temporizador para la eliminación final de las clases
             setTimeout(() => {
                 card.classList.remove('glow-on-load');
                 card.classList.remove('glow-fade-out');
-                card.style.animationPlayState = ''; // Limpiar el estado de pausa
+                card.style.animationPlayState = ''; 
             }, fadeOutDuration);
-            
         }, animationDuration - fadeOutDuration);
     });
 });
@@ -689,7 +767,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const prevBtn = document.getElementById('prevAlertBtn');
     const nextBtn = document.getElementById('nextAlertBtn');
     
-    // CORRECCIÓN: Salir si los elementos no existen (ej. dashboard sin alertas)
     if (!carouselContainer || !prevBtn || !nextBtn) {
         console.log("Carrusel de alertas no inicializado (elementos no encontrados).");
         return;
@@ -697,31 +774,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const cards = carouselContainer.querySelectorAll('.stat-card-item');
     
-    // CORRECCIÓN: Salir si no hay tarjetas
     if (cards.length === 0) {
         console.log("Carrusel de alertas no inicializado (no hay tarjetas).");
-        // Ocultar botones si no hay tarjetas
         prevBtn.style.display = 'none';
         nextBtn.style.display = 'none';
         return;
     }
 
-    const gap = 24; // <-- FIX: Ajustado de 55 a 24 para coincidir con 1.5rem de CSS
-    const scrollDuration = 4000; // Renombrada de 'scrollDration'
+    const gap = 24; 
+    const scrollDuration = 4000;
     let currentIndex = 0;
     let autoScrollInterval;
 
     function calculateMaxScroll() {
         const totalWidth = carouselContainer.scrollWidth;
         const visibleWidth = carouselWrapper.clientWidth;
-        // CORRECCIÓN: Asegurarse de que maxScroll no sea negativo si el contenido es más pequeño
         return Math.max(0, totalWidth - visibleWidth + gap);
     }
 
     function updateCarousel() {
-        // CORRECCIÓN: Asegurarse de que cards[0] exista
         const cardWidth = cards[0] ? cards[0].offsetWidth : 0;
-        if (cardWidth === 0) return; // No hacer nada si el ancho es 0
+        if (cardWidth === 0) return; 
 
         const offset = currentIndex * (cardWidth + gap);
         const maxScroll = calculateMaxScroll();
@@ -730,7 +803,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         carouselContainer.style.transform = `translateX(-${finalOffset}px)`;
 
-        // CORRECCIÓN: Verificar si maxScroll es 0
         const isAtEnd = finalOffset >= maxScroll;
         const isAtStart = finalOffset === 0;
 
@@ -745,14 +817,13 @@ document.addEventListener('DOMContentLoaded', function () {
         if (autoScrollInterval) clearInterval(autoScrollInterval);
 
         autoScrollInterval = setInterval(() => {
-            // CORRECCIÓN: Usar la variable booleana actualizada
             if (nextBtn.disabled) {
                 currentIndex = 0;
             } else {
                 currentIndex++;
             }
             updateCarousel();
-        }, scrollDuration); // Usar la variable renombrada
+        }, scrollDuration); 
     }
 
     function resetAutoScroll() {
@@ -783,4 +854,3 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 {% endblock %}
-

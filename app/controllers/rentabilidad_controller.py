@@ -10,6 +10,7 @@ from app.models.operacion_receta_model import OperacionRecetaModel
 from app.models.operacion_receta_rol_model import OperacionRecetaRolModel
 from app.models.rol import RoleModel
 from app.models.zona import ZonaModel
+from app.models.historial_costos_producto import HistorialCostosProductoModel
 from app.controllers.receta_controller import RecetaController
 from typing import Dict, List
 
@@ -32,6 +33,7 @@ class RentabilidadController(BaseController):
         self.operacion_receta_rol_model = OperacionRecetaRolModel()
         self.rol_model = RoleModel()
         self.zona_model = ZonaModel()
+        self.historial_costos_model = HistorialCostosProductoModel()
         # Instanciamos RecetaController para reutilizar la lógica de costo de materia prima
         self.receta_controller = RecetaController()
 
@@ -49,6 +51,49 @@ class RentabilidadController(BaseController):
         is_completed = estado == 'COMPLETADO'
         
         return is_contado or is_completed
+
+    def _obtener_costo_historico(self, producto_id: int, fecha_pedido_iso: str) -> float:
+        """
+        Obtiene el costo total histórico de un producto para una fecha dada.
+        Intenta encontrar el registro más cercano a la fecha del pedido.
+        """
+        try:
+            # 1. Intentar buscar registros anteriores o iguales a la fecha (el precio vigente en ese momento)
+            # Asegurar formato ISO
+            if 'T' in fecha_pedido_iso:
+                 fecha_limite = fecha_pedido_iso
+            else:
+                 fecha_limite = f"{fecha_pedido_iso}T23:59:59"
+
+            historial_res = self.historial_costos_model.db.table('historial_costos_productos')\
+                .select('costo_total')\
+                .eq('producto_id', producto_id)\
+                .lte('fecha_registro', fecha_limite)\
+                .order('fecha_registro', desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if historial_res.data:
+                return float(historial_res.data[0]['costo_total'] or 0)
+            
+            # 2. Si no hay registros previos, buscar el PRIMER registro histórico disponible (puede ser posterior pero cercano)
+            # Esto ayuda si el historial se empezó a guardar después de los primeros pedidos
+            future_res = self.historial_costos_model.db.table('historial_costos_productos')\
+                .select('costo_total')\
+                .eq('producto_id', producto_id)\
+                .gt('fecha_registro', fecha_limite)\
+                .order('fecha_registro', desc=False)\
+                .limit(1)\
+                .execute()
+                
+            if future_res.data:
+                return float(future_res.data[0]['costo_total'] or 0)
+
+            return 0.0
+
+        except Exception as e:
+            logger.error(f"Error obteniendo costo histórico para prod {producto_id} fecha {fecha_pedido_iso}: {e}")
+            return 0.0
 
     def obtener_datos_matriz_rentabilidad(self, fecha_inicio: str = None, fecha_fin: str = None) -> tuple:
         """
@@ -153,6 +198,9 @@ class RentabilidadController(BaseController):
         
         total_proximo_a_facturar = 0.0 # New accumulator for Projected Revenue
         realized_order_ids = set() # Track IDs for shipping calculation
+        
+        # Track subtotal per order to calculate shipping gap
+        order_subtotals = {} 
 
         # Iterar sobre cada item vendido
         for item in items_filtrados:
@@ -165,18 +213,16 @@ class RentabilidadController(BaseController):
             cantidad = float(item.get('cantidad', 0))
             
             # --- PRECIO VENTA (Safe Access) ---
-            precio_unitario_real = item.get('precio_unitario')
-            if precio_unitario_real is None:
+            precio_unitario_real = float(item.get('precio_unitario') or 0)
+            # Si el precio es 0 (o None), usamos el precio actual del producto como fallback
+            if not precio_unitario_real:
                  precio_unitario_real = float(productos_info_actual[producto_id]['producto'].get('precio_unitario', 0) or 0)
-            else:
-                 precio_unitario_real = float(precio_unitario_real)
             
             # --- COSTO VARIABLE (Safe Access) ---
-            costo_unitario_real = item.get('costo_unitario')
-            if costo_unitario_real is None:
-                 costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
-            else:
-                 costo_unitario_real = float(costo_unitario_real)
+            # SIMULADOR: Usar siempre el costo actual calculado dinámicamente
+            # para proyectar rentabilidad actual sobre el volumen histórico
+            costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
+
 
             facturacion_item = cantidad * precio_unitario_real
             
@@ -193,7 +239,13 @@ class RentabilidadController(BaseController):
                 total_costo_variable_global += costo_item
                 total_volumen_ventas += cantidad
                 
-                realized_order_ids.add(item['pedido_id'])
+                pedido_id = item['pedido_id']
+                realized_order_ids.add(pedido_id)
+                
+                # Accumulate subtotal for shipping calculation
+                if pedido_id not in order_subtotals:
+                    order_subtotals[pedido_id] = 0.0
+                order_subtotals[pedido_id] += facturacion_item
             else:
                 # Include in Projected Revenue
                 total_proximo_a_facturar += facturacion_item
@@ -254,7 +306,26 @@ class RentabilidadController(BaseController):
                     total_costos_fijos_global = total_mensual * months_duration
              except Exception: pass
 
-        total_costos_envio_global = self._calcular_costos_envio(pedidos_data_for_shipping)
+        # Calcular Costos de Envío (Brecha entre Precio Orden y Suma Items)
+        total_costos_envio_global = 0.0
+        # Primero intentamos calcularlo como la diferencia (Gap)
+        try:
+            for p in pedidos_data_for_shipping:
+                pid = p.get('id')
+                precio_orden = float(p.get('precio_orden') or 0.0)
+                subtotal_items = float(order_subtotals.get(pid, 0.0))
+                
+                # Si el precio de la orden es mayor que la suma de sus items, la diferencia es el envío/recargo
+                if precio_orden > subtotal_items:
+                    diff = precio_orden - subtotal_items
+                    total_costos_envio_global += diff
+        except Exception as e:
+            logger.error(f"Error calculating shipping gap: {e}")
+        
+        # Si el método de brecha dio 0 (o muy bajo), intentamos el método de Zonas como fallback
+        if total_costos_envio_global < 1.0:
+             total_costos_envio_global = self._calcular_costos_envio(pedidos_data_for_shipping)
+
         margen_contribucion_global = total_facturacion_global - total_costo_variable_global
         rentabilidad_neta_global = margen_contribucion_global - total_costos_fijos_global - total_costos_envio_global
         rentabilidad_porcentual_global = (rentabilidad_neta_global / total_facturacion_global * 100) if total_facturacion_global > 0 else 0
@@ -372,6 +443,7 @@ class RentabilidadController(BaseController):
     def _calcular_costos_envio(self, pedidos_data: List[Dict]) -> float:
         """
         Calcula el costo total de envíos basado en las direcciones de entrega de los pedidos.
+        Optimizado para usar datos de dirección ya cargados si existen.
         """
         total_costo = 0.0
         if not pedidos_data:
@@ -381,30 +453,58 @@ class RentabilidadController(BaseController):
             zonas_res = self.zona_model.find_all()
             zonas = zonas_res.get('data', []) if zonas_res.get('success') else []
             
-            direccion_ids = [p['id_direccion_entrega'] for p in pedidos_data if p.get('id_direccion_entrega')]
+            # Recopilar IDs de direcciones faltantes (si el objeto 'direccion' no vino populado)
+            ids_to_fetch = []
+            for p in pedidos_data:
+                if p.get('id_direccion_entrega') and not p.get('direccion'):
+                    ids_to_fetch.append(p['id_direccion_entrega'])
             
-            if not direccion_ids:
-                return 0.0
-
-            direcciones_res = self.pedido_model.db.table('usuario_direccion').select('id, codigo_postal').in_('id', direccion_ids).execute()
-            direcciones_map = {d['id']: d.get('codigo_postal') for d in direcciones_res.data} if direcciones_res.data else {}
+            extra_dirs_map = {}
+            if ids_to_fetch:
+                try:
+                    direcciones_res = self.pedido_model.db.table('usuario_direccion').select('id, codigo_postal').in_('id', list(set(ids_to_fetch))).execute()
+                    extra_dirs_map = {d['id']: d for d in direcciones_res.data} if direcciones_res.data else {}
+                except Exception as e:
+                    logger.warning(f"Error fetching extra addresses: {e}")
 
             for pedido in pedidos_data:
-                dir_id = pedido.get('id_direccion_entrega')
-                if not dir_id:
-                    continue
+                # Intentar obtener CP del objeto anidado primero
+                cp_str = None
                 
-                cp_str = direcciones_map.get(dir_id)
+                direccion_obj = pedido.get('direccion')
+                if direccion_obj and isinstance(direccion_obj, dict):
+                    cp_str = direccion_obj.get('codigo_postal')
+                
+                # Si no, buscar en el mapa extra
+                if not cp_str:
+                    dir_id = pedido.get('id_direccion_entrega')
+                    if dir_id and dir_id in extra_dirs_map:
+                         cp_str = extra_dirs_map[dir_id].get('codigo_postal')
+                
                 if not cp_str:
                     continue
                 
                 try:
-                    cp = int(cp_str)
+                    # Limpiar CP de caracteres no numéricos para coincidir mejor
+                    import re
+                    cp_limpio = re.sub(r'\D', '', str(cp_str))
+                    if not cp_limpio:
+                        continue
+                        
+                    cp = int(cp_limpio)
                     precio_zona = 0.0
+                    
+                    found = False
                     for zona in zonas:
-                        if zona.get('codigo_postal_inicio') <= cp <= zona.get('codigo_postal_fin'):
+                        # Asegurar que los límites de zona sean enteros
+                        z_ini = int(zona.get('codigo_postal_inicio') or 0)
+                        z_fin = int(zona.get('codigo_postal_fin') or 99999)
+                        
+                        if z_ini <= cp <= z_fin:
                             precio_zona = float(zona.get('precio', 0))
+                            found = True
                             break
+                    
                     total_costo += precio_zona
                 except (ValueError, TypeError):
                     continue
@@ -438,7 +538,11 @@ class RentabilidadController(BaseController):
                 operaciones_resp = self.operacion_receta_model.find_by_receta_id(receta_id)
                 if operaciones_resp.get('success'):
                     for op in operaciones_resp.get('data', []):
-                        tiempo_minutos = float(op.get('tiempo_ejecucion_unitario') or 0)
+                        # --- AÑADIR TIEMPO DE PREPARACIÓN PARA IGUALAR LÓGICA DEL FORMULARIO ---
+                        t_prep = float(op.get('tiempo_preparacion') or 0)
+                        t_ejec = float(op.get('tiempo_ejecucion_unitario') or 0)
+                        
+                        tiempo_minutos = t_prep + t_ejec
                         tiempo_horas = tiempo_minutos / 60.0
                         
                         roles_op_resp = self.operacion_receta_rol_model.find_by_operacion_id(op['id'])
@@ -513,8 +617,12 @@ class RentabilidadController(BaseController):
                 cantidad = float(item.get('cantidad', 0))
                 
                 # Usar precio/costo histórico o fallback
-                precio = float(item.get('precio_unitario')) if item.get('precio_unitario') is not None else float(producto_data.get('precio_unitario', 0) or 0)
-                costo = float(item.get('costo_unitario')) if item.get('costo_unitario') is not None else costo_fallback
+                precio = float(item.get('precio_unitario') or 0)
+                if not precio:
+                    precio = float(producto_data.get('precio_unitario', 0) or 0)
+                
+                # SIMULADOR: Usar siempre el costo actual
+                costo = costo_fallback
 
                 margen_unitario = precio - costo
                 
@@ -657,13 +765,19 @@ class RentabilidadController(BaseController):
 
             # --- VALORES REALES vs FALLBACK (handled by .get() logic) ---
             cantidad = float(item.get('cantidad', 0))
-            precio_real = float(item.get('precio_unitario')) if item.get('precio_unitario') is not None else precio_actual_prod
-            costo_real = float(item.get('costo_unitario')) if item.get('costo_unitario') is not None else costo_fallback
+            
+            precio_real = float(item.get('precio_unitario') or 0)
+            if not precio_real:
+                precio_real = precio_actual_prod
+            
+            fecha = pedido.get('fecha_solicitud')
+            
+            # SIMULADOR: Usar siempre el costo actual
+            costo_real = costo_fallback
             
             subtotal = cantidad * precio_real
             ganancia = subtotal - (cantidad * costo_real)
             
-            fecha = pedido.get('fecha_solicitud')
             cliente_nombre = pedido.get('nombre_cliente', 'N/A')
             pedido_id = pedido.get('id')
             codigo_pedido = f"#{pedido_id}"

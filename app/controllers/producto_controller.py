@@ -15,6 +15,7 @@ from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from decimal import Decimal, InvalidOperation
 from app.models.operacion_receta_model import OperacionRecetaModel
+from app.models.historial_costos_producto import HistorialCostosProductoModel
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class ProductoController(BaseController):
         self.costo_fijo_controller = CostoFijoController()
         self.config_produccion_controller = ConfiguracionProduccionController()
         self.rol_controller = RolController()
+        self.historial_costos_model = HistorialCostosProductoModel()
 
     def _abrev(self, texto, length=4):
         """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
@@ -209,7 +211,7 @@ class ProductoController(BaseController):
 
             # 2. Iterar sobre el CONJUNTO único de productos afectados y actualizarlos solo una vez.
             for producto_id in productos_a_actualizar:
-                costo_update_result, status = self.actualizar_costo_producto(producto_id)
+                costo_update_result = self._recalcular_costos_producto(producto_id)
                 if costo_update_result.get('success'):
                     productos_actualizados.append(producto_id)
                 else:
@@ -227,6 +229,9 @@ class ProductoController(BaseController):
     def _recalcular_costos_producto(self, producto_id: int) -> Dict:
         """
         Orquestador central para calcular todos los costos de un producto y actualizar la DB.
+        NUEVA LÓGICA:
+        1. Mano de Obra: Suma de (Tiempo * Tarifa Rol * Porcentaje Participacion) para cada paso.
+        2. Costos Fijos: Suma de (Tiempo Paso * Tasa Hora Costo Fijo) por cada costo fijo asociado al paso.
         """
         try:
             # 1. Obtener datos base
@@ -242,52 +247,53 @@ class ProductoController(BaseController):
             costo_materia_prima_res = self.receta_controller.calcular_costo_total_receta(receta_id)
             costo_materia_prima = costo_materia_prima_res['data']['costo_total'] if costo_materia_prima_res.get('success') else 0
 
-            # 3. Calcular Costo de Mano de Obra basado en Operaciones
-            receta_detallada_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
-            operaciones = receta_detallada_res.get('data', {}).get('operaciones', [])
-            
+            # 3. Preparación de datos globales (Roles y Config Producción)
             roles_res, _ = self.rol_controller.get_all_roles()
             roles_data = roles_res.get('data', [])
             roles_costo_map = {rol['id']: Decimal(rol.get('costo_por_hora', 0) or 0) for rol in roles_data}
 
-            costo_mano_obra = Decimal(0)
-            total_minutos_mano_obra = Decimal(0)
-
-            for op in operaciones:
-                costo_por_minuto_operacion = sum(roles_costo_map.get(rol_id, 0) for rol_id in op.get('roles_asignados', [])) / Decimal(60)
-                
-                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
-                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
-                
-                costo_mano_obra += (tiempo_prep + tiempo_ejec) * costo_por_minuto_operacion
-                total_minutos_mano_obra += tiempo_prep + tiempo_ejec
-
-            total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
-
-            # 4. Calcular Costos Fijos
-            # Filtramos explícitamente por 'activo': True para asegurarnos de no incluir costos deshabilitados
-            costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
-            
-            # Verificación adicional en Python por si el filtro de base de datos no es estricto
-            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
-            costos_fijos_activos = [
-                c for c in costos_fijos_res.get('data', []) 
-                if c.get('activo') is True and c.get('tipo') == 'Directo'
-            ]
-            
-            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
-
             config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
             horas_prod_config = config_prod_res.get('data', [])
-            
-            # Asumiendo 4 semanas por mes
-            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4
-            
-            tasa_costo_fijo_por_hora = total_costos_fijos_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else 0
-            costo_fijos_aplicado = tasa_costo_fijo_por_hora * total_horas_mano_obra
+            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4 # 4 semanas/mes
+
+            # Obtener TODOS los costos fijos activos para mapearlos
+            all_costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
+            costos_fijos_map = {c['id']: Decimal(c.get('monto_mensual', 0)) for c in all_costos_fijos_res.get('data', [])}
+
+            # 4. Iterar sobre Operaciones para sumarizar MO y CF
+            receta_detallada_res, _ = self.receta_controller.obtener_receta_con_ingredientes(receta_id)
+            operaciones = receta_detallada_res.get('data', {}).get('operaciones', [])
+
+            costo_mano_obra_total = Decimal(0)
+            costo_fijos_total = Decimal(0)
+
+            for op in operaciones:
+                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
+                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                tiempo_total_paso_min = tiempo_prep + tiempo_ejec
+                tiempo_total_paso_horas = tiempo_total_paso_min / Decimal(60)
+
+                # --- Mano de Obra (Distribuida por Roles y Porcentaje) ---
+                # 'roles_detalle' viene de obtener_receta_con_ingredientes
+                for rol_info in op.get('roles_detalle', []):
+                    rol_id = rol_info.get('rol_id')
+                    porcentaje = Decimal(rol_info.get('porcentaje_participacion', 100)) / Decimal(100)
+                    costo_hora_rol = roles_costo_map.get(rol_id, Decimal(0))
+                    
+                    # Costo del Rol en este paso = Tiempo Paso * Costo Hora * % Participacion
+                    costo_mano_obra_total += tiempo_total_paso_horas * costo_hora_rol * porcentaje
+
+                # --- Costos Fijos (Específicos por Paso) ---
+                # 'costos_fijos_ids' viene de obtener_receta_con_ingredientes
+                for cf_id in op.get('costos_fijos_ids', []):
+                    monto_mensual = costos_fijos_map.get(cf_id, Decimal(0))
+                    # Tasa Hora del Costo Fijo Específico
+                    tasa_hora_cf = monto_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else 0
+                    
+                    costo_fijos_total += tiempo_total_paso_horas * tasa_hora_cf
 
             # 5. Calcular Totales y Precio Final
-            costo_total_produccion = Decimal(costo_materia_prima) + costo_mano_obra + costo_fijos_aplicado
+            costo_total_produccion = Decimal(costo_materia_prima) + costo_mano_obra_total + costo_fijos_total
             
             porcentaje_ganancia = Decimal(producto.get('porcentaje_ganancia', 0) or 0) / Decimal(100)
             precio_sin_iva = costo_total_produccion * (1 + porcentaje_ganancia)
@@ -297,12 +303,24 @@ class ProductoController(BaseController):
 
             # 6. Actualizar Producto en DB
             update_data = {
-                'costo_mano_obra': float(costo_mano_obra),
-                'costo_fijos': float(costo_fijos_aplicado),
+                'costo_mano_obra': float(costo_mano_obra_total),
+                'costo_fijos': float(costo_fijos_total),
                 'costo_total_produccion': float(costo_total_produccion),
                 'precio_unitario': float(precio_final)
             }
             self.model.update(producto_id, update_data, 'id')
+
+            # 7. Registrar Historial de Costos
+            historial_data = {
+                'producto_id': producto_id,
+                'costo_materia_prima': float(costo_materia_prima),
+                'costo_mano_obra': float(costo_mano_obra_total),
+                'costo_indirecto': float(costo_fijos_total),
+                'costo_total': float(costo_total_produccion),
+                'fecha_registro': datetime.now().isoformat()
+            }
+            self.historial_costos_model.create(historial_data)
+
             return {'success': True}
 
         except Exception as e:
@@ -450,44 +468,73 @@ class ProductoController(BaseController):
             roles_res, _ = self.rol_controller.get_all_roles()
             roles_costo_map = {rol['id']: Decimal(rol.get('costo_por_hora', 0) or 0) for rol in roles_res.get('data', [])}
             
-            costo_mano_obra = Decimal(0)
-            total_minutos_mano_obra = Decimal(0)
-
-            for op in operaciones_data:
-                costo_por_minuto_operacion = sum(roles_costo_map.get(rol_id, 0) for rol_id in op.get('roles', [])) / Decimal(60)
-                
-                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
-                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
-                
-                costo_mano_obra += (tiempo_prep + tiempo_ejec) * costo_por_minuto_operacion
-                total_minutos_mano_obra += tiempo_prep + tiempo_ejec
-            
-            total_horas_mano_obra = total_minutos_mano_obra / Decimal(60)
-
-            # Calcular Costos Fijos
-            # Filtramos explícitamente por 'activo': True para asegurarnos de no incluir costos deshabilitados
-            costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
-            
-            # Verificación adicional en Python por si el filtro de base de datos no es estricto
-            # Y filtramos SOLO los costos DIRECTOS para el cálculo de costo unitario, según requerimiento
-            costos_fijos_activos = [
-                c for c in costos_fijos_res.get('data', []) 
-                if c.get('activo') is True and c.get('tipo') == 'Directo'
-            ]
-            
-            total_costos_fijos_mensual = sum(Decimal(c.get('monto_mensual', 0)) for c in costos_fijos_activos)
-
+            # Obtener Configuración de Producción
             config_prod_res, _ = self.config_produccion_controller.get_configuracion_produccion()
             horas_prod_config = config_prod_res.get('data', [])
+            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4 # 4 semanas
+
+            # Obtener Costos Fijos Activos para mapeo
+            costos_fijos_res, _ = self.costo_fijo_controller.get_all_costos_fijos({'activo': True})
+            costos_fijos_map = {c['id']: {'monto': Decimal(c.get('monto_mensual', 0)), 'nombre': c.get('nombre')} 
+                                for c in costos_fijos_res.get('data', [])}
+
+            costo_mano_obra_total = Decimal(0)
+            costo_fijos_total = Decimal(0)
+            detalle_mano_obra = []
+            detalle_costos_fijos = []
+
+            for op in operaciones_data:
+                nombre_op = op.get('nombre_operacion', 'Paso')
+                tiempo_prep = Decimal(op.get('tiempo_preparacion', 0))
+                tiempo_ejec = Decimal(op.get('tiempo_ejecucion_unitario', 0))
+                tiempo_total_paso_min = tiempo_prep + tiempo_ejec
+                tiempo_total_paso_horas = tiempo_total_paso_min / Decimal(60)
+
+                # --- Mano de Obra ---
+                roles_en_paso = op.get('roles', []) # Lista de dicts: {'rol_id': x, 'porcentaje': y}
+                costo_paso_mo = Decimal(0)
+                
+                for rol_data in roles_en_paso:
+                    # Soporte para formato antiguo (solo ID) o nuevo (dict)
+                    if isinstance(rol_data, int):
+                        rol_id = rol_data
+                        porcentaje = Decimal(1)
+                    else:
+                        rol_id = int(rol_data.get('rol_id'))
+                        porcentaje = Decimal(rol_data.get('porcentaje_participacion', 100)) / Decimal(100)
+
+                    costo_hora = roles_costo_map.get(rol_id, Decimal(0))
+                    costo_paso_mo += tiempo_total_paso_horas * costo_hora * porcentaje
+
+                costo_mano_obra_total += costo_paso_mo
+                if costo_paso_mo > 0:
+                    detalle_mano_obra.append(f"{nombre_op}: ${float(costo_paso_mo):.2f}")
+
+                # --- Costos Fijos ---
+                costos_fijos_ids = op.get('costos_fijos', [])
+                costo_paso_cf = Decimal(0)
+                
+                for cf_id in costos_fijos_ids:
+                    cf_info = costos_fijos_map.get(int(cf_id))
+                    if cf_info:
+                        monto_mensual = cf_info['monto']
+                        tasa_hora = monto_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else 0
+                        costo_aplicado = tiempo_total_paso_horas * tasa_hora
+                        costo_paso_cf += costo_aplicado
+                
+                costo_fijos_total += costo_paso_cf
+                if costo_paso_cf > 0:
+                    detalle_costos_fijos.append(f"{nombre_op}: ${float(costo_paso_cf):.2f}")
+
             
-            total_horas_prod_mes = sum(Decimal(d.get('horas', 0)) for d in horas_prod_config) * 4
-            
-            tasa_costo_fijo_por_hora = total_costos_fijos_mensual / total_horas_prod_mes if total_horas_prod_mes > 0 else Decimal(0)
-            costo_fijos_aplicado = tasa_costo_fijo_por_hora * total_horas_mano_obra
+            str_detalle_mano_obra = " + ".join(detalle_mano_obra) if detalle_mano_obra else "Sin costos de mano de obra"
+            str_detalle_costos_fijos = " + ".join(detalle_costos_fijos) if detalle_costos_fijos else "Sin costos fijos aplicados"
 
             return self.success_response({
-                'costo_mano_obra': float(costo_mano_obra),
-                'costo_fijos_aplicado': float(costo_fijos_aplicado)
+                'costo_mano_obra': float(costo_mano_obra_total),
+                'costo_fijos_aplicado': float(costo_fijos_total),
+                'detalle_mano_obra': str_detalle_mano_obra,
+                'detalle_costos_fijos': str_detalle_costos_fijos
             })
 
         except Exception as e:

@@ -227,7 +227,7 @@
                 <h5 class="modal-title" id="modalNoAptoLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i> Gestión de Lote No Apto</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="formNoApto" method="POST">
+            <form id="formNoApto" method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token else '' }}">
                     <p>Lote: <strong id="loteNumeroNoApto"></strong></p>
@@ -273,9 +273,47 @@
                             </select>
                         </div>
 
+                        <!-- Nueva sección de advertencia para OPs afectadas -->
+                        <div id="advertenciaOPs" class="alert alert-warning mt-3" style="display: none;">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>¡Atención!</strong> Este lote está reservado en Órdenes de Producción activas.
+                            <div class="mt-2">
+                                <p class="small mb-2">¿Qué desea hacer con las OPs afectadas?</p>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="accion_ops" id="opReplanificar" value="replanificar" checked>
+                                    <label class="form-check-label" for="opReplanificar">
+                                        Volver a Pendiente (Recomendado)
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="accion_ops" id="opCancelar" value="cancelar">
+                                    <label class="form-check-label" for="opCancelar">
+                                        Cancelar Órdenes
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="accion_ops" id="opIgnorar" value="ignorar">
+                                    <label class="form-check-label" for="opIgnorar">
+                                        Ignorar (Solo retirar lote)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="mb-3">
                             <label for="comentarios_retiro" class="form-label">Comentarios Adicionales:</label>
                             <textarea class="form-control" id="comentarios_retiro" name="comentarios_retiro" rows="2"></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="foto_no_apto" class="form-label">Foto de Evidencia (Opcional):</label>
+                            <input class="form-control" type="file" id="foto_no_apto" name="foto_no_apto" accept=".jpg, .jpeg, .png">
+                            <div class="form-check mt-2" id="divUsarFotoCuarentena" style="display: none;">
+                                <input class="form-check-input" type="checkbox" id="usar_foto_cuarentena" name="usar_foto_cuarentena">
+                                <label class="form-check-label" for="usar_foto_cuarentena">
+                                    Usar foto de cuarentena existente
+                                </label>
+                            </div>
                         </div>
                     </div>
 
@@ -413,6 +451,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const selectMotivo = modalNoApto.querySelector('#motivo_desperdicio_id');
         const selectMotivoAlerta = modalNoApto.querySelector('#motivo_alerta');
         const inputDescAlerta = modalNoApto.querySelector('#descripcion_alerta');
+        const divUsarFotoCuarentena = modalNoApto.querySelector('#divUsarFotoCuarentena');
+        const advertenciaOPs = modalNoApto.querySelector('#advertenciaOPs');
+
+        let currentLoteId = null;
 
         function toggleSections() {
             if (radioRetirar.checked) {
@@ -423,6 +465,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 selectMotivo.required = true;
                 selectMotivoAlerta.required = false;
                 inputDescAlerta.required = false;
+
+                // Verificar OPs si estamos en retirar
+                if (currentLoteId) {
+                    verificarOPsAfectadas(currentLoteId);
+                }
+
             } else {
                 seccionRetirar.style.display = 'none';
                 seccionAlerta.style.display = 'block';
@@ -434,22 +482,43 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
+        async function verificarOPsAfectadas(loteId) {
+            advertenciaOPs.style.display = 'none';
+            try {
+                const response = await fetch(`/inventario/api/lote/${loteId}/ops_afectadas`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.data.length > 0) {
+                        advertenciaOPs.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error("Error verificando OPs:", error);
+            }
+        }
+
         radioRetirar.addEventListener('change', toggleSections);
         radioAlerta.addEventListener('change', toggleSections);
 
         modalNoApto.addEventListener('show.bs.modal', function (event) {
             var button = event.relatedTarget;
             var loteId = button.getAttribute('data-lote-id');
+            currentLoteId = loteId; // Guardar para uso en fetch
             var loteNumero = button.getAttribute('data-lote-numero');
             
             // Obtener cantidades del botón
             var cantidadTotal = parseFloat(button.getAttribute('data-lote-cantidad-total') || '0');
             var cantidadCuarentena = parseFloat(button.getAttribute('data-lote-cantidad-cuarentena') || '0');
             
+            // Determinar si mostrar la opción de "Usar foto de cuarentena"
+            if (cantidadCuarentena > 0) {
+                divUsarFotoCuarentena.style.display = 'block';
+            } else {
+                divUsarFotoCuarentena.style.display = 'none';
+            }
+
             // Calcular el stock máximo disponible para retirar (Total disponible + Cuarentena)
-            // Si el botón no trae data-lote-cantidad-total, usamos fallback (pero deberíamos actualizar el botón)
-            // Asumimos que el botón se actualizará para traer estos datos.
-            var maxStock = cantidadTotal > 0 ? cantidadTotal : cantidadCuarentena; // Simple fallback logic
+            var maxStock = cantidadTotal > 0 ? cantidadTotal : cantidadCuarentena; 
 
             var form = modalNoApto.querySelector('#formNoApto');
             var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/marcar-no-apto`;
@@ -464,7 +533,8 @@ document.addEventListener('DOMContentLoaded', function () {
             inputCantidad.value = maxStock;
 
             radioRetirar.checked = true;
-            toggleSections();
+            advertenciaOPs.style.display = 'none'; // Resetear
+            toggleSections(); // Esto disparará la verificación de OPs
         });
 
         var formNoApto = document.getElementById('formNoApto');

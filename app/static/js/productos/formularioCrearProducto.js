@@ -16,107 +16,238 @@ document.addEventListener('DOMContentLoaded', function () {
     const displayCostoFijos = document.getElementById('display_costo_fijos');
     const displayCostoTotalProduccion = document.getElementById('display_costo_total_produccion');
     const displayPrecioFinal = document.getElementById('display_precio_final');
+    
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
     const rolesData = typeof ROLES_DATA !== 'undefined' && Array.isArray(ROLES_DATA) ? ROLES_DATA : [];
+    const recetaOperaciones = typeof RECETA_OPERACIONES !== 'undefined' && Array.isArray(RECETA_OPERACIONES) ? RECETA_OPERACIONES : [];
+    const costosFijosData = typeof COSTOS_FIJOS_DATA !== 'undefined' && Array.isArray(COSTOS_FIJOS_DATA) ? COSTOS_FIJOS_DATA : [];
 
     // --- LÓGICA DE OPERACIONES (PASOS DE PRODUCCIÓN) ---
     const operacionesContainer = document.getElementById('operaciones-container');
-    const addOperacionBtn = document.getElementById('add-operacion-btn');
+    const FIXED_STEPS = ['Preparacion Previa', 'Coccion', 'Refrigeracion', 'Empaquetado'];
 
-    function updateSecuencias() {
-        const rows = operacionesContainer.querySelectorAll('.operacion-row');
-        rows.forEach((row, index) => {
+    function renderFixedSteps() {
+        operacionesContainer.innerHTML = ''; // Limpiar cualquier contenido previo
+
+        FIXED_STEPS.forEach((stepName, index) => {
             const secuencia = index + 1;
+            
+            // Buscar si ya existe este paso en los datos cargados (para edición)
+            const existingStep = recetaOperaciones.find(op => op.nombre_operacion === stepName);
+            
+            // Valores por defecto o cargados
+            const prepTime = existingStep ? existingStep.tiempo_preparacion : 0;
+            const execTime = existingStep ? existingStep.tiempo_ejecucion_unitario : 0;
+            const assignedRolesDetail = existingStep ? (existingStep.roles_detalle || []) : [];
+            const assignedCostosFijos = existingStep ? (existingStep.costos_fijos_ids || []) : [];
+
+            // Convert assigned roles to a map for easier lookup {rol_id: porcentaje}
+            const assignedRolesMap = {};
+            assignedRolesDetail.forEach(r => assignedRolesMap[r.rol_id] = r.porcentaje_participacion);
+
+            // Construir opciones del select de roles y el HTML para porcentajes
+            let roleOptions = '';
+            let roleInputsHtml = '';
+            
+            rolesData.forEach(rol => {
+                const isSelected = assignedRolesMap.hasOwnProperty(rol.id) ? 'selected' : '';
+                const percent = assignedRolesMap.hasOwnProperty(rol.id) ? assignedRolesMap[rol.id] : 100;
+                const displayStyle = isSelected ? 'block' : 'none';
+
+                roleOptions += `<option value="${rol.id}" ${isSelected}>${rol.nombre}</option>`;
+                
+                // Input para porcentaje de este rol
+                roleInputsHtml += `
+                    <div class="role-percent-input mb-1" id="role-percent-${secuencia}-${rol.id}" style="display: ${displayStyle};">
+                        <div class="d-flex justify-content-between">
+                            <label class="small text-muted">${rol.nombre} (%):</label>
+                        </div>
+                        <input type="number" class="form-control form-control-sm role-percent" 
+                               name="operacion_rol_pct_${secuencia}_${rol.id}" 
+                               data-secuencia="${secuencia}"
+                               value="${percent}" min="1" max="100" step="1">
+                    </div>
+                `;
+            });
+
+            // Construir opciones de Costos Fijos
+            let costosFijosOptions = '';
+            costosFijosData.forEach(cf => {
+                const isSelected = assignedCostosFijos.includes(cf.id) ? 'selected' : '';
+                // Updated: use nombre_costo based on listar.html and add Tipo
+                const displayName = cf.nombre_costo || cf.nombre || cf.concepto || cf.descripcion || `Costo Fijo #${cf.id}`;
+                const tipo = cf.tipo ? `(${cf.tipo})` : '';
+                costosFijosOptions += `<option value="${cf.id}" ${isSelected}>${displayName} ${tipo}</option>`;
+            });
+
+
+            const row = document.createElement('div');
+            row.className = 'list-group-item operacion-row mb-3';
             row.dataset.secuencia = secuencia;
-            row.querySelector('h6').firstChild.textContent = `Paso ${secuencia}: `;
-            row.querySelector('input[name="operacion_secuencia[]"]').value = secuencia;
-            // Actualizar el name del selector de roles para que sea único
-            const rolSelector = row.querySelector('select[name^="operacion_roles"]');
-            if (rolSelector) {
-                rolSelector.name = `operacion_roles_${secuencia}[]`;
-            }
+
+            row.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">Paso ${secuencia}: 
+                        <input type="text" class="form-control form-control-sm d-inline-block w-auto bg-light" 
+                               name="operacion_nombre[]" value="${stepName}" readonly>
+                    </h6>
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-3">
+                        <label class="form-label">Roles Asignados <span class="text-danger">*</span></label>
+                        <select class="form-select select2-roles" name="operacion_roles_${secuencia}[]" multiple required data-secuencia="${secuencia}">
+                            ${roleOptions}
+                        </select>
+                        <div class="mt-2 role-percentages-container">
+                            ${roleInputsHtml}
+                            <div class="small mt-1 fw-bold text-danger pct-warning" id="pct-warning-${secuencia}" style="display: none;">
+                                La suma debe ser 100%
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                         <label class="form-label">
+                            Costos Fijos Relacionados
+                            <i class="bi bi-info-circle text-muted ms-1" data-bs-toggle="tooltip" 
+                               title="Seleccione costos fijos (ej. Energía, Gas) que se consumen durante este paso. El sistema calculará el costo proporcional usando el tiempo de este paso y la tasa horaria del costo fijo.">
+                            </i>
+                         </label>
+                         <select class="form-select select2-cf" name="operacion_cf_${secuencia}[]" multiple>
+                            ${costosFijosOptions}
+                         </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">T. Preparación (min) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="operacion_prep[]" 
+                               value="${prepTime}" min="0.01" max="120" step="0.01" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">T. Ejecución (min/u) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="operacion_ejec[]" 
+                               value="${execTime}" min="0.01" max="120" step="0.01" required>
+                    </div>
+                    <div class="col-12 text-end">
+                         <input type="hidden" name="operacion_secuencia[]" value="${secuencia}">
+                    </div>
+                </div>
+            `;
+            operacionesContainer.appendChild(row);
         });
-    }
 
-    function addOperacion() {
-        const newIndex = operacionesContainer.children.length + 1;
-        const row = document.createElement('div');
-        row.className = 'list-group-item operacion-row mb-3';
-        row.dataset.secuencia = newIndex;
-
-        let options = '';
-        rolesData.forEach(rol => {
-            options += `<option value="${rol.id}">${rol.nombre}</option>`;
-        });
-
-        row.innerHTML = `
-            <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1">Paso ${newIndex}: <input type="text" class="form-control form-control-sm d-inline-block w-auto" name="operacion_nombre[]" placeholder="Nombre del Paso" required></h6>
-                <button type="button" class="btn-close" aria-label="Close"></button>
-            </div>
-            <div class="row g-2 mt-2">
-                <div class="col-md-3">
-                    <label class="form-label">Roles Asignados</label>
-                    <select class="form-select select2" name="operacion_roles_${newIndex}[]" multiple required>
-                        ${options}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">T. Preparación (min)</label>
-                    <input type="number" class="form-control" name="operacion_prep[]" value="0" min="0" step="1" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">T. Ejecución (min/u)</label>
-                    <input type="number" class="form-control" name="operacion_ejec[]" value="0" min="0" step="0.01" required>
-                </div>
-                <div class="col-md-3 align-self-end">
-                     <input type="hidden" name="operacion_secuencia[]" value="${newIndex}">
-                </div>
-            </div>
-        `;
-        operacionesContainer.appendChild(row);
-
-        // Inicializar Select2 en el nuevo elemento
-        const newSelect = row.querySelector('.select2');
+        // Inicializar Select2 y Tooltips para elementos dinámicos
         if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(newSelect).select2({
+            $(operacionesContainer).find('.select2-roles').select2({
                 placeholder: "Seleccionar roles...",
                 allowClear: true
+            }).on('change', function(e) {
+                // Mostrar/Ocultar inputs de porcentaje basado en la selección
+                const selectedValues = $(this).val() || [];
+                const secuencia = $(this).data('secuencia');
+                const container = $(this).closest('.col-md-3').find('.role-percentages-container');
+                
+                // Resetear todos los inputs a 0 o esconderlos
+                container.find('.role-percent-input').hide();
+                
+                // Lógica de auto-distribución
+                if (selectedValues.length > 0) {
+                    const share = Math.floor(100 / selectedValues.length);
+                    const remainder = 100 % selectedValues.length;
+                    
+                    selectedValues.forEach((rolId, index) => {
+                        const inputDiv = container.find(`#role-percent-${secuencia}-${rolId}`);
+                        inputDiv.show();
+                        
+                        // Solo auto-distribuir si estamos en una nueva selección o si se desea resetear
+                        // Aquí implementamos una distribución simple al cambiar la selección
+                        // Asignamos el remanente al primer elemento
+                        const value = share + (index === 0 ? remainder : 0);
+                        const input = inputDiv.find('input');
+                        
+                        // Opcional: Podríamos chequear si ya tenía valor manual, pero "auto-distribute" implica sobreescribir para facilitar.
+                        input.val(value);
+                    });
+                }
+                
+                validarPorcentajes(secuencia);
+                actualizarCostosDinamicos();
+            });
+
+            $(operacionesContainer).find('.select2-cf').select2({
+                placeholder: "Seleccionar costos fijos...",
+                allowClear: true
+            }).on('change', function() {
+                actualizarCostosDinamicos();
             });
         }
-    }
-    
-    function removeOperacion(button) {
-        button.closest('.operacion-row').remove();
-        updateSecuencias();
-        actualizarCostosDinamicos();
+
+        // Re-inicializar tooltips para los nuevos elementos
+        var newTooltipTriggerList = [].slice.call(operacionesContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        newTooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     }
 
-    addOperacionBtn.addEventListener('click', addOperacion);
+    function validarPorcentajes(secuencia) {
+        // Get the row for this sequence
+        const row = operacionesContainer.querySelector(`.operacion-row[data-secuencia="${secuencia}"]`);
+        if (!row) return true;
 
-    operacionesContainer.addEventListener('click', function(e) {
-        if (e.target.classList.contains('btn-close')) {
-            removeOperacion(e.target);
+        const rolesSelect = row.querySelector('.select2-roles');
+        let selectedRoles = [];
+        if (typeof $ !== 'undefined') {
+            selectedRoles = $(rolesSelect).val() || [];
+        } else {
+            selectedRoles = Array.from(rolesSelect.selectedOptions).map(o => o.value);
         }
-    });
 
-    // Listener para recalcular costos al cambiar tiempos o roles
-    operacionesContainer.addEventListener('change', function(e) {
-        if (e.target.matches('input[name="operacion_prep[]"]') || e.target.matches('input[name="operacion_ejec[]"]') || e.target.matches('select[name^="operacion_roles"]')) {
+        if (selectedRoles.length === 0) {
+            row.querySelector(`#pct-warning-${secuencia}`).style.display = 'none';
+            // Remove invalid class from all inputs in this row
+            row.querySelectorAll('.role-percent').forEach(input => input.classList.remove('is-invalid'));
+            return true;
+        }
+
+        let totalPct = 0;
+        selectedRoles.forEach(rolId => {
+            const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+            totalPct += parseFloat(input ? input.value : 0) || 0;
+        });
+
+        const warningEl = row.querySelector(`#pct-warning-${secuencia}`);
+        const isValid = Math.abs(totalPct - 100) <= 0.1;
+
+        if (!isValid) {
+            warningEl.textContent = `Suma actual: ${totalPct}% (Debe ser 100%)`;
+            warningEl.style.display = 'block';
+            // Add visual feedback to inputs
+            selectedRoles.forEach(rolId => {
+                const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+                if(input) input.classList.add('is-invalid');
+            });
+            return false;
+        } else {
+            warningEl.style.display = 'none';
+            // Remove visual feedback
+            selectedRoles.forEach(rolId => {
+                const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+                if(input) input.classList.remove('is-invalid');
+            });
+            return true;
+        }
+    }
+
+    // Listener para recalcular costos y validar porcentajes
+    operacionesContainer.addEventListener('input', function(e) {
+        if (e.target.classList.contains('role-percent')) {
+            const secuencia = e.target.dataset.secuencia;
+            validarPorcentajes(secuencia);
+            actualizarCostosDinamicos();
+        } else if (e.target.matches('input[name="operacion_prep[]"]') || 
+                   e.target.matches('input[name="operacion_ejec[]"]')) {
             actualizarCostosDinamicos();
         }
     });
-
-    // Inicializar Select2 en los elementos existentes al cargar la página
-    document.querySelectorAll('.operacion-row .select2').forEach(select => {
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(select).select2({
-                placeholder: "Seleccionar roles...",
-                allowClear: true
-            });
-        }
-    });
-
+    
     // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
     const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
     const searchFilterInput = document.getElementById('insumo-search-filter');
@@ -210,16 +341,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function limpiarFormatoDinero(valorConFormato) {
         if (!valorConFormato) return 0;
         let valorStr = valorConFormato.toString();
-
-        // Comprueba si el string contiene una coma para decidir el tipo de parseo.
         if (valorStr.includes(',')) {
-            // Asume formato de moneda local (ej: '$ 1.234,56')
-            // Elimina el símbolo de peso, los separadores de miles (punto) y reemplaza la coma decimal por un punto.
             const cleanString = valorStr.replace(/[$.]/g, '').replace(/[^\d,]/g, '').replace(',', '.');
             return parseFloat(cleanString) || 0;
         } else {
-            // Asume formato de número estándar (ej: '1234.56')
-            // Simplemente elimina cualquier caracter que no sea un dígito o un punto.
             const cleanString = valorStr.replace(/[^\d.]/g, '');
             return parseFloat(cleanString) || 0;
         }
@@ -241,13 +366,32 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function calcularTotales() {
         let costoMateriaPrima = 0;
+        let detalleMateriaPrima = [];
+
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
             const precio = limpiarFormatoDinero(row.querySelector('.precio_unitario').value);
             const cantidad = parseFloat(row.querySelector('.cantidad').value) || 0;
             const subtotal = cantidad * precio;
+            
+            const insumoSelector = row.querySelector('.insumo-selector');
+            const insumoNombre = insumoSelector.options[insumoSelector.selectedIndex]?.text || 'Insumo';
+            
             row.querySelector('.subtotal-item').value = formatearADinero(subtotal);
             costoMateriaPrima += subtotal;
+
+            if (subtotal > 0) {
+                detalleMateriaPrima.push(`${insumoNombre} (${formatearADinero(subtotal)})`);
+            }
         });
+
+        // Actualizar Tooltip de Materia Prima
+        const tooltipMateriaPrima = document.getElementById('tooltip-materia-prima');
+        if (tooltipMateriaPrima) {
+            const nuevoTitulo = detalleMateriaPrima.length > 0 ? detalleMateriaPrima.join(' + ') : 'Sin insumos seleccionados';
+            tooltipMateriaPrima.setAttribute('title', nuevoTitulo);
+            bootstrap.Tooltip.getInstance(tooltipMateriaPrima)?.dispose();
+            new bootstrap.Tooltip(tooltipMateriaPrima);
+        }
 
         const costoManoObra = limpiarFormatoDinero(displayCostoManoObra.textContent);
         const costoFijos = limpiarFormatoDinero(displayCostoFijos.textContent);
@@ -267,22 +411,38 @@ document.addEventListener('DOMContentLoaded', function () {
     async function actualizarCostosDinamicos() {
         const operaciones = [];
         operacionesContainer.querySelectorAll('.operacion-row').forEach(row => {
+            const nombre = row.querySelector('input[name="operacion_nombre[]"]').value;
             const prep = row.querySelector('input[name="operacion_prep[]"]').value;
             const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
-            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
-            const roles = Array.from(rolesSelect.selectedOptions).map(opt => opt.value);
+            const secuencia = row.querySelector('input[name="operacion_secuencia[]"]').value;
             
-            if (prep && ejec && roles.length > 0) {
+            // Recopilar roles y porcentajes
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const rolesIds = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
+            const rolesData = [];
+            
+            rolesIds.forEach(id => {
+                const pctInput = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${id}"]`);
+                const pct = pctInput ? parseFloat(pctInput.value) || 100 : 100;
+                rolesData.push({ rol_id: id, porcentaje_participacion: pct });
+            });
+
+            // Recopilar Costos Fijos
+            const cfSelect = row.querySelector('select[name^="operacion_cf"]');
+            const cfIds = Array.from(cfSelect.selectedOptions).map(opt => parseInt(opt.value));
+
+            if (prep && ejec && rolesData.length > 0) {
                 operaciones.push({
+                    nombre_operacion: nombre,
                     tiempo_preparacion: parseFloat(prep),
                     tiempo_ejecucion_unitario: parseFloat(ejec),
-                    roles: roles.map(Number) // Asegurarse de que los IDs de rol sean números
+                    roles: rolesData,
+                    costos_fijos: cfIds
                 });
             }
         });
 
         try {
-            // Se asume que la API se actualizará para aceptar esta nueva estructura
             const response = await fetch('/api/catalogo/recalcular-costos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -294,6 +454,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (result.success) {
                     displayCostoManoObra.textContent = formatearADinero(result.data.costo_mano_obra);
                     displayCostoFijos.textContent = formatearADinero(result.data.costo_fijos_aplicado);
+                    
+                    const tooltipManoObra = document.getElementById('tooltip-mano-obra');
+                    if (tooltipManoObra) {
+                        tooltipManoObra.setAttribute('title', result.data.detalle_mano_obra || 'Calculando...');
+                        bootstrap.Tooltip.getInstance(tooltipManoObra)?.dispose();
+                        new bootstrap.Tooltip(tooltipManoObra);
+                    }
+
+                    const tooltipCostosFijos = document.getElementById('tooltip-costos-fijos');
+                    if (tooltipCostosFijos) {
+                        tooltipCostosFijos.setAttribute('title', result.data.detalle_costos_fijos || 'Calculando...');
+                        bootstrap.Tooltip.getInstance(tooltipCostosFijos)?.dispose();
+                        new bootstrap.Tooltip(tooltipCostosFijos);
+                    }
+
                     calcularTotales();
                 }
             }
@@ -332,6 +507,8 @@ document.addEventListener('DOMContentLoaded', function () {
         subtotalInput.value = formatearADinero(limpiarFormatoDinero(subtotalInput.value));
     });
 
+    // Renderizar los pasos fijos al inicio
+    renderFixedSteps();
     calcularTotales();
     actualizarCostosDinamicos();
 
@@ -339,14 +516,57 @@ document.addEventListener('DOMContentLoaded', function () {
         event.preventDefault();
         event.stopPropagation();
         
-        if (!formulario.checkValidity()) {
+        let isValid = true;
+        let firstInvalidInput = null;
+
+        // Validaciones personalizadas
+        operacionesContainer.querySelectorAll('.operacion-row').forEach((row, index) => {
+            const prepInput = row.querySelector('input[name="operacion_prep[]"]');
+            const ejecInput = row.querySelector('input[name="operacion_ejec[]"]');
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const roles = Array.from(rolesSelect.selectedOptions);
+
+            const prepVal = parseFloat(prepInput.value);
+            const ejecVal = parseFloat(ejecInput.value);
+
+            if (roles.length === 0) {
+                isValid = false;
+            }
+
+            if (isNaN(prepVal) || prepVal <= 0 || prepVal > 120) {
+                prepInput.classList.add('is-invalid');
+                isValid = false;
+                if (!firstInvalidInput) firstInvalidInput = prepInput;
+            } else {
+                prepInput.classList.remove('is-invalid');
+            }
+
+            if (isNaN(ejecVal) || ejecVal <= 0 || ejecVal > 120) {
+                ejecInput.classList.add('is-invalid');
+                isValid = false;
+                if (!firstInvalidInput) firstInvalidInput = ejecInput;
+            } else {
+                ejecInput.classList.remove('is-invalid');
+            }
+        });
+
+        if (!formulario.checkValidity() || !isValid) {
             formulario.classList.add('was-validated');
+            if (firstInvalidInput) firstInvalidInput.focus();
+            if (!isValid) {
+                showNotificationModal('Error de Validación', 'Verifique los pasos de producción:\n- Todos los tiempos deben ser mayores a 0 y hasta 120 minutos.\n- Debe asignar al menos un rol por paso.', 'warning');
+            }
             return;
         }
 
-        const formData = new FormData(formulario);
-        const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked')?.value || '2';
+        // Show loading state
+        const submitButton = formulario.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
 
+        const formData = new FormData(formulario);
+        
         const productoData = {
             codigo: formData.get('codigo'),
             nombre: formData.get('nombre'),
@@ -366,18 +586,31 @@ document.addEventListener('DOMContentLoaded', function () {
             const prep = row.querySelector('input[name="operacion_prep[]"]').value;
             const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
             const secuencia = row.querySelector('input[name="operacion_secuencia[]"]').value;
-            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
-            const roles = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
             
-            if (nombre && prep && ejec && secuencia && roles.length > 0) {
-                productoData.operaciones.push({
-                    nombre_operacion: nombre,
-                    tiempo_preparacion: parseFloat(prep),
-                    tiempo_ejecucion_unitario: parseFloat(ejec),
-                    secuencia: parseInt(secuencia),
-                    roles: roles
+            // Roles y Porcentajes
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const rolesIds = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
+            const rolesData = [];
+            rolesIds.forEach(id => {
+                const pctInput = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${id}"]`);
+                rolesData.push({
+                    rol_id: id,
+                    porcentaje_participacion: pctInput ? parseFloat(pctInput.value) : 100
                 });
-            }
+            });
+
+            // Costos Fijos
+            const cfSelect = row.querySelector('select[name^="operacion_cf"]');
+            const cfIds = Array.from(cfSelect.selectedOptions).map(opt => parseInt(opt.value));
+            
+            productoData.operaciones.push({
+                nombre_operacion: nombre,
+                tiempo_preparacion: parseFloat(prep),
+                tiempo_ejecucion_unitario: parseFloat(ejec),
+                secuencia: parseInt(secuencia),
+                roles: rolesData,
+                costos_fijos: cfIds
+            });
         });
 
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
@@ -391,6 +624,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (productoData.receta_items.length === 0) {
             showNotificationModal('Receta Vacía', 'Debe especificar al menos un ingrediente para la receta.', 'warning');
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
             return;
         }
 
@@ -409,10 +644,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotificationModal('Operación exitosa', isEditBoolean ? 'Producto actualizado.' : 'Producto creado.', 'success');
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
                 const errorMessage = result.error ? (typeof result.error === 'object' ? Object.values(result.error).flat().join('\n') : result.error) : 'Ocurrió un error.';
                 showNotificationModal('Error al guardar', errorMessage, 'error');
             }
         } catch (error) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
             showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
         }
     });

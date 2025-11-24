@@ -12,9 +12,13 @@ from app.utils.estados import OV_FILTROS_UI, OV_MAP_STRING_TO_INT
 import re
 from datetime import datetime, date, timedelta
 import base64
-from xhtml2pdf import pisa
 from flask import Response
 from io import BytesIO
+
+try:
+    from xhtml2pdf import pisa
+except ImportError:
+    pisa = None
 
 orden_venta_bp = Blueprint('orden_venta', __name__, url_prefix='/orden-venta')
 
@@ -576,6 +580,10 @@ def generar_documento_pdf(tipo, id_documento):
     Genera un PDF para un documento específico (nota de crédito o pago).
     """
     try:
+        if pisa is None:
+             flash('Librería de generación de PDF no disponible.', 'error')
+             return redirect(request.referrer or url_for('orden_venta.listar'))
+
         pedido_controller = PedidoController()
         pago_controller = PagoController()
         

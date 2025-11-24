@@ -5,6 +5,7 @@ from app.models.insumo import InsumoModel
 from app.models.receta_ingrediente import RecetaIngredienteModel
 from app.models.operacion_receta_model import OperacionRecetaModel
 from app.models.operacion_receta_rol_model import OperacionRecetaRolModel
+from app.models.operacion_receta_costo_fijo_model import OperacionRecetaCostoFijoModel
 from app.schemas.receta_schema import RecetaSchema
 from typing import Dict, List, Optional
 from marshmallow import ValidationError
@@ -25,6 +26,7 @@ class RecetaController(BaseController):
         self.receta_ingrediente_model = RecetaIngredienteModel()
         self.operacion_receta_model = OperacionRecetaModel()
         self.operacion_receta_rol_model = OperacionRecetaRolModel()
+        self.operacion_receta_costo_fijo_model = OperacionRecetaCostoFijoModel()
         # Importar RolController aquí para evitar importación circular a nivel de módulo
         from app.controllers.rol_controller import RolController
         self.rol_controller = RolController()
@@ -110,14 +112,22 @@ class RecetaController(BaseController):
             operaciones_result = self.operacion_receta_model.find_by_receta_id(receta_id)
             operaciones = operaciones_result.get('data', [])
 
-            # Para cada operación, obtener los roles asignados
+            # Para cada operación, obtener los roles asignados y los costos fijos
             for op in operaciones:
                 roles_result = self.operacion_receta_rol_model.find_by_operacion_id(op['id'])
                 if roles_result.get('success'):
-                    # Guardamos solo los IDs de los roles asignados para el pre-marcado en el form
-                    op['roles_asignados'] = [rol['rol_id'] for rol in roles_result.get('data', [])]
+                    # Guardamos la estructura completa incluyendo porcentaje
+                    op['roles_detalle'] = roles_result.get('data', [])
+                    op['roles_asignados'] = [rol['rol_id'] for rol in op['roles_detalle']]
                 else:
+                    op['roles_detalle'] = []
                     op['roles_asignados'] = []
+                
+                costos_fijos_result = self.operacion_receta_costo_fijo_model.find_by_operacion_id(op['id'])
+                if costos_fijos_result.get('success'):
+                    op['costos_fijos_ids'] = [cf['costo_fijo_id'] for cf in costos_fijos_result.get('data', [])]
+                else:
+                    op['costos_fijos_ids'] = []
             
             receta['operaciones'] = operaciones
 
@@ -281,20 +291,23 @@ class RecetaController(BaseController):
 
     def gestionar_operaciones_para_receta(self, receta_id: int, operaciones_data: List[Dict]) -> Dict:
         """
-        Gestiona los pasos de producción (operaciones) y sus roles asignados para una receta.
-        Utiliza una estrategia de "borrar y volver a crear" para asegurar consistencia.
+        Gestiona los pasos de producción (operaciones), sus roles asignados y costos fijos.
+        Utiliza una estrategia de "borrar y volver a crear".
         """
         try:
             # 1. Obtener y eliminar todas las operaciones antiguas de la receta
             operaciones_antiguas = self.operacion_receta_model.find_by_receta_id(receta_id).get('data', [])
             for op in operaciones_antiguas:
-                # Al eliminar la operación, los roles se borran en cascada por la FK
+                # Al eliminar la operación, los roles y costos fijos se borran en cascada por la FK (si está configurada)
+                # Si no, las borramos manualmente por seguridad
+                self.operacion_receta_rol_model.delete_by_operacion_id(op['id'])
+                self.operacion_receta_costo_fijo_model.delete_by_operacion_id(op['id'])
                 self.operacion_receta_model.delete(op['id'])
 
             if not operaciones_data:
                 return {'success': True, 'message': 'No se proporcionaron operaciones.'}
 
-            # 2. Crear las nuevas operaciones y sus roles
+            # 2. Crear las nuevas operaciones y sus detalles
             for op_data in operaciones_data:
                 # Crear la operación principal
                 datos_operacion = {
@@ -306,16 +319,24 @@ class RecetaController(BaseController):
                 }
                 op_result = self.operacion_receta_model.create(datos_operacion)
                 if not op_result.get('success'):
-                    # Si falla la creación de una operación, detenemos el proceso
                     raise Exception(f"No se pudo crear la operación '{op_data['nombre_operacion']}': {op_result.get('error')}")
 
-                # Asignar roles a la nueva operación
                 nueva_op_id = op_result['data']['id']
-                rol_ids = op_data.get('roles', [])
-                if rol_ids:
-                    roles_result = self.operacion_receta_rol_model.bulk_create_for_operacion(nueva_op_id, rol_ids)
+                
+                # Asignar roles (con porcentajes)
+                # op_data['roles'] debe ser una lista de dicts: [{'rol_id': 1, 'porcentaje_participacion': 50}, ...]
+                roles_data = op_data.get('roles', [])
+                if roles_data:
+                    roles_result = self.operacion_receta_rol_model.bulk_create_for_operacion(nueva_op_id, roles_data)
                     if not roles_result.get('success'):
                          raise Exception(f"No se pudieron asignar roles a la operación '{op_data['nombre_operacion']}': {roles_result.get('error')}")
+
+                # Asignar Costos Fijos
+                costos_fijos_ids = op_data.get('costos_fijos', [])
+                if costos_fijos_ids:
+                    cf_result = self.operacion_receta_costo_fijo_model.bulk_create_for_operacion(nueva_op_id, costos_fijos_ids)
+                    if not cf_result.get('success'):
+                         raise Exception(f"No se pudieron asignar costos fijos a la operación '{op_data['nombre_operacion']}': {cf_result.get('error')}")
 
             return {'success': True}
 
