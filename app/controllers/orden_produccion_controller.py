@@ -315,6 +315,18 @@ class OrdenProduccionController(BaseController):
                 logger.info(msg)
                 return {'success': True, 'message': msg}
 
+            # --- NUEVA LÓGICA: Verificar si YA está cubierta (por la OC que acaba de llegar) ---
+            esta_cubierta = self.inventario_controller.verificar_cobertura_reservas_op(orden)
+
+            if esta_cubierta:
+                logger.info(f"OP {orden_produccion_id} tiene cobertura completa de reservas. Avanzando estado.")
+
+                nuevo_estado = 'LISTA PARA PRODUCIR'
+                self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+
+                return {'success': True, 'message': f"OP {orden_produccion_id} actualizada a {nuevo_estado} (Insumos ya reservados)."}
+            # -----------------------------------------------------------------------------------
+
             # 2. Verificar stock (la lógica de OCs ya se cumplió si llegamos aquí)
             logger.debug(f"Verificando stock para OP {orden_produccion_id}...")
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
@@ -494,12 +506,15 @@ class OrdenProduccionController(BaseController):
         logger.info(summary_message)
         return {'success': True, 'message': summary_message, 'data': {'actualizadas': ordenes_actualizadas_count, 'errores': len(errores)}}
 
-    # --- WRAPPER PARA DELEGAR VERIFICACIÓN DE STOCK (FIX de AttributeError) ---
     def verificar_stock_para_op(self, orden_simulada: Dict) -> Dict:
-        """
-        Wrapper que delega la verificación de stock de insumos al controlador de inventario.
-        """
-        return self.inventario_controller.verificar_stock_para_op(orden_simulada)
+        # Extraer fecha para pasarla explícitamente
+        fecha_uso = None
+        f_str = orden_simulada.get('fecha_inicio_planificada') or orden_simulada.get('fecha_meta')
+        if f_str:
+             try: fecha_uso = date.fromisoformat(f_str.split('T')[0])
+             except: pass
+
+        return self.inventario_controller.verificar_stock_para_op(orden_simulada, fecha_requisito=fecha_uso)
 
     # --- MÉTODO CORREGIDO ---
     def aprobar_orden_con_oc(self, orden_id: int, usuario_id: int, oc_id: int) -> tuple:
@@ -537,7 +552,27 @@ class OrdenProduccionController(BaseController):
             if error_response:
                 return error_response
 
-            verificacion_result = self.inventario_controller.verificar_stock_para_op(orden_produccion)
+            # --- INICIO CORRECCIÓN ---
+            # Obtener la fecha real de uso (Planificada > Meta > Hoy)
+            fecha_uso_str = orden_produccion.get('fecha_inicio_planificada') or orden_produccion.get('fecha_meta')
+            fecha_uso = date.today()
+
+            if fecha_uso_str:
+                try:
+                    fecha_limpia = fecha_uso_str.split('T')[0]
+                    fecha_uso = date.fromisoformat(fecha_limpia)
+                except ValueError:
+                    pass
+
+            logger.info(f"Verificando stock para OP {orden_id} con fecha de requisito: {fecha_uso}")
+
+            # Pasar la fecha explícitamente
+            verificacion_result = self.inventario_controller.verificar_stock_para_op(
+                orden_produccion,
+                fecha_requisito=fecha_uso # <--- CLAVE
+            )
+            # --- FIN CORRECCIÓN ---
+
             if not verificacion_result.get('success'):
                 return self.error_response(f"Error al verificar stock: {verificacion_result.get('error')}", 500)
 
@@ -2421,17 +2456,17 @@ class OrdenProduccionController(BaseController):
 
             # Reutilicemos lógica de crear_orden adaptada o hagamoslo manual para ser precisos.
             # Manual es más seguro para copiar exacto.
-            
+
             # Validar datos sin campos de solo lectura
             validated_data = self.schema.load(nueva_op_data)
-            
+
             # Agregar campos generados por el sistema post-validación
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"
             # usuario_creador_id está marcado como dump_only en el schema, por lo que load() lo ignora.
             # Lo agregamos manualmente aquí.
             if 'usuario_creador_id' in nueva_op_data:
                 validated_data['usuario_creador_id'] = nueva_op_data['usuario_creador_id']
-            
+
             create_res = self.model.create(validated_data)
             if not create_res.get('success'):
                 return {'success': False, 'error': f"Error al crear la nueva OP: {create_res.get('error')}"}
