@@ -14,6 +14,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.controllers.orden_compra_controller import OrdenCompraController
 from app.controllers.usuario_controller import UsuarioController
 from app.controllers.receta_controller import RecetaController
+from app.controllers.costo_fijo_controller import CostoFijoController
 from app.utils.decorators import permission_required, permission_any_of
 from app.utils.validators import validate_uuid
 from marshmallow import ValidationError
@@ -32,6 +33,7 @@ receta_controller = RecetaController()
 ordenes_compra_controller = OrdenCompraController()
 inventario_controller = InventarioController()
 usuario_controller = UsuarioController()
+costo_fijo_controller = CostoFijoController()
 
 
 @productos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
@@ -53,7 +55,11 @@ def crear_producto():
         insumos_resp, _ = insumo_controller.obtener_insumos()
         insumos = insumos_resp.get("data", [])
         roles = usuario_controller.obtener_todos_los_roles()
-        return render_template("productos/formulario.html", producto=producto, receta_items=[], is_edit=False, insumos=insumos, roles=roles, receta=None)
+        
+        costos_fijos_res, _ = costo_fijo_controller.get_all_costos_fijos({'activo': True})
+        costos_fijos = costos_fijos_res.get('data', [])
+
+        return render_template("productos/formulario.html", producto=producto, receta_items=[], is_edit=False, insumos=insumos, roles=roles, costos_fijos=costos_fijos, receta=None)
     except Exception as e:
         logger.error(f"Error inesperado en crear_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
@@ -114,9 +120,24 @@ def obtener_producto_por_id(id_producto):
                 
                 # Enriquecer los nombres de los roles en las operaciones
                 roles_map = {rol['id']: rol['nombre'] for rol in usuario_controller.obtener_todos_los_roles()}
+                
+                # Obtener mapa de Costos Fijos para mostrar nombres
+                # Updated: use 'nombre_costo' based on findings
+                costos_fijos_res, _ = costo_fijo_controller.get_all_costos_fijos({'activo': True})
+                costos_fijos_map = {c['id']: c.get('nombre_costo', c.get('nombre', 'Desconocido')) for c in costos_fijos_res.get('data', [])}
+
                 if 'operaciones' in receta_completa:
                     for op in receta_completa['operaciones']:
-                        op['roles_nombres'] = [roles_map.get(rol_id, 'N/A') for rol_id in op.get('roles_asignados', [])]
+                        # Formatear Roles: "Nombre (50%)"
+                        op['roles_display'] = []
+                        for rol_info in op.get('roles_detalle', []):
+                            nombre = roles_map.get(rol_info['rol_id'], 'N/A')
+                            pct = rol_info.get('porcentaje_participacion', 100)
+                            op['roles_display'].append(f"{nombre} ({pct}%)")
+                        
+                        # Formatear Costos Fijos
+                        op['costos_fijos_nombres'] = [costos_fijos_map.get(cf_id, 'Desconocido') for cf_id in op.get('costos_fijos_ids', [])]
+
         
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
@@ -145,62 +166,21 @@ def obtener_producto_por_id(id_producto):
 def actualizar_producto(id_producto):
     try:
         if request.method == "PUT" or request.method == "POST":
+            # Nota: El frontend ahora envía JSON complejo, así que request.form se usará menos.
+            # Mantengo el soporte JSON principalmente.
             datos_payload = None
             if request.is_json:
                 datos_payload = request.get_json()
             else:
-                form_data = request.form
-                datos_payload = {
-                    "nombre": form_data.get('nombre'),
-                    "categoria": form_data.get('categoria'),
-                    "unidad_medida": form_data.get('unidad_medida'),
-                    "descripcion": form_data.get('descripcion'),
-                    "porcentaje_ganancia": form_data.get('porcentaje_ganancia'),
-                    "iva": 'iva' in form_data,
-                    "vida_util_dias": form_data.get('vida_util_dias'),
-                    "receta_items": [],
-                    "operaciones": []
-                }
-                # Procesar ingredientes
-                insumo_ids = form_data.getlist('insumo_id[]')
-                cantidades = form_data.getlist('cantidad[]')
-                for i in range(len(insumo_ids)):
-                    datos_payload['receta_items'].append({
-                        'id_insumo': insumo_ids[i],
-                        'cantidad': cantidades[i]
-                    })
-                
-                # Procesar operaciones
-                nombres_op = form_data.getlist('operacion_nombre[]')
-                preps_op = form_data.getlist('operacion_prep[]')
-                ejecs_op = form_data.getlist('operacion_ejec[]')
-                secuencias_op = form_data.getlist('operacion_secuencia[]')
-
-                for i in range(len(nombres_op)):
-                    secuencia = secuencias_op[i]
-                    roles = form_data.getlist(f'operacion_roles_{secuencia}[]')
-                    datos_payload['operaciones'].append({
-                        'nombre_operacion': nombres_op[i],
-                        'tiempo_preparacion': preps_op[i],
-                        'tiempo_ejecucion_unitario': ejecs_op[i],
-                        'secuencia': secuencia,
-                        'roles': roles
-                    })
+                # Fallback para form-data tradicional (aunque con la nueva estructura de roles anidados es difícil que funcione bien sin JS)
+                # Se recomienda encarecidamente usar el envío JSON del frontend actualizado.
+                return jsonify({"success": False, "error": "Este formulario requiere envío JSON."}), 400
 
             if not datos_payload:
                 return jsonify({"success": False, "error": "No se recibieron datos válidos"}), 400
             
             response, status = producto_controller.actualizar_producto(id_producto, datos_payload)
             
-            # Si el request no fue JSON (envío tradicional), redirigir en lugar de devolver JSON
-            if not request.is_json:
-                if status == 200:
-                    flash('Producto actualizado correctamente.', 'success')
-                    return redirect(url_for('productos.obtener_productos'))
-                else:
-                    flash(response.get('error', 'Ocurrió un error al actualizar.'), 'error')
-                    return redirect(url_for('productos.actualizar_producto', id_producto=id_producto))
-
             return jsonify(response), status
 
         response_producto = producto_controller.obtener_producto_por_id(id_producto)
@@ -216,6 +196,9 @@ def actualizar_producto(id_producto):
         response_insumos, status_insumo = insumo_controller.obtener_insumos()
         insumos = response_insumos.get("data", [])
         roles = usuario_controller.obtener_todos_los_roles()
+        
+        costos_fijos_res, _ = costo_fijo_controller.get_all_costos_fijos({'activo': True})
+        costos_fijos = costos_fijos_res.get('data', [])
 
         receta_items = []
         receta_completa = None
@@ -238,7 +221,7 @@ def actualizar_producto(id_producto):
                 item['precio_unitario'] = 0
                 item['unidad_medida'] = ''
         
-        return render_template("productos/formulario.html", producto=producto, insumos=insumos, is_edit=True, receta_items=receta_items, roles=roles, receta=receta_completa)
+        return render_template("productos/formulario.html", producto=producto, insumos=insumos, is_edit=True, receta_items=receta_items, roles=roles, costos_fijos=costos_fijos, receta=receta_completa)
     except Exception as e:
         logger.error(f"Error inesperado en actualizar_producto: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500

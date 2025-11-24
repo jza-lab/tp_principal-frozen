@@ -16,9 +16,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const displayCostoFijos = document.getElementById('display_costo_fijos');
     const displayCostoTotalProduccion = document.getElementById('display_costo_total_produccion');
     const displayPrecioFinal = document.getElementById('display_precio_final');
+    
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
     const rolesData = typeof ROLES_DATA !== 'undefined' && Array.isArray(ROLES_DATA) ? ROLES_DATA : [];
     const recetaOperaciones = typeof RECETA_OPERACIONES !== 'undefined' && Array.isArray(RECETA_OPERACIONES) ? RECETA_OPERACIONES : [];
+    const costosFijosData = typeof COSTOS_FIJOS_DATA !== 'undefined' && Array.isArray(COSTOS_FIJOS_DATA) ? COSTOS_FIJOS_DATA : [];
 
     // --- LÓGICA DE OPERACIONES (PASOS DE PRODUCCIÓN) ---
     const operacionesContainer = document.getElementById('operaciones-container');
@@ -31,20 +33,53 @@ document.addEventListener('DOMContentLoaded', function () {
             const secuencia = index + 1;
             
             // Buscar si ya existe este paso en los datos cargados (para edición)
-            // La comparación es por nombre exacto
             const existingStep = recetaOperaciones.find(op => op.nombre_operacion === stepName);
             
             // Valores por defecto o cargados
             const prepTime = existingStep ? existingStep.tiempo_preparacion : 0;
             const execTime = existingStep ? existingStep.tiempo_ejecucion_unitario : 0;
-            const assignedRoles = existingStep ? existingStep.roles_asignados : [];
+            const assignedRolesDetail = existingStep ? (existingStep.roles_detalle || []) : [];
+            const assignedCostosFijos = existingStep ? (existingStep.costos_fijos_ids || []) : [];
 
-            // Construir opciones del select de roles
-            let options = '';
+            // Convert assigned roles to a map for easier lookup {rol_id: porcentaje}
+            const assignedRolesMap = {};
+            assignedRolesDetail.forEach(r => assignedRolesMap[r.rol_id] = r.porcentaje_participacion);
+
+            // Construir opciones del select de roles y el HTML para porcentajes
+            let roleOptions = '';
+            let roleInputsHtml = '';
+            
             rolesData.forEach(rol => {
-                const isSelected = assignedRoles.includes(rol.id) ? 'selected' : '';
-                options += `<option value="${rol.id}" ${isSelected}>${rol.nombre}</option>`;
+                const isSelected = assignedRolesMap.hasOwnProperty(rol.id) ? 'selected' : '';
+                const percent = assignedRolesMap.hasOwnProperty(rol.id) ? assignedRolesMap[rol.id] : 100;
+                const displayStyle = isSelected ? 'block' : 'none';
+
+                roleOptions += `<option value="${rol.id}" ${isSelected}>${rol.nombre}</option>`;
+                
+                // Input para porcentaje de este rol
+                roleInputsHtml += `
+                    <div class="role-percent-input mb-1" id="role-percent-${secuencia}-${rol.id}" style="display: ${displayStyle};">
+                        <div class="d-flex justify-content-between">
+                            <label class="small text-muted">${rol.nombre} (%):</label>
+                        </div>
+                        <input type="number" class="form-control form-control-sm role-percent" 
+                               name="operacion_rol_pct_${secuencia}_${rol.id}" 
+                               data-secuencia="${secuencia}"
+                               value="${percent}" min="1" max="100" step="1">
+                    </div>
+                `;
             });
+
+            // Construir opciones de Costos Fijos
+            let costosFijosOptions = '';
+            costosFijosData.forEach(cf => {
+                const isSelected = assignedCostosFijos.includes(cf.id) ? 'selected' : '';
+                // Updated: use nombre_costo based on listar.html and add Tipo
+                const displayName = cf.nombre_costo || cf.nombre || cf.concepto || cf.descripcion || `Costo Fijo #${cf.id}`;
+                const tipo = cf.tipo ? `(${cf.tipo})` : '';
+                costosFijosOptions += `<option value="${cf.id}" ${isSelected}>${displayName} ${tipo}</option>`;
+            });
+
 
             const row = document.createElement('div');
             row.className = 'list-group-item operacion-row mb-3';
@@ -56,14 +91,30 @@ document.addEventListener('DOMContentLoaded', function () {
                         <input type="text" class="form-control form-control-sm d-inline-block w-auto bg-light" 
                                name="operacion_nombre[]" value="${stepName}" readonly>
                     </h6>
-                    <!-- No hay botón de cerrar porque los pasos son fijos -->
                 </div>
                 <div class="row g-2 mt-2">
                     <div class="col-md-3">
                         <label class="form-label">Roles Asignados <span class="text-danger">*</span></label>
-                        <select class="form-select select2" name="operacion_roles_${secuencia}[]" multiple required>
-                            ${options}
+                        <select class="form-select select2-roles" name="operacion_roles_${secuencia}[]" multiple required data-secuencia="${secuencia}">
+                            ${roleOptions}
                         </select>
+                        <div class="mt-2 role-percentages-container">
+                            ${roleInputsHtml}
+                            <div class="small mt-1 fw-bold text-danger pct-warning" id="pct-warning-${secuencia}" style="display: none;">
+                                La suma debe ser 100%
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                         <label class="form-label">
+                            Costos Fijos Relacionados
+                            <i class="bi bi-info-circle text-muted ms-1" data-bs-toggle="tooltip" 
+                               title="Seleccione costos fijos (ej. Energía, Gas) que se consumen durante este paso. El sistema calculará el costo proporcional usando el tiempo de este paso y la tasa horaria del costo fijo.">
+                            </i>
+                         </label>
+                         <select class="form-select select2-cf" name="operacion_cf_${secuencia}[]" multiple>
+                            ${costosFijosOptions}
+                         </select>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label">T. Preparación (min) <span class="text-danger">*</span></label>
@@ -75,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <input type="number" class="form-control" name="operacion_ejec[]" 
                                value="${execTime}" min="0.01" max="120" step="0.01" required>
                     </div>
-                    <div class="col-md-3 align-self-end">
+                    <div class="col-12 text-end">
                          <input type="hidden" name="operacion_secuencia[]" value="${secuencia}">
                     </div>
                 </div>
@@ -83,29 +134,120 @@ document.addEventListener('DOMContentLoaded', function () {
             operacionesContainer.appendChild(row);
         });
 
-        // Inicializar Select2 en los nuevos elementos
+        // Inicializar Select2 y Tooltips para elementos dinámicos
         if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(operacionesContainer).find('.select2').select2({
+            $(operacionesContainer).find('.select2-roles').select2({
                 placeholder: "Seleccionar roles...",
                 allowClear: true
+            }).on('change', function(e) {
+                // Mostrar/Ocultar inputs de porcentaje basado en la selección
+                const selectedValues = $(this).val() || [];
+                const secuencia = $(this).data('secuencia');
+                const container = $(this).closest('.col-md-3').find('.role-percentages-container');
+                
+                // Resetear todos los inputs a 0 o esconderlos
+                container.find('.role-percent-input').hide();
+                
+                // Lógica de auto-distribución
+                if (selectedValues.length > 0) {
+                    const share = Math.floor(100 / selectedValues.length);
+                    const remainder = 100 % selectedValues.length;
+                    
+                    selectedValues.forEach((rolId, index) => {
+                        const inputDiv = container.find(`#role-percent-${secuencia}-${rolId}`);
+                        inputDiv.show();
+                        
+                        // Solo auto-distribuir si estamos en una nueva selección o si se desea resetear
+                        // Aquí implementamos una distribución simple al cambiar la selección
+                        // Asignamos el remanente al primer elemento
+                        const value = share + (index === 0 ? remainder : 0);
+                        const input = inputDiv.find('input');
+                        
+                        // Opcional: Podríamos chequear si ya tenía valor manual, pero "auto-distribute" implica sobreescribir para facilitar.
+                        input.val(value);
+                    });
+                }
+                
+                validarPorcentajes(secuencia);
+                actualizarCostosDinamicos();
             });
+
+            $(operacionesContainer).find('.select2-cf').select2({
+                placeholder: "Seleccionar costos fijos...",
+                allowClear: true
+            }).on('change', function() {
+                actualizarCostosDinamicos();
+            });
+        }
+
+        // Re-inicializar tooltips para los nuevos elementos
+        var newTooltipTriggerList = [].slice.call(operacionesContainer.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        newTooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    }
+
+    function validarPorcentajes(secuencia) {
+        // Get the row for this sequence
+        const row = operacionesContainer.querySelector(`.operacion-row[data-secuencia="${secuencia}"]`);
+        if (!row) return true;
+
+        const rolesSelect = row.querySelector('.select2-roles');
+        let selectedRoles = [];
+        if (typeof $ !== 'undefined') {
+            selectedRoles = $(rolesSelect).val() || [];
+        } else {
+            selectedRoles = Array.from(rolesSelect.selectedOptions).map(o => o.value);
+        }
+
+        if (selectedRoles.length === 0) {
+            row.querySelector(`#pct-warning-${secuencia}`).style.display = 'none';
+            // Remove invalid class from all inputs in this row
+            row.querySelectorAll('.role-percent').forEach(input => input.classList.remove('is-invalid'));
+            return true;
+        }
+
+        let totalPct = 0;
+        selectedRoles.forEach(rolId => {
+            const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+            totalPct += parseFloat(input ? input.value : 0) || 0;
+        });
+
+        const warningEl = row.querySelector(`#pct-warning-${secuencia}`);
+        const isValid = Math.abs(totalPct - 100) <= 0.1;
+
+        if (!isValid) {
+            warningEl.textContent = `Suma actual: ${totalPct}% (Debe ser 100%)`;
+            warningEl.style.display = 'block';
+            // Add visual feedback to inputs
+            selectedRoles.forEach(rolId => {
+                const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+                if(input) input.classList.add('is-invalid');
+            });
+            return false;
+        } else {
+            warningEl.style.display = 'none';
+            // Remove visual feedback
+            selectedRoles.forEach(rolId => {
+                const input = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${rolId}"]`);
+                if(input) input.classList.remove('is-invalid');
+            });
+            return true;
         }
     }
 
-    // Listener para recalcular costos al cambiar tiempos o roles
-    operacionesContainer.addEventListener('change', function(e) {
-        if (e.target.matches('input[name="operacion_prep[]"]') || e.target.matches('input[name="operacion_ejec[]"]') || e.target.matches('select[name^="operacion_roles"]')) {
+    // Listener para recalcular costos y validar porcentajes
+    operacionesContainer.addEventListener('input', function(e) {
+        if (e.target.classList.contains('role-percent')) {
+            const secuencia = e.target.dataset.secuencia;
+            validarPorcentajes(secuencia);
+            actualizarCostosDinamicos();
+        } else if (e.target.matches('input[name="operacion_prep[]"]') || 
+                   e.target.matches('input[name="operacion_ejec[]"]')) {
             actualizarCostosDinamicos();
         }
     });
     
-    // Necesario para capturar cambios en select2 (jQuery events)
-    if (typeof $ !== 'undefined') {
-        $(operacionesContainer).on('change', '.select2', function() {
-            actualizarCostosDinamicos();
-        });
-    }
-
     // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
     const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
     const searchFilterInput = document.getElementById('insumo-search-filter');
@@ -199,16 +341,10 @@ document.addEventListener('DOMContentLoaded', function () {
     function limpiarFormatoDinero(valorConFormato) {
         if (!valorConFormato) return 0;
         let valorStr = valorConFormato.toString();
-
-        // Comprueba si el string contiene una coma para decidir el tipo de parseo.
         if (valorStr.includes(',')) {
-            // Asume formato de moneda local (ej: '$ 1.234,56')
-            // Elimina el símbolo de peso, los separadores de miles (punto) y reemplaza la coma decimal por un punto.
             const cleanString = valorStr.replace(/[$.]/g, '').replace(/[^\d,]/g, '').replace(',', '.');
             return parseFloat(cleanString) || 0;
         } else {
-            // Asume formato de número estándar (ej: '1234.56')
-            // Simplemente elimina cualquier caracter que no sea un dígito o un punto.
             const cleanString = valorStr.replace(/[^\d.]/g, '');
             return parseFloat(cleanString) || 0;
         }
@@ -253,8 +389,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (tooltipMateriaPrima) {
             const nuevoTitulo = detalleMateriaPrima.length > 0 ? detalleMateriaPrima.join(' + ') : 'Sin insumos seleccionados';
             tooltipMateriaPrima.setAttribute('title', nuevoTitulo);
-            
-            // Re-inicializar el tooltip para que Bootstrap tome el cambio
             bootstrap.Tooltip.getInstance(tooltipMateriaPrima)?.dispose();
             new bootstrap.Tooltip(tooltipMateriaPrima);
         }
@@ -277,24 +411,38 @@ document.addEventListener('DOMContentLoaded', function () {
     async function actualizarCostosDinamicos() {
         const operaciones = [];
         operacionesContainer.querySelectorAll('.operacion-row').forEach(row => {
-            const nombre = row.querySelector('input[name="operacion_nombre[]"]').value; // Agregamos nombre para la API
+            const nombre = row.querySelector('input[name="operacion_nombre[]"]').value;
             const prep = row.querySelector('input[name="operacion_prep[]"]').value;
             const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
-            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
-            const roles = Array.from(rolesSelect.selectedOptions).map(opt => opt.value);
+            const secuencia = row.querySelector('input[name="operacion_secuencia[]"]').value;
             
-            if (prep && ejec && roles.length > 0) {
+            // Recopilar roles y porcentajes
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const rolesIds = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
+            const rolesData = [];
+            
+            rolesIds.forEach(id => {
+                const pctInput = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${id}"]`);
+                const pct = pctInput ? parseFloat(pctInput.value) || 100 : 100;
+                rolesData.push({ rol_id: id, porcentaje_participacion: pct });
+            });
+
+            // Recopilar Costos Fijos
+            const cfSelect = row.querySelector('select[name^="operacion_cf"]');
+            const cfIds = Array.from(cfSelect.selectedOptions).map(opt => parseInt(opt.value));
+
+            if (prep && ejec && rolesData.length > 0) {
                 operaciones.push({
-                    nombre_operacion: nombre, // Enviamos el nombre
+                    nombre_operacion: nombre,
                     tiempo_preparacion: parseFloat(prep),
                     tiempo_ejecucion_unitario: parseFloat(ejec),
-                    roles: roles.map(Number) // Asegurarse de que los IDs de rol sean números
+                    roles: rolesData,
+                    costos_fijos: cfIds
                 });
             }
         });
 
         try {
-            // Se asume que la API se actualizará para aceptar esta nueva estructura
             const response = await fetch('/api/catalogo/recalcular-costos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -307,7 +455,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     displayCostoManoObra.textContent = formatearADinero(result.data.costo_mano_obra);
                     displayCostoFijos.textContent = formatearADinero(result.data.costo_fijos_aplicado);
                     
-                    // Actualizar Tooltips de Mano de Obra y Costos Fijos
                     const tooltipManoObra = document.getElementById('tooltip-mano-obra');
                     if (tooltipManoObra) {
                         tooltipManoObra.setAttribute('title', result.data.detalle_mano_obra || 'Calculando...');
@@ -372,9 +519,8 @@ document.addEventListener('DOMContentLoaded', function () {
         let isValid = true;
         let firstInvalidInput = null;
 
-        // Validaciones personalizadas para los pasos de producción
+        // Validaciones personalizadas
         operacionesContainer.querySelectorAll('.operacion-row').forEach((row, index) => {
-            const stepName = FIXED_STEPS[index];
             const prepInput = row.querySelector('input[name="operacion_prep[]"]');
             const ejecInput = row.querySelector('input[name="operacion_ejec[]"]');
             const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
@@ -383,15 +529,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const prepVal = parseFloat(prepInput.value);
             const ejecVal = parseFloat(ejecInput.value);
 
-            // Validar roles (Al menos uno)
             if (roles.length === 0) {
                 isValid = false;
-                // No hay feedback visual nativo fácil para select2, así que usamos un borde o mensaje custom si se desea.
-                // Aquí solo invalidamos y mostramos alerta genérica abajo.
-                // Opcional: Agregar clase is-invalid al container de select2 si es posible
             }
 
-            // Validar Tiempos (0 < t <= 120)
             if (isNaN(prepVal) || prepVal <= 0 || prepVal > 120) {
                 prepInput.classList.add('is-invalid');
                 isValid = false;
@@ -418,6 +559,12 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Show loading state
+        const submitButton = formulario.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.innerHTML;
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+
         const formData = new FormData(formulario);
         
         const productoData = {
@@ -439,16 +586,30 @@ document.addEventListener('DOMContentLoaded', function () {
             const prep = row.querySelector('input[name="operacion_prep[]"]').value;
             const ejec = row.querySelector('input[name="operacion_ejec[]"]').value;
             const secuencia = row.querySelector('input[name="operacion_secuencia[]"]').value;
-            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
-            const roles = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
             
-            // Aquí ya confiamos en que los datos son válidos porque pasaron la validación previa
+            // Roles y Porcentajes
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const rolesIds = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
+            const rolesData = [];
+            rolesIds.forEach(id => {
+                const pctInput = row.querySelector(`input[name="operacion_rol_pct_${secuencia}_${id}"]`);
+                rolesData.push({
+                    rol_id: id,
+                    porcentaje_participacion: pctInput ? parseFloat(pctInput.value) : 100
+                });
+            });
+
+            // Costos Fijos
+            const cfSelect = row.querySelector('select[name^="operacion_cf"]');
+            const cfIds = Array.from(cfSelect.selectedOptions).map(opt => parseInt(opt.value));
+            
             productoData.operaciones.push({
                 nombre_operacion: nombre,
                 tiempo_preparacion: parseFloat(prep),
                 tiempo_ejecucion_unitario: parseFloat(ejec),
                 secuencia: parseInt(secuencia),
-                roles: roles
+                roles: rolesData,
+                costos_fijos: cfIds
             });
         });
 
@@ -463,6 +624,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (productoData.receta_items.length === 0) {
             showNotificationModal('Receta Vacía', 'Debe especificar al menos un ingrediente para la receta.', 'warning');
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
             return;
         }
 
@@ -481,10 +644,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 showNotificationModal('Operación exitosa', isEditBoolean ? 'Producto actualizado.' : 'Producto creado.', 'success');
                 setTimeout(() => { window.location.href = productoS_LISTA_URL; }, 1500);
             } else {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
                 const errorMessage = result.error ? (typeof result.error === 'object' ? Object.values(result.error).flat().join('\n') : result.error) : 'Ocurrió un error.';
                 showNotificationModal('Error al guardar', errorMessage, 'error');
             }
         } catch (error) {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
             showNotificationModal('Error de Conexión', 'No se pudo conectar con el servidor.', 'error');
         }
     });

@@ -383,6 +383,7 @@ Agregar nuevo producto al catálogo
     const INSUMOS_DATA = JSON.parse('{{ insumos | tojson | safe | replace("\n", "") | replace("\r", "") }}');
     const ROLES_DATA = JSON.parse('{{ roles | tojson | safe | replace("\n", "") | replace("\r", "") }}');
     const RECETA_OPERACIONES = JSON.parse('{{ (receta.operaciones if receta and receta.operaciones else []) | tojson | safe | replace("\n", "") | replace("\r", "") }}');
+    const COSTOS_FIJOS_DATA = JSON.parse('{{ (costos_fijos if costos_fijos else []) | tojson | safe | replace("\n", "") | replace("\r", "") }}');
 
     document.addEventListener('DOMContentLoaded', function () {
         const unidadMedidaSelect = document.getElementById('unidad_medida');
