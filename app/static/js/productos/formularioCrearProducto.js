@@ -18,87 +18,79 @@ document.addEventListener('DOMContentLoaded', function () {
     const displayPrecioFinal = document.getElementById('display_precio_final');
     const insumosData = typeof INSUMOS_DATA !== 'undefined' && Array.isArray(INSUMOS_DATA) ? INSUMOS_DATA : [];
     const rolesData = typeof ROLES_DATA !== 'undefined' && Array.isArray(ROLES_DATA) ? ROLES_DATA : [];
+    const recetaOperaciones = typeof RECETA_OPERACIONES !== 'undefined' && Array.isArray(RECETA_OPERACIONES) ? RECETA_OPERACIONES : [];
 
     // --- LÓGICA DE OPERACIONES (PASOS DE PRODUCCIÓN) ---
     const operacionesContainer = document.getElementById('operaciones-container');
-    const addOperacionBtn = document.getElementById('add-operacion-btn');
+    const FIXED_STEPS = ['Preparacion Previa', 'Coccion', 'Refrigeracion', 'Empaquetado'];
 
-    function updateSecuencias() {
-        const rows = operacionesContainer.querySelectorAll('.operacion-row');
-        rows.forEach((row, index) => {
+    function renderFixedSteps() {
+        operacionesContainer.innerHTML = ''; // Limpiar cualquier contenido previo
+
+        FIXED_STEPS.forEach((stepName, index) => {
             const secuencia = index + 1;
+            
+            // Buscar si ya existe este paso en los datos cargados (para edición)
+            // La comparación es por nombre exacto
+            const existingStep = recetaOperaciones.find(op => op.nombre_operacion === stepName);
+            
+            // Valores por defecto o cargados
+            const prepTime = existingStep ? existingStep.tiempo_preparacion : 0;
+            const execTime = existingStep ? existingStep.tiempo_ejecucion_unitario : 0;
+            const assignedRoles = existingStep ? existingStep.roles_asignados : [];
+
+            // Construir opciones del select de roles
+            let options = '';
+            rolesData.forEach(rol => {
+                const isSelected = assignedRoles.includes(rol.id) ? 'selected' : '';
+                options += `<option value="${rol.id}" ${isSelected}>${rol.nombre}</option>`;
+            });
+
+            const row = document.createElement('div');
+            row.className = 'list-group-item operacion-row mb-3';
             row.dataset.secuencia = secuencia;
-            row.querySelector('h6').firstChild.textContent = `Paso ${secuencia}: `;
-            row.querySelector('input[name="operacion_secuencia[]"]').value = secuencia;
-            // Actualizar el name del selector de roles para que sea único
-            const rolSelector = row.querySelector('select[name^="operacion_roles"]');
-            if (rolSelector) {
-                rolSelector.name = `operacion_roles_${secuencia}[]`;
-            }
+
+            row.innerHTML = `
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">Paso ${secuencia}: 
+                        <input type="text" class="form-control form-control-sm d-inline-block w-auto bg-light" 
+                               name="operacion_nombre[]" value="${stepName}" readonly>
+                    </h6>
+                    <!-- No hay botón de cerrar porque los pasos son fijos -->
+                </div>
+                <div class="row g-2 mt-2">
+                    <div class="col-md-3">
+                        <label class="form-label">Roles Asignados <span class="text-danger">*</span></label>
+                        <select class="form-select select2" name="operacion_roles_${secuencia}[]" multiple required>
+                            ${options}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">T. Preparación (min) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="operacion_prep[]" 
+                               value="${prepTime}" min="0.01" max="120" step="0.01" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">T. Ejecución (min/u) <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" name="operacion_ejec[]" 
+                               value="${execTime}" min="0.01" max="120" step="0.01" required>
+                    </div>
+                    <div class="col-md-3 align-self-end">
+                         <input type="hidden" name="operacion_secuencia[]" value="${secuencia}">
+                    </div>
+                </div>
+            `;
+            operacionesContainer.appendChild(row);
         });
-    }
 
-    function addOperacion() {
-        const newIndex = operacionesContainer.children.length + 1;
-        const row = document.createElement('div');
-        row.className = 'list-group-item operacion-row mb-3';
-        row.dataset.secuencia = newIndex;
-
-        let options = '';
-        rolesData.forEach(rol => {
-            options += `<option value="${rol.id}">${rol.nombre}</option>`;
-        });
-
-        row.innerHTML = `
-            <div class="d-flex w-100 justify-content-between">
-                <h6 class="mb-1">Paso ${newIndex}: <input type="text" class="form-control form-control-sm d-inline-block w-auto" name="operacion_nombre[]" placeholder="Nombre del Paso" required></h6>
-                <button type="button" class="btn-close" aria-label="Close"></button>
-            </div>
-            <div class="row g-2 mt-2">
-                <div class="col-md-3">
-                    <label class="form-label">Roles Asignados</label>
-                    <select class="form-select select2" name="operacion_roles_${newIndex}[]" multiple required>
-                        ${options}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">T. Preparación (min)</label>
-                    <input type="number" class="form-control" name="operacion_prep[]" value="0" min="0" step="1" required>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">T. Ejecución (min/u)</label>
-                    <input type="number" class="form-control" name="operacion_ejec[]" value="0" min="0" step="0.01" required>
-                </div>
-                <div class="col-md-3 align-self-end">
-                     <input type="hidden" name="operacion_secuencia[]" value="${newIndex}">
-                </div>
-            </div>
-        `;
-        operacionesContainer.appendChild(row);
-
-        // Inicializar Select2 en el nuevo elemento
-        const newSelect = row.querySelector('.select2');
+        // Inicializar Select2 en los nuevos elementos
         if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(newSelect).select2({
+            $(operacionesContainer).find('.select2').select2({
                 placeholder: "Seleccionar roles...",
                 allowClear: true
             });
         }
     }
-    
-    function removeOperacion(button) {
-        button.closest('.operacion-row').remove();
-        updateSecuencias();
-        actualizarCostosDinamicos();
-    }
-
-    addOperacionBtn.addEventListener('click', addOperacion);
-
-    operacionesContainer.addEventListener('click', function(e) {
-        if (e.target.classList.contains('btn-close')) {
-            removeOperacion(e.target);
-        }
-    });
 
     // Listener para recalcular costos al cambiar tiempos o roles
     operacionesContainer.addEventListener('change', function(e) {
@@ -106,16 +98,13 @@ document.addEventListener('DOMContentLoaded', function () {
             actualizarCostosDinamicos();
         }
     });
-
-    // Inicializar Select2 en los elementos existentes al cargar la página
-    document.querySelectorAll('.operacion-row .select2').forEach(select => {
-        if (typeof $ !== 'undefined' && $.fn.select2) {
-            $(select).select2({
-                placeholder: "Seleccionar roles...",
-                allowClear: true
-            });
-        }
-    });
+    
+    // Necesario para capturar cambios en select2 (jQuery events)
+    if (typeof $ !== 'undefined') {
+        $(operacionesContainer).on('change', '.select2', function() {
+            actualizarCostosDinamicos();
+        });
+    }
 
     // --- LÓGICA DEL MODAL DE BÚSQUEDA ---
     const insumoSearchModal = new bootstrap.Modal(document.getElementById('insumoSearchModal'));
@@ -332,6 +321,8 @@ document.addEventListener('DOMContentLoaded', function () {
         subtotalInput.value = formatearADinero(limpiarFormatoDinero(subtotalInput.value));
     });
 
+    // Renderizar los pasos fijos al inicio
+    renderFixedSteps();
     calcularTotales();
     actualizarCostosDinamicos();
 
@@ -339,14 +330,57 @@ document.addEventListener('DOMContentLoaded', function () {
         event.preventDefault();
         event.stopPropagation();
         
-        if (!formulario.checkValidity()) {
+        let isValid = true;
+        let firstInvalidInput = null;
+
+        // Validaciones personalizadas para los pasos de producción
+        operacionesContainer.querySelectorAll('.operacion-row').forEach((row, index) => {
+            const stepName = FIXED_STEPS[index];
+            const prepInput = row.querySelector('input[name="operacion_prep[]"]');
+            const ejecInput = row.querySelector('input[name="operacion_ejec[]"]');
+            const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
+            const roles = Array.from(rolesSelect.selectedOptions);
+
+            const prepVal = parseFloat(prepInput.value);
+            const ejecVal = parseFloat(ejecInput.value);
+
+            // Validar roles (Al menos uno)
+            if (roles.length === 0) {
+                isValid = false;
+                // No hay feedback visual nativo fácil para select2, así que usamos un borde o mensaje custom si se desea.
+                // Aquí solo invalidamos y mostramos alerta genérica abajo.
+                // Opcional: Agregar clase is-invalid al container de select2 si es posible
+            }
+
+            // Validar Tiempos (0 < t <= 120)
+            if (isNaN(prepVal) || prepVal <= 0 || prepVal > 120) {
+                prepInput.classList.add('is-invalid');
+                isValid = false;
+                if (!firstInvalidInput) firstInvalidInput = prepInput;
+            } else {
+                prepInput.classList.remove('is-invalid');
+            }
+
+            if (isNaN(ejecVal) || ejecVal <= 0 || ejecVal > 120) {
+                ejecInput.classList.add('is-invalid');
+                isValid = false;
+                if (!firstInvalidInput) firstInvalidInput = ejecInput;
+            } else {
+                ejecInput.classList.remove('is-invalid');
+            }
+        });
+
+        if (!formulario.checkValidity() || !isValid) {
             formulario.classList.add('was-validated');
+            if (firstInvalidInput) firstInvalidInput.focus();
+            if (!isValid) {
+                showNotificationModal('Error de Validación', 'Verifique los pasos de producción:\n- Todos los tiempos deben ser mayores a 0 y hasta 120 minutos.\n- Debe asignar al menos un rol por paso.', 'warning');
+            }
             return;
         }
 
         const formData = new FormData(formulario);
-        const lineaCompatibleStr = document.querySelector('input[name="linea_compatible"]:checked')?.value || '2';
-
+        
         const productoData = {
             codigo: formData.get('codigo'),
             nombre: formData.get('nombre'),
@@ -369,15 +403,14 @@ document.addEventListener('DOMContentLoaded', function () {
             const rolesSelect = row.querySelector('select[name^="operacion_roles"]');
             const roles = Array.from(rolesSelect.selectedOptions).map(opt => parseInt(opt.value));
             
-            if (nombre && prep && ejec && secuencia && roles.length > 0) {
-                productoData.operaciones.push({
-                    nombre_operacion: nombre,
-                    tiempo_preparacion: parseFloat(prep),
-                    tiempo_ejecucion_unitario: parseFloat(ejec),
-                    secuencia: parseInt(secuencia),
-                    roles: roles
-                });
-            }
+            // Aquí ya confiamos en que los datos son válidos porque pasaron la validación previa
+            productoData.operaciones.push({
+                nombre_operacion: nombre,
+                tiempo_preparacion: parseFloat(prep),
+                tiempo_ejecucion_unitario: parseFloat(ejec),
+                secuencia: parseInt(secuencia),
+                roles: roles
+            });
         });
 
         itemsContainer.querySelectorAll('.item-row').forEach(row => {
