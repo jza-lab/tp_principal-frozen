@@ -1063,69 +1063,102 @@ class InventarioController(BaseController):
 
     def poner_lote_en_cuarentena(self, lote_id: str, motivo: str, cantidad: float, usuario_id: int, resultado_inspeccion: str = None, foto_file=None) -> tuple:
         """
-        Mueve una cantidad de un lote a cuarentena, con subida de foto opcional.
+        Mueve una cantidad de un lote a cuarentena.
+        CORRECCIÓN: Considera el stock RESERVADO como parte del stock físico disponible para mover.
+        Si se mueve a cuarentena, cancela las reservas asociadas y actualiza las OPs afectadas.
         """
         from app.controllers.usuario_controller import UsuarioController
         from app.models.notificacion import NotificacionModel
         from app.controllers.control_calidad_insumo_controller import ControlCalidadInsumoController
-        from app.models.alerta_riesgo import AlertaRiesgoModel
+        # Importar modelo de reservas (asegurar que esté disponible)
+        from app.models.reserva_insumo import ReservaInsumoModel
 
         try:
+            # 1. Obtener el lote
             lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
             if not lote_res.get('success') or not lote_res.get('data'):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            estado_actual = lote.get('estado')
-            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
+            cantidad_db_disponible = float(lote.get('cantidad_actual') or 0)
             cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
 
-            # Fallback: si motivo (comentarios) está vacío, usar resultado_inspeccion (dropdown)
-            motivo_final = motivo or resultado_inspeccion
+            # --- PASO CRÍTICO: RECUPERAR Y SUMAR STOCK RESERVADO ---
+            # En reserva dura, 'cantidad_actual' es 0, pero el stock está ahí (en reservas).
+            reserva_model = ReservaInsumoModel()
+            reservas_activas_res = reserva_model.find_all(filters={'lote_inventario_id': lote_id, 'estado': 'RESERVADO'})
+            reservas_activas = reservas_activas_res.get('data', []) if reservas_activas_res.get('success') else []
 
+            cantidad_reservada = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_activas)
+
+            # Calculamos el "Físico Real" que podemos tocar
+            stock_fisico_movible = cantidad_db_disponible + cantidad_reservada
+            # -------------------------------------------------------
+
+            # Validaciones
+            motivo_final = motivo or resultado_inspeccion
             if not motivo_final:
                 return self.error_response("Se requiere un motivo para la cuarentena.", 400)
 
-            # Path 1: Cuarentena por trazabilidad (lote agotado, sin cantidad)
-            if estado_actual == 'agotado' and cantidad == 0:
-                update_data = { 'estado': 'cuarentena', 'motivo_cuarentena': motivo_final }
-                result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-                if not result.get('success'):
-                    return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+            if cantidad <= 0:
+                return self.error_response("La cantidad debe ser un número positivo.", 400)
 
-            # Path 2: Cuarentena de una cantidad específica (lote con stock)
-            else:
-                if estado_actual == 'cuarentena':
-                    return self.error_response("El lote ya se encuentra en cuarentena.", 400)
-                if estado_actual not in ['disponible', 'reservado']:
-                    return self.error_response(f"El lote debe estar 'disponible' o 'reservado'. Estado actual: {estado_actual}", 400)
-                if cantidad <= 0:
-                    return self.error_response("La cantidad debe ser un número positivo.", 400)
+            # Validar contra el stock físico total (no solo el disponible en DB)
+            cantidad_a_mover = cantidad
+            if cantidad_a_mover > stock_fisico_movible:
+                logger.warning(f"Solicitado {cantidad} a cuarentena, pero físico real es {stock_fisico_movible}. Ajustando al máximo.")
+                cantidad_a_mover = stock_fisico_movible
 
-                cantidad_a_mover = cantidad
-                if cantidad_a_mover > cantidad_actual_disponible:
-                    logger.warning(f"La cantidad de cuarentena solicitada ({cantidad}) excede el disponible ({cantidad_actual_disponible}). Se pondrá en cuarentena todo el disponible.")
-                    cantidad_a_mover = cantidad_actual_disponible
+            # --- CÁLCULO DE NUEVOS SALDOS ---
+            nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
 
-                nueva_cantidad_disponible = cantidad_actual_disponible - cantidad_a_mover
-                nueva_cantidad_cuarentena = cantidad_actual_cuarentena + cantidad_a_mover
+            # El remanente (lo que no se fue a cuarentena) queda como DISPONIBLE
+            # Nota: Al haber un problema de calidad, "rompemos" las reservas, así que todo lo que sobre se libera.
+            nueva_cantidad_disponible = stock_fisico_movible - cantidad_a_mover
 
-                nuevo_estado = 'agotado'
-                if nueva_cantidad_disponible > 0:
-                    nuevo_estado = 'disponible'
-                elif nueva_cantidad_cuarentena > 0:
-                    nuevo_estado = 'cuarentena'
+            # Determinar nuevo estado
+            nuevo_estado = 'agotado'
+            if nueva_cantidad_disponible > 0:
+                nuevo_estado = 'disponible'
+            elif nueva_cantidad_cuarentena > 0:
+                nuevo_estado = 'cuarentena'
 
-                update_data = {
-                    'estado': nuevo_estado,
-                    'motivo_cuarentena': motivo_final,
-                    'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
-                    'cantidad_actual': nueva_cantidad_disponible
-                }
-                result = self.inventario_model.update(lote_id, update_data, 'id_lote')
-                if not result.get('success'):
-                    return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+            # --- ACTUALIZACIÓN DE LOTE EN DB ---
+            update_data = {
+                'estado': nuevo_estado,
+                'motivo_cuarentena': motivo_final,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_actual': nueva_cantidad_disponible
+            }
+            result = self.inventario_model.update(lote_id, update_data, 'id_lote')
 
+            if not result.get('success'):
+                return self.error_response(result.get('error', 'Error al actualizar el lote.'), 500)
+
+            # --- GESTIÓN DE IMPACTO EN RESERVAS Y OPs ---
+            # Si movimos stock que estaba comprometido, debemos cancelar las reservas.
+            if reservas_activas:
+                ops_afectadas = set()
+                for reserva in reservas_activas:
+                    if reserva.get('orden_produccion_id'):
+                        ops_afectadas.add(reserva['orden_produccion_id'])
+
+                    # Eliminar la reserva (ya no es válida porque el lote está en cuarentena/movido)
+                    reserva_model.delete(reserva['id'], 'id')
+
+                logger.info(f"Se cancelaron {len(reservas_activas)} reservas del lote {lote_id} al pasar a cuarentena.")
+
+                # Regresar las OPs afectadas a "EN ESPERA" para que el planificador sepa que faltan materiales
+                for op_id in ops_afectadas:
+                    # Solo si estaba lista para producir (si ya inició, requiere intervención manual mayor)
+                    op_data_res = self.op_model.find_by_id(op_id)
+                    if op_data_res.get('success') and op_data_res['data'].get('estado') == 'LISTA PARA PRODUCIR':
+                        self.op_model.cambiar_estado(
+                            op_id, 'EN ESPERA',
+                            observaciones=f"Regresada a EN ESPERA automáticamente. El lote {lote.get('numero_lote_proveedor')} pasó a cuarentena."
+                        )
+
+            # --- REGISTRO DE CALIDAD ---
             control_calidad_controller = ControlCalidadInsumoController()
             foto_url = None
             if foto_file:
@@ -1138,13 +1171,14 @@ class InventarioController(BaseController):
                 comentarios=motivo_final,
                 orden_compra_id=None,
                 resultado_inspeccion=resultado_inspeccion or 'Cuarentena Manual',
-                foto_url=foto_url
+                foto_url=foto_url,
+                cantidad_inspeccionada=cantidad_a_mover
             )
 
             if not registro_cc_result.get('success'):
-                logger.error(f"El lote {lote_id} se puso en cuarentena, pero falló la creación del registro de C.C.: {registro_cc_result.get('error')}")
+                logger.error(f"Fallo al crear registro CC: {registro_cc_result.get('error')}")
 
-            # Envío de notificación a gerentes
+            # --- NOTIFICACIONES (Opcional) ---
             try:
                 usuario_controller = UsuarioController()
                 gerentes_res = usuario_controller.obtener_usuarios_por_rol(['GERENTE'])
@@ -1154,68 +1188,21 @@ class InventarioController(BaseController):
                     nombre_insumo = insumo_res['data'].get('nombre', 'Desconocido') if insumo_res.get('success') else 'Desconocido'
 
                     for gerente in gerentes_res['data']:
-                        mensaje = f"El lote {lote.get('numero_lote_proveedor')} del insumo {nombre_insumo} ha sido puesto en cuarentena por trazabilidad."
-                        notificacion_data = {
-                            'usuario_id': gerente['id'],
-                            'mensaje': mensaje,
-                            'tipo': 'ALERTA',
+                        mensaje = f"El lote {lote.get('numero_lote_proveedor')} de {nombre_insumo} pasó a cuarentena."
+                        notificacion_model.create({
+                            'usuario_id': gerente['id'], 'mensaje': mensaje, 'tipo': 'ALERTA',
                             'url_destino': url_for('inventario_view.detalle_lote', id_lote=lote_id)
-                        }
-                        notificacion_model.create(notificacion_data)
-            except Exception as e:
-                logger.error(f"Falló el envío de notificación de cuarentena para el lote {lote_id}: {e}", exc_info=True)
+                        })
+            except Exception as e_notif:
+                logger.warning(f"Error enviando notificaciones: {e_notif}")
 
-
-            # Actualizar el stock consolidado del insumo (importante si cambió la cantidad)
+            # Actualizar stock consolidado
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
-            # --- NUEVA LÓGICA: REVERTIR OPs CON RESERVAS EN ESTE LOTE ---
-            try:
-                # 1. Buscar si este lote tenía reservas activas para producción
-                reservas_afectadas_res = self.reserva_insumo_model.find_all(
-                    filters={'lote_inventario_id': lote_id}
-                )
-
-                if reservas_afectadas_res.get('success'):
-                    reservas = reservas_afectadas_res.get('data', [])
-                    ops_afectadas = set()
-
-                    for reserva in reservas:
-                        # Guardamos la ID de la OP afectada
-                        if reserva.get('orden_produccion_id'):
-                            ops_afectadas.add(reserva['orden_produccion_id'])
-
-                        # 2. ELIMINAR LA RESERVA
-                        # Como el lote está en cuarentena (o una parte), la reserva ya no es confiable.
-                        # La eliminamos para que el sistema obligue a buscar otro lote disponible.
-                        self.reserva_insumo_model.delete(reserva['id'], 'id')
-                        logger.warning(f"Reserva {reserva['id']} eliminada automáticamente porque el lote {lote.get('numero_lote_proveedor')} pasó a cuarentena.")
-
-                    # 3. ACTUALIZAR ESTADO DE LAS OPs
-                    for op_id in ops_afectadas:
-                        op_res = self.op_model.find_by_id(op_id)
-                        if op_res.get('success'):
-                            op_data = op_res['data']
-                            estado_actual = op_data.get('estado')
-
-                            # Si la OP estaba lista para producir, la regresamos a EN ESPERA
-                            # Si ya estaba en proceso, no la tocamos (requiere decisión humana de parar)
-                            if estado_actual == 'LISTA PARA PRODUCIR':
-                                self.op_model.cambiar_estado(
-                                    op_id,
-                                    'PENDIENTE',
-                                    observaciones=f"Regresada a EN ESPERA automáticamente. El lote {lote.get('numero_lote_proveedor')} pasó a cuarentena."
-                                )
-                                logger.info(f"OP {op_id} regresada a EN ESPERA por cuarentena de insumo.")
-
-            except Exception as e_revert:
-                logger.error(f"Error al revertir OPs por cuarentena de lote {lote_id}: {e_revert}")
-            # ------------------------------------------------------------
-
-            return self.success_response(message="Lote puesto en cuarentena con éxito.")
+            return self.success_response(message="Lote puesto en cuarentena con éxito. Reservas afectadas liberadas.")
 
         except Exception as e:
-            logger.error(f"Error en poner_lote_en_cuarentena (insumo): {e}", exc_info=True)
+            logger.error(f"Error en poner_lote_en_cuarentena: {e}", exc_info=True)
             return self.error_response('Error interno del servidor', 500)
 
     def liberar_lote_de_cuarentena(self, lote_id: str, cantidad_a_liberar: float) -> tuple:
