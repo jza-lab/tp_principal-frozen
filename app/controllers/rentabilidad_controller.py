@@ -10,6 +10,7 @@ from app.models.operacion_receta_model import OperacionRecetaModel
 from app.models.operacion_receta_rol_model import OperacionRecetaRolModel
 from app.models.rol import RoleModel
 from app.models.zona import ZonaModel
+from app.models.historial_costos_producto import HistorialCostosProductoModel
 from app.controllers.receta_controller import RecetaController
 from typing import Dict, List
 
@@ -32,6 +33,7 @@ class RentabilidadController(BaseController):
         self.operacion_receta_rol_model = OperacionRecetaRolModel()
         self.rol_model = RoleModel()
         self.zona_model = ZonaModel()
+        self.historial_costos_model = HistorialCostosProductoModel()
         # Instanciamos RecetaController para reutilizar la lógica de costo de materia prima
         self.receta_controller = RecetaController()
 
@@ -49,6 +51,32 @@ class RentabilidadController(BaseController):
         is_completed = estado == 'COMPLETADO'
         
         return is_contado or is_completed
+
+    def _obtener_costo_historico(self, producto_id: int, fecha_pedido_iso: str) -> float:
+        """
+        Obtiene el costo total histórico de un producto para una fecha dada.
+        Si no hay historial previo a esa fecha, devuelve el costo actual (o 0 si no hay costo actual).
+        """
+        try:
+            # Buscar registros anteriores o iguales a la fecha
+            historial_res = self.historial_costos_model.db.table('historial_costos_productos')\
+                .select('costo_total')\
+                .eq('producto_id', producto_id)\
+                .lte('fecha_registro', fecha_pedido_iso)\
+                .order('fecha_registro', desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if historial_res.data:
+                return float(historial_res.data[0]['costo_total'] or 0)
+            
+            # Fallback: intentar buscar el registro más antiguo posterior (si no hay previos)
+            # O simplemente devolver 0 para que se use el costo actual como fallback en el caller.
+            return 0.0
+
+        except Exception as e:
+            logger.error(f"Error obteniendo costo histórico: {e}")
+            return 0.0
 
     def obtener_datos_matriz_rentabilidad(self, fecha_inicio: str = None, fecha_fin: str = None) -> tuple:
         """
@@ -172,7 +200,20 @@ class RentabilidadController(BaseController):
             
             # --- COSTO VARIABLE (Safe Access) ---
             # Priorizamos SIEMPRE el costo actual recalculado para arreglar reportes con costos históricos erróneos (ghost costs)
-            costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
+            # costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
+
+            # NUEVO: Intentar obtener costo histórico
+            fecha_pedido = pedido.get('fecha_solicitud')
+            costo_unitario_historico = 0.0
+            if fecha_pedido:
+                costo_unitario_historico = self._obtener_costo_historico(producto_id, fecha_pedido)
+            
+            # Si no hay histórico, usar actual
+            if costo_unitario_historico > 0:
+                costo_unitario_real = costo_unitario_historico
+            else:
+                 costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
+
 
             facturacion_item = cantidad * precio_unitario_real
             
@@ -518,7 +559,11 @@ class RentabilidadController(BaseController):
                     precio = float(producto_data.get('precio_unitario', 0) or 0)
                 
                 # Force current cost to ensure consistent reporting even with bad historical data
-                costo = costo_fallback
+                # costo = costo_fallback
+
+                # NUEVO: Costo Histórico
+                costo_hist = self._obtener_costo_historico(producto_id, pedido['fecha_solicitud'])
+                costo = costo_hist if costo_hist > 0 else costo_fallback
 
                 margen_unitario = precio - costo
                 
@@ -667,12 +712,17 @@ class RentabilidadController(BaseController):
                 precio_real = precio_actual_prod
             
             # Force current cost for consistency
-            costo_real = costo_fallback
+            # costo_real = costo_fallback
+
+            fecha = pedido.get('fecha_solicitud')
+            
+            # NUEVO: Costo Histórico
+            costo_hist = self._obtener_costo_historico(producto_id, fecha)
+            costo_real = costo_hist if costo_hist > 0 else costo_fallback
             
             subtotal = cantidad * precio_real
             ganancia = subtotal - (cantidad * costo_real)
             
-            fecha = pedido.get('fecha_solicitud')
             cliente_nombre = pedido.get('nombre_cliente', 'N/A')
             pedido_id = pedido.get('id')
             codigo_pedido = f"#{pedido_id}"

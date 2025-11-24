@@ -15,6 +15,7 @@ from typing import Dict, Optional, List
 from marshmallow import ValidationError
 from decimal import Decimal, InvalidOperation
 from app.models.operacion_receta_model import OperacionRecetaModel
+from app.models.historial_costos_producto import HistorialCostosProductoModel
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class ProductoController(BaseController):
         self.costo_fijo_controller = CostoFijoController()
         self.config_produccion_controller = ConfiguracionProduccionController()
         self.rol_controller = RolController()
+        self.historial_costos_model = HistorialCostosProductoModel()
 
     def _abrev(self, texto, length=4):
         """Devuelve una abreviación de la cadena, solo letras, en mayúsculas."""
@@ -209,7 +211,7 @@ class ProductoController(BaseController):
 
             # 2. Iterar sobre el CONJUNTO único de productos afectados y actualizarlos solo una vez.
             for producto_id in productos_a_actualizar:
-                costo_update_result, status = self.actualizar_costo_producto(producto_id)
+                costo_update_result = self._recalcular_costos_producto(producto_id)
                 if costo_update_result.get('success'):
                     productos_actualizados.append(producto_id)
                 else:
@@ -307,6 +309,18 @@ class ProductoController(BaseController):
                 'precio_unitario': float(precio_final)
             }
             self.model.update(producto_id, update_data, 'id')
+
+            # 7. Registrar Historial de Costos
+            historial_data = {
+                'producto_id': producto_id,
+                'costo_materia_prima': float(costo_materia_prima),
+                'costo_mano_obra': float(costo_mano_obra_total),
+                'costo_indirecto': float(costo_fijos_total),
+                'costo_total': float(costo_total_produccion),
+                'fecha_registro': datetime.now().isoformat()
+            }
+            self.historial_costos_model.create(historial_data)
+
             return {'success': True}
 
         except Exception as e:
