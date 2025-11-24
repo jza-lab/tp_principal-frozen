@@ -45,6 +45,9 @@ def listar_alertas_riesgo():
 @jwt_required(locations=["cookies"])
 @permission_required('riesgos_ver')
 def detalle_alerta_riesgo(codigo_alerta):
+    from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+    from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
+
     controller = RiesgoController()
     response, status_code = controller.obtener_detalle_alerta_completo(codigo_alerta)
     
@@ -53,7 +56,17 @@ def detalle_alerta_riesgo(codigo_alerta):
         return redirect(url_for('admin_riesgo.listar_alertas_riesgo'))
 
     alerta = response.get('data')
-    return render_template('admin_riesgos/detalle.html', alerta=alerta)
+    
+    # Cargar motivos de desperdicio para el modal de resolución
+    motivos_insumo = MotivoDesperdicioModel().find_all().get('data', [])
+    motivos_producto = MotivoDesperdicioLoteModel().get_all().get('data', [])
+
+    return render_template(
+        'admin_riesgos/detalle.html', 
+        alerta=alerta,
+        motivos_insumo=motivos_insumo,
+        motivos_producto=motivos_producto
+    )
 
 @admin_riesgo_bp.route('/<string:codigo_alerta>/resolver', methods=['POST'])
 @jwt_required(locations=["cookies"])

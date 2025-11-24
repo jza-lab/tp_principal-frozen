@@ -57,15 +57,28 @@ def api_tiempo_ciclo_promedio():
     data = produccion_controller.obtener_tiempo_ciclo_promedio()
     return jsonify(data)
 
-# @reportes_bp.route('/api/produccion/eficiencia_produccion')
-# def api_eficiencia_produccion():
-#     data = produccion_controller.obtener_eficiencia_produccion()
-#     return jsonify(data)
-
 @reportes_bp.route('/api/produccion/produccion_por_tiempo')
 def api_produccion_por_tiempo():
     periodo = request.args.get('periodo', 'semanal')
     data = produccion_controller.obtener_produccion_por_tiempo(periodo)
+    return jsonify(data)
+
+@reportes_bp.route('/api/produccion/eficiencia_consumo')
+def api_eficiencia_consumo():
+    top_n = request.args.get('top_n', 15, type=int)
+    producto_filter = request.args.get('producto', None)
+    
+    # Manejar string vacío como None
+    if producto_filter == "":
+        producto_filter = None
+        
+    data = produccion_controller.obtener_eficiencia_consumo_insumos(top_n, producto_filter)
+    return jsonify(data)
+
+@reportes_bp.route('/api/produccion/costos_plan_vs_real')
+def api_costos_plan_vs_real():
+    periodo = request.args.get('periodo', 'semanal')
+    data = produccion_controller.obtener_costos_produccion_plan_vs_real(periodo)
     return jsonify(data)
 
 @reportes_bp.route('/stock')

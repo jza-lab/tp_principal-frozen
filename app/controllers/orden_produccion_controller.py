@@ -2447,18 +2447,19 @@ class OrdenProduccionController(BaseController):
                 'pedido_id': op_original.get('pedido_id'), # Mantener vínculo con el pedido si existe
                 'usuario_creador_id': get_current_user().id if get_current_user() else op_original.get('usuario_creador_id')
             }
+            if nueva_op_data.get('fecha_meta'):
+                fecha_meta_val = nueva_op_data['fecha_meta']
+                if isinstance(fecha_meta_val, (date, datetime)):
+                    nueva_op_data['fecha_meta'] = fecha_meta_val.isoformat().split('T')[0]
+                elif isinstance(fecha_meta_val, str):
+                    nueva_op_data['fecha_meta'] = fecha_meta_val.split('T')[0]
 
-            # 3. Crear la nueva OP
-            # Usamos self.crear_orden que maneja validaciones y generación de código
-            # crear_orden espera un formato específico para 'productos' si es múltiple, o podemos usar model.create directo.
-            # Dado que crear_orden es complejo y espera un form_data, mejor preparamos el dict y llamamos a model.create
-            # pero debemos validar schema y generar código.
-
-            # Reutilicemos lógica de crear_orden adaptada o hagamoslo manual para ser precisos.
-            # Manual es más seguro para copiar exacto.
+            # --- FIX: Excluir usuario_creador_id de load() ---
+            data_to_load = {k: v for k, v in nueva_op_data.items() if k != 'usuario_creador_id'}
+            
 
             # Validar datos sin campos de solo lectura
-            validated_data = self.schema.load(nueva_op_data)
+            validated_data = self.schema.load(data_to_load)
 
             # Agregar campos generados por el sistema post-validación
             validated_data['codigo'] = f"OP-{datetime.now().strftime('%Y%m%d%H%M%S%f')}"

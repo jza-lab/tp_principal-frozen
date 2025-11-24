@@ -871,24 +871,129 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Acción de resolver lote insumo "No Apto" con modal
     document.querySelectorAll('.btn-resolver-lote-con-modal').forEach(button => {
-        button.addEventListener('click', function(e) {
+        button.addEventListener('click', async function(e) {
             e.stopPropagation();
             const loteId = this.dataset.loteId;
+            const tipoLote = this.dataset.tipoLote;
+            
             document.getElementById('lote-insumo-id-resolucion').value = loteId;
+            document.getElementById('lote-tipo-resolucion').value = tipoLote;
+            
+            // Resetear UI
+            document.getElementById('section-ops-afectadas').style.display = 'none';
+            document.getElementById('container-motivos-insumo').style.display = 'none';
+            document.getElementById('container-motivos-producto').style.display = 'none';
+            document.getElementById('motivo_desperdicio_insumo').value = '';
+            document.getElementById('motivo_desperdicio_producto').value = '';
+
+            // Mostrar dropdown correcto
+            if (tipoLote === 'lote_insumo') {
+                document.getElementById('container-motivos-insumo').style.display = 'block';
+                
+                // Verificar OPs afectadas solo para insumos
+                const spinner = this.querySelector('i');
+                if(spinner) spinner.className = 'spinner-border spinner-border-sm me-1';
+                this.disabled = true;
+
+                try {
+                    const response = await fetch(`/inventario/api/lote/${loteId}/ops_afectadas`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success && data.data && data.data.length > 0) {
+                            document.getElementById('section-ops-afectadas').style.display = 'block';
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error verificando OPs', err);
+                } finally {
+                    if(spinner) spinner.className = 'bi bi-x-circle me-1';
+                    this.disabled = false;
+                }
+
+            } else {
+                document.getElementById('container-motivos-producto').style.display = 'block';
+            }
+
             new bootstrap.Modal(document.getElementById('modalResolucionInsumo')).show();
         });
     });
 
     document.getElementById('btnConfirmarInsumoNoApto').addEventListener('click', function() {
         const loteId = document.getElementById('lote-insumo-id-resolucion').value;
-        const accionDownstream = document.querySelector('input[name="accion_ops_downstream"]:checked').value;
+        const tipoLote = document.getElementById('lote-tipo-resolucion').value;
+        
+        // Obtener motivo correcto
+        let motivoId = null;
+        if (tipoLote === 'lote_insumo') {
+            motivoId = document.getElementById('motivo_desperdicio_insumo').value;
+        } else {
+            motivoId = document.getElementById('motivo_desperdicio_producto').value;
+        }
+
+        if (!motivoId) {
+            showNotificationModal('Error', 'Debe seleccionar un motivo de retiro.', 'error');
+            return;
+        }
+
+        // Obtener accion downstream solo si es visible
+        let accionDownstream = null;
+        if (document.getElementById('section-ops-afectadas').style.display !== 'none') {
+            accionDownstream = document.querySelector('input[name="accion_ops_downstream"]:checked').value;
+        } else {
+            accionDownstream = 'ignorar'; // O default seguro
+        }
         
         // Encontrar el botón original para reutilizar la lógica visual
         const originalBtn = document.querySelector(`.btn-resolver-lote-con-modal[data-lote-id="${loteId}"]`);
+        const modal = bootstrap.Modal.getInstance(document.getElementById('modalResolucionInsumo'));
         
         if (originalBtn) {
-            ejecutarResolucionLote(originalBtn, { accion_ops_downstream: accionDownstream });
-            bootstrap.Modal.getInstance(document.getElementById('modalResolucionInsumo')).hide();
+            // Mostrar spinner en el botón del modal
+            const btnConfirmar = this;
+            const spinner = btnConfirmar.querySelector('.spinner-border');
+            if(spinner) spinner.classList.remove('d-none');
+            btnConfirmar.disabled = true;
+
+            // Ejecutar y cerrar modal al terminar (o dejar que la función maneje el reload)
+            // Hack: Pasamos una función callback para cerrar el modal si es éxito, o resetear botón si error
+            
+            // Re-implementamos ejecutarResolucionLote aquí para tener control del modal
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            
+            const payload = {
+                accion: 'resolver_lote',
+                data: {
+                    lote_id: loteId,
+                    tipo_lote: tipoLote,
+                    resolucion: 'No Apto',
+                    alerta_id: '{{ alerta.id }}',
+                    motivo_id: motivoId, // Nuevo campo
+                    accion_ops_downstream: accionDownstream
+                }
+            };
+
+            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    modal.hide();
+                    showNotificationModal('Éxito', data.message, 'success');
+                    document.getElementById('notificationModal').addEventListener('hidden.bs.modal', () => location.reload());
+                } else {
+                    showNotificationModal('Error', data.error, 'error');
+                    if(spinner) spinner.classList.add('d-none');
+                    btnConfirmar.disabled = false;
+                }
+            })
+            .catch(error => {
+                showNotificationModal('Error', 'Error de conexión.', 'error');
+                if(spinner) spinner.classList.add('d-none');
+                btnConfirmar.disabled = false;
+            });
         }
     });
 
@@ -1498,30 +1603,60 @@ document.addEventListener('DOMContentLoaded', function () {
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Está a punto de marcar este lote de insumos como <strong>NO APTO (Retirado)</strong>.</p>
-                <p>Este insumo afecta a Órdenes de Producción asociadas. ¿Qué desea hacer con ellas?</p>
+                <p>Está a punto de marcar este lote como <strong>NO APTO (Retirado)</strong>.</p>
+                
                 <form id="formResolucionInsumo">
                     <input type="hidden" id="lote-insumo-id-resolucion">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">Acción sobre OPs afectadas:</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_replanificar" value="replanificar" checked>
-                            <label class="form-check-label" for="op_replanificar">
-                                Replanificar OPs (Volver a Pendiente para buscar otro insumo)
-                            </label>
+                    <input type="hidden" id="lote-tipo-resolucion">
+                    
+                    <div class="mb-3" id="container-motivos-insumo" style="display: none;">
+                        <label for="motivo_desperdicio_insumo" class="form-label fw-bold">Motivo de Retiro <span class="text-danger">*</span></label>
+                        <select class="form-select" id="motivo_desperdicio_insumo">
+                            <option value="">Seleccione un motivo...</option>
+                            {% for motivo in motivos_insumo %}
+                            <option value="{{ motivo.id }}">{{ motivo.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3" id="container-motivos-producto" style="display: none;">
+                        <label for="motivo_desperdicio_producto" class="form-label fw-bold">Motivo de Retiro <span class="text-danger">*</span></label>
+                        <select class="form-select" id="motivo_desperdicio_producto">
+                            <option value="">Seleccione un motivo...</option>
+                            {% for motivo in motivos_producto %}
+                            <option value="{{ motivo.id }}">{{ motivo.descripcion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="section-ops-afectadas" style="display: none;">
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i><strong>Atención:</strong> Este insumo afecta a Órdenes de Producción activas.
                         </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_dejar" value="dejar">
-                            <label class="form-check-label" for="op_dejar">
-                                Dejar OPs como están (Solo marcar insumo)
-                            </label>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Acción sobre OPs afectadas:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_replanificar" value="replanificar" checked>
+                                <label class="form-check-label" for="op_replanificar">
+                                    Replanificar OPs (Volver a Pendiente para buscar otro insumo)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="accion_ops_downstream" id="op_dejar" value="dejar">
+                                <label class="form-check-label" for="op_dejar">
+                                    Dejar OPs como están (Solo marcar insumo)
+                                </label>
+                            </div>
                         </div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" id="btnConfirmarInsumoNoApto">Confirmar No Apto</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarInsumoNoApto">
+                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    Confirmar No Apto
+                </button>
             </div>
         </div>
     </div>

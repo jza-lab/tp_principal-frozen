@@ -17,89 +17,155 @@
         <p class="text-muted">Una vez que haya actividad de producción, los gráficos y estadísticas aparecerán aquí.</p>
     </div>
 
-    <!-- Contenedor Principal de Reportes -->
-    <div id="report-container">
-        <!-- Fila 1: KPIs y Gráficos Pequeños -->
-        <div class="row">
-            <!-- Tiempo de Ciclo Promedio -->
-            <div class="col-xl-4 col-md-6 mb-4">
-                <div class="card border-left-info shadow h-100 py-2">
-                    <div class="card-body">
-                        <div class="row no-gutters align-items-center">
-                            <div class="col mr-2">
-                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Tiempo de Ciclo Promedio</div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempo-ciclo-promedio">Calculando...</div>
-                                 <p class="text-muted small mt-2">Este valor representa el tiempo promedio (días, horas, minutos) desde que una orden de producción entra en línea hasta que se marca como 'Completada'. Mide la eficiencia del ciclo productivo.</p>
-                                 <div class="text-muted small mt-2 chart-description" id="tiempo-ciclo-description"></div>
+    <!-- Navegación de Pestañas -->
+    <ul class="nav nav-tabs mb-4" id="produccionTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="produccion-tab" data-bs-toggle="tab" data-bs-target="#produccion" type="button" role="tab" aria-controls="produccion" aria-selected="true">Producción</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="materia-prima-tab" data-bs-toggle="tab" data-bs-target="#materia-prima" type="button" role="tab" aria-controls="materia-prima" aria-selected="false">Uso de Materia Prima</button>
+        </li>
+    </ul>
+
+    <!-- Contenido de las Pestañas -->
+    <div class="tab-content" id="produccionTabsContent">
+        
+        <!-- Pestaña 1: Producción (Contenido Original) -->
+        <div class="tab-pane fade show active" id="produccion" role="tabpanel" aria-labelledby="produccion-tab">
+            <div id="report-container">
+                <!-- Fila 1: KPIs y Gráficos Pequeños -->
+                <div class="row">
+                    <!-- Tiempo de Ciclo Promedio -->
+                    <div class="col-xl-4 col-md-6 mb-4">
+                        <div class="card border-left-info shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="row no-gutters align-items-center">
+                                    <div class="col mr-2">
+                                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Tiempo de Ciclo Promedio</div>
+                                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="tiempo-ciclo-promedio">Calculando...</div>
+                                         <p class="text-muted small mt-2">Este valor representa el tiempo promedio (días, horas, minutos) desde que una orden de producción entra en línea hasta que se marca como 'Completada'. Mide la eficiencia del ciclo productivo.</p>
+                                         <div class="text-muted small mt-2 chart-description" id="tiempo-ciclo-description"></div>
+                                    </div>
+                                    <div class="col-auto">
+                                        <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-auto">
-                                <i class="fas fa-clock fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+
+                    <!-- Órdenes por Estado -->
+                    <div class="col-xl-4 col-md-6 mb-4">
+                        <div class="card border-left-primary shadow h-100 py-2">
+                            <div class="card-body">
+                                <h6 class="m-0 font-weight-bold text-primary mb-2">Órdenes por Estado</h6>
+                                <p class="text-muted small mb-2">Cada sección del anillo representa un estado (ej. 'Pendiente', 'Completada'). El tamaño de la sección es proporcional al número de órdenes en ese estado.</p>
+                                <div id="ordenes-por-estado-chart" style="height: 220px;"></div>
+                                <div class="text-muted small mt-2 chart-description" id="ordenes-por-estado-description"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Composición de la Producción -->
+                    <div class="col-xl-4 col-md-6 mb-4">
+                        <div class="card border-left-success shadow h-100 py-2">
+                            <div class="card-body">
+                                <h6 class="m-0 font-weight-bold text-success mb-2">Composición de la Producción</h6>
+                                <p class="text-muted small mb-2">Este gráfico circular muestra qué proporción de la producción total corresponde a cada producto. Cada sección representa un producto y su tamaño indica la cantidad a producir.</p>
+                                <div id="composicion-produccion-chart" style="height: 220px;"></div>
+                                <div class="text-muted small mt-2 chart-description" id="composicion-produccion-description"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fila 2: Gráficos Grandes -->
+                <div class="row">
+                    <!-- Producción a lo largo del tiempo -->
+                    <div class="col-xl-12 col-lg-12 mb-4">
+                        <div class="card shadow">
+                            <div class="card-header py-3">
+                                <h6 class="m-0 font-weight-bold text-primary">Producción a lo largo del tiempo</h6>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted small mb-2">La línea muestra cómo ha variado el número de órdenes completadas a lo largo del tiempo. El eje Y indica la cantidad de órdenes y el eje X las semanas o meses.</p>
+                                <div id="produccion-por-tiempo-chart" style="height: 350px;"></div>
+                                <div class="text-muted small mt-2 chart-description" id="produccion-por-tiempo-description"></div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Órdenes por Estado -->
-            <div class="col-xl-4 col-md-6 mb-4">
-                <div class="card border-left-primary shadow h-100 py-2">
-                    <div class="card-body">
-                        <h6 class="m-0 font-weight-bold text-primary mb-2">Órdenes por Estado</h6>
-                        <p class="text-muted small mb-2">Cada sección del anillo representa un estado (ej. 'Pendiente', 'Completada'). El tamaño de la sección es proporcional al número de órdenes en ese estado.</p>
-                        <div id="ordenes-por-estado-chart" style="height: 220px;"></div>
-                        <div class="text-muted small mt-2 chart-description" id="ordenes-por-estado-description"></div>
+        <!-- Pestaña 2: Uso de Materia Prima (Nuevo Contenido) -->
+        <div class="tab-pane fade" id="materia-prima" role="tabpanel" aria-labelledby="materia-prima-tab">
+             <div class="row">
+                <!-- Top Insumos Utilizados -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Top Insumos Utilizados</h6>
+                            <select id="top-n-select" class="form-control form-control-sm" style="width: 100px;">
+                                <option value="5">Top 5</option>
+                                <option value="10">Top 10</option>
+                                <option value="15">Top 15</option>
+                            </select>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">Las barras representan los insumos más consumidos en volumen total. Ayuda a identificar los materiales de mayor rotación.</p>
+                            <div id="top-insumos-chart" style="height: 350px;"></div>
+                            <div class="text-muted small mt-2 chart-description" id="top-insumos-description"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Composición de la Producción -->
-            <div class="col-xl-4 col-md-6 mb-4">
-                <div class="card border-left-success shadow h-100 py-2">
-                    <div class="card-body">
-                        <h6 class="m-0 font-weight-bold text-success mb-2">Composición de la Producción</h6>
-                        <p class="text-muted small mb-2">Este gráfico circular muestra qué proporción de la producción total corresponde a cada producto. Cada sección representa un producto y su tamaño indica la cantidad a producir.</p>
-                        <div id="composicion-produccion-chart" style="height: 220px;"></div>
-                        <div class="text-muted small mt-2 chart-description" id="composicion-produccion-description"></div>
+
+                <!-- Eficiencia de Consumo (Nuevo Gráfico Dumbbell) -->
+                <div class="col-xl-6 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Eficiencia de Consumo (Plan vs Real)</h6>
+                            <select id="producto-filter-select" class="form-control form-control-sm" style="width: 200px;">
+                                <option value="">Todos (Top Desviaciones)</option>
+                                <!-- Opciones se llenarán dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">Visualiza la desviación entre lo planificado (Gris) y lo realmente consumido (Color). <br>
+                            <span class="text-success font-weight-bold">Verde</span> = Consumo eficiente o ahorro. <span class="text-danger font-weight-bold">Rojo</span> = Excedente/Desperdicio.</p>
+                            
+                            <div id="eficiencia-consumo-chart" style="height: 350px;"></div>
+                            
+                            <!-- Narrativa Dinámica -->
+                            <div class="mt-4 p-3 bg-light rounded border-left-info">
+                                <h6 class="font-weight-bold text-gray-800"><i class="fas fa-info-circle text-info mr-2"></i>Análisis de Resultados:</h6>
+                                <p id="eficiencia-consumo-narrative" class="mb-0 text-gray-700 font-italic">Cargando análisis...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Costos Plan vs Real (Nuevo Gráfico) -->
+                <div class="col-xl-12 col-lg-12 mb-4">
+                    <div class="card shadow">
+                        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary">Costos de Producción: Planificado vs Real</h6>
+                            <select id="costos-periodo-select" class="form-control form-control-sm" style="width: 150px;">
+                                <option value="semanal">Semanal</option>
+                                <option value="mensual">Mensual</option>
+                                <option value="anual">Anual</option>
+                            </select>
+                        </div>
+                        <div class="card-body">
+                            <p class="text-muted small mb-2">Comparación del costo teórico de los insumos según receta (Planificado) versus el costo real considerando los desperdicios reportados.</p>
+                            <div id="costos-produccion-chart" style="height: 350px;"></div>
+                            <div class="text-muted small mt-2 chart-description" id="costos-produccion-description"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Fila 2: Gráficos Grandes -->
-        <div class="row">
-            <!-- Top Insumos Utilizados -->
-            <div class="col-xl-6 col-lg-12 mb-4">
-                <div class="card shadow">
-                    <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                        <h6 class="m-0 font-weight-bold text-primary">Top Insumos Utilizados</h6>
-                        <select id="top-n-select" class="form-control form-control-sm" style="width: 100px;">
-                            <option value="5">Top 5</option>
-                            <option value="10">Top 10</option>
-                            <option value="15">Top 15</option>
-                        </select>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted small mb-2">Las barras representan los insumos más consumidos. El eje Y muestra el nombre del insumo y el eje X (horizontal) la cantidad total utilizada en las unidades correspondientes.</p>
-                        <div id="top-insumos-chart" style="height: 350px;"></div>
-                        <div class="text-muted small mt-2 chart-description" id="top-insumos-description"></div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Producción a lo largo del tiempo -->
-            <div class="col-xl-6 col-lg-12 mb-4">
-                <div class="card shadow">
-                    <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Producción a lo largo del tiempo</h6>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted small mb-2">La línea muestra cómo ha variado el número de órdenes completadas a lo largo del tiempo. El eje Y indica la cantidad de órdenes y el eje X las semanas o meses.</p>
-                        <div id="produccion-por-tiempo-chart" style="height: 350px;"></div>
-                        <div class="text-muted small mt-2 chart-description" id="produccion-por-tiempo-description"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -108,7 +174,7 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.3.2/dist/echarts.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="{{ url_for('static', filename='js/reportes/produccion.js') }}?v=1.7"></script>
+<script src="{{ url_for('static', filename='js/reportes/produccion.js') }}?v=1.9"></script>
 {% endblock %}
 
 {% endblock %}

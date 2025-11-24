@@ -67,11 +67,9 @@
                         <tr>
                             <th>Producto</th>
                             <th>N° Lote</th>
-                            <th class="text-end">Cantidad</th>
-                            
-                            <th>Fecha Producción</th> 
-                            
-                            <th>Fecha Creación</th> <th>Fecha Vencimiento</th>
+                            <th class="text-end">Cantidad</th> 
+                            <th>Fecha Creación</th>
+                            <th>Fecha Vencimiento</th>
                             <th>Estado</th>
                             <th>Acciones</th>
                         </tr>
@@ -95,11 +93,6 @@
                                     {{ lote.cantidad_actual | round(1) }} <small class="text-muted" style="font-size: 0.8em;">unid.</small>
                                 {% endif %}
                             </td>
-
-                            <td>
-                                {{ lote.fecha_produccion.strftime('%Y-%m-%d') if lote.fecha_produccion else 'N/A' }}
-                            </td>
-
                             <td>{{ lote.created_at.strftime('%Y-%m-%d') if lote.created_at else 'N/A' }}</td>
                             <td>
                                 {% if lote.fecha_vencimiento %}
@@ -234,11 +227,9 @@
                         <label for="resultado_inspeccion" class="form-label">Motivo (Requerido):</label>
                         <select class="form-select" id="resultado_inspeccion" name="resultado_inspeccion" required>
                             <option value="" selected disabled>Seleccione un motivo...</option>
-                            <option value="Cuarentena por calidad">Cuarentena por calidad</option>
-                            <option value="Sospecha de contaminación">Sospecha de contaminación</option>
-                            <option value="Defecto de empaque">Defecto de empaque</option>
-                            <option value="Etiquetado incorrecto">Etiquetado incorrecto</option>
-                            <option value="Otro">Otro</option>
+                            {% for estado in estados_inspeccion %}
+                            <option value="{{ estado }}">{{ estado }}</option>
+                            {% endfor %}
                         </select>
                     </div>
 

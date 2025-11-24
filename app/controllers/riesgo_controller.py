@@ -1058,7 +1058,39 @@ class RiesgoController(BaseController):
         op_controller = OrdenProduccionController()
 
         # 1. Retirar el insumo
-        inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
+       
+        # 1. Utilizar el método unificado para retirar el insumo y gestionar OPs
+        # Asumimos que el motivo ID para alertas debe obtenerse o definirse. 
+        # Por simplicidad, usaremos un motivo genérico o buscaremos uno.
+        from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+        motivo_model = MotivoDesperdicioModel()
+        motivo_res = motivo_model.find_all({'descripcion': 'Insumo No Conforme'}, 1)
+        motivo_id = motivo_res['data'][0]['id'] if motivo_res.get('data') else 1 # Fallback ID 1
+
+        # Obtener cantidad total del lote para retirarlo todo
+        lote_res = inventario_controller.inventario_model.find_by_id(lote_insumo_id, 'id_lote')
+        cantidad_total = 0
+        if lote_res.get('success') and lote_res.get('data'):
+            lote = lote_res['data']
+            cantidad_total = float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
+
+
+        accion_ops_mapped = 'replanificar' if accion_ops == 'replanificar' else accion_ops
+
+        res_retiro, _ = inventario_controller.retirar_lote_insumo_unificado(
+            lote_insumo_id, 
+            cantidad_total, 
+            motivo_id, 
+            f"Retiro por Alerta de Riesgo #{alerta_id}", 
+            usuario_id, 
+            accion_ops=accion_ops_mapped
+        )
+
+        if not res_retiro.get('success'):
+            return res_retiro, 500
+
+        # 2. Registrar resolución en Alerta
+
         self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
 
         # 2. Obtener afectados
@@ -1168,7 +1200,7 @@ class RiesgoController(BaseController):
             logger.error(f"Error en resolver_op_individual: {e}", exc_info=True)
             return {"success": False, "error": "Error interno al procesar la OP."}, 500
 
-    def _ejecutar_finalizar_analisis_api(self, alerta_id, data, usuario_id):
+    def _ejecutar_finalizar_analisis_api(self, alerta_id: int, data: dict, usuario_id: int):
         conclusion = data.get('conclusion')
         if not conclusion:
             return {"success": False, "error": "La conclusión es obligatoria."}, 400

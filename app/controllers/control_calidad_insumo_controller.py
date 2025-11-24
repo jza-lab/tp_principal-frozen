@@ -84,31 +84,52 @@ class ControlCalidadInsumoController(BaseController):
             cantidad_a_procesar_str = form_data.get('cantidad')
             cantidad_a_procesar = float(cantidad_a_procesar_str) if cantidad_a_procesar_str else cantidad_original
 
-            # Corrección para la validación de punto flotante
             TOLERANCIA = 1e-9
             if cantidad_a_procesar <= 0 or (cantidad_a_procesar - cantidad_original) > TOLERANCIA:
                 return self.error_response('La cantidad a procesar no es válida.', 400)
-
-            es_parcial = cantidad_a_procesar < cantidad_original
 
             nuevo_estado_lote = {'Aceptar': 'disponible', 'Poner en Cuarentena': 'cuarentena', 'Rechazar': 'RECHAZADO'}.get(decision)
             if not nuevo_estado_lote:
                 return self.error_response('La decisión tomada no es válida.', 400)
 
-            # Lógica unificada para procesamiento parcial y total
+            # --- CASO ESPECIAL: RECHAZAR ---
+            # Si se rechaza, usamos la lógica unificada de retiro + desperdicio
+            if decision == 'Rechazar':
+                from app.controllers.inventario_controller import InventarioController
+                from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+                
+                # Buscar o crear motivo "Insumo No Conforme"
+                motivo_model = MotivoDesperdicioModel()
+                motivo_res = motivo_model.find_all({'descripcion': 'Insumo No Conforme'}, 1)
+                motivo_id = motivo_res['data'][0]['id'] if motivo_res.get('data') else 1
+
+                inv_controller = InventarioController()
+                # Llamada al método unificado: Esto crea el desperdicio y pone las OPs a PENDIENTE (replanificar)
+                res_retiro, _ = inv_controller.retirar_lote_insumo_unificado(
+                    lote_id, 
+                    cantidad_a_procesar, 
+                    motivo_id, 
+                    f"Rechazo en Control de Calidad. {form_data.get('comentarios', '')}", 
+                    usuario_id, 
+                    foto_file, 
+                    accion_ops='replanificar'
+                )
+                
+                if not res_retiro.get('success'):
+                    return self.error_response(f"Error al procesar rechazo: {res_retiro.get('error')}", 500)
+                
+                # Registrar el evento de C.C. para historial
+                self._registrar_evento_cc(lote_id, decision, form_data, foto_file, usuario_id, lote)
+                
+                # Recalcular stock
+                if insumo_id: self.insumo_controller.actualizar_stock_insumo(insumo_id)
+                
+                return self.success_response(message=f"Lote {lote_id} rechazado y retirado con éxito.")
+
+            # --- RESTO DE CASOS (Aceptar, Cuarentena) ---
             update_data = {}
             if decision == 'Aceptar':
-                # FIX: Es necesario agregar el estado para que se ejecute el update
                 update_data['estado'] = nuevo_estado_lote 
-                # No se hace nada especial con la cantidad, la cantidad_actual es la disponible.
-                pass
-            elif decision == 'Rechazar':
-                update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
-                # Si queda remanente, NO cambiamos el estado a RECHAZADO, solo actualizamos la cantidad.
-                # Esto evita que el stock válido 'desaparezca' del conteo de disponibles.
-                if update_data['cantidad_actual'] <= 0.001:
-                    update_data['estado'] = nuevo_estado_lote
-                # Opcional: registrar la cantidad rechazada en otro campo si existiera
             elif decision == 'Poner en Cuarentena':
                 cantidad_en_cuarentena_actual = float(lote.get('cantidad_en_cuarentena', 0) or 0)
                 update_data['cantidad_actual'] = cantidad_original - cantidad_a_procesar
@@ -124,27 +145,12 @@ class ControlCalidadInsumoController(BaseController):
             else:
                 lote_actualizado = lote
 
-            # Registrar el evento de C.C. si es necesario
-            if decision in ['Poner en Cuarentena', 'Rechazar']:
-                foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
-                orden_compra_id = self._extraer_oc_id_de_lote(lote)
-                
-                registro_data = {
-                    'lote_insumo_id': lote_id,
-                    'orden_compra_id': orden_compra_id,
-                    'usuario_supervisor_id': usuario_id,
-                    'decision_final': decision.upper().replace(' ', '_'),
-                    'comentarios': form_data.get('comentarios'),
-                    'resultado_inspeccion': form_data.get('resultado_inspeccion'),
-                    'foto_url': foto_url
-                }
-                self.model.create_registro(registro_data)
+            # Registrar el evento de C.C.
+            self._registrar_evento_cc(lote_id, decision, form_data, foto_file, usuario_id, lote)
 
-            # Recalcular el stock del insumo afectado
             if insumo_id:
                 self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
-            # Verificar si la orden de compra asociada ya puede ser cerrada
             orden_compra_id_a_verificar = self._extraer_oc_id_de_lote(lote)
             if orden_compra_id_a_verificar:
                 self._verificar_y_finalizar_orden_si_corresponde(orden_compra_id_a_verificar, usuario_id)
@@ -154,6 +160,22 @@ class ControlCalidadInsumoController(BaseController):
         except Exception as e:
             logger.error(f"Error crítico procesando inspección para el lote {lote_id}: {e}", exc_info=True)
             return self.error_response('Error interno del servidor.', 500)
+
+    def _registrar_evento_cc(self, lote_id, decision, form_data, foto_file, usuario_id, lote):
+        if decision in ['Poner en Cuarentena', 'Rechazar']:
+            foto_url = self._subir_foto_y_obtener_url(foto_file, lote_id)
+            orden_compra_id = self._extraer_oc_id_de_lote(lote)
+            
+            registro_data = {
+                'lote_insumo_id': lote_id,
+                'orden_compra_id': orden_compra_id,
+                'usuario_supervisor_id': usuario_id,
+                'decision_final': decision.upper().replace(' ', '_'),
+                'comentarios': form_data.get('comentarios'),
+                'resultado_inspeccion': form_data.get('resultado_inspeccion'),
+                'foto_url': foto_url
+            }
+            self.model.create_registro(registro_data)
 
     def procesar_inspeccion_api(self, lote_id: str, decision: str, form_data: Dict, foto_file, usuario_id: int) -> tuple:
         """
@@ -311,100 +333,6 @@ class ControlCalidadInsumoController(BaseController):
 
 
     def manejar_rechazo_cuarentena(self, lote_rechazado_id: str, usuario_id: int) -> list:
-        from app.controllers.orden_produccion_controller import OrdenProduccionController
-        from app.controllers.lote_producto_controller import LoteProductoController
-        from app.models.alerta_riesgo import AlertaRiesgoModel
-        from app.models.reserva_insumo import ReservaInsumoModel
-        from app.models.registro_desperdicio_model import RegistroDesperdicioModel
-        from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
-
-        op_controller = OrdenProduccionController()
-        lote_producto_controller = LoteProductoController()
-        alerta_model = AlertaRiesgoModel()
-        reserva_insumo_model = ReservaInsumoModel()
-        desperdicio_model = RegistroDesperdicioModel()
-        motivo_desperdicio_model = MotivoDesperdicioModel()
-        resultados = []
-
-        try:
-            # Marcar el lote como resuelto en las alertas
-            alerta_model.actualizar_estado_afectados_por_entidad('lote_insumo', lote_rechazado_id, 'no_apto', usuario_id)
-
-            reservas_afectadas = reserva_insumo_model.find_all(
-                filters={'lote_inventario_id': lote_rechazado_id}
-            ).get('data', [])
-
-            if not reservas_afectadas:
-                resultados.append("El lote no estaba reservado para ninguna Orden de Producción.")
-                return resultados
-
-            for reserva in reservas_afectadas:
-                op_id = reserva['orden_produccion_id']
-                insumo_id = reserva['insumo_id']
-                cantidad_reservada = float(reserva['cantidad_reservada'])
-                
-                op_res = op_controller.model.find_by_id(op_id, 'id')
-                if not op_res.get('success') or not op_res.get('data'):
-                    logger.error(f"No se pudo encontrar la OP {op_id} para procesar el rechazo del lote.")
-                    continue
-                
-                orden_produccion = op_res['data'][0]
-                op_codigo = orden_produccion.get('codigo', f"ID {op_id}")
-
-                if orden_produccion.get('estado') in ['COMPLETADA', 'CONTROL_DE_CALIDAD', 'FINALIZADA', 'CANCELADA','CONSOLIDADA']:
-                    logger.info(f"Lote {lote_rechazado_id} rechazado. La OP {op_codigo} ya está en un estado final ('{orden_produccion.get('estado')}'). No se tomarán acciones.")
-                    resultados.append(f"La OP {op_codigo} no fue modificada porque su estado es '{orden_produccion.get('estado')}'.")
-                    alerta_model.actualizar_estado_afectados_por_entidad('orden_produccion', op_id, 'resuelta_completada', usuario_id)
-                    continue
-                
-                # 1. Resetear OP a PENDIENTE
-                op_controller.model.update(op_id, {'estado': 'PENDIENTE'}, 'id')
-                msg = f"La OP {op_codigo} se ha reseteado a 'PENDIENTE' debido al rechazo del lote de insumo."
-                logger.warning(msg)
-                resultados.append(msg)
-
-                # 2. Poner lotes de producto terminado en cuarentena
-                lotes_producto_producidos = lote_producto_controller.model.find_all({'orden_produccion_id': op_id}).get('data', [])
-                for lote_prod in lotes_producto_producidos:
-                    lote_producto_controller.poner_lote_en_cuarentena(
-                        lote_prod['id_lote'], 
-                        f"Insumo ID {lote_rechazado_id} rechazado",
-                        999999
-                    )
-                    msg = f"El lote de producto terminado {lote_prod['numero_lote']} ha sido puesto en cuarentena."
-                    logger.info(msg)
-                    resultados.append(msg)
-
-                # 3. Registrar desperdicio del insumo
-                motivo_res = motivo_desperdicio_model.find_all({'descripcion': 'Insumo No Conforme'}, 1)
-                motivo_id = None
-                if motivo_res.get('success') and motivo_res.get('data'):
-                    motivo_id = motivo_res['data'][0]['id']
-                else:
-                    new_motivo_res = motivo_desperdicio_model.create({'descripcion': 'Insumo No Conforme', 'tipo': 'INSUMO'})
-                    if new_motivo_res.get('success') and new_motivo_res.get('data'):
-                        motivo_id = new_motivo_res['data'][0]['id']
-                
-                if motivo_id and cantidad_reservada > 0:
-                    desperdicio_data = {
-                        'orden_produccion_id': op_id,
-                        'insumo_id': insumo_id,
-                        'motivo_desperdicio_id': motivo_id,
-                        'cantidad': cantidad_reservada,
-                        'usuario_id': usuario_id,
-                        'observaciones': f"Rechazo del lote de insumo ID {lote_rechazado_id}",
-                        'fecha_registro': datetime.now().isoformat()
-                    }
-                    desperdicio_model.create(desperdicio_data)
-                    msg = f"Se registró un desperdicio de {cantidad_reservada} para la OP {op_codigo}."
-                    logger.info(msg)
-                    resultados.append(msg)
-
-                # 4. Anular la reserva del insumo
-                reserva_insumo_model.delete(reserva['id'], 'id')
-            
-            return resultados
-
-        except Exception as e:
-            logger.error(f"Error al manejar el rechazo del lote {lote_rechazado_id}: {e}", exc_info=True)
-            return [f"Error interno al procesar las Órdenes de Producción: {e}"]
+        # Método Legacy, mantenido por compatibilidad interna de `crear_registro_control_calidad` si se llama con 'Rechazar'.
+        # Idealmente `procesar_inspeccion` intercepta antes y usa el método unificado.
+        return []
