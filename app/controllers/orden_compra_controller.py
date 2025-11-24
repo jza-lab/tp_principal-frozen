@@ -658,12 +658,8 @@ class OrdenCompraController:
     # --- MÉTODO CLAVE: MANEJO DE ESCENARIOS FALLIDOS (ACTUALIZADO) ---
     def _manejar_escenario_fallido(self, orden_data, motivo, descripcion, orden_produccion_controller: "OrdenProduccionController", modo_oc='auto', usuario_id=None):
         """
-        Maneja los escenarios donde la recepción es incompleta (calidad o cantidad).
-        Aplica la lógica de negocio:
-        1. Marca OC como RECEPCION_INCOMPLETA.
-        2. Si hay OP vinculada:
-           - Si modo_oc == 'auto': OP -> EN_ESPERA, Crea OC Hija.
-           - Si modo_oc == 'manual': OP -> PENDIENTE, No crea OC Hija.
+        Maneja los escenarios donde la recepción es incompleta.
+        Aplica lógica diferenciada si hay OP vinculada o si es OC manual.
         """
         op_id = orden_data.get('orden_produccion_id')
         mensaje_extra = ""
@@ -671,34 +667,50 @@ class OrdenCompraController:
         # 1. Actualizar estado de la OC actual
         self.model.update(orden_data['id'], {'estado': 'RECEPCION_INCOMPLETA'})
 
+        # --- CASO A: OC VINCULADA A UNA OP ---
         if op_id:
             logger.info(f"[OC RECEPCION] Fallo/Discrepancia en OC {orden_data.get('codigo_oc')} vinculada a OP {op_id}. Modo: {modo_oc}")
 
             if modo_oc == 'manual':
-                # --- CASO B: MANUAL ---
-                # La OP vuelve a PENDIENTE para ser replanificada por el usuario.
-                # El stock aprobado ya existe (lotes creados), así que la replanificación solo pedirá el faltante.
+                # Manual: OP vuelve a PENDIENTE, NO se crea OC hija automática.
                 orden_produccion_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
                 mensaje_extra = "La OP asociada volvió al estado PENDIENTE para gestión manual del faltante."
                 logger.info(f"[OC RECEPCION] OP {op_id} movida a PENDIENTE (Gestión Manual).")
+                return {
+                    'success': True,
+                    'partial': True,
+                    'message': f"{motivo}. Se generó un reclamo. {mensaje_extra}"
+                }
 
             else:
-                # --- CASO A: AUTOMÁTICO (Default) ---
-                # La OP pasa a EN_ESPERA.
+                # Automático: OP a EN ESPERA.
                 orden_produccion_controller.cambiar_estado_orden_simple(op_id, 'EN ESPERA')
+                mensaje_extra_op = "La OP asociada pasó a EN ESPERA."
 
-                # Intentar crear la OC hija automáticamente
-                if usuario_id:
-                    resultado_hija = self.crear_oc_hija_desde_fallo(orden_data['id'], usuario_id)
-                    if resultado_hija.get('success'):
-                        nueva_oc = resultado_hija.get('data', {}).get('data', {}).get('codigo_oc', 'N/A')
-                        mensaje_extra = f"La OP pasó a EN ESPERA. Se generó automáticamente la OC complementaria {nueva_oc}."
-                        logger.info(f"[OC RECEPCION] OP {op_id} movida a EN_ESPERA. OC Hija creada.")
-                    else:
-                        mensaje_extra = f"La OP pasó a EN ESPERA, pero falló la creación automática de la OC hija: {resultado_hija.get('error')}"
-                        logger.error(f"[OC RECEPCION] Fallo creando OC hija automática: {resultado_hija.get('error')}")
-                else:
-                     mensaje_extra = "La OP pasó a EN ESPERA. (No se pudo crear OC hija por falta de ID de usuario)."
+        # --- CASO B: OC MANUAL (SIN OP) ---
+        else:
+            # Si es manual y el usuario eligió "gestionar manualmente", no hacemos nada extra.
+            if modo_oc == 'manual':
+                return {
+                    'success': True,
+                    'partial': True,
+                    'message': f"{motivo}. Se generó un reclamo. No se generó OC hija (gestión manual)."
+                }
+            # Si es automático, seguimos al bloque de creación de hija.
+            mensaje_extra_op = "OC Manual incompleta."
+
+        # --- CREACIÓN DE OC HIJA (Común para Auto-OP y Auto-Manual) ---
+        if usuario_id:
+            resultado_hija = self.crear_oc_hija_desde_fallo(orden_data['id'], usuario_id)
+            if resultado_hija.get('success'):
+                nueva_oc = resultado_hija.get('data', {}).get('data', {}).get('codigo_oc', 'N/A')
+                mensaje_extra = f"{mensaje_extra_op} Se generó automáticamente la OC complementaria {nueva_oc}."
+                logger.info(f"[OC RECEPCION] OC Hija creada para OC {orden_data.get('id')}.")
+            else:
+                mensaje_extra = f"{mensaje_extra_op} Pero falló la creación automática de la OC hija: {resultado_hija.get('error')}"
+                logger.error(f"[OC RECEPCION] Fallo creando OC hija automática: {resultado_hija.get('error')}")
+        else:
+             mensaje_extra = f"{mensaje_extra_op} (No se pudo crear OC hija por falta de ID de usuario)."
 
         return {
             'success': True,
