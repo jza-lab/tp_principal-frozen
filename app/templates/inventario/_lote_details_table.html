@@ -76,19 +76,6 @@
                 </a>
                 {% endif %}
 
-                {% if lote.estado != 'cuarentena' or lote.cantidad_en_cuarentena == 0 %}
-                <button type="button" class="btn btn-sm btn-outline-warning"
-                        title="Poner en Cuarentena"
-                        data-bs-toggle="modal"
-                        data-bs-target="#modalCuarentena"
-                        data-lote-id="{{ lote.id_lote }}"
-                        data-lote-numero="{{ lote.numero_lote_proveedor }}"
-                        data-lote-cantidad="{{ lote.cantidad_actual }}"
-                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
-                    <i class="bi bi-shield-lock"></i>
-                </button>
-                {% endif %}
-                
                 {% if lote.estado == 'cuarentena' or 0 < lote.cantidad_en_cuarentena %}
                 <button type="button" class="btn btn-sm btn-outline-success"
                         title="Liberar de Cuarentena"
@@ -100,17 +87,19 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-check"></i>
                 </button>
-
-                <!-- Botón para Marcar como No Apto -->
-                <button type="button" class="btn btn-sm btn-outline-danger"
-                        title="Marcar como No Apto"
+                {% endif %}
+                
+                {% if lote.estado != 'cuarentena' or lote.cantidad_en_cuarentena == 0 %}
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        title="Poner en Cuarentena"
                         data-bs-toggle="modal"
-                        data-bs-target="#modalNoApto"
+                        data-bs-target="#modalCuarentena"
                         data-lote-id="{{ lote.id_lote }}"
                         data-lote-numero="{{ lote.numero_lote_proveedor }}"
-                        data-lote-cantidad-total="{{ (lote.cantidad_actual | float) + (lote.cantidad_en_cuarentena | float) }}"
-                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
-                    <i class="bi bi-slash-circle"></i>
+                        data-lote-cantidad="{{ lote.cantidad_actual }}"
+                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}"
+                        
+                        data-lote-cantidad-reservada="{{ lote.cantidad_reservada }}" > <i class="bi bi-shield-lock"></i>
                 </button>
                 {% endif %}
             </td>

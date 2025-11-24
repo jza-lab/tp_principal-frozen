@@ -337,11 +337,17 @@ document.addEventListener('DOMContentLoaded', function () {
             var button = event.relatedTarget;
             var loteId = button.getAttribute('data-lote-id');
             var loteNumero = button.getAttribute('data-lote-numero');
-            var loteCantidad = parseFloat(button.getAttribute('data-lote-cantidad'));
-            var loteCantidadCuarentena = parseFloat(button.getAttribute('data-lote-cantidad-cuarentena'));
+            
+            // CORRECCIÓN: Obtener cantidades
+            var loteCantidadDisponible = parseFloat(button.getAttribute('data-lote-cantidad')) || 0;
+            var loteCantidadReservada = parseFloat(button.getAttribute('data-lote-cantidad-reservada')) || 0;
+            
+            // El stock físico real que se puede mover es Disponible + Reservado
+            var stockFisicoTotal = loteCantidadDisponible + loteCantidadReservada;
             
             var form = modalCuarentena.querySelector('#formCuarentena');
-            var actionUrl = `{{ url_for('inventario_view.listar_lotes') }}lote/${loteId}/cuarentena`;
+            // (Asegúrate que la URL sea la correcta según tu router)
+            var actionUrl = `/inventario/lote/${loteId}/cuarentena`; 
             form.setAttribute('action', actionUrl);
             
             modalCuarentena.querySelector('#loteNumeroCuarentena').textContent = loteNumero;
@@ -350,7 +356,8 @@ document.addEventListener('DOMContentLoaded', function () {
             var inputCantidad = modalCuarentena.querySelector('#cantidad_cuarentena');
             var spanCantidad = modalCuarentena.querySelector('#loteCantidadDisponibleCuarentena');
             
-            if (loteCantidad <= 0 && loteCantidadCuarentena <= 0) {
+            // Si no hay stock físico (ni disponible ni reservado), ocultamos el input
+            if (stockFisicoTotal <= 0) {
                 divCantidad.style.display = 'none';
                 inputCantidad.removeAttribute('required');
                 inputCantidad.removeAttribute('min');
@@ -359,9 +366,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 divCantidad.style.display = 'block';
                 inputCantidad.setAttribute('required', 'required');
                 inputCantidad.setAttribute('min', '0.01');
-                inputCantidad.setAttribute('max', loteCantidad);
-                inputCantidad.setAttribute('placeholder', `Máx: ${loteCantidad}`);
-                spanCantidad.textContent = loteCantidad;
+                
+                // El máximo permitido es la suma de lo disponible y lo reservado
+                inputCantidad.setAttribute('max', stockFisicoTotal);
+                inputCantidad.setAttribute('placeholder', `Máx: ${stockFisicoTotal}`);
+                
+                spanCantidad.textContent = stockFisicoTotal; // Mostrar al usuario el total real
                 inputCantidad.value = ''; 
             }
         });

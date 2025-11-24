@@ -725,46 +725,42 @@ class OrdenCompraController:
         lotes_creados_count = 0
         errores = []
 
-        # Importar modelo de reserva aquí para evitar ciclos al inicio
         from app.models.reserva_insumo import ReservaInsumoModel
         reserva_insumo_model = ReservaInsumoModel()
 
         for item_info in items_recibidos:
             item_data = item_info['data']
-            cantidad_total = item_info['cantidad_total_recibida']
-            cantidad_aprobada = item_info['cantidad_aprobada']
-            cantidad_cuarentena = item_info['cantidad_cuarentena']
+            cantidad_aprobada = float(item_info['cantidad_aprobada'])
             qc_data = item_info.get('qc_data')
 
-            if cantidad_aprobada <= 0 and cantidad_cuarentena <= 0:
+            # --- CORRECCIÓN: FILTRO ESTRICTO ---
+            # Solo creamos lote si hay cantidad APROBADA.
+            # La cantidad en cuarentena o rechazada se ignora para el lote (va a reclamo).
+            if cantidad_aprobada <= 0:
                 continue
 
-            # Determinar si hay reserva automática
+            # La cantidad real del lote es SOLO lo aprobado.
+            cantidad_real_lote = cantidad_aprobada
+
+            # Configuración de Reserva Dura
             op_id = orden_data.get('orden_produccion_id')
             es_reserva_automatica = bool(op_id and cantidad_aprobada > 0)
 
-            # Estado inicial
             if es_reserva_automatica:
                 estado_lote = 'reservado'
-                # En reserva dura, la cantidad disponible física (cantidad_actual) debería ser 0
-                # porque todo lo aprobado se asigna a la OP.
-                cantidad_inicial_disponible = 0
+                cantidad_inicial_disponible = 0 # Todo se reserva
                 cantidad_a_reservar = cantidad_aprobada
             else:
                 estado_lote = 'disponible'
                 cantidad_inicial_disponible = cantidad_aprobada
                 cantidad_a_reservar = 0
 
-            if cantidad_aprobada <= 0 and cantidad_cuarentena > 0:
-                estado_lote = 'cuarentena'
-                cantidad_inicial_disponible = 0 # No hay disponible si todo es cuarentena
-
             lote_data = {
                 'id_insumo': item_data['insumo_id'],
                 'id_proveedor': orden_data.get('proveedor_id'),
-                'cantidad_inicial': cantidad_total,
-                'cantidad_actual': cantidad_inicial_disponible, # <-- CORRECCIÓN CRÍTICA
-                'cantidad_en_cuarentena': cantidad_cuarentena,
+                'cantidad_inicial': cantidad_real_lote,     # Solo lo aprobado
+                'cantidad_actual': cantidad_inicial_disponible,
+                'cantidad_en_cuarentena': 0, # Forzamos 0 porque "no cuenta para el lote"
                 'precio_unitario': item_data.get('precio_unitario'),
                 'documento_ingreso': f"{orden_data.get('codigo_oc')}",
                 'f_ingreso': date.today().isoformat(),
@@ -772,30 +768,25 @@ class OrdenCompraController:
                 'orden_produccion_id': op_id
             }
 
-            # ... (Cálculo de vencimiento igual que antes) ...
+            # Cálculo de vencimiento (Mantenemos tu lógica original)
             insumo_id_para_lote = item_data.get('insumo_id')
             if insumo_id_para_lote:
                 insumo_res, _ = self.insumo_controller.obtener_insumo_por_id(insumo_id_para_lote)
                 if insumo_res.get('success') and insumo_res.get('data'):
-                    insumo_data = insumo_res['data']
-                    vida_util_raw = insumo_data.get('vida_util_dias')
-                    if vida_util_raw is not None:
-                        try:
-                            vida_util = int(vida_util_raw)
-                            if vida_util > 0:
-                                fecha_vencimiento = datetime.now().date() + timedelta(days=vida_util)
-                                lote_data['f_vencimiento'] = fecha_vencimiento.isoformat()
-                        except (ValueError, TypeError):
-                            pass
+                    vida_util = int(insumo_res['data'].get('vida_util_dias') or 0)
+                    if vida_util > 0:
+                        fecha_vencimiento = datetime.now().date() + timedelta(days=vida_util)
+                        lote_data['f_vencimiento'] = fecha_vencimiento.isoformat()
 
             try:
+                # Crear el lote
                 lote_result, status_code = self.inventario_controller.crear_lote(lote_data, usuario_id)
 
                 if lote_result.get('success'):
                     lotes_creados_count += 1
                     nuevo_lote_id = lote_result.get('data', {}).get('id_lote')
 
-                    # --- CREAR REGISTRO DE RESERVA (CORRECCIÓN) ---
+                    # Crear Reserva (si aplica)
                     if es_reserva_automatica and nuevo_lote_id:
                         try:
                             datos_reserva = {
@@ -804,18 +795,20 @@ class OrdenCompraController:
                                 'insumo_id': item_data['insumo_id'],
                                 'cantidad_reservada': cantidad_a_reservar,
                                 'usuario_reserva_id': usuario_id,
-                                'estado': 'RESERVADO' # Estado inicial de la reserva
+                                'estado': 'RESERVADO'
                             }
                             reserva_insumo_model.create(datos_reserva)
-                            logger.info(f"Reserva automática creada para Lote {nuevo_lote_id} -> OP {op_id}")
+                            logger.info(f"Reserva creada: Lote {nuevo_lote_id} -> OP {op_id}")
                         except Exception as e_reserva:
-                            logger.error(f"Fallo al crear reserva automática: {e_reserva}")
-                    # ----------------------------------------------
+                            logger.error(f"Fallo reserva auto: {e_reserva}")
 
-                    # ... (Lógica de QC igual que antes) ...
+                    # Registrar Control de Calidad vinculado al lote
+                    # (Opcional: si quieres guardar el registro de que este lote "pasó" la inspección)
                     if qc_data and nuevo_lote_id:
                         qc_data['lote_insumo_id'] = nuevo_lote_id
                         qc_data['orden_compra_id'] = orden_data.get('id')
+                        # Ajustamos la decisión a APROBADO porque este lote solo tiene lo bueno
+                        qc_data['decision_final'] = 'APROBADO'
                         self.control_calidad_insumo_model.create_registro(qc_data)
 
                 else:
@@ -1049,21 +1042,30 @@ class OrdenCompraController:
 
                 lotes_del_item = lotes_por_insumo.get(item_insumo_id, [])
 
-                # --- CORRECCIÓN CRÍTICA ---
-                # Usamos 'cantidad_inicial' en lugar de 'cantidad_actual'.
-                # cantidad_inicial refleja lo que entró físicamente, incluso si se reservó (actual=0)
-                # o si se puso en cuarentena.
-                total_ingresado = sum(
-                    float(lote.get('cantidad_inicial', 0))
-                    for lote in lotes_del_item
-                )
-                # --------------------------
+                # --- CORRECCIÓN: Restar Cuarentena/Rechazo ---
+                total_ingresado_neto = 0.0
 
-                # Calculamos el faltante (Lo que pedí - Lo que llegó físicamente)
-                cantidad_a_reordenar = solicitado - total_ingresado
+                for lote in lotes_del_item:
+                    inicial = float(lote.get('cantidad_inicial', 0))
+                    cuarentena = float(lote.get('cantidad_en_cuarentena', 0))
 
-                logger.info(f"[OC HIJA] Insumo {item_insumo_id}: Solicitado {solicitado} - Ingresado {total_ingresado} = Faltante {cantidad_a_reordenar}")
+                    # Si el lote está 'rechazado' o 'no_apto', no cuenta nada.
+                    # Si está en 'cuarentena', tampoco cuenta como disponible para producción inmediata.
+                    # Si está 'disponible' o 'reservado', cuenta lo que no sea cuarentena.
 
+                    estado = lote.get('estado', '').lower()
+
+                    if estado in ['rechazado', 'no_apto', 'retirado']:
+                        continue # Este lote no sirve, no suma al ingresado
+
+                    # Lo que sirve es lo que entró MENOS lo que se apartó por calidad
+                    cantidad_util = max(0, inicial - cuarentena)
+                    total_ingresado_neto += cantidad_util
+
+                # Calculamos el faltante real (Lo que pedí - Lo que sirve)
+                cantidad_a_reordenar = solicitado - total_ingresado_neto
+
+                logger.info(f"[OC HIJA] Insumo {item_insumo_id}: Solicitado {solicitado} - Útil {total_ingresado_neto} = Faltante {cantidad_a_reordenar}")
                 if cantidad_a_reordenar > 0.01:
                     items_faltantes.append({
                         'insumo_id': item_insumo_id,

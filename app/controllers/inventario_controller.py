@@ -1169,6 +1169,49 @@ class InventarioController(BaseController):
             # Actualizar el stock consolidado del insumo (importante si cambió la cantidad)
             self.insumo_controller.actualizar_stock_insumo(lote['id_insumo'])
 
+            # --- NUEVA LÓGICA: REVERTIR OPs CON RESERVAS EN ESTE LOTE ---
+            try:
+                # 1. Buscar si este lote tenía reservas activas para producción
+                reservas_afectadas_res = self.reserva_insumo_model.find_all(
+                    filters={'lote_inventario_id': lote_id}
+                )
+
+                if reservas_afectadas_res.get('success'):
+                    reservas = reservas_afectadas_res.get('data', [])
+                    ops_afectadas = set()
+
+                    for reserva in reservas:
+                        # Guardamos la ID de la OP afectada
+                        if reserva.get('orden_produccion_id'):
+                            ops_afectadas.add(reserva['orden_produccion_id'])
+
+                        # 2. ELIMINAR LA RESERVA
+                        # Como el lote está en cuarentena (o una parte), la reserva ya no es confiable.
+                        # La eliminamos para que el sistema obligue a buscar otro lote disponible.
+                        self.reserva_insumo_model.delete(reserva['id'], 'id')
+                        logger.warning(f"Reserva {reserva['id']} eliminada automáticamente porque el lote {lote.get('numero_lote_proveedor')} pasó a cuarentena.")
+
+                    # 3. ACTUALIZAR ESTADO DE LAS OPs
+                    for op_id in ops_afectadas:
+                        op_res = self.op_model.find_by_id(op_id)
+                        if op_res.get('success'):
+                            op_data = op_res['data']
+                            estado_actual = op_data.get('estado')
+
+                            # Si la OP estaba lista para producir, la regresamos a EN ESPERA
+                            # Si ya estaba en proceso, no la tocamos (requiere decisión humana de parar)
+                            if estado_actual == 'LISTA PARA PRODUCIR':
+                                self.op_model.cambiar_estado(
+                                    op_id,
+                                    'PENDIENTE',
+                                    observaciones=f"Regresada a EN ESPERA automáticamente. El lote {lote.get('numero_lote_proveedor')} pasó a cuarentena."
+                                )
+                                logger.info(f"OP {op_id} regresada a EN ESPERA por cuarentena de insumo.")
+
+            except Exception as e_revert:
+                logger.error(f"Error al revertir OPs por cuarentena de lote {lote_id}: {e_revert}")
+            # ------------------------------------------------------------
+
             return self.success_response(message="Lote puesto en cuarentena con éxito.")
 
         except Exception as e:
