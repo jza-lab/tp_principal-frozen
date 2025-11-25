@@ -17,6 +17,27 @@ class LoteProductoModel(BaseModel):
     def get_table_name(self) -> str:
         return 'lotes_productos'
 
+    def update(self, record_id: int, data: Dict, id_column: str = 'id') -> Dict:
+        """
+        Sobrescribe el método de actualización para forzar el estado a 'AGOTADO'
+        si la cantidad es cero o menor.
+        """
+        if 'cantidad_actual' in data:
+            try:
+                # Si la cantidad disponible es 0 o menos, y no hay nada en cuarentena,
+                # el lote está realmente agotado.
+                cantidad_actual = float(data.get('cantidad_actual', 0))
+                cantidad_en_cuarentena = float(data.get('cantidad_en_cuarentena', 0))
+
+                if cantidad_actual <= 0 and cantidad_en_cuarentena <= 0:
+                    data['estado'] = 'AGOTADO'
+            except (ValueError, TypeError):
+                # Si el valor no es un número válido, no hacemos nada.
+                # Se deja que el schema o la DB maneje el error.
+                pass
+        
+        return super().update(record_id, data, id_column)
+
     def get_all_lotes_for_antiquity_view(self) -> Dict:
         """
         Obtiene todos los lotes de producto con su costo de producción calculado,
