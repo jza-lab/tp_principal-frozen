@@ -935,6 +935,16 @@ class InventarioController(BaseController):
             lotes_response, _ = self.obtener_lotes_para_vista()
             if not lotes_response.get('success'):
                 return self.error_response(lotes_response.get('error', 'No se pudieron obtener los lotes de inventario.'), 500)
+           # START MODIFICATION: Calculate reserved quantities
+            reservas_response = self.reserva_insumo_model.find_all(filters={'estado': 'RESERVADO'})
+            reservas_por_lote = {}
+            if reservas_response.get('success'):
+                for reserva in reservas_response.get('data', []):
+                    lote_id = reserva.get('lote_inventario_id')
+                    if lote_id:
+                        cantidad = float(reserva.get('cantidad_reservada', 0))
+                        reservas_por_lote[lote_id] = reservas_por_lote.get(lote_id, 0) + cantidad
+            # END MODIFICATION
 
             lotes_por_insumo = {}
             for lote in lotes_response.get('data', []):
@@ -947,6 +957,9 @@ class InventarioController(BaseController):
                     # IMPORTANTE: Usamos cantidad_actual (físico disponible en lote)
                     lote['cantidad_actual'] = float(lote.get('cantidad_actual') or 0)
                     lote['cantidad_en_cuarentena'] = float(lote.get('cantidad_en_cuarentena') or 0)
+                    # START MODIFICATION: Add reserved quantity to lot
+                    lote['cantidad_reservada'] = reservas_por_lote.get(lote.get('id_lote'), 0)
+                    # END MODIFICATION
                     lotes_por_insumo[insumo_id].append(lote)
 
             # 3. Construir el resultado final iterando sobre los insumos del catálogo

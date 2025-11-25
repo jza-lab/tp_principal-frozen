@@ -451,6 +451,16 @@ class LoteProductoController(BaseController):
             result = self.model.get_all_lotes_for_view()
             if result.get('success'):
                 lotes = result.get('data', [])
+                # START MODIFICATION: Calculate reserved quantities
+                reservas_response = self.reserva_model.find_all(filters={'estado': 'RESERVADO'})
+                reservas_por_lote = {}
+                if reservas_response.get('success'):
+                    for reserva in reservas_response.get('data', []):
+                        lote_id = reserva.get('lote_producto_id')
+                        if lote_id:
+                            cantidad = float(reserva.get('cantidad_reservada', 0))
+                            reservas_por_lote[lote_id] = reservas_por_lote.get(lote_id, 0) + cantidad
+                # END MODIFICATION
 
                 # Convertir strings de fecha a objetos datetime
                 for lote in lotes:
@@ -458,6 +468,9 @@ class LoteProductoController(BaseController):
                         lote['created_at'] = datetime.fromisoformat(lote['created_at'])
                     if lote.get('fecha_vencimiento') and isinstance(lote['fecha_vencimiento'], str):
                         lote['fecha_vencimiento'] = datetime.fromisoformat(lote['fecha_vencimiento'])
+                    # START MODIFICATION: Add reserved quantity to lot
+                    lote['cantidad_reservada'] = reservas_por_lote.get(lote.get('id_lote'), 0)
+                    # END MODIFICATION
 
                 return self.success_response(data=lotes)
             else:
