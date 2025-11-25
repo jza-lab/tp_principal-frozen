@@ -444,3 +444,28 @@ def seguimiento_publico_pedido(token):
         hitos=hitos_para_template,
         lotes_por_item=lotes_por_item
     )
+
+@public_bp.route('/pedido/<int:pedido_id>/pagar', methods=['GET'])
+def pagar_pedido_page(pedido_id):
+    """
+    Muestra la página dedicada para registrar un pago para un pedido específico.
+    """
+    if 'cliente_id' not in session:
+        flash('Por favor, inicia sesión para realizar un pago.', 'info')
+        return redirect(url_for('cliente.login', next=request.url))
+
+    csrf_form = CSRFOnlyForm()
+    cliente_controller = ClienteController()
+    
+    # Aquí llamaremos a un método del controlador que preparará los datos para la vista
+    response, status_code = cliente_controller.obtener_datos_para_pago(pedido_id, session['cliente_id'])
+
+    if status_code != 200:
+        flash(response.get('error', 'No se pudo cargar la página de pago.'), 'danger')
+        return redirect(url_for('cliente.perfil'))
+
+    return render_template(
+        'public/pagar_pedido.html',
+        pedido=response.get('data', {}),
+        csrf_form=csrf_form
+    )

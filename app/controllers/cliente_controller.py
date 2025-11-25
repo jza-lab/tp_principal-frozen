@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from typing import Dict, Optional
 import logging
 from app.config import Config
+from decimal import Decimal
 
 
 logger = logging.getLogger(__name__)
@@ -477,9 +478,12 @@ class ClienteController(BaseController):
                         
                         # Calcular saldo pendiente
                         pagos_res, _ = pago_controller.get_pagos_by_pedido_id(pedido['id'])
-                        total_pagado = sum(p['monto'] for p in pagos_res.get('data', []))
-                        pedido['saldo_pendiente'] = pedido['precio_orden'] - total_pagado
-                        
+                        pagos_data = pagos_res.get('data', []) if isinstance(pagos_res, dict) else pagos_res[0].get('data', [])
+                        total_pagado = sum(Decimal(p['monto']) for p in pagos_data)
+                        precio_orden = Decimal(pedido.get('precio_orden') or '0')
+                        saldo_pendiente = precio_orden - total_pagado
+                        pedido['saldo_pendiente'] = str(saldo_pendiente)
+
                         pedidos_enriquecidos.append(pedido)
 
             # 3. Combinar los datos
@@ -520,3 +524,37 @@ class ClienteController(BaseController):
         except Exception as e:
             logger.error(f"Error recalculando el estado crediticio de todos los clientes: {e}", exc_info=True)
             return 0
+
+    def obtener_datos_para_pago(self, pedido_id: int, cliente_id: int) -> tuple:
+        """
+        Obtiene los datos de un pedido para la página de pago, verificando la propiedad.
+        """
+        try:
+            # 1. Obtener el pedido completo
+            pedido_response, status_code = self.pedido_controller.obtener_pedido_por_id(pedido_id)
+            if status_code != 200:
+                return self.error_response('Pedido no encontrado.', 404)
+            
+            pedido = pedido_response.get('data', {})
+
+            # 2. Verificar que el pedido pertenece al cliente en sesión
+            if pedido.get('id_cliente') != cliente_id:
+                return self.error_response('No tienes permiso para pagar este pedido.', 403)
+
+            # 3. Calcular el saldo pendiente
+            from app.controllers.pago_controller import PagoController
+            pago_controller = PagoController()
+            pagos_res, _ = pago_controller.get_pagos_by_pedido_id(pedido_id)
+            
+            pagos_data = pagos_res.get('data', [])
+            total_pagado = sum(Decimal(p['monto']) for p in pagos_data)
+            precio_orden = Decimal(pedido.get('precio_orden') or '0')
+            saldo_pendiente = precio_orden - total_pagado
+            
+            pedido['saldo_pendiente'] = str(saldo_pendiente)
+
+            return self.success_response(data=pedido)
+
+        except Exception as e:
+            logger.error(f"Error obteniendo datos para la página de pago del pedido {pedido_id}: {str(e)}")
+            return self.error_response('Error interno del servidor.', 500)
