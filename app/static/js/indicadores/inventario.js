@@ -286,7 +286,7 @@ window.renderInventario = function(data, container, utils) {
             yAxis: { type: 'value' },
             series: [
                 { name: 'Stock Actual', type: 'bar', data: data.stock_critico_chart.actual, itemStyle: { color: '#ee6666' } },
-                { name: 'Mínimo', type: 'bar', data: data.stock_critico_chart.minimo, itemStyle: { color: '#fac858' }, barGap: '-100%', opacity: 0.5 }
+                { name: 'Mínimo', type: 'bar', data: data.stock_critico_chart.minimo, itemStyle: { color: '#fac858' }, opacity: 0.5 }
             ]
         });
     } else {

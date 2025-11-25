@@ -911,6 +911,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
             } else {
+                // Mostrar container-motivos-producto O container-motivos-insumo si es producto
+                // Para simplificar, usamos container-motivos-insumo si no hay uno especifico, pero 
+                // aqui ya existe container-motivos-producto
                 document.getElementById('container-motivos-producto').style.display = 'block';
             }
 
@@ -934,6 +937,13 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotificationModal('Error', 'Debe seleccionar un motivo de retiro.', 'error');
             return;
         }
+        
+        // Obtener cantidad (Nuevo)
+        const cantidad = document.getElementById('cantidad_resolucion_no_apto').value;
+        if (!cantidad || parseFloat(cantidad) <= 0) {
+             showNotificationModal('Error', 'Debe ingresar una cantidad válida a retirar.', 'error');
+             return;
+        }
 
         // Obtener accion downstream solo si es visible
         let accionDownstream = null;
@@ -941,6 +951,12 @@ document.addEventListener('DOMContentLoaded', function () {
             accionDownstream = document.querySelector('input[name="accion_ops_downstream"]:checked').value;
         } else {
             accionDownstream = 'ignorar'; // O default seguro
+        }
+
+        // Obtener checkbox de retirar productos downstream si es visible
+        let retirarProductosDownstream = false;
+        if (document.getElementById('section-ops-afectadas').style.display !== 'none') {
+            retirarProductosDownstream = document.getElementById('retirar_productos_downstream').checked;
         }
         
         // Encontrar el botón original para reutilizar la lógica visual
@@ -968,7 +984,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     resolucion: 'No Apto',
                     alerta_id: '{{ alerta.id }}',
                     motivo_id: motivoId, // Nuevo campo
-                    accion_ops_downstream: accionDownstream
+                    cantidad: cantidad, // Nuevo campo
+                    accion_ops_downstream: accionDownstream,
+                    retirar_productos_downstream: retirarProductosDownstream // Nuevo campo
                 }
             };
 
@@ -1609,6 +1627,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <input type="hidden" id="lote-insumo-id-resolucion">
                     <input type="hidden" id="lote-tipo-resolucion">
                     
+                    <div class="mb-3">
+                        <label for="cantidad_resolucion_no_apto" class="form-label fw-bold">Cantidad a retirar <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="cantidad_resolucion_no_apto" step="0.01" min="0.01">
+                        <div class="form-text">Ingrese la cantidad a descartar. El resto (si hay) se puede devolver a Disponible o mantener en Cuarentena.</div>
+                    </div>
+
                     <div class="mb-3" id="container-motivos-insumo" style="display: none;">
                         <label for="motivo_desperdicio_insumo" class="form-label fw-bold">Motivo de Retiro <span class="text-danger">*</span></label>
                         <select class="form-select" id="motivo_desperdicio_insumo">
@@ -1647,6 +1671,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                     Dejar OPs como están (Solo marcar insumo)
                                 </label>
                             </div>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="retirar_productos_downstream" checked>
+                            <label class="form-check-label text-danger fw-bold" for="retirar_productos_downstream">
+                                Retirar productos ya elaborados por seguridad
+                            </label>
+                            <div class="form-text text-danger">Se recomienda retirar todos los productos vinculados a este insumo defectuoso.</div>
                         </div>
                     </div>
                 </form>

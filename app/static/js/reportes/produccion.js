@@ -68,7 +68,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 if(noDataMessage) noDataMessage.style.display = 'none';
                 if(downloadButton) downloadButton.disabled = false;
 
-                // If absolutely empty, maybe show message, but user asked to avoid crashes, so we prefer showing empty containers over hiding UI.
                 if (!hasData) {
                      // Optional: show specific message per card instead of global hide
                 }
@@ -223,41 +222,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 const option = {
                     tooltip: {
                         trigger: 'axis',
-                        axisPointer: { type: 'shadow' },
+                        axisPointer: { type: 'cross' },
                         formatter: function(params) {
                             let tooltip = `<strong>${params[0].axisValue}</strong><br/>`;
                             params.forEach(param => {
                                 tooltip += `${param.marker} ${param.seriesName}: $${param.value.toLocaleString('es-AR')}<br/>`;
                             });
-                            if (params.length >= 2) {
-                                const diff = params[1].value - params[0].value;
-                                if (diff > 0) {
-                                    tooltip += `<span style="color: #e74a3b; font-weight: bold;">Sobrecosto: $${diff.toLocaleString('es-AR')}</span>`;
-                                }
-                            }
                             return tooltip;
                         }
                     },
                     legend: { data: ['Costo Planificado', 'Costo Real'], bottom: 0 },
                     grid: { left: '3%', right: '4%', bottom: '10%', containLabel: true },
-                    xAxis: { type: 'category', data: data.labels },
+                    xAxis: { type: 'category', data: data.labels, boundaryGap: false },
                     yAxis: { type: 'value', axisLabel: { formatter: '${value}' } },
                     series: [
                         {
                             name: 'Costo Planificado',
-                            type: 'bar',
+                            type: 'line', // Changed to line
+                            smooth: true, // Smooth curve
                             data: data.planificado,
                             itemStyle: { color: '#858796' },
-                            barGap: '-100%'
+                            areaStyle: { opacity: 0.1 } // Added area style
                         },
                         {
                             name: 'Costo Real',
-                            type: 'bar',
+                            type: 'line', // Changed to line
+                            smooth: true, // Smooth curve
                             data: data.real,
-                            itemStyle: { 
-                                color: '#4e73df',
-                                opacity: 0.7
-                            }
+                            itemStyle: { color: '#4e73df' },
+                            areaStyle: { opacity: 0.2 } // Added area style
                         }
                     ]
                 };
@@ -326,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!container) return;
 
         const chart = echarts.getInstanceByDom(container) || echarts.init(container);
-        charts['eficienciaConsumo'] = {chart: chart, title: 'Eficiencia de Consumo (Plan vs Real)'};
+        charts['eficienciaConsumo'] = {chart: chart, title: 'Eficiencia de Consumo (Estándar vs Real)'};
         
         chart.showLoading();
 
@@ -367,7 +360,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const plannedData = data.map(item => item.planificado);
                     const realData = data.map(item => item.real);
                     
-                    // Colores para puntos reales: Rojo si Real > Planificado, Verde si Real <= Planificado
+                    // Colores para puntos reales: Rojo si Real > Planificado (Ineficiencia), Verde si Real <= Planificado (Eficiencia)
+                    // Nota: 'planificado' en los datos ahora representa el Estándar Teórico para la producción real.
                     const realPointColors = data.map(item => item.real > item.planificado ? '#e74a3b' : '#1cc88a');
 
                     const option = {
@@ -384,13 +378,13 @@ document.addEventListener('DOMContentLoaded', function () {
                                 return `
                                     <strong>${item.insumo}</strong><br/>
                                     Producto: ${item.producto}<br/>
-                                    Planificado: ${item.planificado.toLocaleString('es-AR')}<br/>
-                                    Real: ${item.real.toLocaleString('es-AR')}<br/>
+                                    Consumo Estándar: ${item.planificado.toLocaleString('es-AR')}<br/>
+                                    Consumo Real: ${item.real.toLocaleString('es-AR')}<br/>
                                     Desviación: <span style="color:${diffColor}">${diffSign}${item.desviacion}%</span>
                                 `;
                             }
                         },
-                        legend: { data: ['Planificado', 'Real'] },
+                        legend: { data: ['Estándar', 'Real'] },
                         grid: { left: '3%', right: '4%', bottom: '8%', containLabel: true }, // Aumentar bottom para etiquetas X
                         xAxis: { 
                             type: 'value', 
@@ -430,7 +424,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 data: data.map((item, idx) => [item.planificado, idx]) // Dummy data to trigger render
                             },
                             {
-                                name: 'Planificado',
+                                name: 'Estándar',
                                 type: 'scatter',
                                 itemStyle: { color: '#858796' }, // Gris
                                 symbolSize: 10,

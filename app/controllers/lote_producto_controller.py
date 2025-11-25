@@ -1704,3 +1704,106 @@ class LoteProductoController(BaseController):
         except Exception as e:
             logger.error(f"Error devolviendo stock a lote {lote_id}: {e}")
             return False
+    def retirar_lote_producto_unificado(self, lote_id: int, cantidad: float, motivo_id: int, comentarios: str, usuario_id: int, foto_file=None, usar_foto_cuarentena=False, accion_pedidos: str = 'ignorar') -> tuple:
+        """
+        Método centralizado para retirar stock de un lote de producto, registrar desperdicio
+        y gestionar las afectaciones (pedidos).
+        """
+        try:
+            lote_res = self.model.find_by_id(lote_id, 'id_lote')
+            if not lote_res.get('success') or not lote_res.get('data'):
+                return self.error_response('Lote no encontrado', 404)
+            lote = lote_res['data']
+
+            if cantidad <= 0:
+                return self.error_response("La cantidad debe ser mayor a 0.", 400)
+            if not motivo_id:
+                return self.error_response("Debe seleccionar un motivo de desperdicio.", 400)
+
+            # --- 1. Calcular Stock ---
+            stock_disp = float(lote.get('cantidad_actual') or 0)
+            stock_cuar = float(lote.get('cantidad_en_cuarentena') or 0)
+            stock_total = stock_disp + stock_cuar
+
+            if cantidad > stock_total:
+                # Permitir tolerancia pequeña por errores de punto flotante
+                if cantidad - stock_total < 0.001:
+                    cantidad = stock_total
+                else:
+                    return self.error_response(f"La cantidad a retirar ({cantidad}) excede el stock total del lote ({stock_total}).", 400)
+
+            # --- 2. Manejo de Foto ---
+            foto_url_final = None
+            if foto_file and foto_file.filename:
+                foto_url_final = self._subir_foto_y_obtener_url(foto_file, lote['id_lote'])
+            elif usar_foto_cuarentena:
+                # Buscar foto en historial de calidad
+                historial = self.control_calidad_producto_controller.obtener_registros_por_lote_producto(lote_id)
+                if historial[0].get('success') and historial[0].get('data'):
+                    for evento in historial[0]['data']:
+                        if evento.get('foto_url'):
+                             foto_url_final = evento['foto_url']
+                             break
+
+            # --- 3. Registrar Desperdicio ---
+            registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
+            detalle_texto = "Retiro de inventario"
+            if comentarios:
+                detalle_texto += f": {comentarios}"
+
+            datos_desperdicio = {
+                'lote_producto_id': lote['id_lote'],
+                'motivo_id': int(motivo_id),
+                'cantidad': cantidad,
+                'created_at': datetime.now().isoformat(),
+                'usuario_id': usuario_id,
+                'detalle': detalle_texto,
+                'comentarios': comentarios,
+                'foto_url': foto_url_final
+            }
+            
+            res_desperdicio = registro_desperdicio_model.create(datos_desperdicio)
+            if not res_desperdicio.get('success'):
+                # Fallback si no tiene foto_url
+                if "foto_url" in str(res_desperdicio.get('error')):
+                     datos_desperdicio.pop('foto_url')
+                     res_desperdicio = registro_desperdicio_model.create(datos_desperdicio)
+                if not res_desperdicio.get('success'):
+                    return self.error_response(f"Error al registrar desperdicio: {res_desperdicio.get('error')}", 500)
+
+            # --- 4. Actualizar Stock ---
+            nueva_cantidad_cuar = stock_cuar
+            nueva_cantidad_disp = stock_disp
+            remanente_a_descontar = cantidad
+
+            # Prioridad: descontar de cuarentena primero
+            if stock_cuar > 0:
+                descuento_cuar = min(stock_cuar, remanente_a_descontar)
+                nueva_cantidad_cuar -= descuento_cuar
+                remanente_a_descontar -= descuento_cuar
+            
+            if remanente_a_descontar > 0:
+                nueva_cantidad_disp -= remanente_a_descontar
+
+            nuevo_estado = lote['estado']
+            # Si se agota todo el stock (físico y cuarentena)
+            if (nueva_cantidad_cuar + nueva_cantidad_disp) <= 0.001:
+                # Si retiramos TODO lo que había, marcamos como RETIRADO (o AGOTADO si fue consumo normal, pero aquí es "No Apto")
+                if cantidad >= stock_total - 0.001:
+                    nuevo_estado = 'RETIRADO'
+                else:
+                    nuevo_estado = 'AGOTADO'
+            
+            update_data = {
+                'cantidad_actual': nueva_cantidad_disp,
+                'cantidad_en_cuarentena': nueva_cantidad_cuar,
+                'estado': nuevo_estado,
+                'cantidad_desperdiciada': float(lote.get('cantidad_desperdiciada', 0)) + cantidad
+            }
+            self.model.update(lote['id_lote'], update_data, 'id_lote')
+
+            return self.success_response(message="Lote retirado y desperdicio registrado correctamente.")
+
+        except Exception as e:
+            logger.error(f"Error en retirar_lote_producto_unificado: {e}", exc_info=True)
+            return self.error_response(f"Error interno: {str(e)}", 500)
