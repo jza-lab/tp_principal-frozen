@@ -87,8 +87,18 @@
                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                     <i class="bi bi-shield-check"></i>
                 </button>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        title="Marcar como No Apto"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalNoApto"
+                        data-lote-id="{{ lote.id_lote }}"
+                        data-lote-numero="{{ lote.numero_lote_proveedor }}"
+                        data-lote-cantidad-total="{{ (lote.cantidad_actual | float) + (lote.cantidad_en_cuarentena | float) + (lote.cantidad_reservada | default(0) | float) }}"
+                        data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
+                    <i class="bi bi-trash"></i>
+                </button>
                 {% endif %}
-                
+
                 {% if lote.estado != 'cuarentena' or lote.cantidad_en_cuarentena == 0 %}
                 <button type="button" class="btn btn-sm btn-outline-warning"
                         title="Poner en Cuarentena"
@@ -102,6 +112,8 @@
                         data-lote-cantidad-reservada="{{ lote.cantidad_reservada }}" > <i class="bi bi-shield-lock"></i>
                 </button>
                 {% endif %}
+
+                
             </td>
         </tr>
         {% else %}
