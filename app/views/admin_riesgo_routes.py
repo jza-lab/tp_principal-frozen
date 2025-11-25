@@ -1,5 +1,7 @@
+from venv import logger
 from flask import Blueprint, request, jsonify, render_template, flash, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.controllers.pedido_controller import PedidoController
 from app.controllers.riesgo_controller import RiesgoController
 from app.utils.decorators import permission_required
 

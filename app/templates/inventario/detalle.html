@@ -22,6 +22,9 @@
         <p class="text-muted mb-0">Insumo: <strong>{{ lote.insumo_nombre or 'N/A' }}</strong></p>
     </div>
     <div class="btn-toolbar">
+        <button class="btn btn-warning me-2" data-bs-toggle="modal" data-bs-target="#registrarDesperdicioModal">
+            <i class="bi bi-trash-fill me-1"></i> Registrar Desperdicio
+        </button>
         <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="lote_insumo"
             data-id-entidad="{{ lote.id_lote }}" data-nombre-entidad="Lote de Insumo {{ lote.numero_lote_proveedor }}">
             <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
@@ -83,6 +86,14 @@
             data-bs-target="#trazabilidad-content" type="button" role="tab" aria-controls="trazabilidad-content"
             aria-selected="false">
             <i class="bi bi-diagram-3 me-1"></i>Trazabilidad
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link-custom" id="desperdicio-tab" data-bs-toggle="tab"
+            data-bs-target="#desperdicio-content" type="button" role="tab" aria-controls="desperdicio-content"
+            aria-selected="false">
+            <i class="bi bi-trash-fill me-1"></i>Historial de Desperdicios
+            <span class="badge rounded-pill bg-warning text-dark ms-1">{{ lote.historial_desperdicios | length }}</span>
         </button>
     </li>
 </ul>
@@ -318,7 +329,101 @@
         </div>
     </div>
 </div>
+<div class="tab-pane fade" id="desperdicio-content" role="tabpanel" aria-labelledby="desperdicio-tab">
+    <div class="card mt-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Registros de Desperdicio</h5>
+        </div>
+        <div class="card-body">
+            {% if lote.historial_desperdicios %}
+                {% for registro in lote.historial_desperdicios %}
+                    <div class="row mb-4 pb-3 border-bottom">
+                        <div class="col-md-8">
+                            <p class="mb-1"><strong>Fecha:</strong> {{ registro.created_at.strftime('%Y-%m-%d %H:%M') if registro.created_at else 'N/A' }}</p>
+                            <p class="mb-1"><strong>Cantidad:</strong> <span class="fw-bold text-danger">{{ registro.cantidad | round(2) }} {{ lote.insumo_unidad_medida }}</span></p>
+                            <p class="mb-1"><strong>Motivo:</strong> {{ registro.motivo.motivo or 'No especificado' }}</p>
+                            <p class="mb-1"><strong>Detalle:</strong> {{ registro.detalle or 'No especificado' }}</p>
+                            <p class="mb-1"><strong>Usuario:</strong> {{ registro.usuario.nombre or 'N/A' }}</p>
+                            {% if registro.comentarios %}
+                                <p class="mb-1"><strong>Comentarios:</strong> {{ registro.comentarios }}</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4 text-center">
+                            {% if registro.foto_url %}
+                                <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" data-img-url="{{ registro.foto_url }}">
+                                    <img src="{{ registro.foto_url }}" alt="Foto de desperdicio" class="img-fluid rounded" style="max-height: 150px; cursor: pointer;">
+                                </a>
+                                <small class="text-muted d-block mt-1">Clic para ampliar</small>
+                            {% else %}
+                                <div class="text-muted fst-italic mt-3">Sin foto adjunta</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p class="text-muted">Este lote no tiene registros de desperdicio.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
 {% include "admin_riesgos/_modal_crear_alerta.html" %}
+
+<!-- Modal para Registrar Desperdicio -->
+<div class="modal fade" id="registrarDesperdicioModal" tabindex="-1" aria-labelledby="registrarDesperdicioModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="registrarDesperdicioModalLabel">Registrar Desperdicio de Insumo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form action="{{ url_for('registro_desperdicio_lote_insumo.registrar_desperdicio', lote_insumo_id=lote.id_lote) }}" method="POST" enctype="multipart/form-data">
+                {{ csrf_form.csrf_token }}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="cantidad" class="form-label">Cantidad a Desperdiciar</label>
+                        <input type="number" name="cantidad" id="cantidad_desperdicio" class="form-control" required step="any" min="0.01" max="{{ (lote.cantidad_actual|float) + (lote.cantidad_en_cuarentena|float) }}">
+                        <div class="form-text">Disponible: <span id="disponible_actual">{{ ((lote.cantidad_actual|float) + (lote.cantidad_en_cuarentena|float)) | round(2) }}</span> {{ lote.insumo_unidad_medida }}.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="motivo_id" class="form-label">Motivo</label>
+                        <select name="motivo_id" id="motivo_id" class="form-select" required>
+                            <option value="" disabled selected>-- Seleccione un motivo --</option>
+                            {% for motivo in motivos_desperdicio %}
+                                <option value="{{ motivo.id }}">{{ motivo.motivo }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="comentarios" class="form-label">Comentarios</label>
+                        <textarea name="comentarios" class="form-control"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="foto" class="form-label">Foto</label>
+                        <input type="file" name="foto" class="form-control" accept="image/*">
+                    </div>
+
+                    <div id="ops-afectadas-warning" class="alert alert-warning mt-3" style="display: none;">
+                        <h6 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Órdenes de Producción Afectadas</h6>
+                        <p>La cantidad a desperdiciar afecta a las siguientes Órdenes de Producción activas. Por favor, elija una acción:</p>
+                        <ul id="lista-ops-afectadas" class="list-unstyled mb-3"></ul>
+                        <div class="form-group">
+                            <label for="accion_ops">Acción a tomar:</label>
+                            <select name="accion_ops" id="accion_ops" class="form-select">
+                                <option value="replanificar" selected>Volver a PENDIENTE (Replanificar)</option>
+                                <option value="cancelar">Cancelar Órdenes Afectadas</option>
+                                <option value="ignorar">Ignorar y registrar solo el desperdicio</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="submit" class="btn btn-primary">Registrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 
@@ -335,4 +440,50 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.1"></script>
 <script src="{{ url_for('static', filename='js/gestorAlertas.js') }}?v=1.1"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cantidadInput = document.getElementById('cantidad_desperdicio');
+    const warningDiv = document.getElementById('ops-afectadas-warning');
+    const opsList = document.getElementById('lista-ops-afectadas');
+    const loteId = "{{ lote.id_lote | safe }}";
+
+    if (cantidadInput) {
+        cantidadInput.addEventListener('input', function() {
+            const cantidadDesperdicio = parseFloat(this.value);
+            const cantidadDisponible = parseFloat(document.getElementById('disponible_actual').textContent);
+
+            if (isNaN(cantidadDesperdicio) || cantidadDesperdicio <= 0) {
+                warningDiv.style.display = 'none';
+                return;
+            }
+
+            // Solo hacemos la llamada a la API si hay una cantidad válida
+            fetch(`/inventario/api/lote/${loteId}/ops_afectadas`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Error al obtener OPs afectadas');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success && data.data.length > 0) {
+                        opsList.innerHTML = ''; 
+                        data.data.forEach(op => {
+                            const li = document.createElement('li');
+                            li.innerHTML = `<strong>${op.codigo}</strong> (Estado: ${op.estado})`;
+                            opsList.appendChild(li);
+                        });
+                        warningDiv.style.display = 'block';
+                    } else {
+                        warningDiv.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    warningDiv.style.display = 'none';
+                });
+        });
+    }
+});
+</script>
 {% endblock %}

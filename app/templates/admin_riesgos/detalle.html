@@ -187,6 +187,11 @@
                                                         {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
                                                         <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
                                                     {% endif %}
+                                                {% elif (lote.estado and lote.estado | upper == 'AGOTADO') %}
+                                                    <div class="alert alert-warning small p-2">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                        <strong>Lote Agotado:</strong> No es posible revisar los insumos. Puede haber OPs activas que lo estén empleando y que deben ser revisadas individualmente.
+                                                    </div>
                                                 {% elif lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
@@ -250,20 +255,39 @@
                                                 {% if op.estado_resolucion == 'resuelto' %}
                                                     <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
                                                     <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% elif op.estado_resolucion == 'resuelto' %}
+                                                    <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
+                                                    {% set resolucion_clase = 'info' %}
+                                                    {% if 'Cancelada' in op.resolucion_aplicada %}
+                                                        {% set resolucion_clase = 'danger' %}
+                                                    {% elif 'Continuada' in op.resolucion_aplicada %}
+                                                        {% set resolucion_clase = 'success' %}
+                                                    {% endif %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% elif op.estado_previo == 'COMPLETADA' and op.estado_resolucion == 'pendiente' %}
+                                                    <div class="alert alert-info small p-2 mt-3">
+                                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                                        <strong>OP Completada:</strong> Esta orden ya finalizó. Puede reprogramarla para ponerla en estado 'Pendiente' nuevamente.
+                                                    </div>
+                                                    <div class="d-grid gap-2 mt-2">
+                                                        <button class="btn btn-sm btn-primary btn-reprogramar-op" data-op-id="{{ op.id }}">
+                                                            <i class="bi bi-arrow-clockwise me-1"></i> Reprogramar OP
+                                                        </button>
+                                                    </div>
+                                                {% elif op.estado_previo in ['PENDIENTE', 'EN ESPERA'] and op.estado_resolucion == 'pendiente' %}
+                                                    <div class="alert alert-secondary small p-2 mt-3">
+                                                        <i class="bi bi-pause-circle-fill me-1"></i>
+                                                        <strong>OP en Espera:</strong> No se requieren acciones. La orden está a la espera de ser procesada.
+                                                    </div>
                                                 {% elif op.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
-                                                    <div class="d-grid gap-2 mt-3">
-                                                        {% if op.estado_previo == 'COMPLETADA' %}
-                                                            <button class="btn btn-sm btn-primary btn-reprogramar-op" data-op-id="{{ op.id }}">
-                                                                <i class="bi bi-arrow-clockwise me-1"></i> Reprogramar OP
-                                                            </button>
-                                                        {% else %}
-                                                            <button class="btn btn-sm btn-success btn-resolver-op" data-op-id="{{ op.id }}" data-accion="continuar">
-                                                                <i class="bi bi-play-circle me-1"></i> Continuar Producción
-                                                            </button>
-                                                            <button class="btn btn-sm btn-danger btn-resolver-op-modal" data-op-id="{{ op.id }}">
-                                                                <i class="bi bi-stop-circle me-1"></i> Cancelar / Modificar
-                                                            </button>
-                                                        {% endif %}
+                                                    <p class="small text-muted mb-2">Definir el estado de esta Orden:</p>
+                                                    <div class="d-grid gap-2">
+                                                        <button class="btn btn-sm btn-success btn-resolver-op" data-op-id="{{ op.id }}" data-accion="continuar">
+                                                            <i class="bi bi-play-circle me-1"></i> Continuar Producción
+                                                        </button>
+                                                        <button class="btn btn-sm btn-danger btn-resolver-op-modal" data-op-id="{{ op.id }}">
+                                                            <i class="bi bi-stop-circle me-1"></i> Cancelar / Modificar
+                                                        </button>
                                                     </div>
                                                 {% endif %}
                                             </div>

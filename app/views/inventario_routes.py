@@ -137,8 +137,12 @@ def detalle_lote(id_lote):
                     except (ValueError, TypeError):
                         # Si hay un error, simplemente dejar la cadena como está
                         pass
+        
+        motivo_model = MotivoDesperdicioModel()
+        motivos_res = motivo_model.find_all()
+        motivos_desperdicio = motivos_res.get('data', []) if motivos_res.get('success') else []
 
-        return render_template('inventario/detalle.html', lote=lote)
+        return render_template('inventario/detalle.html', lote=lote, motivos_desperdicio=motivos_desperdicio)
     else:
         flash(response.get('error', 'Lote no encontrado.'), 'error')
         return redirect(url_for('inventario_view.listar_lotes'))

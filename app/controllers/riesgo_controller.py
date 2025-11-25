@@ -133,10 +133,19 @@ class RiesgoController(BaseController):
             tipo, entidad_id = afectado['tipo_entidad'], afectado['id_entidad']
             estado_actual = estados_previos.get((tipo, str(entidad_id)), '').lower()
             
-            # Para lotes de producto agotados, no hacemos nada, solo los marcamos para que el usuario pueda solicitar devolución.
-            if tipo == 'lote_producto' and 'agotado' in estado_actual:
-                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
-                continue
+            # --- Lógica Mejorada para Lotes de Producto ---
+            if tipo == 'lote_producto':
+                # Obtener detalles completos del lote para verificar cantidad
+                lote_data_res = controllers[tipo].model.find_by_id(entidad_id, 'id_lote')
+                if lote_data_res.get('success') and lote_data_res.get('data'):
+                    lote_data = lote_data_res['data']
+                    cantidad_total = float(lote_data.get('cantidad_actual', 0)) + float(lote_data.get('cantidad_en_cuarentena', 0))
+                    
+                    # Si está agotado por estado O por cantidad, lo saltamos para que el usuario pueda solicitar devolución
+                    if 'agotado' in estado_actual or cantidad_total <= 0:
+                        self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
+                        continue
+            # --- Fin Lógica Mejorada ---
 
             # Si es insumo agotado, o si no está en un estado procesable, lo marcamos como resuelto automáticamente.
             if (tipo == 'lote_insumo' and 'agotado' in estado_actual) or \
