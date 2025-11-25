@@ -21,9 +21,9 @@ class RegistroDesperdicioLoteInsumoModel(BaseModel):
         try:
             # Se elimina el join a 'usuarios' que causa el error de cross-schema.
             # El join a 'motivos' funciona porque está en el mismo schema 'mes_kanban'.
-            # Nota: Para insumos, la tabla de motivos suele ser 'motivos_desperdicio'
+            # Nota: Para insumos, la tabla de motivos suele ser 'motivos_desperdicio_lote'
             result = self._get_query_builder().select(
-                '*, motivo:motivos_desperdicio(descripcion)'
+                '*, motivo:motivos_desperdicio_lote(descripcion)'
             ).eq('lote_insumo_id', lote_insumo_id).order('created_at', desc=True).execute()
 
             return {'success': True, 'data': result.data}
@@ -35,7 +35,7 @@ class RegistroDesperdicioLoteInsumoModel(BaseModel):
         """Obtiene todos los registros de desperdicio dentro de un rango de fechas."""
         try:
             query = self._get_query_builder().select(
-                '*, motivo:motivos_desperdicio(descripcion)'
+                '*, motivo:motivos_desperdicio_lote(descripcion)'
             )
             query = query.gte('created_at', fecha_inicio.isoformat())
             query = query.lte('created_at', fecha_fin.isoformat())

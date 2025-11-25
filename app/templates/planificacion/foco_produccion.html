@@ -426,15 +426,18 @@
                 let insumoOptions = '<option value="" selected disabled>Seleccione...</option>';
                 INGREDIENTES_DATA.forEach(ing => {
                     if (ing.id_insumo) {
-                        // Guardamos el total requerido en data attribute
-                        insumoOptions += `<option value="${ing.id_insumo}" data-max="${ing.cantidad_total_requerida || 999999}" data-unit="${ing.unidad_medida}">${ing.nombre_insumo}</option>`;
+                        // MODIFICADO: Usamos 'disponible_real' en lugar de 'cantidad_total_requerida'
+                        const disponible = ing.disponible_real !== undefined ? ing.disponible_real : (ing.cantidad_total_requerida || 999999);
+                        insumoOptions += `<option value="${ing.id_insumo}" data-max="${disponible}" data-unit="${ing.unidad_medida}">${ing.nombre_insumo} (Disp: ${disponible})</option>`;
                     }
                 });
 
                 // Opciones de Motivos
                 let motivoOptions = '<option value="" selected disabled>Seleccione...</option>';
                 MOTIVOS_MERMA_DATA.forEach(m => {
-                    motivoOptions += `<option value="${m.id}">${m.descripcion}</option>`;
+                    // FIX: Manejo seguro de la descripción
+                    const descripcion = m.descripcion || m.description || 'Sin descripción';
+                    motivoOptions += `<option value="${m.id}">${descripcion}</option>`;
                 });
 
                 tr.innerHTML = `
