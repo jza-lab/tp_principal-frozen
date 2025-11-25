@@ -25,11 +25,15 @@ class RegistroDesperdicioLoteProductoController(BaseController):
             lote = lote_res['data']
             cantidad_a_desperdiciar = float(form_data.get('cantidad'))
             
+            stock_disponible = lote.get('cantidad_actual', 0)
+            stock_cuarentena = lote.get('cantidad_en_cuarentena', 0)
+            stock_total = stock_disponible + stock_cuarentena
+
             if cantidad_a_desperdiciar <= 0:
                 return self.error_response("La cantidad a desperdiciar debe ser un número positivo.", 400)
 
-            if cantidad_a_desperdiciar > lote['cantidad_actual']:
-                return self.error_response("La cantidad a desperdiciar excede el stock disponible.", 400)
+            if cantidad_a_desperdiciar > stock_total:
+                return self.error_response(f"La cantidad a desperdiciar ({cantidad_a_desperdiciar}) excede el stock total ({stock_total}).", 400)
 
             foto_url = None
             if file and file.filename:
@@ -75,16 +79,30 @@ class RegistroDesperdicioLoteProductoController(BaseController):
                 logger.error(error_msg)
                 return self.error_response(error_msg, 500)
 
-            nueva_cantidad_actual = lote['cantidad_actual'] - cantidad_a_desperdiciar
-            nueva_cantidad_desperdiciada = lote.get('cantidad_desperdiciada', 0) + cantidad_a_desperdiciar
-            update_data = {
-                'cantidad_actual': nueva_cantidad_actual,
-                'cantidad_desperdiciada': nueva_cantidad_desperdiciada
-            }
+            # Lógica de descuento de stock mejorada
+            nueva_cantidad_cuarentena = stock_cuarentena
+            nueva_cantidad_disponible = stock_disponible
+            remanente_a_descontar = cantidad_a_desperdiciar
+
+            # Prioridad: descontar de cuarentena primero
+            if stock_cuarentena > 0:
+                descuento_cuarentena = min(stock_cuarentena, remanente_a_descontar)
+                nueva_cantidad_cuarentena -= descuento_cuarentena
+                remanente_a_descontar -= descuento_cuarentena
             
-            # CORRECCIÓN: Cambiar estado a AGOTADO si la cantidad llega a cero.
-            if nueva_cantidad_actual <= 0:
-                update_data['estado'] = 'AGOTADO'
+            if remanente_a_descontar > 0:
+                nueva_cantidad_disponible -= remanente_a_descontar
+
+            # Preparar datos para actualizar el lote
+            update_data = {
+                'cantidad_actual': nueva_cantidad_disponible,
+                'cantidad_en_cuarentena': nueva_cantidad_cuarentena,
+                'cantidad_desperdiciada': lote.get('cantidad_desperdiciada', 0) + cantidad_a_desperdiciar
+            }
+
+            # Si se agota todo el stock, marcar como RETIRADO
+            if nueva_cantidad_disponible <= 0 and nueva_cantidad_cuarentena <= 0:
+                update_data['estado'] = 'RETIRADO'
 
             self.lote_producto_model.update(lote_id, update_data, 'id_lote')
 

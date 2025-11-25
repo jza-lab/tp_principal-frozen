@@ -133,12 +133,28 @@ class RiesgoController(BaseController):
             tipo, entidad_id = afectado['tipo_entidad'], afectado['id_entidad']
             estado_actual = estados_previos.get((tipo, str(entidad_id)), '').lower()
             
-            # Modificación: Si es insumo agotado, NO se pone en cuarentena (User request)
-            if tipo == 'lote_insumo' and 'agotado' in estado_actual:
-                # Solo marcamos el flag de alerta para visibilidad, pero no cambiamos estado ni movemos a cuarentena
+            # Para lotes de producto agotados, no hacemos nada, solo los marcamos para que el usuario pueda solicitar devolución.
+            if tipo == 'lote_producto' and 'agotado' in estado_actual:
                 self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
-                continue 
-            elif not any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
+                continue
+
+            # Si es insumo agotado, o si no está en un estado procesable, lo marcamos como resuelto automáticamente.
+            if (tipo == 'lote_insumo' and 'agotado' in estado_actual) or \
+               not any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
+                
+                # Marcar como resuelto en la tabla de afectados
+                self.alerta_riesgo_model.db.table('alerta_riesgo_afectados') \
+                    .update({
+                        'estado': 'resuelto',
+                        'resolucion_aplicada': 'omitido_por_estado_previo',
+                        'id_usuario_resolucion': usuario_id
+                    }) \
+                    .eq('alerta_id', alerta['id']) \
+                    .eq('tipo_entidad', tipo) \
+                    .eq('id_entidad', entidad_id) \
+                    .execute()
+                
+                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
                 continue
 
             self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
@@ -1241,6 +1257,11 @@ class RiesgoController(BaseController):
                 else:
                     return {"success": False, "error": f"Error al replanificar: {res_replan.get('error')}"}, 500
             
+            elif sub_accion == 'reprogramar':
+                # Lógica simplificada para cambiar estado a pendiente
+                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+                resolucion_texto = 'Reprogramada (Estado: Pendiente)'
+
             else:
                 return {"success": False, "error": "Acción desconocida."}, 400
 

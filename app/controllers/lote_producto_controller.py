@@ -122,6 +122,10 @@ class LoteProductoController(BaseController):
             # Validar datos
             validated_data = self.schema.load(data, partial=True)
 
+            # Si se actualiza la cantidad a 0, actualizar también el estado
+            if 'cantidad_actual' in validated_data and validated_data['cantidad_actual'] <= 0:
+                validated_data['estado'] = 'AGOTADO'
+
             # Actualizar el lote
             result = self.model.update(lote_id, validated_data, 'id_lote')
             if not result.get('success'):
@@ -961,8 +965,8 @@ class LoteProductoController(BaseController):
                 return self.error_response('Lote no encontrado', 404)
 
             lote = lote_res['data']
-            cantidad_actual_disponible = lote.get('cantidad_actual') or 0
-            cantidad_actual_cuarentena = lote.get('cantidad_en_cuarentena') or 0
+            cantidad_actual_disponible = float(lote.get('cantidad_actual') or 0)
+            cantidad_actual_cuarentena = float(lote.get('cantidad_en_cuarentena') or 0)
 
             if lote.get('estado') not in ['DISPONIBLE', 'CUARENTENA']:
                 msg = f"El lote debe estar DISPONIBLE o en CUARENTENA. Estado actual: {lote.get('estado')}"
