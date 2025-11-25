@@ -472,6 +472,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     setTimeout(() => window.location.href = '/produccion/kanban/', 2500);
                 } else {
                     addActivityLog(`Reportado: +${formatNumber(payload.cantidad_buena, 2)}kg OK, +${formatNumber(payload.cantidad_desperdicio, 2)}kg Desp.`, 'info');
+                    // Recargar la página para reflejar todos los cambios del backend
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1500); // Pequeño delay para que el usuario vea la notificación de éxito
                 }
             } else {
                 showNotification(`❌ Error: ${data.error || 'Error desconocido'}`, 'error');
