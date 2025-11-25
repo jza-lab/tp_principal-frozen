@@ -2301,8 +2301,8 @@ class OrdenProduccionController(BaseController):
         if max_produccion_posible <= 0:
             logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada. Se cancelará y creará una nueva.")
             
-            # 1. Liberar reservas de OTROS insumos de la orden fallida
-            self.inventario_controller.liberar_stock_reservado_para_op(orden_id)
+            # 1. Liberar solo el stock sano y no consumido
+            self.inventario_controller.liberar_stock_no_consumido_para_op(orden_id)
             
             # 2. Cancelar la OP actual con una observación clara
             obs = f"{orden.get('observaciones', '')} | CANCELADA por pérdida total de insumo ID {insumo_id}. Replanificada automáticamente.".strip()
