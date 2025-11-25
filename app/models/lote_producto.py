@@ -226,8 +226,13 @@ class LoteProductoModel(BaseModel):
                         pass
 
                 # --- CALCULO SEMAFORO ---
+                # Usar fecha_produccion si existe, sino created_at como fallback
+                fecha_inicio_calc = lote.get('fecha_produccion')
+                if not fecha_inicio_calc:
+                    fecha_inicio_calc = lote.get('created_at')
+
                 semaforo = calcular_semaforo(
-                    lote.get('fecha_produccion'),
+                    fecha_inicio_calc,
                     lote.get('fecha_vencimiento'),
                     umbral_verde=umbral_verde,
                     umbral_amarillo=umbral_amarillo,
