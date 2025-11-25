@@ -449,15 +449,15 @@ class RentabilidadController(BaseController):
                 history_by_cost[cid].sort(key=lambda x: x['fecha_cambio_dt'])
 
             # 5. Determinar Estrategia
+            # "Vol. Mes" siempre es el mes actual. "Vol. Trimestre" es Actual + 2 pasados.
+            # Usamos la duración para distinguir el modo.
             dias_duracion = (end_date - start_date).total_seconds() / 86400
             
-            # --- ESTRATEGIA A: Mensual / Foto Actual ---
-            if 20 <= dias_duracion <= 35:
+            # --- MODO A: Vol. Mes (Solo Actual) ---
+            if dias_duracion <= 35:
                 for costo in costos_activos:
-                    if not self._existia_en_fecha(costo, end_date):
-                        continue
-
-                    # Usamos el costo actual (Snapshot)
+                    # En modo "Mes Actual", asumimos que todos los activos cuentan con su valor actual.
+                    # Ignoramos created_at estricto para no ocultar costos recién creados en el reporte del mes.
                     monto = float(costo.get('monto_mensual') or 0)
                     
                     resultado['total'] += monto
@@ -468,7 +468,7 @@ class RentabilidadController(BaseController):
                 
                 return resultado
 
-            # --- ESTRATEGIA B: Acumulado / Histórico ---
+            # --- MODO B: Vol. Trimestre / Anual (Iterativo con Historial) ---
             months_to_process = []
             current = start_date.replace(day=1)
             
@@ -485,23 +485,42 @@ class RentabilidadController(BaseController):
                 
                 if current.year > end_date.year + 1: break 
 
+            # Definir la fecha actual para comparar
+            now_year = now.year
+            now_month = now.month
+
             for year, month in months_to_process:
                 last_day = calendar.monthrange(year, month)[1]
                 month_end_dt = datetime(year, month, last_day, 23, 59, 59)
                 
+                is_current_month = (year == now_year and month == now_month)
+
                 for costo in costos_activos:
                     cid = int(costo['id'])
+                    historial_especifico = history_by_cost.get(cid, [])
 
-                    # 1. Validar existencia
-                    if not self._existia_en_fecha(costo, month_end_dt):
-                        continue
+                    # 1. Validar existencia INTELIGENTE
+                    # Si tiene historial válido para esa fecha, LO CONTAMOS (aunque created_at sea posterior).
+                    # Esto permite "retroactivos" manuales.
+                    tiene_historial_previo = any(h['fecha_cambio_dt'] <= month_end_dt for h in historial_especifico)
+                    
+                    if not tiene_historial_previo:
+                         # Si no tiene historial antiguo, respetamos la fecha de creación original
+                         if not self._existia_en_fecha(costo, month_end_dt):
+                            continue
 
-                    # 2. Obtener valor histórico
-                    monto_mensual = self._obtener_monto_vigente_dt(
-                        costo, 
-                        month_end_dt, 
-                        history_by_cost.get(cid, [])
-                    )
+                    monto_mensual = 0.0
+
+                    if is_current_month:
+                        # Si es el mes actual, usamos SIEMPRE el valor activo actual
+                        monto_mensual = float(costo.get('monto_mensual') or 0)
+                    else:
+                        # Si hay historial (o asumimos estabilidad), calculamos valor
+                        monto_mensual = self._obtener_monto_vigente_dt(
+                            costo, 
+                            month_end_dt, 
+                            historial_especifico
+                        )
                     
                     resultado['total'] += monto_mensual
                     if costo.get('tipo') == 'Directo':
@@ -568,7 +587,12 @@ class RentabilidadController(BaseController):
                 break
         
         if primer_cambio_futuro:
-            return float(primer_cambio_futuro['monto_anterior'])
+            # FIX: Si el monto anterior es 0, asumimos que es un registro inicial
+            # y usamos el monto_nuevo como valor vigente (evita caídas a 0 en retroactivos).
+            val_anterior = float(primer_cambio_futuro['monto_anterior'])
+            if val_anterior == 0.0:
+                return float(primer_cambio_futuro['monto_nuevo'])
+            return val_anterior
 
         # 3. Fallback
         return monto_actual_modelo
