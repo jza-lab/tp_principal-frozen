@@ -34,3 +34,30 @@ class RecetaIngredienteModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo ingredientes para receta ID {receta_id}: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e), 'data': []}
+
+    def get_all_with_insumo_details(self) -> Dict:
+        """
+        Obtiene todos los ingredientes de todas las recetas, haciendo un JOIN
+        para incluir los detalles completos de cada insumo.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                '*, insumo:insumos_catalogo(nombre)'
+            )
+            
+            response = query.execute()
+
+            if not response.data:
+                return {'success': True, 'data': []}
+            
+            # Aplanar datos
+            for item in response.data:
+                if item.get('insumo'):
+                    item['insumo_nombre'] = item['insumo'].get('nombre', 'Desconocido')
+                item.pop('insumo', None)
+
+            return {'success': True, 'data': response.data}
+            
+        except Exception as e:
+            logger.error(f"Error en get_all_with_insumo_details: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e), 'data': []}

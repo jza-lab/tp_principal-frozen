@@ -675,3 +675,34 @@ class OrdenProduccionModel(BaseModel):
         except Exception as e:
             logger.error(f"Error al obtener la comparativa plan vs. real: {str(e)}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
+    def find_all_with_producto_in_date_range(self, fecha_inicio: datetime, fecha_fin: datetime, estado: str) -> Dict:
+        """
+        Busca todas las órdenes de producción en un rango de fechas y con un estado específico,
+        incluyendo el nombre del producto asociado.
+        """
+        try:
+            query = self.db.table(self.get_table_name()).select(
+                "*, producto_nombre:productos(nombre)"
+            ).gte(
+                'fecha_fin', fecha_inicio.isoformat()
+            ).lte(
+                'fecha_fin', fecha_fin.isoformat()
+            ).eq(
+                'estado', estado
+            )
+            
+            result = query.execute()
+
+            if result.data:
+                # Aplanar el nombre del producto
+                for item in result.data:
+                    if item.get('producto_nombre'):
+                        item['producto_nombre'] = item['producto_nombre'].get('nombre', 'Desconocido')
+                return {'success': True, 'data': result.data}
+            else:
+                return {'success': True, 'data': []}
+
+        except Exception as e:
+            logger.error(f"Error en find_all_with_producto_in_date_range: {str(e)}", exc_info=True)
+            return {'success': False, 'error': str(e)}

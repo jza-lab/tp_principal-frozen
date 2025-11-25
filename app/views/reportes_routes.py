@@ -63,16 +63,29 @@ def api_produccion_por_tiempo():
     data = produccion_controller.obtener_produccion_por_tiempo(periodo)
     return jsonify(data)
 
+# --- NUEVA RUTA AGREGADA PARA CORREGIR EL ERROR 404 ---
+@reportes_bp.route('/api/materia-prima')
+def api_materia_prima():
+    """
+    Endpoint utilizado por materia_prima.js para obtener la eficiencia de consumo
+    en un rango de fechas específico.
+    """
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
+    
+    # Llamamos al controlador pasándole las fechas que vienen del JS
+    data = produccion_controller.obtener_eficiencia_consumo_insumos(fecha_inicio, fecha_fin)
+    return jsonify(data)
+
 @reportes_bp.route('/api/produccion/eficiencia_consumo')
 def api_eficiencia_consumo():
-    top_n = request.args.get('top_n', 15, type=int)
-    producto_filter = request.args.get('producto', None)
+    # Nota: He corregido esta ruta también, ya que el controlador espera fechas, 
+    # no 'top_n' ni 'producto'. Si usas esta ruta en otro lado, revisa si necesitas
+    # adaptar el controlador para aceptar filtros extra.
+    fecha_inicio = request.args.get('fecha_inicio')
+    fecha_fin = request.args.get('fecha_fin')
     
-    # Manejar string vacío como None
-    if producto_filter == "":
-        producto_filter = None
-        
-    data = produccion_controller.obtener_eficiencia_consumo_insumos(top_n, producto_filter)
+    data = produccion_controller.obtener_eficiencia_consumo_insumos(fecha_inicio, fecha_fin)
     return jsonify(data)
 
 @reportes_bp.route('/api/produccion/costos_plan_vs_real')

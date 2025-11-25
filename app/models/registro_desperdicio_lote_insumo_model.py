@@ -123,3 +123,34 @@ class RegistroDesperdicioLoteInsumoModel(BaseModel):
         except Exception as e:
             logger.error(f"Error obteniendo historial enriquecido de mermas: {str(e)}")
             return {'success': False, 'error': str(e)}
+
+    def get_by_op_ids(self, op_ids: list):
+        """
+        Obtiene todos los registros de desperdicio para una lista de IDs de órdenes de producción.
+        Enriquece los datos con el ID del insumo (catálogo).
+        """
+        try:
+            if not op_ids:
+                return {'success': True, 'data': []}
+
+            # 1. Obtener los registros de desperdicio base
+            # Se hace un join implícito para obtener el insumo_id desde el lote de inventario
+            result = self._get_query_builder().select(
+                '*, lote:lote_insumo_id(insumo_id:id_insumo)'
+            ).in_('orden_produccion_id', op_ids).execute()
+
+            if not result.data:
+                return {'success': True, 'data': []}
+
+            # 2. Aplanar el insumo_id para que sea accesible directamente
+            for item in result.data:
+                insumo_id = None
+                if item.get('lote') and item['lote'].get('insumo_id'):
+                    insumo_id = item['lote']['insumo_id']
+                item['insumo_id'] = insumo_id
+                item.pop('lote', None)
+
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error en get_by_op_ids para insumos: {str(e)}")
+            return {'success': False, 'error': str(e)}
