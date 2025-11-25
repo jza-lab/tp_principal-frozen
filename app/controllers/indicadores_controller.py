@@ -1025,7 +1025,7 @@ class IndicadoresController:
         }
 
     # --- CATEGORÍA: FINANCIERA ---
-    def obtener_datos_financieros(self, semana=None, mes=None, ano=None):
+    def obtener_datos_financieros(self, semana=None, mes=None, ano=None):  
         fecha_inicio, fecha_fin = self._parsear_periodo(semana, mes, ano)
         fecha_inicio_str = fecha_inicio.strftime('%Y-%m-%d')
         fecha_fin_str = fecha_fin.strftime('%Y-%m-%d')
@@ -1086,7 +1086,13 @@ class IndicadoresController:
         evolucion_ingresos = self._obtener_evolucion_financiera_comparativa(fecha_inicio, fecha_fin, contexto)
         descomposicion = self._obtener_descomposicion_costos_con_detalle(fecha_inicio, fecha_fin, gastos_fijos_periodo)
         ingresos_vs_egresos = self._obtener_evolucion_ingresos_vs_egresos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
-        evolucion_costos_fijos = self._obtener_evolucion_costos_fijos(fecha_inicio, fecha_fin, contexto, monto_mensual_fijos)
+        
+        # --- CORRECCIÓN APLICADA ---
+        # Definimos un rango histórico (6 meses atrás) independiente del filtro actual
+        fecha_historia_inicio = fecha_fin - timedelta(days=180) 
+        # Forzamos contexto='ano' para que agrupe por MES y no por día
+        evolucion_costos_fijos = self._obtener_evolucion_costos_fijos(fecha_historia_inicio, fecha_fin, 'ano', monto_mensual_fijos)
+        # ---------------------------
 
         try:
             rentabilidad_raw = self.rentabilidad_controller.obtener_datos_matriz_rentabilidad(fecha_inicio_str, fecha_fin_str)
@@ -1301,33 +1307,60 @@ class IndicadoresController:
             "insight": insight,
             "tooltip": "Comparativa de Ingresos vs Egresos Básicos (Variable + Fijos). Nota: Los egresos son aproximados."
         }
-
+    
     def _obtener_evolucion_costos_fijos(self, fecha_inicio, fecha_fin, contexto, monto_actual):
-        freq = 'month' if contexto == 'ano' else 'day'
-        bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
-
+        """
+        Genera la serie temporal de costos fijos.
+        CORREGIDO: 
+        1. Normaliza los IDs a string para asegurar que encuentre el historial.
+        2. Suma correctamente mes a mes basándose en la tabla historial_costos_fijos.
+        """
+        bucket_fmt = '%Y-%m' if contexto == 'ano' else '%Y-%m-%d'
         data_map = defaultdict(float)
         
         try:
-            costos_res = self.costo_fijo_model.find_all()
+            # 1. Obtener Costos Activos
+            costos_res = self.costo_fijo_model.find_all(filters={'activo': True})
             costos = costos_res.get('data', []) if costos_res.get('success') else []
             
-            historial_res = self.costo_fijo_model.db.table('historial_costos_fijos').select('*').execute()
-            all_historial = historial_res.data if historial_res.data else []
+            # 2. Obtener Historial Completo
+            try:
+                historial_res = self.costo_fijo_model.db.table('historial_costos_fijos').select('*').execute()
+                all_historial = historial_res.data if historial_res.data else []
+            except Exception:
+                all_historial = []
             
+            # Agrupar historial por costo_id (Normalizando ID a string para evitar errores)
             historial_map = defaultdict(list)
             for h in all_historial:
-                historial_map[h['costo_fijo_id']].append(h)
+                try:
+                    f_str = h.get('fecha_cambio', '')
+                    # Parseo de fecha robusto
+                    if 'T' in f_str:
+                        dt = datetime.fromisoformat(f_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                    else:
+                        dt = datetime.strptime(f_str[:19], '%Y-%m-%d %H:%M:%S')
+                    
+                    h['fecha_cambio_dt'] = dt
+                    
+                    # CLAVE: Convertimos ID a string para asegurar coincidencia
+                    c_id = str(h.get('costo_fijo_id', ''))
+                    if c_id:
+                        historial_map[c_id].append(h)
+                except Exception:
+                    continue 
             
+            # Ordenar historial cronológicamente
             for cid in historial_map:
-                historial_map[cid].sort(key=lambda x: x['fecha_cambio'])
+                historial_map[cid].sort(key=lambda x: x['fecha_cambio_dt'])
 
+            # 3. Generar Fechas (Buckets)
             fechas_bucket = []
             current = fecha_inicio
-            if freq == 'month':
+            
+            if contexto == 'ano':
                 current = current.replace(day=1)
-                end_align = fecha_fin.replace(day=1)
-                while current <= end_align:
+                while current <= fecha_fin:
                     fechas_bucket.append(current)
                     next_month = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
                     current = next_month
@@ -1336,78 +1369,87 @@ class IndicadoresController:
                     fechas_bucket.append(current)
                     current += timedelta(days=1)
 
+            # 4. Calcular Total por Fecha
             for date_point in fechas_bucket:
                 key = date_point.strftime(bucket_fmt)
+                # Comparamos contra el final del día para incluir cambios hechos ese mismo día
+                point_dt = datetime.combine(date_point, datetime.max.time())
                 
-                total_dia = 0.0
+                total_en_fecha = 0.0
                 
                 for costo in costos:
-                    cid = costo['id']
+                    # Normalizamos ID del costo a string
+                    cid = str(costo.get('id', ''))
                     cambios = historial_map.get(cid, [])
                     
+                    # Valor base por defecto (el actual)
                     try:
                         valor_vigente = float(costo.get('monto_mensual') or 0.0) 
                     except:
                         valor_vigente = 0.0
                     
-                    point_dt = datetime.combine(date_point, datetime.min.time())
-                    
+                    # Si hay historial, buscamos el valor correcto para LA FECHA
                     if cambios:
-                        try:
-                            primer_cambio_dt = datetime.fromisoformat(cambios[0]['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
+                        primer_cambio = cambios[0]
+                        
+                        if point_dt < primer_cambio['fecha_cambio_dt']:
+                            # Si estamos antes del primer cambio registrado, usamos el valor "anterior" de ese cambio
+                            valor_vigente = float(primer_cambio.get('monto_anterior') or 0.0)
+                        else:
+                            # Buscamos el último cambio que ya haya ocurrido para esta fecha
+                            ultimo_cambio_valido = None
+                            for cambio in cambios:
+                                if cambio['fecha_cambio_dt'] <= point_dt:
+                                    ultimo_cambio_valido = cambio
+                                else:
+                                    # Como están ordenados, si este es futuro, paramos
+                                    break 
                             
-                            if point_dt < primer_cambio_dt:
-                                valor_vigente = float(cambios[0].get('monto_anterior') or 0.0)
-                            else:
-                                for cambio in cambios:
-                                    cambio_dt = datetime.fromisoformat(cambio['fecha_cambio'].replace('Z', '+00:00')).replace(tzinfo=None)
-                                    if cambio_dt <= point_dt:
-                                        valor_vigente = float(cambio.get('monto_nuevo') or 0.0)
-                                    else:
-                                        break
-                        except Exception as e:
-                            logger.error(f"Error procesando historial de costo {cid}: {e}")
+                            if ultimo_cambio_valido:
+                                valor_vigente = float(ultimo_cambio_valido.get('monto_nuevo') or 0.0)
+
+                    # Protección de datos corruptos
+                    if valor_vigente > 1_000_000_000: valor_vigente = 0.0
                     
-                    if valor_vigente > 1_000_000_000_000: 
-                        logger.warning(f"Valor de costo fijo {cid} anormalmente alto detectado y omitido: {valor_vigente}")
-                        valor_vigente = 0.0
+                    total_en_fecha += valor_vigente
 
-                    total_dia += valor_vigente
-
-                val_final = total_dia if freq == 'month' else (total_dia / 30.0)
-                data_map[key] = val_final
+                data_map[key] = total_en_fecha
 
         except Exception as e:
-            logger.error(f"Error calculando historial costos fijos para gráfico: {e}")
-            val_per_unit = monto_actual if freq == 'month' else (monto_actual / 30.0)
-            return self._obtener_evolucion_costos_fijos_fallback(fecha_inicio, fecha_fin, freq, val_per_unit)
+            logger.error(f"Error calculando historial costos fijos: {e}")
+            return self._obtener_evolucion_costos_fijos_fallback(fecha_inicio, fecha_fin, 'month' if contexto == 'ano' else 'day', monto_actual)
 
+        # Ordenar y formatear para el gráfico
         labels = sorted(data_map.keys())
         values = [round(data_map[k], 2) for k in labels]
         
         display_labels = []
         for l in labels:
-            if freq == 'month':
-                dt = datetime.strptime(l, "%Y-%m")
-                display_labels.append(dt.strftime("%b"))
+            if contexto == 'ano':
+                try:
+                    dt = datetime.strptime(l, "%Y-%m")
+                    display_labels.append(dt.strftime("%b"))
+                except: display_labels.append(l)
             else:
-                dt = datetime.strptime(l, "%Y-%m-%d")
-                display_labels.append(dt.strftime("%d/%m"))
+                try:
+                    dt = datetime.strptime(l, "%Y-%m-%d")
+                    display_labels.append(dt.strftime("%d/%m"))
+                except: display_labels.append(l)
 
         insight = "Los costos fijos se mantienen estables."
         if len(values) > 1:
             first = values[0]
             last = values[-1]
-            if last > first * 1.05:
-                insight = "Se observa un aumento en la estructura de costos fijos."
-            elif last < first * 0.95:
+            if last > first * 1.01:
+                insight = "Los costos fijos han aumentado en el periodo."
+            elif last < first * 0.99:
                 insight = "Los costos fijos han disminuido en el periodo."
 
         return {
             "categories": display_labels,
             "values": values,
             "insight": insight,
-            "tooltip": "Evolución histórica calculada basada en los registros de cambio de valor."
+            "tooltip": "Evolución mensual total de costos fijos vigentes."
         }
 
     def _obtener_evolucion_costos_fijos_fallback(self, fecha_inicio, fecha_fin, freq, val_per_unit):
