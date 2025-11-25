@@ -11,6 +11,10 @@
     <a href="{{ url_for('orden_venta.detalle', id=pedido.id) }}" class="btn btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Volver al Detalle
     </a>
+    <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2"
+            title="Volver a la página anterior">
+            <i class="bi bi-arrow-left"></i> Volver
+    </a>
 </div>
 
 <form method="POST" action="{{ url_for('orden_venta.despachar', id=pedido.id) }}" id="form-despacho" novalidate>

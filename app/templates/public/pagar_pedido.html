@@ -1,0 +1,155 @@
+{% extends 'public/base.html' %}
+{% block title %}Pagar Pedido - #{{ pedido.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .payment-container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .summary-card {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="payment-container">
+    <div class="text-center mb-4">
+        <h1 class="h2">Finalizar Pago</h1>
+        <p class="lead">Estás pagando el pedido <strong>PED-{{ pedido.id }}</strong></p>
+    </div>
+
+    <div class="card summary-card mb-4">
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-6">
+                    <h5 class="text-muted">Total del Pedido</h5>
+                    <p class="h3">${{ pedido.precio_orden | formato_moneda }}</p>
+                </div>
+                <div class="col-md-6">
+                    <h5 class="text-muted">Saldo Pendiente</h5>
+                    <p class="h3 text-danger">${{ pedido.saldo_pendiente | formato_moneda }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form id="pagoForm" enctype="multipart/form-data" action="{{ url_for('api.registrar_pago') }}" method="POST">
+        {{ csrf_form.csrf_token }}
+        <input type="hidden" id="id_pedido" name="id_pedido" value="{{ pedido.id }}">
+        
+        <div class="row g-3">
+            <div class="col-md-6">
+                <label for="monto" class="form-label">Monto a Pagar <span class="text-danger">*</span></label>
+                <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="text" class="form-control" id="monto" name="monto" value="{{ '%.2f'|format(pedido.saldo_pendiente|float) }}" required>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label for="metodo_pago" class="form-label">Método de Pago <span class="text-danger">*</span></label>
+                <select class="form-select" id="metodo_pago" name="metodo_pago" required>
+                    <option value="transferencia" selected>Transferencia Bancaria</option>
+                    <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                    <option value="tarjeta_debito">Tarjeta de Débito</option>
+                    <option value="efectivo">Efectivo</option>
+                </select>
+            </div>
+            <div class="col-12">
+                <label for="datos_adicionales" class="form-label">Datos Adicionales (Opcional)</label>
+                <textarea class="form-control" id="datos_adicionales" name="datos_adicionales" rows="3" placeholder="Ej: N° de CBU, últimos 4 dígitos de la tarjeta, etc."></textarea>
+            </div>
+            <div class="col-12">
+                <label for="comprobante_pago" class="form-label">Comprobante (Opcional)</label>
+                <input class="form-control" type="file" id="comprobante_pago" name="comprobante_pago">
+            </div>
+        </div>
+
+        <div id="pago-error-alert" class="alert alert-danger d-none mt-4" role="alert"></div>
+
+        <div class="d-flex justify-content-end mt-4">
+            <a href="{{ url_for('cliente.perfil') }}" class="btn btn-secondary me-2">Cancelar</a>
+            <button type="submit" class="btn btn-primary" id="submitPagoBtn">
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                <i class="bi bi-credit-card-fill me-2"></i>Confirmar Pago
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const pagoForm = document.getElementById('pagoForm');
+    const submitBtn = document.getElementById('submitPagoBtn');
+    const spinner = submitBtn.querySelector('.spinner-border');
+    const errorAlert = document.getElementById('pago-error-alert');
+    const montoInput = document.getElementById('monto');
+
+    // Formatear monto en tiempo real
+    montoInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^\d,]/g, '').replace(',', '.');
+        if (value.split('.').length > 2) {
+            value = value.substring(0, value.lastIndexOf('.'));
+        }
+        // No se re-asigna a e.target.value para no interrumpir la escritura
+    });
+
+    pagoForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        
+        spinner.classList.remove('d-none');
+        submitBtn.disabled = true;
+        errorAlert.classList.add('d-none');
+
+        const formData = new FormData(pagoForm);
+
+        fetch(pagoForm.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                // El token CSRF se envía en el form, no es necesario aquí para FormData
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Pago Exitoso!',
+                    text: data.message,
+                    confirmButtonColor: '#0d6efd'
+                }).then(() => {
+                    window.location.href = "{{ url_for('cliente.perfil') }}";
+                });
+            } else {
+                let errorMessage = data.error || 'Ocurrió un error desconocido.';
+                if (typeof errorMessage === 'object') {
+                   errorMessage = Object.entries(errorMessage).map(([field, errors]) => `${field}: ${errors.join(', ')}`).join('; ');
+                }
+                errorAlert.textContent = errorMessage;
+                errorAlert.classList.remove('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error en fetch:', error);
+            errorAlert.textContent = 'Error de conexión. Por favor, intente de nuevo.';
+            errorAlert.classList.remove('d-none');
+        })
+        .finally(() => {
+            spinner.classList.add('d-none');
+            submitBtn.disabled = false;
+        });
+    });
+});
+</script>
+{% endblock %}

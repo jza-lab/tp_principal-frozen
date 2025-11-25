@@ -33,6 +33,9 @@
         <button class="btn btn-danger me-2 btn-crear-alerta" data-tipo-entidad="orden_compra" data-id-entidad="{{ orden.id }}" data-nombre-entidad="Orden de Compra {{ orden.codigo_oc }}">
             <i class="bi bi-exclamation-triangle-fill me-1"></i> Crear Alerta de Riesgo
         </button>
+        <a href="{{ url_for('orden_compra.listar') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Lista de Órdenes de compra
+        </a>
         <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
             <i class="bi bi-arrow-left me-1"></i>Volver
         </a>
