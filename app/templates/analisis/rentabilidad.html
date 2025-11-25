@@ -64,38 +64,50 @@
             <div class="row align-items-center mb-4">
                 <div class="col-md-12">
                     <div class="row g-3">
-                        <!-- KPI: Facturación Total -->
-                        <div class="col-md-2">
+                        <!-- 1. KPI: Facturación Total -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Facturación Total</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Facturación Total
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Total facturado por ventas realizadas (cobrado o por cobrar) en el período."></i>
+                                    </h6>
                                     <p class="fw-bold text-primary mb-0 display-6" style="font-size: 1.3rem;" id="global-facturacion">$0</p>
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Costos Variables -->
-                        <div class="col-md-2">
+                        <!-- 2. KPI: Costos Variables -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Variables</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Costos Variables
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Costos directos asociados a la producción (Materia Prima + Mano de Obra)."></i>
+                                    </h6>
                                     <p class="fw-bold text-warning mb-0 display-6" style="font-size: 1.3rem;" id="global-costo-variable">$0</p>
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Margen Contribución -->
-                        <div class="col-md-2">
+                        <!-- 3. KPI: Margen Contribución -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Margen Contrib.</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Margen Contrib.
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Dinero disponible para cubrir costos fijos tras restar los costos variables."></i>
+                                    </h6>
                                     <p class="fw-bold text-info mb-0 display-6" style="font-size: 1.3rem;" id="global-margen-contribucion">$0</p>
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Costos Fijos -->
-                        <div class="col-md-2">
+                        <!-- 4. KPI: Costos Fijos -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Fijos</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Costos Fijos
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Gastos operativos recurrentes (alquiler, salarios fijos, servicios) que no dependen del volumen."></i>
+                                    </h6>
                                     <p class="fw-bold text-danger mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-fijos">$0</p>
                                     <small class="d-block text-muted mt-1" style="font-size: 0.7rem;" id="global-costos-fijos-desglose">
                                         Dir: $0 | Ind: $0
@@ -103,47 +115,59 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Costos de Envío -->
-                        <div class="col-md-2">
+                        <!-- 5. KPI: Costos de Envío -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Costos Envío</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Costos Envío
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Gastos de logística y transporte asumidos por la empresa (no cobrados al cliente)."></i>
+                                    </h6>
                                     <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-costos-envio">$0</p>
                                     <small class="text-muted" style="font-size: 0.65rem;">Recargos asumidos</small>
                                 </div>
                             </div>
                         </div>
-                         <!-- KPI: Punto de Equilibrio -->
-                        <div class="col-md-2">
+                        <!-- 6. KPI: Rentabilidad Neta (MOVIDO AQUI) -->
+                        <div class="col-12 col-md-3">
+                            <div class="card text-center h-100 border-0 shadow rounded-4 bg-white position-relative overflow-hidden">
+                                <div class="card-body p-3 position-relative z-1">
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Rentabilidad Neta
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Ganancia final real de la empresa tras descontar todos los costos (variables, fijos y envío)."></i>
+                                    </h6>
+                                    <p class="fw-bold text-success display-6 mb-0" style="font-size: 1.5rem;" id="global-rentabilidad-neta">$0</p>
+                                    <small id="global-rentabilidad-porcentaje" class="text-success fw-bold">0%</small>
+                                </div>
+                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10 bg-success-subtle"></div>
+                            </div>
+                        </div>
+                         <!-- 7. KPI: Punto de Equilibrio -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4">
                                 <div class="card-body p-3">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Punto de Equilibrio</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Punto de Equilibrio
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Facturación mínima necesaria para cubrir todos los costos y no perder dinero (Ganancia = 0)."></i>
+                                    </h6>
                                     <p class="fw-bold text-dark mb-0 display-6" style="font-size: 1.3rem;" id="global-punto-equilibrio">$0</p>
                                     <small class="text-muted" style="font-size: 0.65rem;">Meta Mínima</small>
                                 </div>
                             </div>
                         </div>
-                        <!-- KPI: Próximo a Facturar (NEW) -->
-                        <div class="col-md-2">
+                        <!-- 8. KPI: Próximo a Facturar -->
+                        <div class="col-12 col-md-3">
                             <div class="card text-center h-100 border-0 shadow-sm rounded-4 bg-white position-relative overflow-hidden">
                                 <div class="card-body p-3 position-relative z-1">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Próximo a Facturar</h6>
+                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">
+                                        Próximo a Facturar
+                                        <i class="bi bi-info-circle ms-1 text-muted opacity-50" data-bs-toggle="tooltip" title="Ventas pendientes o en proceso que aún no se han completado/entregado. Ingreso futuro proyectado."></i>
+                                    </h6>
                                     <p class="fw-bold text-secondary mb-0 display-6" style="font-size: 1.3rem;" id="global-proximo-facturar">$0</p>
-                                    <small class="text-muted" style="font-size: 0.65rem;">Pendiente + En Proceso (Crédito)</small>
+                                    <small class="text-muted" style="font-size: 0.65rem;">Pendiente + En Proceso</small>
                                 </div>
                                 <!-- Subtle background to distinguish it -->
                                 <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10" style="background-color: rgba(108, 117, 125, 0.1);"></div>
-                            </div>
-                        </div>
-                        <!-- KPI: Rentabilidad Neta -->
-                        <div class="col-md-2">
-                            <div class="card text-center h-100 border-0 shadow rounded-4 bg-white position-relative overflow-hidden">
-                                <div class="card-body p-3 position-relative z-1">
-                                    <h6 class="text-muted text-uppercase small fw-bold mb-2">Rentabilidad Neta</h6>
-                                    <p class="fw-bold text-success display-6 mb-0" style="font-size: 1.5rem;" id="global-rentabilidad-neta">$0</p>
-                                    <small id="global-rentabilidad-porcentaje" class="text-success fw-bold">0%</small>
-                                </div>
-                                <div class="position-absolute top-0 start-0 w-100 h-100 opacity-10 bg-success-subtle"></div>
                             </div>
                         </div>
                     </div>
@@ -156,10 +180,49 @@
                 <div class="col-lg-7">
                     <div class="card shadow border-0 h-100 rounded-4">
                         <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
-                            <h6 class="fw-bold mb-0 text-dark h5">Matriz de Contribución</h6>
-                            <i class="bi bi-info-circle text-muted opacity-50" data-bs-toggle="tooltip" title="Clasificación de productos según su Margen de Contribución Unitario y Volumen de Ventas."></i>
+                            <h6 class="fw-bold mb-0 text-dark h5">Matriz de Contribución (BCG)</h6>
+                            <button class="btn btn-sm btn-light text-muted rounded-pill px-3" type="button" data-bs-toggle="collapse" data-bs-target="#bcgInfo" aria-expanded="false" aria-controls="bcgInfo">
+                                <i class="bi bi-info-circle me-2"></i>¿Cómo leer esto?
+                            </button>
                         </div>
                         <div class="card-body px-4 pb-4">
+                            <!-- Collapsible Explanation -->
+                            <div class="collapse mb-3" id="bcgInfo">
+                                <div class="card card-body bg-light-subtle border-0 small text-muted rounded-4">
+                                    <div class="d-flex align-items-start">
+                                        <i class="bi bi-grid-1x2-fill text-primary me-3 mt-1 fs-5"></i>
+                                        <div>
+                                            <strong class="text-dark d-block mb-2">Matriz BCG adaptada: Clasificación por Ventas vs. Margen</strong>
+                                            <div class="row g-2">
+                                                <div class="col-md-6">
+                                                    <div class="d-flex align-items-center">
+                                                        <span class="badge bg-success rounded-pill me-2">Estrellas</span>
+                                                        <span><strong>Alto Vol. / Alto Margen:</strong> Productos líderes. Potenciar.</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                     <div class="d-flex align-items-center">
+                                                        <span class="badge bg-primary rounded-pill me-2">Vacas</span>
+                                                        <span><strong>Alto Vol. / Bajo Margen:</strong> Generan flujo constante. Mantener.</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                     <div class="d-flex align-items-center">
+                                                        <span class="badge bg-warning text-dark rounded-pill me-2">Interrogantes</span>
+                                                        <span><strong>Bajo Vol. / Alto Margen:</strong> Potenciales. Evaluar estrategia.</span>
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                     <div class="d-flex align-items-center">
+                                                        <span class="badge bg-danger rounded-pill me-2">Perros</span>
+                                                        <span><strong>Bajo Vol. / Bajo Margen:</strong> Baja rentabilidad. Considerar descartar.</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div id="rentabilidad-chart-container" style="width: 100%; height: 450px;"></div>
                             <div id="dynamic-chart-description" class="alert alert-light border-0 bg-light-subtle rounded-3 mt-3 py-2 px-3 d-flex align-items-start small text-muted">
                                 <i class="bi bi-lightbulb-fill text-warning me-2 mt-1"></i>
@@ -170,37 +233,6 @@
                 </div>
                 <!-- Leyenda y Gráficos Secundarios -->
                 <div class="col-lg-5">
-                     <!-- Leyenda Descriptiva -->
-                     <div class="card shadow border-0 rounded-4 mb-4">
-                         <div class="card-body p-4">
-                            <div class="row g-3">
-                                <div class="col-6">
-                                    <div class="d-flex align-items-start">
-                                        <span class="rounded-circle me-2 mt-1" style="background-color:#4CAF50; width:10px; height:10px;"></span>
-                                        <div><strong class="d-block small text-dark">Estrellas</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, altas ventas</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="d-flex align-items-start">
-                                        <span class="rounded-circle me-2 mt-1" style="background-color:#FFC107; width:10px; height:10px;"></span>
-                                        <div><strong class="d-block small text-dark">Interrogantes</strong><span class="text-muted small" style="font-size: 0.75rem;">Alto margen, bajas ventas</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                    <div class="d-flex align-items-start">
-                                        <span class="rounded-circle me-2 mt-1" style="background-color:#2196F3; width:10px; height:10px;"></span>
-                                        <div><strong class="d-block small text-dark">Vacas</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, altas ventas</span></div>
-                                    </div>
-                                </div>
-                                <div class="col-6">
-                                     <div class="d-flex align-items-start">
-                                        <span class="rounded-circle me-2 mt-1" style="background-color:#F44336; width:10px; height:10px;"></span>
-                                        <div><strong class="d-block small text-dark">Perros</strong><span class="text-muted small" style="font-size: 0.75rem;">Bajo margen, bajas ventas</span></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                     <div class="card shadow border-0 rounded-4 mb-4">
                         <div class="card-header bg-white border-bottom-0 pt-4 px-4">
                             <h6 class="fw-bold mb-0 text-dark h6">Top 5: Mayor Margen Total</h6>
