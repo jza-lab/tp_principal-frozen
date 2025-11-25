@@ -59,14 +59,14 @@ class PagoController(BaseController):
             if file and file.filename:
                 filename = secure_filename(file.filename)
                 file_path = f"comprobantes_pago/{id_pedido}/{filename}"
-                
+
                 upload_response, status_code = self.storage_controller.upload_file(
-                    file=file, bucket_name='comprobantes', destination_path=file_path
+                    file=file, bucket_name='comprobantes_de_pago', destination_path=file_path
                 )
-                
+
                 if not upload_response.get('success'):
                     return self.error_response(upload_response.get('error', 'Error al subir el archivo'), status_code)
-                
+
                 comprobante_url = upload_response.get('url')
 
             # 5. Preparar y registrar el pago usando el modelo
@@ -84,12 +84,24 @@ class PagoController(BaseController):
             if not result.get('success'):
                  return self.error_response("No se pudo registrar el pago en la base de datos.", 500)
 
-            # 6. Actualizar estado del pedido SOLO si es 'al contado'
+            # 6. Actualizar estado del pedido
             if pedido.get('condicion_venta') == 'contado':
-                update_result = self.pedido_model.update(id_pedido, {'estado_pago': 'Pagado'})
-                if not update_result.get('success'):
-                     # Log de advertencia si la actualización falla pero el pago se creó
-                     print(f"ADVERTENCIA: Pago {result['data']['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a 'Pagado'.")
+                nuevo_estado_pago = 'Pagado'
+            else:
+                nuevo_total_pagado = total_ya_pagado + monto_pagado
+                nuevo_saldo_pendiente = monto_total_pedido - nuevo_total_pagado
+                
+                nuevo_estado_pago = 'Pagado Parcialmente'
+                if nuevo_saldo_pendiente <= 0:
+                    nuevo_estado_pago = 'Pagado'
+
+            update_data = {'estado_pago': nuevo_estado_pago}
+            update_result = self.pedido_model.update(id_pedido, update_data)
+
+            if not update_result.get('success'):
+                # Log de advertencia si la actualización falla pero el pago se creó
+                print(f"ADVERTENCIA: Pago {result['data']['id_pago']} registrado, pero no se pudo actualizar el estado del pedido {id_pedido} a '{nuevo_estado_pago}'.")
+
 
             return self.success_response(result['data'], message="Pago registrado con éxito.", status_code=201)
 

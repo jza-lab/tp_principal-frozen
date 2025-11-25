@@ -353,6 +353,16 @@
                                     <div class="accordion-body bg-light">
                                         {# Asumiendo que _comprobante_pago.html existe y es correcto #}
                                         {% include 'orden_venta/_comprobante_pago.html' %}
+
+                                        {% if pago.comprobante_url %}
+                                        <div class="mt-3 text-center">
+                                            <h6 class="text-muted small">Comprobante Adjunto</h6>
+                                            <a href="#" data-bs-toggle="modal" data-bs-target="#imageModal" data-img-src="{{ pago.comprobante_url }}">
+                                                <img src="{{ pago.comprobante_url }}" alt="Comprobante de Pago" class="img-thumbnail" style="max-height: 150px; cursor: pointer;">
+                                            </a>
+                                        </div>
+                                        {% endif %}
+
                                         <div class="text-center mt-3">
                                             <a href="{{ url_for('orden_venta.generar_documento_pdf', tipo='pago', id_documento=pago.id_pago) }}" class="btn btn-primary btn-sm" target="_blank">
                                                 <i class="bi bi-download me-1"></i> Descargar PDF
@@ -475,6 +485,21 @@
     </div>
 </div>
 {% include "admin_riesgos/_modal_crear_alerta.html" %}
+
+<!-- Modal para la Imagen -->
+<div class="modal fade" id="imageModal" tabindex="-1" aria-labelledby="imageModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="imageModalLabel">Comprobante de Pago</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <img src="" class="img-fluid" id="modalImage" alt="Comprobante de Pago">
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -633,4 +658,15 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 <script src="{{ url_for('static', filename='js/exportarTrazabilidadPDF.js') }}?v=1.1"></script>
 
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var imageModal = document.getElementById('imageModal');
+    imageModal.addEventListener('show.bs.modal', function (event) {
+        var button = event.relatedTarget;
+        var imgSrc = button.getAttribute('data-img-src');
+        var modalImage = imageModal.querySelector('#modalImage');
+        modalImage.src = imgSrc;
+    });
+});
+</script>
 {% endblock %}

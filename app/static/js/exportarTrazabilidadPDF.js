@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function captureDiagramImage() {
     console.log("Iniciando captura de diagrama...");
 
-    const elementToCapture = document.getElementById('vis_trazabilidad') || document.getElementById('sankey_chart_trazabilidad');
+    const elementToCapture = document.getElementById('vis_trazabilidad') || document.getElementById('sankey_trazabilidad');
     if (!elementToCapture) {
         console.error("Error crítico: No se encontró el contenedor del diagrama.");
         return null;
@@ -590,12 +590,39 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
     drawSectionTitle('Diagrama de Trazabilidad');
     drawDescriptionText(SECTION_DESCRIPTIONS.diagram);
     if (diagramImage) {
+        // --- INICIO DE LA MODIFICACIÓN: PÁGINA HORIZONTAL PARA EL DIAGRAMA ---
+        doc.addPage('a4', 'l'); // Añadir página en landscape
+        PDF_GLOBALS.currentPage++;
+        PDF_GLOBALS.totalPages++;
+
+        const landscapePageW = doc.internal.pageSize.getWidth();
+        const landscapePageH = doc.internal.pageSize.getHeight();
+        const landscapeMargin = 10; // Un margen más pequeño para la página del diagrama
+        const contentW = landscapePageW - (landscapeMargin * 2);
+        const contentH = landscapePageH - (landscapeMargin * 2);
+
         const imgProps = doc.getImageProperties(diagramImage);
-        // Para tu pregunta "en grande": calculamos la altura para que ocupe todo el ancho
-        const imgHeight = (PDF_GLOBALS.CONTENT_W * imgProps.height) / imgProps.width;
-        checkPageBreak(imgHeight + 10);
-        doc.addImage(diagramImage, 'PNG', PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR, PDF_GLOBALS.CONTENT_W, imgHeight);
-        PDF_GLOBALS.Y_CURSOR += imgHeight + 10;
+        const aspectRatio = imgProps.width / imgProps.height;
+
+        let imgWidth = contentW;
+        let imgHeight = imgWidth / aspectRatio;
+
+        if (imgHeight > contentH) {
+            imgHeight = contentH;
+            imgWidth = imgHeight * aspectRatio;
+        }
+
+        const x = (landscapePageW - imgWidth) / 2;
+        const y = (landscapePageH - imgHeight) / 2;
+
+        doc.addImage(diagramImage, 'PNG', x, y, imgWidth, imgHeight);
+
+        // Añadir una nueva página vertical para continuar con el resto del contenido
+        doc.addPage('a4', 'p');
+        PDF_GLOBALS.currentPage++;
+        PDF_GLOBALS.totalPages++;
+        addHeader(); // Restablecer la cabecera en la nueva página
+        // --- FIN DE LA MODIFICACIÓN ---
     } else {
         checkPageBreak(10);
         doc.setFont('Helvetica', 'italic');

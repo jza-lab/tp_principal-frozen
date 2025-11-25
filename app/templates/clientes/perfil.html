@@ -174,6 +174,7 @@
                                             <button class="btn btn-sm btn-outline-success btn-registrar-pago"
                                                 data-pedido-id="{{ pedido.id }}"
                                                 data-monto-total="{{ pedido.precio_orden | default(0) }}"
+                                                data-saldo-pendiente="{{ pedido.saldo_pendiente | default(0) }}"
                                                 data-cliente-nombre="{{ cliente.nombre }}"
                                                 title="Registrar Pago">
                                                 <i class="bi bi-cash-coin"></i>
@@ -309,6 +310,17 @@
                     <p>Cliente: <strong id="modalClienteNombre"></strong></p>
                     {{ csrf_form.csrf_token }}
                     <input type="hidden" id="id_pedido" name="id_pedido">
+
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <h5>Total Pedido</h5>
+                            <p class="h4" id="modalMontoTotal">$0.00</p>
+                        </div>
+                        <div class="col-6">
+                            <h5>Saldo Pendiente</h5>
+                            <p class="h4 text-danger" id="modalSaldoPendiente">$0.00</p>
+                        </div>
+                    </div>
                     
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -380,18 +392,16 @@ document.addEventListener('DOMContentLoaded', function () {
         button.addEventListener('click', function () {
             const pedidoId = this.dataset.pedidoId;
             const montoTotal = this.dataset.montoTotal;
+            const saldoP = this.dataset.saldoPendiente;
             const clienteNombre = this.dataset.clienteNombre;
 
             document.getElementById('id_pedido').value = pedidoId;
             document.getElementById('modalPedidoId').textContent = pedidoId;
             document.getElementById('modalClienteNombre').textContent = clienteNombre;
-            montoInput.value = parseFloat(montoTotal).toFixed(2).replace('.', ',');
+            document.getElementById('modalMontoTotal').textContent = `$${parseFloat(montoTotal).toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            document.getElementById('modalSaldoPendiente').textContent = `$${parseFloat(saldoP).toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+            montoInput.value = parseFloat(saldoP).toFixed(2);
             
-            pagoForm.reset(); // Limpiar el formulario excepto los campos que acabamos de setear
-            document.getElementById('id_pedido').value = pedidoId;
-            montoInput.value = parseFloat(montoTotal).toFixed(2);
-
-
             errorAlert.classList.add('d-none');
             registrarPagoModal.show();
         });

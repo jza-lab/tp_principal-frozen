@@ -56,19 +56,11 @@ def ver_perfil_cliente(id):
 
     pagos_por_pedido = {}
     if pedidos:
-        pedido_ids = [p['id'] for p in pedidos]
-        
-        # Realizar una única consulta para obtener todos los pagos
-        todos_los_pagos_resp = pago_controller.pago_model.find_all(filters={'id_pedido': pedido_ids})
-        
-        if todos_los_pagos_resp.get('success'):
-            # Inicializar el diccionario para todos los pedidos
-            for pid in pedido_ids:
-                pagos_por_pedido[pid] = []
-            
-            # Agrupar los pagos por id_pedido
-            for pago in todos_los_pagos_resp.get('data', []):
-                pagos_por_pedido[pago['id_pedido']].append(pago)
+        for pedido in pedidos:
+            pagos_res, _ = pago_controller.get_pagos_by_pedido_id(pedido['id'])
+            total_pagado = sum(p['monto'] for p in pagos_res.get('data', []))
+            pedido['saldo_pendiente'] = pedido['precio_orden'] - total_pagado
+            pagos_por_pedido[pedido['id']] = pagos_res.get('data', [])
 
     return render_template('clientes/perfil.html', cliente=cliente, pedidos=pedidos, pagos_por_pedido=pagos_por_pedido)
 
