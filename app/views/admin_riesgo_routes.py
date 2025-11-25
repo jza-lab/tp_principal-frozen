@@ -1,5 +1,7 @@
+from venv import logger
 from flask import Blueprint, request, jsonify, render_template, flash, redirect, url_for
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.controllers.pedido_controller import PedidoController
 from app.controllers.riesgo_controller import RiesgoController
 from app.utils.decorators import permission_required
 
@@ -171,27 +173,55 @@ def ejecutar_accion_api(alerta_id):
     resultado, status_code = controller.ejecutar_accion_riesgo_api(alerta_id, datos, usuario_id)
     return jsonify(resultado), status_code
 
-@api_riesgos_bp.route('/lote_producto/<int:lote_id>/pedidos_afectados', methods=['GET'])
+@api_riesgos_bp.route('/lote_producto/<string:lote_id>/pedidos_afectados', methods=['GET'])
 @jwt_required(locations=["cookies"])
 def obtener_pedidos_lote_producto(lote_id):
-    from app.models.reserva_producto import ReservaProductoModel
+    from app.models.trazabilidad import TrazabilidadModel
+    from app.models.pedido import PedidoModel
+
     try:
-        reserva_model = ReservaProductoModel()
-        reservas_res = reserva_model.db.table('reservas_productos')\
-            .select('cantidad_reservada, pedido:pedidos(id, codigo, clientes(nombre))')\
-            .eq('lote_producto_id', lote_id).execute()
+        trazabilidad_model = TrazabilidadModel()
+        pedido_model = PedidoModel()
         
+        # Usar el sistema de trazabilidad para encontrar todos los pedidos afectados
+        afectados_res = trazabilidad_model.obtener_trazabilidad_unificada('lote_producto', lote_id, nivel='simple')
+        
+        pedidos_afectados = []
+        if afectados_res and 'resumen' in afectados_res:
+            for item in afectados_res['resumen'].get('destino', []):
+                if item.get('tipo') == 'pedido':
+                    pedidos_afectados.append(item)
+
         data = []
-        if reservas_res.data:
-            for r in reservas_res.data:
-                pedido = r.get('pedido') or {}
-                cliente = pedido.get('clientes') or {}
-                data.append({
-                    'pedido_id': pedido.get('id'),
-                    'pedido_codigo': pedido.get('codigo') or f"#{pedido.get('id')}",
-                    'cliente_nombre': cliente.get('nombre', 'Desconocido'),
-                    'cantidad_reservada': r.get('cantidad_reservada', 0)
-                })
+        if pedidos_afectados:
+            # Obtener detalles completos de los pedidos, incluyendo cliente y cantidad reservada
+            for p_afectado in pedidos_afectados:
+                pedido_id = p_afectado['id']
+                pedido_detalles_res, _ = PedidoController().obtener_pedido_por_id(pedido_id)
+
+                if not pedido_detalles_res.get('success'): continue
+                pedido_completo = pedido_detalles_res.get('data', {})
+
+                # Encontrar la cantidad reservada específicamente de este lote
+                cantidad_reservada = 0
+                reservas_del_lote = pedido_model.db.table('reservas_productos') \
+                    .select('cantidad_reservada') \
+                    .eq('lote_producto_id', lote_id) \
+                    .in_('pedido_item_id', [item['id'] for item in pedido_completo.get('items', [])]) \
+                    .execute().data
+                
+                if reservas_del_lote:
+                    cantidad_reservada = sum(r['cantidad_reservada'] for r in reservas_del_lote)
+
+                if cantidad_reservada > 0:
+                     data.append({
+                        'pedido_id': pedido_completo.get('id'),
+                        'pedido_codigo': pedido_completo.get('codigo', f"#{pedido_id}"),
+                        'cliente_nombre': pedido_completo.get('cliente', {}).get('nombre', 'Desconocido'),
+                        'cantidad_reservada': cantidad_reservada
+                    })
+
         return jsonify({'success': True, 'data': data})
     except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        logger.error(f"Error al obtener pedidos para lote de producto {lote_id}: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': "Error interno al buscar pedidos afectados."}), 500

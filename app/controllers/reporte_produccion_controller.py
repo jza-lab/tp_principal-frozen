@@ -4,8 +4,12 @@ from app.models.insumo import InsumoModel
 from app.models.producto import ProductoModel
 from app.models.receta_ingrediente import RecetaIngredienteModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
 from datetime import datetime, timedelta
 from collections import defaultdict
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ReporteProduccionController:
     def __init__(self):
@@ -15,6 +19,7 @@ class ReporteProduccionController:
         self.producto_model = ProductoModel()
         self.receta_ingrediente_model = RecetaIngredienteModel()
         self.registro_desperdicio_model = RegistroDesperdicioModel()
+        self.registro_desperdicio_lote_insumo_model = RegistroDesperdicioLoteInsumoModel()
 
     def obtener_ordenes_por_estado(self):
         """
@@ -296,9 +301,9 @@ class ReporteProduccionController:
 
     def obtener_eficiencia_consumo_insumos(self, top_n=15, product_id=None):
         """
-        Calcula la eficiencia de consumo de insumos comparando lo planificado vs lo real.
-        Real = Planificado + Desperdicio.
-        Retorna datos para el gráfico y una narrativa.
+        Calcula la eficiencia de consumo de insumos centrada en la eficiencia real.
+        Estándar (Planificado para Output) = Cantidad Real Producida * Cantidad Receta.
+        Real = Estándar + Desperdicios (RegistroDesperdicioLoteInsumoModel con OP ID).
         """
         try:
             # 1. Obtener OPs recientes completadas
@@ -317,52 +322,74 @@ class ReporteProduccionController:
 
             op_ids = [op['id'] for op in ops]
             
-            # 2. Buscar desperdicios en el rango de fechas de estas OPs
-            fechas_inicio = [op['fecha_inicio'] for op in ops if op.get('fecha_inicio')]
-            fechas_fin = [op['fecha_fin'] for op in ops if op.get('fecha_fin')]
-            
+            # 2. Obtener desperdicios de insumos vinculados a estas OPs
+            # Usamos el nuevo modelo RegistroDesperdicioLoteInsumoModel
             desperdicios = []
-            if fechas_inicio and fechas_fin:
-                min_fecha = min(fechas_inicio)
-                max_fecha = max(fechas_fin)
-                if isinstance(min_fecha, str): min_fecha = datetime.fromisoformat(min_fecha)
-                if isinstance(max_fecha, str): max_fecha = datetime.fromisoformat(max_fecha)
+            if op_ids:
+                waste_res = self.registro_desperdicio_lote_insumo_model.db.table('registros_desperdicio_lote_insumo')\
+                    .select('*, motivo:motivos_desperdicio(descripcion)')\
+                    .in_('orden_produccion_id', op_ids)\
+                    .execute()
                 
-                waste_res = self.registro_desperdicio_model.get_all_in_date_range(min_fecha, max_fecha)
-                if waste_res.get('success'):
-                    desperdicios = waste_res.get('data', [])
+                if waste_res.data:
+                    desperdicios = waste_res.data
 
-            waste_by_insumo = defaultdict(float)
-            waste_reasons = defaultdict(lambda: defaultdict(int)) 
+            # Agrupar desperdicios por OP y por Insumo
+            waste_map = defaultdict(lambda: defaultdict(float)) # op_id -> insumo_id -> cantidad
+            waste_reasons = defaultdict(lambda: defaultdict(int)) # insumo_id -> motivo -> count
+
+            # Mapa auxiliar para obtener insumo_id desde lote_insumo_id si fuera necesario
+            # Asumimos que podemos obtener el insumo a través del registro o inferirlo de la OP,
+            # pero el registro de desperdicio suele tener lote_insumo_id.
+            # Necesitamos saber qué "insumo_id" (catalogo) corresponde a ese lote para agrupar con la receta.
+            # Haremos una consulta para resolver lote_insumo_id -> insumo_id
+            
+            lote_ids = list(set([w['lote_insumo_id'] for w in desperdicios if w.get('lote_insumo_id')]))
+            lote_to_insumo_map = {}
+            if lote_ids:
+                lotes_res = self.insumo_inventario_model.db.table('insumos_inventario')\
+                    .select('id_lote, id_insumo')\
+                    .in_('id_lote', [str(lid) for lid in lote_ids])\
+                    .execute()
+                if lotes_res.data:
+                    for l in lotes_res.data:
+                        lote_to_insumo_map[l['id_lote']] = l['id_insumo']
+                        lote_to_insumo_map[str(l['id_lote'])] = l['id_insumo']
 
             for w in desperdicios:
-                insumo_id = w.get('insumo_id')
-                if insumo_id:
+                op_id = w.get('orden_produccion_id')
+                lid = w.get('lote_insumo_id')
+                insumo_id = lote_to_insumo_map.get(lid) or lote_to_insumo_map.get(str(lid))
+                
+                if op_id and insumo_id:
                     cantidad = float(w.get('cantidad', 0))
-                    waste_by_insumo[insumo_id] += cantidad
-                    motivo = w.get('motivo_desperdicio', {}).get('descripcion', 'Sin motivo')
-                    waste_reasons[insumo_id][motivo] += 1
+                    waste_map[op_id][insumo_id] += cantidad
+                    
+                    motivo_desc = 'Sin motivo'
+                    if w.get('motivo'):
+                        motivo_desc = w.get('motivo', {}).get('descripcion', 'Sin motivo')
+                    waste_reasons[insumo_id][motivo_desc] += 1
 
-            # 3. Calcular Planificado por Insumo y Producto
-            data_map = defaultdict(lambda: defaultdict(lambda: {'planificado': 0, 'real': 0, 'insumo_id': None}))
+            # 3. Calcular Estándar vs Real por Insumo y Producto
+            data_map = defaultdict(lambda: defaultdict(lambda: {'estandar': 0, 'real': 0, 'insumo_id': None}))
             products_set = set()
 
             for op in ops:
                 if not op.get('receta_id'): continue
+                op_id = op['id']
                 
                 prod_nombre = op.get('producto_nombre', 'Producto Desconocido') 
-                if 'producto_nombre' not in op:
-                    if op.get('producto_id'):
-                        prod = self.producto_model.find_by_id(op['producto_id'])
-                        if prod.get('success'):
-                             prod_nombre = prod['data'].get('nombre')
+                if 'producto_nombre' not in op and op.get('producto_id'):
+                    prod = self.producto_model.find_by_id(op['producto_id'])
+                    if prod.get('success'):
+                         prod_nombre = prod['data'].get('nombre')
                 
                 products_set.add(prod_nombre)
 
                 if product_id and str(op.get('producto_id')) != str(product_id) and prod_nombre != product_id: 
                     continue
 
-                qty_op = float(op.get('cantidad_planificada', 0))
+                qty_op_prod = float(op.get('cantidad_producida', 0)) # Cantidad Real Producida
                 
                 ingredientes_res = self.receta_ingrediente_model.find_by_receta_id_with_insumo(op['receta_id'])
                 ingredientes = ingredientes_res.get('data', [])
@@ -371,56 +398,47 @@ class ReporteProduccionController:
                     insumo_data = ing.get('insumo', {})
                     insumo_nombre = insumo_data.get('nombre', 'Insumo Desconocido')
                     insumo_id = ing.get('insumo_id')
-                    cantidad_unitaria = float(ing.get('cantidad', 0))
+                    cantidad_unitaria_receta = float(ing.get('cantidad', 0))
                     
-                    total_planificado = qty_op * cantidad_unitaria
+                    # Consumo Estándar (Lo que se debió usar para la producción real)
+                    consumo_estandar = qty_op_prod * cantidad_unitaria_receta
+                    
+                    # Consumo Real = Estándar + Desperdicio registrado para esta OP/Insumo
+                    desperdicio_op = waste_map[op_id][insumo_id]
+                    consumo_real = consumo_estandar + desperdicio_op
                     
                     entry = data_map[prod_nombre][insumo_nombre]
-                    entry['planificado'] += total_planificado
+                    entry['estandar'] += consumo_estandar
+                    entry['real'] += consumo_real
                     entry['insumo_id'] = insumo_id
-
-            # 4. Asignar desperdicio a los insumos planificados
-            total_planned_by_insumo = defaultdict(float)
-            for prod, insumos in data_map.items():
-                for ins_nom, datos in insumos.items():
-                    total_planned_by_insumo[datos['insumo_id']] += datos['planificado']
-            
-            for prod, insumos in data_map.items():
-                for ins_nom, datos in insumos.items():
-                    planned = datos['planificado']
-                    ins_id = datos['insumo_id']
-                    
-                    waste_amount = 0
-                    if ins_id in waste_by_insumo and total_planned_by_insumo[ins_id] > 0:
-                        ratio = planned / total_planned_by_insumo[ins_id]
-                        waste_amount = waste_by_insumo[ins_id] * ratio
-                    
-                    datos['real'] = planned + waste_amount
 
             # 5. Formatear datos para el gráfico
             chart_data = []
             
             for prod, insumos in data_map.items():
                 for ins_nom, datos in insumos.items():
-                    plan = datos['planificado']
+                    std = datos['estandar']
                     real = datos['real']
                     
-                    if plan == 0: continue
+                    if std == 0 and real == 0: continue
                     
-                    # Avoid near-zero floating point errors
-                    if abs(real - plan) < 0.0001:
-                        real = plan
-                        desviacion_pct = 0.0
+                    # Desviación: (Real - Estándar) / Estándar
+                    # Positiva = Ineficiencia (Usé más de lo necesario)
+                    # Negativa = Ahorro (Raro si Real >= Estándar, pero posible si hubo merma negativa o corrección)
+                    # Como Real = Std + Waste, Real siempre >= Std (salvo errores de datos), por lo que desviación >= 0
+                    
+                    if std > 0:
+                        desviacion_pct = ((real - std) / std) * 100
                     else:
-                        desviacion_pct = ((real - plan) / plan) * 100
+                        desviacion_pct = 100.0 # Todo fue desperdicio si no había estándar
                     
                     chart_data.append({
                         'producto': prod,
                         'insumo': ins_nom,
-                        'planificado': round(plan, 2),
+                        'planificado': round(std, 2), # Mapeado a 'planificado' para compatibilidad frontend, pero es 'Estándar'
                         'real': round(real, 2),
                         'desviacion': round(desviacion_pct, 2),
-                        'diff_absoluta': abs(real - plan)
+                        'diff_absoluta': abs(real - std)
                     })
             
             chart_data.sort(key=lambda x: x['diff_absoluta'], reverse=True)
@@ -433,11 +451,10 @@ class ReporteProduccionController:
             if chart_data:
                 top_item = chart_data[0]
                 
-                if top_item['desviacion'] == 0.0:
-                    narrative = "Excelente gestión. No se registraron desperdicios ni desviaciones significativas en los insumos analizados para el periodo."
+                if top_item['desviacion'] <= 0.1:
+                    narrative = "Excelente eficiencia. El consumo de insumos se ajusta a los estándares de producción."
                 else:
                     insumo_critico_id = None
-                    # Re-search ID needed for reasons (inefficient but safe)
                     for prod, insumos in data_map.items():
                         if top_item['insumo'] in insumos:
                             insumo_critico_id = insumos[top_item['insumo']]['insumo_id']
@@ -445,12 +462,15 @@ class ReporteProduccionController:
                     
                     reasons_text = ""
                     if insumo_critico_id and insumo_critico_id in waste_reasons:
-                        top_reason = max(waste_reasons[insumo_critico_id].items(), key=lambda x: x[1])
-                        reasons_text = f" La causa más frecuente de desperdicio reportada fue '{top_reason[0]}'."
+                        # Find top reason
+                        sorted_reasons = sorted(waste_reasons[insumo_critico_id].items(), key=lambda x: x[1], reverse=True)
+                        if sorted_reasons:
+                            top_reason = sorted_reasons[0]
+                            reasons_text = f" La principal causa de pérdida reportada fue '{top_reason[0]}'."
                     
                     narrative = (
-                        f"El insumo con mayor desviación es **{top_item['insumo']}** utilizado en **{top_item['producto']}**, "
-                        f"con un excedente del **{top_item['desviacion']}%** sobre lo planificado. "
+                        f"Se detectó una ineficiencia en el uso de **{top_item['insumo']}** para **{top_item['producto']}**, "
+                        f"consumiendo un **{top_item['desviacion']}%** más de lo estipulado por receta. "
                         f"{reasons_text}"
                     )
             else:
@@ -471,64 +491,82 @@ class ReporteProduccionController:
     def obtener_costos_produccion_plan_vs_real(self, periodo='semanal'):
         """
         Compara el costo planificado vs real de producción agrupado por tiempo.
-        Planificado = Cantidad OP * Costo Receta (aprox sum ingrediente * costo).
-        Real = Planificado + (Desperdicio * Costo Insumo).
+        Planificado = Cantidad OP * Costo Receta.
+        Real = Cantidad Producida * Costo Receta + Desperdicio.
+        Rellena huecos de fechas con 0 para continuidad.
         """
         try:
-            # 1. Obtener OPs Completadas
+            # 1. Definir rango de fechas y formato
+            hoy = datetime.now()
+            
+            if periodo == 'anual':
+                # Últimos 12 meses
+                fecha_inicio = (hoy.replace(day=1) - timedelta(days=365)).replace(day=1)
+                delta_step = 'month'
+                fmt_key = '%Y-%m'
+            elif periodo == 'mensual':
+                # Últimos 6 meses (o un rango razonable para ver meses)
+                fecha_inicio = (hoy.replace(day=1) - timedelta(days=180)).replace(day=1)
+                delta_step = 'month'
+                fmt_key = '%Y-%m'
+            else: # semanal (por defecto)
+                # Últimas 12 semanas
+                fecha_inicio = hoy - timedelta(weeks=12)
+                # Ajustar al lunes de esa semana
+                fecha_inicio = fecha_inicio - timedelta(days=fecha_inicio.weekday())
+                delta_step = 'week'
+                fmt_key = '%Y-W%U'
+            
             filters = {'estado': 'COMPLETADA'}
-            # Limitar a un rango razonable (e.g., último año o según periodo)
-            # Aquí simplificamos trayendo las últimas 100 o filtrando por fecha si se pasara argumento.
-            # Asumimos 'últimos 6 meses' por defecto para el gráfico.
-            fecha_limite = datetime.now() - timedelta(days=180)
-            filters['fecha_fin_gte'] = fecha_limite.isoformat()
+            filters['fecha_fin_gte'] = fecha_inicio.isoformat()
             
             op_response = self.orden_produccion_model.find_all(filters)
             ops = op_response.get('data', [])
             
-            if not ops:
-                return {'success': True, 'data': {}}
+            # 2. Generar mapa continuo de fechas inicializado en 0
+            costos_por_tiempo = {}
+            current_date = fecha_inicio
+            while current_date <= hoy:
+                key = current_date.strftime(fmt_key)
+                costos_por_tiempo[key] = {'planificado': 0.0, 'real': 0.0}
+                
+                if delta_step == 'month':
+                    # Avanzar al próximo mes
+                    next_month = (current_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+                    current_date = next_month
+                elif delta_step == 'week':
+                    current_date += timedelta(weeks=1)
+                else:
+                    current_date += timedelta(days=1)
 
-            # 2. Obtener Desperdicios en el mismo rango
-            waste_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_limite, datetime.now())
+            # 3. Obtener Desperdicios en el mismo rango
+            waste_res = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, hoy)
             desperdicios = waste_res.get('data', []) if waste_res.get('success') else []
 
-            # Mapa de costos de insumos (Optimización: cargar todos los insumos una vez)
-            # InsumoModel no tiene un get_all_costs fácil, usaremos un cache simple si es posible
-            # O iterar. Para hacerlo bien, asumiremos un costo promedio si no tenemos acceso directo rapido.
-            # Mejor opción: Consultar insumos y crear mapa {id: costo}
+            # Mapa de costos de insumos
             insumos_res = self.insumo_model.find_all()
             costos_insumos = {}
             if insumos_res.get('success'):
                 for ins in insumos_res.get('data', []):
-                    # Asumimos campo 'costo' o 'precio'. Si no existe, 0.
-                    costos_insumos[ins['id']] = float(ins.get('costo', 0) or ins.get('precio', 0))
+                    costos_insumos[ins['id']] = float(ins.get('costo', 0) or ins.get('precio', 0) or ins.get('precio_unitario', 0))
 
-            # 3. Calcular Costos Agrupados por Tiempo
-            costos_por_tiempo = defaultdict(lambda: {'planificado': 0.0, 'real': 0.0})
-
-            # A. Costos Planificados (OPs)
+            # 4. Calcular Costos Agrupados por Tiempo
+            # A. Costos Planificados y Reales (Base Producida)
             for op in ops:
                 fecha_fin = op.get('fecha_fin')
                 if not fecha_fin: continue
                 
                 try:
                     dt = datetime.fromisoformat(fecha_fin)
-                    if periodo == 'semanal':
-                        key = dt.strftime('%Y-W%U')
-                    elif periodo == 'mensual':
-                        key = dt.strftime('%Y-%m')
-                    else: # diario
-                        key = dt.strftime('%Y-%m-%d')
+                    key = dt.strftime(fmt_key)
                     
-                    # Costo Planificado de esta OP
-                    # Idealmente: Receta.get_costo(). Si no, calcular sum(ing * cost).
+                    if key not in costos_por_tiempo: continue 
+
                     receta_id = op.get('receta_id')
-                    qty_op = float(op.get('cantidad_planificada', 0))
+                    qty_op_plan = float(op.get('cantidad_planificada', 0))
+                    qty_op_prod = float(op.get('cantidad_producida', 0))
                     
-                    # Calcular costo receta al vuelo (podría ser lento, caching recomendado)
-                    # Simplificación: Usar un costo estimado promedio si es muy pesado, 
-                    # pero intentaremos calcularlo bien.
+                    # Calcular costo receta
                     ingredientes_res = self.receta_ingrediente_model.find_by_receta_id_with_insumo(receta_id)
                     costo_receta_unitario = 0
                     for ing in ingredientes_res.get('data', []):
@@ -537,11 +575,11 @@ class ReporteProduccionController:
                         costo_u = costos_insumos.get(ins_id, 0)
                         costo_receta_unitario += cant_ing * costo_u
                     
-                    total_plan_op = qty_op * costo_receta_unitario
+                    total_plan_op = qty_op_plan * costo_receta_unitario
+                    total_real_op_base = qty_op_prod * costo_receta_unitario
                     
                     costos_por_tiempo[key]['planificado'] += total_plan_op
-                    # El real empieza igual al planificado (base), luego sumamos desperdicio
-                    costos_por_tiempo[key]['real'] += total_plan_op
+                    costos_por_tiempo[key]['real'] += total_real_op_base
 
                 except ValueError:
                     continue
@@ -553,30 +591,38 @@ class ReporteProduccionController:
                 
                 try:
                     dt = datetime.fromisoformat(fecha_reg)
-                    if periodo == 'semanal':
-                        key = dt.strftime('%Y-W%U')
-                    elif periodo == 'mensual':
-                        key = dt.strftime('%Y-%m')
-                    else:
-                        key = dt.strftime('%Y-%m-%d')
+                    key = dt.strftime(fmt_key)
                     
-                    ins_id = w.get('insumo_id')
-                    cant = float(w.get('cantidad', 0))
-                    costo_u = costos_insumos.get(ins_id, 0)
-                    costo_waste = cant * costo_u
-                    
-                    # Sumar solo si la fecha cae en una clave existente (o crearla si queremos mostrar todo desperdicio)
-                    # Si solo mostramos produccion, el desperdicio sin produccion quizas no deba salir, 
-                    # pero para ser honestos, es costo real. Lo agregamos.
-                    costos_por_tiempo[key]['real'] += costo_waste
+                    if key in costos_por_tiempo:
+                        ins_id = w.get('insumo_id')
+                        cant = float(w.get('cantidad', 0))
+                        costo_u = costos_insumos.get(ins_id, 0)
+                        costo_waste = cant * costo_u
+                        
+                        costos_por_tiempo[key]['real'] += costo_waste
                     
                 except ValueError:
                     continue
 
             # Ordenar
             sorted_keys = sorted(costos_por_tiempo.keys())
+            
+            # Formatear etiquetas para el gráfico
+            labels_display = []
+            for k in sorted_keys:
+                if delta_step == 'month':
+                    # Ej: 2023-11 -> Nov 2023
+                    d = datetime.strptime(k, '%Y-%m')
+                    labels_display.append(d.strftime('%b %Y'))
+                elif delta_step == 'week':
+                    # Ej: 2023-W45 -> Sem 45
+                    labels_display.append(f"Sem {k.split('-W')[1]}")
+                else:
+                    labels_display.append(k)
+
             result_data = {
-                'labels': sorted_keys,
+                'labels': labels_display, # Etiquetas legibles
+                'raw_labels': sorted_keys, # Etiquetas crudas por si acaso
                 'planificado': [round(costos_por_tiempo[k]['planificado'], 2) for k in sorted_keys],
                 'real': [round(costos_por_tiempo[k]['real'], 2) for k in sorted_keys]
             }

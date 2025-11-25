@@ -172,7 +172,27 @@
                                             </div>
                                             <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
                                                 <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
-                                                {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                {% if lote.estado_resolucion == 'resuelto' %}
+                                                    {% if lote.resolucion_aplicada == 'omitido_por_estado_previo' %}
+                                                        <div class="alert alert-warning small p-2">
+                                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                            <strong>Lote Agotado:</strong> No es posible realizar una inspección, por lo que fue resuelto automáticamente. El lote puede estar en uso en OPs activas que deben ser revisadas.
+                                                        </div>
+                                                        <div class="d-grid gap-2">
+                                                            <button class="btn btn-sm btn-success" disabled><i class="bi bi-check-circle me-1"></i> Marcar como Apto</button>
+                                                            <button class="btn btn-sm btn-danger" disabled><i class="bi bi-x-circle me-1"></i> Marcar como No Apto</button>
+                                                        </div>
+                                                    {% else %}
+                                                        <p class="small text-muted">Este lote fue resuelto como:</p>
+                                                        {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
+                                                        <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                    {% endif %}
+                                                {% elif (lote.estado and lote.estado | upper == 'AGOTADO') %}
+                                                    <div class="alert alert-warning small p-2">
+                                                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                                        <strong>Lote Agotado:</strong> No es posible revisar los insumos. Puede haber OPs activas que lo estén empleando y que deben ser revisadas individualmente.
+                                                    </div>
+                                                {% elif lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
                                                         <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_insumo" data-resolucion="apto">
@@ -183,10 +203,6 @@
                                                             <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
                                                         </button>
                                                     </div>
-                                                {% elif lote.estado_resolucion == 'resuelto' %}
-                                                    <p class="small text-muted">Este lote fue resuelto como:</p>
-                                                    {% set resolucion_clase = 'success' if lote.resolucion_aplicada == 'apto' else 'danger' %}
-                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ lote.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
                                                 {% else %}
                                                     <p class="small text-muted">La alerta general debe estar pendiente para poder tomar acciones sobre este lote.</p>
                                                 {% endif %}
@@ -239,8 +255,33 @@
                                                 {% if op.estado_resolucion == 'resuelto' %}
                                                     <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
                                                     <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% elif op.estado_resolucion == 'resuelto' %}
+                                                    <small class="text-muted d-block mt-3 mb-1">Resolución de Alerta:</small>
+                                                    {% set resolucion_clase = 'info' %}
+                                                    {% if 'Cancelada' in op.resolucion_aplicada %}
+                                                        {% set resolucion_clase = 'danger' %}
+                                                    {% elif 'Continuada' in op.resolucion_aplicada %}
+                                                        {% set resolucion_clase = 'success' %}
+                                                    {% endif %}
+                                                    <h4><span class="badge bg-{{ resolucion_clase }}">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
+                                                {% elif op.estado_previo == 'COMPLETADA' and op.estado_resolucion == 'pendiente' %}
+                                                    <div class="alert alert-info small p-2 mt-3">
+                                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                                        <strong>OP Completada:</strong> Esta orden ya finalizó. Puede reprogramarla para ponerla en estado 'Pendiente' nuevamente.
+                                                    </div>
+                                                    <div class="d-grid gap-2 mt-2">
+                                                        <button class="btn btn-sm btn-primary btn-reprogramar-op" data-op-id="{{ op.id }}">
+                                                            <i class="bi bi-arrow-clockwise me-1"></i> Reprogramar OP
+                                                        </button>
+                                                    </div>
+                                                {% elif op.estado_previo in ['PENDIENTE', 'EN ESPERA'] and op.estado_resolucion == 'pendiente' %}
+                                                    <div class="alert alert-secondary small p-2 mt-3">
+                                                        <i class="bi bi-pause-circle-fill me-1"></i>
+                                                        <strong>OP en Espera:</strong> No se requieren acciones. La orden está a la espera de ser procesada.
+                                                    </div>
                                                 {% elif op.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
-                                                    <div class="d-grid gap-2 mt-3">
+                                                    <p class="small text-muted mb-2">Definir el estado de esta Orden:</p>
+                                                    <div class="d-grid gap-2">
                                                         <button class="btn btn-sm btn-success btn-resolver-op" data-op-id="{{ op.id }}" data-accion="continuar">
                                                             <i class="bi bi-play-circle me-1"></i> Continuar Producción
                                                         </button>
@@ -300,14 +341,25 @@
                                             </div>
                                             <div class="col-lg-4 border-start-lg mt-3 mt-lg-0 pt-3 pt-lg-0">
                                                 <h6 class="text-primary mb-3">Resolución de Cuarentena</h6>
-                                                {% if lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
+                                                {% if (lote.cantidad_total is defined and lote.cantidad_total <= 0) or (lote.estado and lote.estado|upper == 'AGOTADO') %}
+                                                    <div class="alert alert-info small p-2">
+                                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                                        <strong>Stock Agotado:</strong> Este lote no tiene stock disponible. Se debe iniciar el proceso de devolución de los pedidos afectados.
+                                                    </div>
+                                                    <div class="d-grid mt-2">
+                                                        <button class="btn btn-sm btn-info btn-recibir-devolucion" data-lote-id="{{ lote.id_lote }}">
+                                                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                                                            <i class="bi bi-box-arrow-in-down me-1"></i> Solicitar Devolución
+                                                        </button>
+                                                    </div>
+                                                {% elif lote.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <p class="small text-muted mb-2">Definir el estado de este lote:</p>
                                                     <div class="d-grid gap-2">
                                                         <button class="btn btn-sm btn-success btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="apto">
                                                             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                                                             <i class="bi bi-check-circle me-1"></i> Marcar como Apto
                                                         </button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote-con-modal" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
                                                             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                                                             <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
                                                         </button>
@@ -629,49 +681,6 @@
                     });
                 });
 
-    // Acción de recibir devolución
-    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const loteId = this.dataset.loteId;
-            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
-            const actionContainer = this.closest('.d-grid');
-            const spinner = this.querySelector('.spinner-border');
-
-            spinner.classList.remove('d-none');
-            this.disabled = true;
-
-            fetch(`/api/riesgos/{{ alerta.id }}/accion`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify({
-                    accion: 'recibir_devolucion',
-                    data: {
-                        lote_id: loteId
-                    }
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotificationModal('Éxito', data.message, 'success');
-                    actionContainer.innerHTML = `<h4><span class="badge bg-danger">Retirado</span></h4>`;
-                } else {
-                    showNotificationModal('Error', data.error, 'error');
-                    spinner.classList.add('d-none');
-                    this.disabled = false;
-                }
-            })
-            .catch(error => {
-                showNotificationModal('Error', 'Error de conexión.', 'error');
-                spinner.classList.add('d-none');
-                this.disabled = false;
-            });
-        });
-    });
             });
         }
 
@@ -861,15 +870,25 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Acción de resolver lotes (Simple para Apto y Lote Producto)
+    // Acción de resolver lotes (Simple para Apto) con Confirmación
     document.querySelectorAll('.btn-resolver-lote').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation(); 
-            ejecutarResolucionLote(this);
+            const resolucion = this.dataset.resolucion;
+            const loteId = this.dataset.loteId;
+            const btn = this;
+            
+            showConfirmationModal(
+                'Confirmar Resolución',
+                `¿Está seguro de que desea marcar este lote como '${resolucion.replace('_', ' ')}'?`,
+                function() {
+                    ejecutarResolucionLote(btn);
+                }
+            );
         });
     });
 
-    // Acción de resolver lote insumo "No Apto" con modal
+    // Acción de resolver lote "No Apto" con modal (Insumo y Producto)
     document.querySelectorAll('.btn-resolver-lote-con-modal').forEach(button => {
         button.addEventListener('click', async function(e) {
             e.stopPropagation();
@@ -885,10 +904,12 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('container-motivos-producto').style.display = 'none';
             document.getElementById('motivo_desperdicio_insumo').value = '';
             document.getElementById('motivo_desperdicio_producto').value = '';
+            document.getElementById('cantidad_resolucion_no_apto').value = '';
 
             // Mostrar dropdown correcto
             if (tipoLote === 'lote_insumo') {
                 document.getElementById('container-motivos-insumo').style.display = 'block';
+                document.getElementById('modalResolucionInsumoLabel').textContent = 'Confirmar Insumo No Apto';
                 
                 // Verificar OPs afectadas solo para insumos
                 const spinner = this.querySelector('i');
@@ -911,7 +932,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
             } else {
+                // Producto
                 document.getElementById('container-motivos-producto').style.display = 'block';
+                document.getElementById('modalResolucionInsumoLabel').textContent = 'Confirmar Producto No Apto';
             }
 
             new bootstrap.Modal(document.getElementById('modalResolucionInsumo')).show();
@@ -934,6 +957,13 @@ document.addEventListener('DOMContentLoaded', function () {
             showNotificationModal('Error', 'Debe seleccionar un motivo de retiro.', 'error');
             return;
         }
+        
+        // Obtener cantidad (Nuevo)
+        const cantidad = document.getElementById('cantidad_resolucion_no_apto').value;
+        if (!cantidad || parseFloat(cantidad) <= 0) {
+             showNotificationModal('Error', 'Debe ingresar una cantidad válida a retirar.', 'error');
+             return;
+        }
 
         // Obtener accion downstream solo si es visible
         let accionDownstream = null;
@@ -941,6 +971,12 @@ document.addEventListener('DOMContentLoaded', function () {
             accionDownstream = document.querySelector('input[name="accion_ops_downstream"]:checked').value;
         } else {
             accionDownstream = 'ignorar'; // O default seguro
+        }
+
+        // Obtener checkbox de retirar productos downstream si es visible
+        let retirarProductosDownstream = false;
+        if (document.getElementById('section-ops-afectadas').style.display !== 'none') {
+            retirarProductosDownstream = document.getElementById('retirar_productos_downstream').checked;
         }
         
         // Encontrar el botón original para reutilizar la lógica visual
@@ -968,7 +1004,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     resolucion: 'No Apto',
                     alerta_id: '{{ alerta.id }}',
                     motivo_id: motivoId, // Nuevo campo
-                    accion_ops_downstream: accionDownstream
+                    cantidad: cantidad, // Nuevo campo
+                    accion_ops_downstream: accionDownstream,
+                    retirar_productos_downstream: retirarProductosDownstream // Nuevo campo
                 }
             };
 
@@ -1063,11 +1101,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Lógica de Resolución de OPs ---
     
-    // 1. Continuar Producción (Simple)
+    // 1. Continuar Producción (Simple) con Confirmación
     document.querySelectorAll('.btn-resolver-op').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
-            resolverOP(this.dataset.opId, 'continuar', 'Se verificó y está en condiciones.');
+            const opId = this.dataset.opId;
+            
+            showConfirmationModal(
+                'Confirmar Continuación',
+                '¿Está seguro de que desea continuar la producción de esta orden? Se asume que las condiciones de alerta han sido mitigadas.',
+                function() {
+                     resolverOP(opId, 'continuar', 'Se verificó y está en condiciones.');
+                }
+            );
         });
     });
 
@@ -1090,6 +1136,22 @@ document.addEventListener('DOMContentLoaded', function () {
                 divRetirar.classList.add('d-none');
                 document.getElementById('check_retirar_producto').checked = false;
             }
+        });
+    });
+
+    // 3. Reprogramar OP (para OPs completadas)
+    document.querySelectorAll('.btn-reprogramar-op').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const opId = this.dataset.opId;
+            
+            showConfirmationModal(
+                'Confirmar Reprogramación',
+                '¿Está seguro de que desea reprogramar esta Orden de Producción? Su estado se cambiará a "Pendiente" para que pueda ser procesada de nuevo.',
+                function() {
+                     resolverOP(opId, 'reprogramar', 'Reprogramada desde alerta de riesgo.');
+                }
+            );
         });
     });
 
@@ -1143,28 +1205,28 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(error => showNotificationModal('Error', 'Error de conexión.', 'error'));
     }
 
-    // Acción de recibir devolución (Ahora con Modal)
-    document.querySelectorAll('.btn-recibir-devolucion').forEach(button => {
-        button.addEventListener('click', function(e) {
+    // Acción de recibir devolución con event delegation
+    const listaLotesProducto = document.getElementById('lista-lotes-producto');
+    if (listaLotesProducto) {
+        listaLotesProducto.addEventListener('click', function(e) {
+            const button = e.target.closest('.btn-recibir-devolucion');
+            if (!button) return;
+
             e.stopPropagation();
-            const loteId = this.dataset.loteId;
-            const spinner = this.querySelector('.spinner-border');
-            
-            // Mostrar spinner mientras cargamos datos
+            const loteId = button.dataset.loteId;
+            const spinner = button.querySelector('.spinner-border');
+
             if (spinner) spinner.classList.remove('d-none');
-            this.disabled = true;
+            button.disabled = true;
 
             fetch(`/api/riesgos/lote_producto/${loteId}/pedidos_afectados`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
+                .then(res => res.json())
+                .then(data => {
                     const container = document.getElementById('lista-pedidos-devolucion');
                     container.innerHTML = '';
                     document.getElementById('lote-id-devolucion').value = loteId;
-                    
-                    if (data.data.length === 0) {
-                        container.innerHTML = '<div class="alert alert-warning">No se encontraron pedidos asociados para este lote.</div>';
-                    } else {
+
+                    if (data.success && data.data && data.data.length > 0) {
                         data.data.forEach(p => {
                             const row = document.createElement('div');
                             row.className = 'row mb-2 align-items-center';
@@ -1181,42 +1243,70 @@ document.addEventListener('DOMContentLoaded', function () {
                                             value="${p.cantidad_reservada}" 
                                             max="${p.cantidad_reservada}" min="0" step="any">
                                     </div>
-                                </div>
-                            `;
+                                </div>`;
                             container.appendChild(row);
                         });
+                    } else {
+                        const msg = (data.success && data.data.length === 0)
+                            ? 'No se encontraron pedidos asociados.'
+                            : 'No se pudieron cargar los pedidos. Ingrese el total manualmente.';
+                        container.innerHTML = `
+                            <div class="alert alert-warning">${msg}</div>
+                            <div class="mb-3">
+                                <label class="form-label">Cantidad Total Recibida</label>
+                                <input type="number" id="input-manual-total-devolucion" class="form-control" placeholder="Ej: 50.0" step="any">
+                            </div>`;
                     }
                     new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
-                } else {
-                    showNotificationModal('Error', 'No se pudieron cargar los pedidos: ' + data.error, 'error');
-                }
-            })
-            .catch(err => {
-                showNotificationModal('Error', 'Error de conexión al cargar pedidos.', 'error');
-            })
-            .finally(() => {
-                if (spinner) spinner.classList.add('d-none');
-                this.disabled = false;
-            });
+                })
+                .catch(err => {
+                    const container = document.getElementById('lista-pedidos-devolucion');
+                    document.getElementById('lote-id-devolucion').value = loteId;
+                    container.innerHTML = `
+                        <div class="alert alert-danger">Error de conexión al buscar pedidos. Ingrese el total manualmente.</div>
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad Total Recibida</label>
+                            <input type="number" id="input-manual-total-devolucion" class="form-control" placeholder="Ej: 50.0" step="any">
+                        </div>`;
+                    new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
+                })
+                .finally(() => {
+                    if (spinner) spinner.classList.add('d-none');
+                    button.disabled = false;
+                });
         });
-    });
+    }
 
     document.getElementById('btnConfirmarDevolucion').addEventListener('click', function() {
         const loteId = document.getElementById('lote-id-devolucion').value;
         const inputs = document.querySelectorAll('.input-cantidad-devolucion');
-        const devoluciones = [];
+        const manualInput = document.getElementById('input-manual-total-devolucion');
+        
+        const payloadData = { lote_id: loteId };
         let totalRecibido = 0;
 
-        inputs.forEach(inp => {
-            const cant = parseFloat(inp.value) || 0;
-            if (cant > 0) {
-                devoluciones.push({
-                    pedido_id: inp.dataset.pedidoId,
-                    cantidad: cant
-                });
-                totalRecibido += cant;
+        if (manualInput) {
+            const val = parseFloat(manualInput.value);
+            if (!val || val <= 0) {
+                showNotificationModal('Error', 'Debe ingresar una cantidad total válida.', 'error');
+                return;
             }
-        });
+            payloadData.cantidad_total = val;
+            totalRecibido = val;
+        } else {
+            const devoluciones = [];
+            inputs.forEach(inp => {
+                const cant = parseFloat(inp.value) || 0;
+                if (cant > 0) {
+                    devoluciones.push({
+                        pedido_id: inp.dataset.pedidoId,
+                        cantidad: cant
+                    });
+                    totalRecibido += cant;
+                }
+            });
+            payloadData.devoluciones = devoluciones;
+        }
 
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         
@@ -1232,10 +1322,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({
                 accion: 'recibir_devolucion',
-                data: {
-                    lote_id: loteId,
-                    devoluciones: devoluciones
-                }
+                data: payloadData
             })
         })
         .then(response => response.json())
@@ -1609,6 +1696,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     <input type="hidden" id="lote-insumo-id-resolucion">
                     <input type="hidden" id="lote-tipo-resolucion">
                     
+                    <div class="mb-3">
+                        <label for="cantidad_resolucion_no_apto" class="form-label fw-bold">Cantidad a retirar <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control" id="cantidad_resolucion_no_apto" step="0.01" min="0.01">
+                        <div class="form-text">Ingrese la cantidad a descartar. El resto (si hay) se puede devolver a Disponible o mantener en Cuarentena.</div>
+                    </div>
+
                     <div class="mb-3" id="container-motivos-insumo" style="display: none;">
                         <label for="motivo_desperdicio_insumo" class="form-label fw-bold">Motivo de Retiro <span class="text-danger">*</span></label>
                         <select class="form-select" id="motivo_desperdicio_insumo">
@@ -1647,6 +1740,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                     Dejar OPs como están (Solo marcar insumo)
                                 </label>
                             </div>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="retirar_productos_downstream" checked>
+                            <label class="form-check-label text-danger fw-bold" for="retirar_productos_downstream">
+                                Retirar productos ya elaborados por seguridad
+                            </label>
+                            <div class="form-text text-danger">Se recomienda retirar todos los productos vinculados a este insumo defectuoso.</div>
                         </div>
                     </div>
                 </form>

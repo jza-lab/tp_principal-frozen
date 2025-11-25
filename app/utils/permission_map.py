@@ -35,7 +35,7 @@ CANONICAL_PERMISSION_MAP = {
 
     # Módulo: Administración y Configuración
     'admin_gestion_sistema': ['ADMIN', 'IT'],
-    'admin_gestion_personal': ['ADMIN','RRHH', 'IT'],
+    'admin_gestion_personal': ['ADMIN', 'RRHH', 'IT'],
     'consultar_empleados': ['RRHH', 'ADMIN', 'IT', 'SUPERVISOR', 'GERENTE'],
     'admin_configuracion_sistema': ['IT', 'GERENTE', 'RRHH'],
     'gestionar_proveedores': ['ADMIN'],
@@ -48,7 +48,7 @@ CANONICAL_PERMISSION_MAP = {
     'planificar_ov': ['VENDEDOR', 'SUPERVISOR', 'GERENTE'],
     'gestionar_clientes': ['VENDEDOR'],
     'finanzas_ver_precios_costos': ['SUPERVISOR', 'GERENTE'],
-    'consultar_analisis_rentabilidad': ['GERENTE', 'VENDEDOR', 'SUPERVISOR'],
+    'consultar_analisis_rentabilidad': ['GERENTE'],
 
     # Módulo: Producción
     'crear_orden_de_produccion': ['SUPERVISOR'],
@@ -63,7 +63,7 @@ CANONICAL_PERMISSION_MAP = {
     'ejecutar_planificacion_automatica': ['SUPERVISOR'],
 
     # Módulo: Almacén e Inventario
-    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],
+    'gestionar_catalogo_de_productos': ['SUPERVISOR', 'ADMIN', 'GERENTE'],# Crear, editar, inhabilitar productos   
     'gestionar_catalogo_insumos': ['SUPERVISOR', 'ADMIN'], # Crear, editar, inhabilitar insumos
     'gestionar_inventario': ['SUPERVISOR'], # Registrar ingresos y egresos de stock
     'gestionar_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Crear y gestionar lotes de productos
@@ -71,7 +71,7 @@ CANONICAL_PERMISSION_MAP = {
     'realizar_control_de_calidad_insumos': ['SUPERVISOR_CALIDAD'],
     'registrar_ingreso_de_materia_prima': ['ADMIN'],
     'almacen_ver_registrar': ['VENDEDOR', 'SUPERVISOR'],
-    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE'],
+    'almacen_ver_insumos': ['OPERARIO', 'SUPERVISOR', 'GERENTE', 'ADMIN'],
 
     # Módulo: Calidad
     'controlar_calidad_lotes': ['SUPERVISOR', 'SUPERVISOR_CALIDAD'], # Realizar controles de calidad
@@ -88,7 +88,7 @@ CANONICAL_PERMISSION_MAP = {
     'editar_orden_de_compra': ['SUPERVISOR', 'ADMIN'],
     'aprobar_orden_de_compra': ['SUPERVISOR','GERENTE'],
     'gestionar_recepcion_orden_compra': ['SUPERVISOR_CALIDAD', 'DEV'],
-    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'GERENTE'],
+    'logistica_recepcion_oc': ['ADMIN', 'SUPERVISOR', 'SUPERVISOR_CALIDAD'],
     'logistica_supervision': ['SUPERVISOR', 'GERENTE'],
 
     # Módulo: Gerencia y Supervisión General

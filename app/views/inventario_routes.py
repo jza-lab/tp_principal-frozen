@@ -4,7 +4,7 @@ from app.controllers.inventario_controller import InventarioController
 from app.utils.decorators import permission_required
 from app.controllers.insumo_controller import InsumoController
 from app.controllers.proveedor_controller import ProveedorController
-from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
 from marshmallow import ValidationError
 from datetime import date, datetime
 from app.utils.estados import ESTADOS_INSPECCION
@@ -50,8 +50,8 @@ def listar_lotes():
         insumos_full_data = insumos_data
 
     # Cargar motivos de desperdicio para el modal de No Apto
-    motivo_model = MotivoDesperdicioModel()
-    motivos_res = motivo_model.find_all()
+    motivo_model = MotivoDesperdicioLoteModel()
+    motivos_res = motivo_model.get_all()
     motivos_desperdicio = motivos_res.get('data', []) if motivos_res.get('success') else []
 
     return render_template('inventario/listar.html',
@@ -137,8 +137,29 @@ def detalle_lote(id_lote):
                     except (ValueError, TypeError):
                         # Si hay un error, simplemente dejar la cadena como está
                         pass
+        
+        if lote.get('historial_desperdicios'):
+            for registro in lote['historial_desperdicios']:
+                if registro.get('created_at'):
+                    try:
+                        date_string = registro['created_at'].split('.')[0].replace('Z', '')
+                        registro['created_at'] = datetime.fromisoformat(date_string)
+                    except (ValueError, TypeError):
+                        pass
+                if registro.get('usuario_id'):
+                    try:
+                        from app.models.usuario import UsuarioModel
+                        usuario_model = UsuarioModel()
+                        res = usuario_model.find_by_id(registro.get('usuario_id'))
+                        registro['usuario'] = res.get('data')
+                    except (ValueError, TypeError):
+                        pass
+        
+        motivo_model = MotivoDesperdicioLoteModel()
+        motivos_res = motivo_model.get_all()
+        motivos_desperdicio = motivos_res.get('data', []) if motivos_res.get('success') else []
 
-        return render_template('inventario/detalle.html', lote=lote)
+        return render_template('inventario/detalle.html', lote=lote, motivos_desperdicio=motivos_desperdicio)
     else:
         flash(response.get('error', 'Lote no encontrado.'), 'error')
         return redirect(url_for('inventario_view.listar_lotes'))

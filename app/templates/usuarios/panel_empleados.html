@@ -81,13 +81,13 @@
 
                 <div class="mt-auto">
                     <div class="d-grid gap-2 action-buttons">
-                        {% if usuario.activo %}
+                        {% if usuario.activo and current_user.roles.codigo != 'ADMIN'%}
                             <a href="{{ url_for('admin_usuario.ver_perfil', id=usuario.id) }}" 
                                class="btn btn-sm btn-primary w-100">
                                 <i class="bi bi-person-gear me-2"></i>Gestionar Empleado
                             </a>
                         {% else %}
-                            {% if has_permission('admin_gestion_personal') %}
+                            {% if has_permission('admin_gestion_personal') and current_user.roles.codigo != 'ADMIN' %}
                             <form method="POST" action="{{ url_for('admin_usuario.habilitar_usuario', id=usuario.id) }}" class="w-100">
                                 {{ csrf_form.csrf_token }}
                                 <button type="submit" class="btn btn-sm btn-outline-success w-100">

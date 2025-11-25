@@ -9,7 +9,7 @@ const helpData = [
         title: 'Forzar Auto-Planificación',
         content: `
             <p><strong>¿Qué hace?</strong><br>
-            Ejecuta el algoritmo de inteligencia artificial que revisa todas las órdenes en estado <em>Pendiente</em> y trata de asignarles automáticamente una línea, fecha y turno.</p>
+            Ejecuta un algoritmo que revisa todas las órdenes en estado Pendiente y su línea de producción establecida y trata de asignarles automáticamente fecha para producirse.</p>
             <p><strong>¿Cuándo usarlo?</strong><br>
             Úselo cuando tenga nuevas órdenes pendientes y quiera que el sistema sugiera el mejor plan posible sin hacerlo manualmente.</p>
         `
@@ -70,8 +70,7 @@ const helpData = [
         selector: '#maestro-tab',
         title: 'Pestaña: Plan Maestro (Pendientes)',
         content: `
-            <p>Listado de todas las órdenes que <strong>aún no tienen fecha asignada</strong> (Backlog).</p>
-            <p>Desde aquí puede arrastrar o seleccionar órdenes para pasarlas al calendario semanal.</p>
+            <p>Listado de todas las órdenes que <strong>aún no tienen fecha asignada para producirse</strong> (Backlog).</p>
         `
     },
     {

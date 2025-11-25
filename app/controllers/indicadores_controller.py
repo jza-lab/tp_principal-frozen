@@ -4,6 +4,7 @@ from app.models.orden_produccion import OrdenProduccionModel
 from app.models.control_calidad_producto import ControlCalidadProductoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
 from app.models.receta import RecetaModel
 from app.models.registro_paro_model import RegistroParoModel
 from app.models.bloqueo_capacidad_model import BloqueoCapacidadModel
@@ -39,6 +40,7 @@ class IndicadoresController:
         self.control_calidad_producto_model = ControlCalidadProductoModel()
         self.registro_desperdicio_model = RegistroDesperdicioLoteProductoModel()
         self.registro_desperdicio_insumo_model = RegistroDesperdicioModel()
+        self.registro_desperdicio_lote_insumo_model = RegistroDesperdicioLoteInsumoModel()
         self.costo_fijo_model = CostoFijoModel()
         self.receta_model = RecetaModel()
         self.registro_paro_model = RegistroParoModel()
@@ -55,8 +57,6 @@ class IndicadoresController:
         self.nota_credito_model = NotaCreditoModel()
         self.alerta_riesgo_model = AlertaRiesgoModel()
         self.reclamo_proveedor_model = ReclamoProveedorModel()
-        # self.registro_desperdicio_model es para registro_desperdicio_lote_producto
-        # self.registro_desperdicio_insumo_model es para mes_kanban.registros_desperdicio (mermas de produccion)
         
     def _parsear_fechas(self, fecha_inicio_str, fecha_fin_str, default_days=30):
         if fecha_inicio_str:
@@ -72,26 +72,25 @@ class IndicadoresController:
 
     def _parsear_periodo(self, semana=None, mes=None, ano=None):
         hoy = datetime.now()
-        if semana: # formato "2024-W48"
+        if semana: 
             year, week_num = map(int, semana.split('-W'))
             fecha_inicio = datetime.fromisocalendar(year, week_num, 1)
             fecha_fin = fecha_inicio + timedelta(days=6)
-        elif mes: # formato "2024-11"
+        elif mes: 
             year, month = map(int, mes.split('-'))
             fecha_inicio = datetime(year, month, 1)
             next_month = (fecha_inicio.replace(day=28) + timedelta(days=4))
             fecha_fin = next_month - timedelta(days=next_month.day)
-        elif ano: # formato "2024"
+        elif ano: 
             year = int(ano)
             fecha_inicio = datetime(year, 1, 1)
             fecha_fin = datetime(year, 12, 31)
-        else: # Por defecto, semana actual
+        else: 
             fecha_inicio = hoy - timedelta(days=hoy.weekday())
             fecha_fin = fecha_inicio + timedelta(days=6)
         return fecha_inicio.date(), fecha_fin.date()
     
     def obtener_anos_disponibles(self):
-        """Obtiene los años únicos en los que se registraron pedidos."""
         return self.pedido_model.obtener_anos_distintos()
 
     # --- CATEGORÍA: PRODUCCIÓN ---
@@ -128,7 +127,6 @@ class IndicadoresController:
         evolucion_consumo_insumos = self._obtener_evolucion_consumo_insumos(fecha_inicio, fecha_fin, contexto)
 
         oee = self._calcular_oee(fecha_inicio, fecha_fin)
-        # cumplimiento_plan = self._calcular_cumplimiento_plan(fecha_inicio, fecha_fin)
 
         return {
             "meta": {"top_n": top_n},
@@ -139,10 +137,7 @@ class IndicadoresController:
             "top_insumos": top_insumos,
             "evolucion_consumo_insumos": evolucion_consumo_insumos,
             "oee": oee if isinstance(oee, dict) else {"valor": 0, "disponibilidad": 0, "rendimiento": 0, "calidad": 0},
-            # "cumplimiento_plan": cumplimiento_plan
         }
-
-    # --- MÉTODOS PRIVADOS PRODUCCIÓN ---
 
     def _obtener_panorama_estados(self, inicio_semana):
         estados_activos = [
@@ -197,6 +192,9 @@ class IndicadoresController:
 
         res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
+
+        res_lote_insumo = self.registro_desperdicio_lote_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_lote_insumo = res_lote_insumo.get('data', []) if res_lote_insumo.get('success') else []
         
         conteo = Counter()
         
@@ -211,11 +209,18 @@ class IndicadoresController:
             if isinstance(d.get('motivo_desperdicio'), dict):
                 motivo = d.get('motivo_desperdicio', {}).get('descripcion', 'Sin motivo')
             else:
+                motivo = 'Sin motivo (Producción)'
+            conteo[motivo] += 1
+
+        for d in data_lote_insumo:
+            if isinstance(d.get('motivo'), dict):
+                motivo = d.get('motivo', {}).get('descripcion', 'Sin motivo')
+            else:
                 motivo = 'Sin motivo (Insumo)'
             conteo[motivo] += 1
 
         top_5 = conteo.most_common(5)
-        total_incidentes = len(data_prod) + len(data_insumo)
+        total_incidentes = len(data_prod) + len(data_insumo) + len(data_lote_insumo)
         
         if top_5:
             top_motivo = top_5[0][0]
@@ -235,120 +240,15 @@ class IndicadoresController:
             "chart_type": chart_type
         }
 
-    def _obtener_top_items_con_desperdicio(self, fecha_inicio, fecha_fin):
-        conteo_items = Counter()
-
-        res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        data_prod = res_prod.get('data', []) if res_prod.get('success') else []
-        
-        if data_prod:
-            lote_ids = []
-            for d in data_prod:
-                lid = d.get('lote_producto_id') or d.get('lote_id')
-                if lid: lote_ids.append(lid)
-            
-            lote_ids = list(set(lote_ids))
-            lote_map = {}
-
-            if lote_ids:
-                lote_ids_str = [str(id_) for id_ in lote_ids]
-                try:
-                    lotes_res = self.lote_producto_model.db.table('lotes_productos')\
-                        .select('id_lote, producto:productos(nombre)')\
-                        .in_('id_lote', lote_ids_str)\
-                        .execute()
-                    
-                    if lotes_res.data:
-                        for item in lotes_res.data:
-                            lote_map[str(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
-                            lote_map[int(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
-                except Exception as e:
-                    logger.error(f"Error fetching product details for waste: {e}")
-
-            for d in data_prod:
-                l_id = d.get('lote_producto_id') or d.get('lote_id')
-                if l_id:
-                    name = lote_map.get(l_id) or lote_map.get(str(l_id)) or f"Producto ID {l_id}"
-                    conteo_items[f"{name}"] += 1
-
-        res_ins = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
-        data_ins = res_ins.get('data', []) if res_ins.get('success') else []
-
-        if data_ins:
-            op_ids_to_fetch = set()
-            lote_insumo_ids = set()
-
-            for d in data_ins:
-                op_id = d.get('orden_produccion_id')
-                if op_id:
-                    op_ids_to_fetch.add(op_id)
-                
-                lid = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
-                if lid:
-                    lote_insumo_ids.add(lid)
-
-            op_map = {}
-            if op_ids_to_fetch:
-                try:
-                    ops_res = self.orden_produccion_model.db.table('ordenes_produccion')\
-                        .select('id, producto:productos(nombre)')\
-                        .in_('id', list(op_ids_to_fetch))\
-                        .execute()
-                    
-                    if ops_res.data:
-                        for item in ops_res.data:
-                            p_name = item.get('producto', {}).get('nombre', 'Producto Desconocido')
-                            op_map[item['id']] = f"{p_name} (En Producción)"
-                except Exception as e:
-                    logger.error(f"Error fetching OP details for waste: {e}")
-
-            insumo_map = {}
-            if lote_insumo_ids:
-                lote_ids_str = [str(id_) for id_ in lote_insumo_ids]
-                try:
-                    insumos_res = self.insumo_inventario_model.db.table('insumos_inventario')\
-                        .select('id_lote, insumo:insumos_catalogo(nombre)')\
-                        .in_('id_lote', lote_ids_str)\
-                        .execute()
-                    
-                    if insumos_res.data:
-                        for item in insumos_res.data:
-                            insumo_map[str(item['id_lote'])] = item.get('insumo', {}).get('nombre', 'Insumo Desconocido')
-                except Exception as e:
-                    logger.error(f"Error fetching insumo details for waste: {e}")
-
-            for d in data_ins:
-                op_id = d.get('orden_produccion_id')
-                l_id = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
-                
-                if op_id and op_id in op_map:
-                    conteo_items[op_map[op_id]] += 1
-                elif l_id:
-                    name = insumo_map.get(str(l_id)) or f"Insumo ID {str(l_id)[:8]}..."
-                    conteo_items[f"{name}"] += 1
-                elif op_id: 
-                     conteo_items[f"Orden Producción #{op_id}"] += 1
-
-        top_items = conteo_items.most_common(10)
-        
-        insight = "No se registraron desperdicios específicos."
-        if top_items:
-            top_name = top_items[0][0]
-            insight = f"El ítem con más reportes de desperdicio es '{top_name}'."
-
-        return {
-            "categories": [x[0] for x in top_items],
-            "values": [x[1] for x in top_items],
-            "insight": insight,
-            "tooltip": "Ranking de productos e insumos según la cantidad de reportes de desperdicio registrados."
-        }
-
     def _obtener_evolucion_desperdicios(self, fecha_inicio, fecha_fin, contexto='mes'):
         res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_prod = res_prod.get('data', []) if res_prod.get('success') else []
 
         res_insumo = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
+
+        res_lote_insumo = self.registro_desperdicio_lote_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_lote_insumo = res_lote_insumo.get('data', []) if res_lote_insumo.get('success') else []
         
         data_agregada = defaultdict(int)
         labels_ordenados = []
@@ -394,6 +294,7 @@ class IndicadoresController:
 
         procesar_lista(data_prod, 'created_at')
         procesar_lista(data_insumo, 'fecha_registro')
+        procesar_lista(data_lote_insumo, 'created_at')
 
         valores = [data_agregada[k] for k in labels_ordenados]
         
@@ -437,25 +338,6 @@ class IndicadoresController:
             "tooltip": "Tiempo promedio que toma completar una orden desde su inicio real hasta su fin."
         }
 
-    def _obtener_evolucion_consumo_insumos(self, fecha_inicio, fecha_fin, contexto='mensual'):
-        periodo_map = {'mes': 'mensual', 'semana': 'semanal', 'ano': 'mensual'} 
-        periodo = periodo_map.get(contexto, 'mensual')
-        
-        res = self.reporte_produccion_controller.obtener_consumo_insumos_por_tiempo(fecha_inicio, fecha_fin, periodo)
-        data = res.get('data', {}) if res.get('success') else {'labels': [], 'data': []}
-        
-        insight = "El consumo de insumos se mantiene consistente."
-        if data['data'] and len(data['data']) > 1:
-             if data['data'][-1] > data['data'][0]:
-                 insight = "El consumo de insumos muestra una tendencia al alza."
-        
-        return {
-            "categories": data.get('labels', []),
-            "values": data.get('data', []),
-            "insight": insight,
-            "tooltip": "Cantidad total de insumos reservados (consumidos) a lo largo del tiempo."
-        }
-
     def _obtener_top_insumos_wrapper(self, fecha_inicio, fecha_fin, top_n=5):
         res = self.reporte_produccion_controller.obtener_top_insumos(top_n) 
         data = res.get('data', {}) if res.get('success') else {}
@@ -473,6 +355,25 @@ class IndicadoresController:
             "data": values,
             "insight": insight,
             "tooltip": "Insumos con mayor cantidad reservada en órdenes de producción en el periodo seleccionado."
+        }
+
+    def _obtener_evolucion_consumo_insumos(self, fecha_inicio, fecha_fin, contexto='mensual'):
+        periodo_map = {'mes': 'mensual', 'semana': 'semanal', 'ano': 'mensual'} 
+        periodo = periodo_map.get(contexto, 'mensual')
+        
+        res = self.reporte_produccion_controller.obtener_consumo_insumos_por_tiempo(fecha_inicio, fecha_fin, periodo)
+        data = res.get('data', {}) if res.get('success') else {'labels': [], 'data': []}
+        
+        insight = "El consumo de insumos se mantiene consistente."
+        if data['data'] and len(data['data']) > 1:
+             if data['data'][-1] > data['data'][0]:
+                 insight = "El consumo de insumos muestra una tendencia al alza."
+        
+        return {
+            "categories": data.get('labels', []),
+            "values": data.get('data', []),
+            "insight": insight,
+            "tooltip": "Cantidad total de insumos reservados (consumidos) a lo largo del tiempo."
         }
 
     # --- CATEGORÍA: CALIDAD ---
@@ -495,6 +396,8 @@ class IndicadoresController:
         desperdicios_count = len(desperdicios_res.get('data', [])) if desperdicios_res.get('success') else 0
         desperdicios_insumos_res = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         desperdicios_count += len(desperdicios_insumos_res.get('data', [])) if desperdicios_insumos_res.get('success') else 0
+        desperdicios_lote_insumos_res = self.registro_desperdicio_lote_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        desperdicios_count += len(desperdicios_lote_insumos_res.get('data', [])) if desperdicios_lote_insumos_res.get('success') else 0
 
         evolucion_reclamos = self._obtener_evolucion_reclamos_detalle(fecha_inicio, fecha_fin, contexto)
         distribucion_alertas = self._obtener_distribucion_alertas(fecha_inicio, fecha_fin)
@@ -502,6 +405,7 @@ class IndicadoresController:
         motivos_alerta = self._obtener_motivos_alerta(fecha_inicio, fecha_fin)
         evolucion_desperdicios = self._obtener_evolucion_desperdicios(fecha_inicio, fecha_fin, contexto)
         top_items_desperdicio = self._obtener_top_items_con_desperdicio(fecha_inicio, fecha_fin)
+        origen_desperdicios = self._obtener_origen_desperdicios(fecha_inicio, fecha_fin)
 
         return {
             "tasa_rechazo_interno": rechazo_interno if isinstance(rechazo_interno, dict) else {"valor": 0, "rechazadas": 0, "inspeccionadas": 0},
@@ -515,7 +419,8 @@ class IndicadoresController:
             "resultados_calidad": resultados_calidad,
             "motivos_alerta": motivos_alerta,
             "evolucion_desperdicios": evolucion_desperdicios,
-            "top_items_desperdicio": top_items_desperdicio
+            "top_items_desperdicio": top_items_desperdicio,
+            "origen_desperdicios": origen_desperdicios
         }
 
     def _obtener_evolucion_reclamos_detalle(self, fecha_inicio, fecha_fin, contexto):
@@ -712,6 +617,172 @@ class IndicadoresController:
             "values": [x[1] for x in top_5],
             "insight": insight,
             "tooltip": "Ranking de los motivos declarados al crear alertas de riesgo."
+        }
+
+    def _obtener_top_items_con_desperdicio(self, fecha_inicio, fecha_fin):
+        conteo_items = Counter()
+
+        # 1. Desperdicios de Lotes de Producto (Ya terminados)
+        res_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_prod = res_prod.get('data', []) if res_prod.get('success') else []
+        
+        if data_prod:
+            lote_ids = []
+            for d in data_prod:
+                lid = d.get('lote_producto_id') or d.get('lote_id')
+                if lid: lote_ids.append(lid)
+            
+            lote_ids = list(set(lote_ids))
+            lote_map = {}
+
+            if lote_ids:
+                lote_ids_str = [str(id_) for id_ in lote_ids]
+                try:
+                    lotes_res = self.lote_producto_model.db.table('lotes_productos')\
+                        .select('id_lote, producto:productos(nombre)')\
+                        .in_('id_lote', lote_ids_str)\
+                        .execute()
+                    
+                    if lotes_res.data:
+                        for item in lotes_res.data:
+                            lote_map[str(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                            lote_map[int(item['id_lote'])] = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                except Exception as e:
+                    logger.error(f"Error fetching product details for waste: {e}")
+
+            for d in data_prod:
+                l_id = d.get('lote_producto_id') or d.get('lote_id')
+                if l_id:
+                    name = lote_map.get(l_id) or lote_map.get(str(l_id)) or f"Producto ID {l_id}"
+                    conteo_items[f"{name}"] += 1
+
+        # 2. Desperdicios en Ordenes de Producción (Productos en proceso)
+        res_ins = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_ins = res_ins.get('data', []) if res_ins.get('success') else []
+
+        # 3. Desperdicios de Lotes de Insumos (O en OP)
+        res_lote_ins = self.registro_desperdicio_lote_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_lote_ins = res_lote_ins.get('data', []) if res_lote_ins.get('success') else []
+        
+        # Combinar datos de insumos (tabla registro_desperdicio y registro_desperdicio_lote_insumo)
+        combined_insumo_data = data_ins + data_lote_ins
+
+        if combined_insumo_data:
+            op_ids_to_fetch = set()
+            lote_insumo_ids = set()
+
+            for d in combined_insumo_data:
+                op_id = d.get('orden_produccion_id')
+                if op_id:
+                    op_ids_to_fetch.add(op_id)
+                
+                lid = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
+                if lid:
+                    lote_insumo_ids.add(lid)
+
+            op_map = {}
+            if op_ids_to_fetch:
+                try:
+                    ops_res = self.orden_produccion_model.db.table('ordenes_produccion')\
+                        .select('id, producto:productos(nombre)')\
+                        .in_('id', list(op_ids_to_fetch))\
+                        .execute()
+                    
+                    if ops_res.data:
+                        for item in ops_res.data:
+                            p_name = item.get('producto', {}).get('nombre', 'Producto Desconocido')
+                            op_map[item['id']] = f"{p_name} (En Producción)"
+                except Exception as e:
+                    logger.error(f"Error fetching OP details for waste: {e}")
+
+            insumo_map = {}
+            if lote_insumo_ids:
+                lote_ids_str = [str(id_) for id_ in lote_insumo_ids]
+                try:
+                    insumos_res = self.insumo_inventario_model.db.table('insumos_inventario')\
+                        .select('id_lote, insumo:insumos_catalogo(nombre)')\
+                        .in_('id_lote', lote_ids_str)\
+                        .execute()
+                    
+                    if insumos_res.data:
+                        for item in insumos_res.data:
+                            insumo_map[str(item['id_lote'])] = item.get('insumo', {}).get('nombre', 'Insumo Desconocido')
+                except Exception as e:
+                    logger.error(f"Error fetching insumo details for waste: {e}")
+
+            for d in combined_insumo_data:
+                op_id = d.get('orden_produccion_id')
+                l_id = d.get('lote_insumo_id') or d.get('lote_inventario_id') or d.get('lote_id')
+                
+                if op_id and op_id in op_map:
+                    conteo_items[op_map[op_id]] += 1
+                elif l_id:
+                    name = insumo_map.get(str(l_id)) or f"Insumo ID {str(l_id)[:8]}..."
+                    conteo_items[f"{name}"] += 1
+                elif op_id: 
+                     conteo_items[f"Orden Producción #{op_id}"] += 1
+
+        top_items = conteo_items.most_common(10)
+        
+        insight = "No se registraron desperdicios específicos."
+        if top_items:
+            top_name = top_items[0][0]
+            insight = f"El ítem con más reportes de desperdicio es '{top_name}'."
+
+        return {
+            "categories": [x[0] for x in top_items],
+            "values": [x[1] for x in top_items],
+            "insight": insight,
+            "tooltip": "Ranking de productos e insumos según la cantidad de reportes de desperdicio registrados."
+        }
+
+    def _obtener_origen_desperdicios(self, fecha_inicio, fecha_fin):
+        # 1. Productos en Ordenes de Producción
+        res_op_prod = self.registro_desperdicio_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_op_prod = res_op_prod.get('data', []) if res_op_prod.get('success') else []
+        count_op_prod = len(data_op_prod)
+
+        # 2. Insumos (Pueden ser de OP o de Lote directo)
+        res_insumo = self.registro_desperdicio_lote_insumo_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_insumo = res_insumo.get('data', []) if res_insumo.get('success') else []
+        
+        count_op_insumo = 0
+        count_lote_insumo = 0
+        
+        for d in data_insumo:
+            if d.get('orden_produccion_id'):
+                count_op_insumo += 1
+            else:
+                count_lote_insumo += 1
+
+        # 3. Lotes de Productos (Ya terminados)
+        res_lote_prod = self.registro_desperdicio_model.get_all_in_date_range(fecha_inicio, fecha_fin)
+        data_lote_prod = res_lote_prod.get('data', []) if res_lote_prod.get('success') else []
+        count_lote_prod = len(data_lote_prod)
+
+        # Agregación
+        ordenes_produccion = count_op_prod + count_op_insumo
+        lotes_insumos = count_lote_insumo
+        lotes_productos = count_lote_prod
+        
+        total = ordenes_produccion + lotes_insumos + lotes_productos
+        
+        data = [
+            {"name": "Ordenes de Producción", "value": ordenes_produccion},
+            {"name": "Lotes de Insumos", "value": lotes_insumos},
+            {"name": "Lotes de Productos", "value": lotes_productos}
+        ]
+        
+        insight = "No se han registrado desperdicios."
+        if total > 0:
+            top = max(data, key=lambda x: x['value'])
+            pct = (top['value'] / total * 100)
+            insight = f"La mayor cantidad de desperdicios proviene de '{top['name']}' ({pct:.0f}%)."
+            
+        return {
+            "data": data,
+            "insight": insight,
+            "tooltip": "Distribución del origen de los desperdicios registrados."
         }
 
     # --- CATEGORÍA: COMERCIAL ---
@@ -1402,8 +1473,6 @@ class IndicadoresController:
         productos_cero_list = productos_cero_res.get('data', []) if productos_cero_res.get('success') else []
         productos_cero_count = len(productos_cero_list)
 
-        # CORRECCIÓN: Usar las listas de "Próximos a Vencer (30 días)" para contar, 
-        # en lugar de usar la función de porcentaje consumido.
         insumos_venc_res = self.reporte_stock_controller.obtener_lotes_insumos_a_vencer(dias_horizonte=30)
         insumos_venc_list = insumos_venc_res.get('data', []) if insumos_venc_res.get('success') else []
         insumos_venc_count = len(insumos_venc_list)
@@ -1506,7 +1575,7 @@ class IndicadoresController:
 
         stock_critico_chart = {
             "labels": [x['nombre'] for x in insumos_criticos_list[:top_n]],
-            "actual": [x['stock_actual'] for x in insumos_criticos_list[:top_n]],
+            "actual": [max(0, x['stock_actual']) for x in insumos_criticos_list[:top_n]], # <-- FIXED: Prevent negative stock
             "minimo": [x['stock_min'] for x in insumos_criticos_list[:top_n]]
         }
         if insumos_criticos_count > 0:
@@ -1816,13 +1885,14 @@ class IndicadoresController:
 
     def _calcular_tasa_rechazo_proveedores(self, fecha_inicio, fecha_fin):
         lotes_rechazados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
-        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range(estados.OC_RECEPCION_COMPLETA, fecha_inicio, fecha_fin)
+        lotes_aprobados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('APROBADO', fecha_inicio, fecha_fin)
         
         lotes_rechazados = lotes_rechazados_res.get('count', 0)
-        lotes_recibidos = lotes_recibidos_res.get('count', 0)
+        lotes_aprobados = lotes_aprobados_res.get('count', 0)
+        lotes_inspeccionados = lotes_rechazados + lotes_aprobados
 
-        tasa = (lotes_rechazados / lotes_recibidos) * 100 if lotes_recibidos > 0 else 0
-        return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_recibidos}
+        tasa = (lotes_rechazados / lotes_inspeccionados) * 100 if lotes_inspeccionados > 0 else 0
+        return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_inspeccionados}
 
     def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
         try:
@@ -2099,7 +2169,17 @@ class IndicadoresController:
                 return
 
             try:
-                dt = parser.parse(str(fecha_str)).date()
+                # FIX: Check for format before parsing to avoid error
+                if isinstance(fecha_str, str):
+                    if 'T' in fecha_str:
+                        dt = datetime.fromisoformat(fecha_str).date()
+                    else:
+                        dt = datetime.strptime(fecha_str[:10], '%Y-%m-%d').date()
+                elif isinstance(fecha_str, (date, datetime)):
+                    dt = fecha_str if isinstance(fecha_str, date) else fecha_str.date()
+                else:
+                    raise ValueError("Formato desconocido")
+
                 antiguedad = (hoy - dt).days
                 asignar_categoria(antiguedad, cantidad)
             except (ValueError, TypeError) as e:
@@ -2111,6 +2191,7 @@ class IndicadoresController:
             lotes_res = self.insumo_inventario_model.get_all_lotes_for_view()
             if lotes_res.get('success'):
                 for lote in lotes_res.get('data', []):
+                    # InsumoInventarioModel maps created_at to fecha_ingreso
                     procesar_lote(lote, 'fecha_ingreso')
 
         else: 

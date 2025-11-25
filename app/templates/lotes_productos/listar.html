@@ -142,7 +142,7 @@
                                 <a href="{{ url_for('lote_producto.detalle_lote', id_lote=lote.id_lote) }}" class="btn btn-sm btn-outline-primary" title="Ver Detalle">
                                     <i class="bi bi-eye"></i>
                                 </a>
-                                {% if (lote.estado == 'DISPONIBLE' or lote.estado == 'CUARENTENA') and lote.cantidad_actual > 0 and 'gestionar_lotes' is has_permission %}
+                                {% if lote.estado == 'DISPONIBLE' and lote.cantidad_actual > 0 and 'gestionar_lotes' is has_permission %}
                                 <button type="button" class="btn btn-sm btn-outline-warning" title="Poner en Cuarentena"
                                         data-bs-toggle="modal" 
                                         data-bs-target="#modalCuarentena"
@@ -158,7 +158,7 @@
                                 </a>
                                 {% endif %}
                                 {% if lote.estado == 'CUARENTENA' and lote.cantidad_en_cuarentena > 0 and 'gestionar_lotes' is has_permission %}
-                                <button type="button" class="btn btn-sm btn-outline-success" title="Liberar de Cuarentena"
+                                <button type="button" class="btn btn-sm btn-outline-success" title="Marcar como Apto"
                                         data-bs-toggle="modal"
                                         data-bs-target="#modalLiberar"
                                         data-lote-id="{{ lote.id_lote }}"
@@ -169,6 +169,7 @@
                                 {% endif %}
                                 
                                 <!-- Botón para Marcar como No Apto -->
+                                {% if lote.estado == 'CUARENTENA' and 'gestionar_lotes' is has_permission %}
                                 <button type="button" class="btn btn-sm btn-outline-danger"
                                         title="Marcar como No Apto"
                                         data-bs-toggle="modal"
@@ -179,6 +180,7 @@
                                         data-lote-cantidad-cuarentena="{{ lote.cantidad_en_cuarentena }}">
                                     <i class="bi bi-slash-circle"></i>
                                 </button>
+                                {% endif %}
                             </td>
                         </tr>
                         
@@ -355,11 +357,6 @@
                             </select>
                         </div>
                         
-                         <div class="mb-3">
-                            <label for="resultado_inspeccion" class="form-label">Detalle/Resultado Inspección:</label>
-                            <textarea class="form-control" id="resultado_inspeccion" name="resultado_inspeccion" rows="2" placeholder="Opcional"></textarea>
-                        </div>
-
                         <div class="mb-3">
                             <label for="comentarios_retiro" class="form-label">Comentarios Adicionales:</label>
                             <textarea class="form-control" id="comentarios_retiro" name="comentarios_retiro" rows="2"></textarea>

@@ -39,7 +39,7 @@
                         <i class="bi bi-box-seam me-1"></i> Logística
                     </a>
                     <ul class="dropdown-menu" aria-labelledby="navbarDropdownLogistica">
-                        {% if 'almacen_ver_insumos' is has_permission %}
+                        {% if 'almacen_ver_insumos' is has_permission or current_user.roles.codigo == 'ADMIN' %}
                         <li><a class="dropdown-item {% if request.endpoint.startswith('insumos_api') %}active{% endif %}"
                                 href="{{ url_for('insumos_api.obtener_insumos') }}"><i class="fas fa-cubes me-2"></i>
                                 Insumos</a></li>
@@ -71,7 +71,7 @@
                                 href="{{ url_for('reservas.listar') }}"><i class="bi bi-signpost-split-fill me-2"></i>
                                 Trazabilidad de Reservas</a></li>
                         {% endif %}
-                        {% if 'finanzas_ver_precios_costos' is has_permission %}
+                        {% if 'finanzas_ver_precios_costos' is has_permission and current_user.roles.codigo != 'SUPERVISOR'%}
                         <li>
                             <hr class="dropdown-divider">
                         </li>
@@ -182,14 +182,15 @@
                 </li>
                 {% endif %}
 
-                {% if 'configurar_alertas' is has_permission and not is_operario and current_user and
-                current_user.roles.codigo != 'RRHH' %}
-                <li class="nav-item">
-                    <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
-                       href="{{ url_for('reportes.indicadores') }}">
-                        <i class="bi bi-bar-chart-line-fill me-1"></i> Indicadores
-                    </a>
-                </li>
+                {% if 'configurar_alertas' is has_permission and not is_operario and current_user and current_user.roles.codigo != 'RRHH' %}
+                    {% if current_user.roles.codigo != 'IT' %}
+                    <li class="nav-item">
+                        <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('reportes.indicadores') %}active{% endif %}"
+                        href="{{ url_for('reportes.indicadores') }}">
+                            <i class="bi bi-bar-chart-line-fill me-1"></i> Indicadores
+                        </a>
+                    </li>
+                    {% endif %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle {% if request.endpoint.startswith('alertas') %}active{% endif %}"
                         href="#" id="navbarDropdownAlertas" role="button" data-bs-toggle="dropdown"
@@ -284,7 +285,7 @@
                             </a>
                             </li>
                         {% endif %}
-                        {% if can_gestionar_consultas %}
+                        {% if can_gestionar_consultas and current_user.roles.codigo != 'ADMIN'%}
                         <li>
 
                         <li>
@@ -346,12 +347,15 @@
                 </li>
                 {% endif %}
             </ul>
+           
             <ul class="navbar-nav ms-auto">
+                {% if current_user.roles.codigo != 'OPERARIO' %}
                 <li class="nav-item">
                     <a class="nav-link" href="{{ url_for('main_routes.search_page') }}">
                         <i class="bi bi-search me-1"></i> Buscador global
                     </a>
                 </li>
+                {% endif %}
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="navbarDropdownUser"
                         role="button" data-bs-toggle="dropdown">

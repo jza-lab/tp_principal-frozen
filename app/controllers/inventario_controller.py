@@ -15,6 +15,8 @@ from app.models.pedido import PedidoModel, PedidoItemModel
 from app.models.reserva_producto import ReservaProductoModel
 from app.schemas.inventario_schema import InsumosInventarioSchema
 from app.models.control_calidad_insumo import ControlCalidadInsumoModel
+from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
+from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
 from typing import Dict, Optional, List
 import logging
 from decimal import Decimal
@@ -741,7 +743,15 @@ class InventarioController(BaseController):
             else:
                 lote_data['historial_calidad'] = []
                 logger.warning(f"No se pudo cargar el historial de calidad para el lote {id_lote}: {historial_result.get('error')}")
-            # --- FIN MODIFICACIÓN ---
+            
+            # Cargar historial de desperdicios
+            desperdicio_model = RegistroDesperdicioLoteInsumoModel()
+            historial_desperdicio_result = desperdicio_model.find_all(filters={'lote_insumo_id': id_lote})
+            if historial_desperdicio_result.get('success'):
+                lote_data['historial_desperdicios'] = historial_desperdicio_result.get('data', [])
+            else:
+                lote_data['historial_desperdicios'] = []
+                logger.warning(f"No se pudo cargar el historial de desperdicios para el lote {id_lote}: {historial_desperdicio_result.get('error')}")
 
             serialized_data = self._serialize_data(lote_data)
             return self.success_response(data=serialized_data)
@@ -1234,8 +1244,7 @@ class InventarioController(BaseController):
                 comentarios=motivo_final,
                 orden_compra_id=None,
                 resultado_inspeccion=resultado_inspeccion or 'Cuarentena Manual',
-                foto_url=foto_url,
-                cantidad_inspeccionada=cantidad_a_mover
+                foto_url=foto_url
             )
 
             if not registro_cc_result.get('success'):
@@ -1732,11 +1741,7 @@ class InventarioController(BaseController):
 
             # --- 2. Manejo de Foto ---
             foto_url_final = None
-            cc_controller = ControlCalidadInsumoController()
-            
-            if foto_file and foto_file.filename:
-                foto_url_final = cc_controller._subir_foto_y_obtener_url(foto_file, lote['id_lote'])
-            elif usar_foto_cuarentena:
+            if usar_foto_cuarentena:
                 cc_model = ControlCalidadInsumoModel()
                 historial = cc_model.find_by_lote_id(lote['id_lote'])
                 if historial.get('success') and historial.get('data'):

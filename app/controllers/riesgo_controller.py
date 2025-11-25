@@ -126,46 +126,59 @@ class RiesgoController(BaseController):
                        'orden_produccion': OrdenProduccionController(), 'pedido': PedidoController()}
         ESTADOS_AFECTADOS = {
             'lote_insumo': ['disponible', 'agotado', 'reservado', 'vencido'], 'lote_producto': ['disponible', 'reservado', 'agotado', 'vencido'],
-            'orden_produccion': ['en proceso', 'completada', 'lista para producir', 'en linea 1', 'en linea 2', 'en empaquetado', 'en control de calidad'],
+            'orden_produccion': ['en proceso', 'lista para producir', 'en linea 1', 'en linea 2', 'en empaquetado'],
             'pedido': ['en proceso', 'listo para entrega', 'en transito']
         }
         for afectado in afectados:
             tipo, entidad_id = afectado['tipo_entidad'], afectado['id_entidad']
             estado_actual = estados_previos.get((tipo, str(entidad_id)), '').lower()
             
-            # Modificación: Si es insumo agotado pero afectado, forzamos la cuarentena para revisión
-            if tipo == 'lote_insumo' and 'agotado' in estado_actual:
-                pass # Se procesará abajo aunque esté agotado
-            elif not any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
+            # --- Lógica Mejorada para Lotes de Producto ---
+            if tipo == 'lote_producto':
+                # Obtener detalles completos del lote para verificar cantidad
+                lote_data_res = controllers[tipo].model.find_by_id(entidad_id, 'id_lote')
+                if lote_data_res.get('success') and lote_data_res.get('data'):
+                    lote_data = lote_data_res['data']
+                    cantidad_total = float(lote_data.get('cantidad_actual', 0)) + float(lote_data.get('cantidad_en_cuarentena', 0))
+                    
+                    # Si está agotado por estado O por cantidad, lo saltamos para que el usuario pueda solicitar devolución
+                    if 'agotado' in estado_actual or cantidad_total <= 0:
+                        self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
+                        continue
+            # --- Fin Lógica Mejorada ---
+
+            # Si es insumo agotado, o si no está en un estado procesable, lo marcamos como resuelto automáticamente.
+            if (tipo == 'lote_insumo' and 'agotado' in estado_actual) or \
+               not any(s in estado_actual for s in ESTADOS_AFECTADOS.get(tipo, [])):
+                
+                # Marcar como resuelto en la tabla de afectados
+                self.alerta_riesgo_model.db.table('alerta_riesgo_afectados') \
+                    .update({
+                        'estado': 'resuelto',
+                        'resolucion_aplicada': 'omitido_por_estado_previo',
+                        'id_usuario_resolucion': usuario_id
+                    }) \
+                    .eq('alerta_id', alerta['id']) \
+                    .eq('tipo_entidad', tipo) \
+                    .eq('id_entidad', entidad_id) \
+                    .execute()
+                
+                self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
                 continue
 
             self.alerta_riesgo_model._actualizar_flag_en_alerta_entidad(tipo, entidad_id, True)
             try:
+                # Preparar datos extra para guardar el estado previo en la entidad misma
+                # Asumimos que el campo se llama 'estado_previo_alerta' si existe en la tabla
+                extra_data_previo = {'estado_previo_alerta': estados_previos.get((tipo, str(entidad_id)), '')}
+
                 if tipo == 'lote_insumo':
-                    # Si está agotado, poner cantidad 0 en cuarentena solo para marcar el estado
+                    # Si está agotado, ya lo saltamos arriba. Aquí llega solo si tiene stock o reservado.
                     cantidad_a_cuarentena = 999999
-                    if 'agotado' in estado_actual:
-                        # Lógica de simulación: si está agotado pero tiene OPs activas, usar la cantidad de las OPs
-                        cantidad_a_cuarentena = 0 
-                        from app.models.orden_produccion import OrdenProduccionModel
-                        from app.models.reserva_insumo import ReservaInsumoModel
-                        
-                        # Buscar OPs activas que usen este lote
-                        reserva_model = ReservaInsumoModel()
-                        reservas = reserva_model.find_all({'lote_inventario_id': entidad_id}).get('data', [])
-                        
-                        total_en_ops = 0
-                        for r in reservas:
-                            # Verificar si la OP está activa
-                            op_res = OrdenProduccionModel().find_by_id(r['orden_produccion_id'])
-                            if op_res.get('success'):
-                                op_estado = op_res['data'].get('estado', '')
-                                if op_estado in ['EN_PROCESO', 'PAUSADA', 'EN ESPERA', 'LISTA PARA PRODUCIR']:
-                                    total_en_ops += float(r['cantidad_reservada'])
-                        
-                        if total_en_ops > 0:
-                             cantidad_a_cuarentena = total_en_ops
                     
+                    # Actualizar estado previo explícitamente antes de cuarentena si es necesario
+                    controllers[tipo].inventario_model.update(entidad_id, extra_data_previo, 'id_lote')
+
                     controllers[tipo].poner_lote_en_cuarentena(
                         lote_id=entidad_id, 
                         motivo=motivo_log, 
@@ -175,6 +188,8 @@ class RiesgoController(BaseController):
                         foto_file=None
                     )
                 elif tipo == 'lote_producto':
+                    controllers[tipo].model.update(entidad_id, extra_data_previo, 'id_lote')
+
                     controllers[tipo].poner_lote_en_cuarentena(
                         lote_id=entidad_id, 
                         motivo=motivo_log, 
@@ -184,8 +199,9 @@ class RiesgoController(BaseController):
                         foto_file=None
                     )
                 elif tipo == 'orden_produccion':
-                    controllers[tipo].cambiar_estado_orden_simple(int(entidad_id), 'EN ESPERA')
+                    controllers[tipo].cambiar_estado_orden_simple(int(entidad_id), 'EN ESPERA', extra_data=extra_data_previo)
                 elif tipo == 'pedido':
+                    controllers[tipo].model.update(int(entidad_id), extra_data_previo)
                     controllers[tipo].cambiar_estado_pedido(int(entidad_id), 'EN REVISION')
             except Exception as e:
                 logger.error(f"Fallo al procesar efecto secundario para {tipo}:{entidad_id}. Error: {e}", exc_info=True)
@@ -329,6 +345,7 @@ class RiesgoController(BaseController):
                 # Enriquecer la entidad
                 entidad_en_detalle['estado_resolucion'] = afectado.get('estado', 'pendiente')
                 entidad_en_detalle['resolucion_aplicada'] = afectado.get('resolucion_aplicada')
+                entidad_en_detalle['estado_previo'] = afectado.get('estado_previo')
                 
                 if afectado.get('id_usuario_resolucion'):
                      entidad_en_detalle['resolutor_info'] = usuario_controller.obtener_detalles_completos_usuario(afectado['id_usuario_resolucion'])
@@ -814,26 +831,107 @@ class RiesgoController(BaseController):
         return {"success": True, "message": "Lote de insumo marcado como Apto. Se revisarán las entidades dependientes."}, 200
 
 
-    def _resolver_lote_insumo_no_apto(self, alerta_id, lote_insumo_id, usuario_id):
+    def _resolver_lote_insumo_no_apto(self, alerta_id, lote_insumo_id, usuario_id, accion_ops=None, cantidad=None, motivo_id=None, liberar_remanente=False, retirar_productos_downstream=True):
         from app.controllers.inventario_controller import InventarioController
         from app.controllers.orden_produccion_controller import OrdenProduccionController
 
         inventario_controller = InventarioController()
         op_controller = OrdenProduccionController()
 
-        inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
-        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
+        # 1. Procesar retiro del lote
+        if accion_ops:
+            # Flujo Nuevo: Cantidad específica y acción definida sobre OPs
+            
+            # Si no hay motivo, usar uno genérico (o buscar ID 1 como fallback)
+            if not motivo_id:
+                from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
+                motivo_res = MotivoDesperdicioModel().find_all({'descripcion': 'Insumo No Conforme'}, 1)
+                motivo_id = motivo_res['data'][0]['id'] if motivo_res.get('data') else 1
 
+            # Si no hay cantidad, calcular total
+            cantidad_a_retirar = float(cantidad) if cantidad is not None else 9999999
+
+            # Obtener cantidad total antes del retiro para calcular liberado
+            lote_info = inventario_controller.inventario_model.find_by_id(lote_insumo_id, 'id_lote')
+            cantidad_total_lote = 0
+            if lote_info.get('success') and lote_info.get('data'):
+                lote_data = lote_info['data']
+                cantidad_total_lote = float(lote_data.get('cantidad_actual', 0)) + float(lote_data.get('cantidad_en_cuarentena', 0))
+
+            cantidad_real_retirada = min(cantidad_a_retirar, cantidad_total_lote)
+            cantidad_liberada = cantidad_total_lote - cantidad_real_retirada
+
+            # Llamar al método unificado con accion_ops='ignorar' para manejar las OPs manualmente aquí
+            res_retiro, _ = inventario_controller.retirar_lote_insumo_unificado(
+                lote_insumo_id, 
+                cantidad_a_retirar, 
+                motivo_id, 
+                f"Retiro por Alerta de Riesgo #{alerta_id}", 
+                usuario_id, 
+                accion_ops='ignorar' 
+            )
+            if not res_retiro.get('success'): return res_retiro, 500
+
+            resolucion_texto = f"No Apto (Retirado: {cantidad_real_retirada})"
+            if cantidad_liberada > 0.001:
+                resolucion_texto = f"Retiro Parcial (Retirado: {cantidad_real_retirada}, Restante: {cantidad_liberada})"
+                
+                # Lógica para liberar remanente si el usuario lo pidió
+                if liberar_remanente:
+                    # El remanente está en CUARENTENA porque retirar_lote_insumo_unificado solo retira lo pedido
+                    # y deja el resto en su estado (que era Cuarentena).
+                    # Debemos liberarlo explícitamente.
+                    inventario_controller.liberar_lote_de_cuarentena_alerta(lote_insumo_id, usuario_id)
+                    resolucion_texto += " [Restante Liberado]"
+                else:
+                    resolucion_texto += " [Restante en Cuarentena]"
+
+            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', resolucion_texto, usuario_id)
+
+        else:
+            # Flujo Legacy: Retirar todo
+            inventario_controller.marcar_lote_retirado_alerta(lote_insumo_id, usuario_id)
+            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado Totalmente)', usuario_id)
+
+
+        # 2. Obtener afectados downstream
         afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
-        
         afectados_downstream = self._transformar_trazabilidad_a_diccionario(afectados_downstream_res)
         
+        # 3. Procesar OPs
         for op_data in afectados_downstream.get('ordenes_produccion', []):
-            op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_data['id'])
-            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_data['id'], 'resuelto', 'Pendiente por insumo no apto', usuario_id)
+            op_id = op_data['id']
+            
+            if accion_ops:
+                # Lógica Nueva
+                resolucion_texto = 'Mantenida (Insumo No Apto)' # Default si accion_ops != replanificar
+                if accion_ops == 'replanificar':
+                    res_replan = op_controller.replanificar_op_con_copia(op_id)
+                    if res_replan.get('success'):
+                        nuevo_codigo = res_replan.get('data', {}).get('codigo')
+                        resolucion_texto = f'Replanificada (Nueva OP: {nuevo_codigo})'
+                    else:
+                        logger.error(f"Fallo al replanificar OP {op_id}: {res_replan.get('error')}")
+                        resolucion_texto = 'Error al replanificar'
+                
+                self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_id, 'resuelto', resolucion_texto, usuario_id)
+            
+            else:
+                # Lógica Legacy
+                op_controller.cambiar_estado_a_pendiente_con_reemplazo(op_id)
+                self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_id, 'resuelto', 'Pendiente por insumo no apto', usuario_id)
 
+        # 4. Procesar Lotes de Producto
         for lp_data in afectados_downstream.get('lotes_productos', []):
-            self._resolver_lote_producto_no_apto(alerta_id, lp_data['id'], usuario_id, motivo_adicional=f"originado por insumo no apto {lote_insumo_id}")
+            if retirar_productos_downstream:
+                # Si es parcial, quizás no debamos retirar todos los productos, pero por seguridad asumimos que sí
+                # O podríamos marcar 'En Revisión'. Por ahora mantenemos la lógica agresiva de seguridad si se marca el check.
+                self._resolver_lote_producto_no_apto(alerta_id, lp_data['id'], usuario_id, motivo_adicional=f"originado por insumo no apto {lote_insumo_id}")
+            else:
+                # Si el usuario desmarcó "Retirar productos downstream", se asume que están OK o se revisarán manualmente.
+                # Podríamos marcarlos como "En Revisión" por seguridad, o simplemente no hacer nada y dejar que el usuario decida.
+                # Por ahora, solo registramos en la alerta que fueron "Omitidos por usuario".
+                self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lp_data['id'], 'pendiente', 'Revisión manual requerida (Retiro automático deshabilitado)', usuario_id)
         
         self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
         return {"success": True, "message": "Lote de insumo marcado como No Apto y entidades dependientes actualizadas."}, 200
@@ -849,7 +947,7 @@ class RiesgoController(BaseController):
         
         return {"success": True, "message": "Lote de producto marcado como Apto."}, 200
 
-    def _resolver_lote_producto_no_apto(self, alerta_id, lote_producto_id, usuario_id, motivo_adicional=""):
+    def _resolver_lote_producto_no_apto(self, alerta_id, lote_producto_id, usuario_id, motivo_adicional="", cantidad=None, motivo_id=None):
         from app.controllers.lote_producto_controller import LoteProductoController
         from app.controllers.pedido_controller import PedidoController
         from app.models.lote_producto import LoteProductoModel
@@ -858,8 +956,41 @@ class RiesgoController(BaseController):
         pedido_controller = PedidoController()
         lote_producto_model = LoteProductoModel()
 
-        lote_producto_controller.marcar_lote_retirado_alerta(lote_producto_id)
-        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote_producto_id, 'resuelto', f'No Apto (Retirado) {motivo_adicional}'.strip(), usuario_id)
+        resolucion_texto = f'No Apto (Retirado) {motivo_adicional}'.strip()
+
+        # --- LOGICA DE RETIRO UNIFICADA CON CANTIDAD ---
+        if cantidad is not None and motivo_id is not None:
+             # Obtener stock total antes del retiro
+             lote_info = lote_producto_model.find_by_id(lote_producto_id, 'id_lote')
+             cantidad_total_lote = 0
+             if lote_info.get('success') and lote_info.get('data'):
+                 lote_data = lote_info['data']
+                 cantidad_total_lote = float(lote_data.get('cantidad_actual', 0)) + float(lote_data.get('cantidad_en_cuarentena', 0))
+
+             cantidad_a_retirar = float(cantidad)
+             cantidad_real_retirada = min(cantidad_a_retirar, cantidad_total_lote)
+             cantidad_liberada = cantidad_total_lote - cantidad_real_retirada
+
+             # Usar el nuevo método unificado
+             lote_producto_controller.retirar_lote_producto_unificado(
+                 lote_producto_id, 
+                 cantidad_a_retirar, 
+                 int(motivo_id), 
+                 f"Alerta #{alerta_id} {motivo_adicional}", 
+                 usuario_id
+             )
+
+             resolucion_texto = f"No Apto (Retirado: {cantidad_real_retirada}) {motivo_adicional}"
+             if cantidad_liberada > 0.001:
+                 resolucion_texto = f"Retiro Parcial (Retirado: {cantidad_real_retirada}, Liberado: {cantidad_liberada}) {motivo_adicional}"
+
+        else:
+             # Legacy: retirar todo
+             lote_producto_controller.marcar_lote_retirado_alerta(lote_producto_id)
+             resolucion_texto = f'No Apto (Retirado Totalmente) {motivo_adicional}'.strip()
+        # -----------------------------------------------
+
+        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_producto', lote_producto_id, 'resuelto', resolucion_texto, usuario_id)
         
         afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_producto', lote_producto_id, nivel='completo')
         
@@ -1044,87 +1175,35 @@ class RiesgoController(BaseController):
         # El método legacy no espera 'accion_ops_downstream', así que mejor lo manejamos aquí si es No Apto
         resolucion = data.get('resolucion')
         
+        # Extraer cantidad y motivo (si vienen) para "No Apto"
+        cantidad = data.get('cantidad')
+        motivo_id = data.get('motivo_id')
+        liberar_remanente = data.get('liberar_remanente', False)
+        retirar_productos_downstream = data.get('retirar_productos_downstream', True)
+
         if data.get('tipo_lote') == 'lote_insumo' and resolucion == 'No Apto' and accion_ops_downstream:
-             # Lógica custom para este caso específico que reemplaza a _resolver_lote_insumo_no_apto estándar
-             return self._resolver_lote_insumo_no_apto_custom(alerta_id, data.get('lote_id'), usuario_id, accion_ops_downstream)
+             # Lógica custom unificada
+             return self._resolver_lote_insumo_no_apto(
+                 alerta_id, 
+                 data.get('lote_id'), 
+                 usuario_id, 
+                 accion_ops=accion_ops_downstream,
+                 cantidad=cantidad,
+                 motivo_id=motivo_id,
+                 liberar_remanente=liberar_remanente,
+                 retirar_productos_downstream=retirar_productos_downstream
+             )
+        elif data.get('tipo_lote') == 'lote_producto' and resolucion == 'No Apto':
+             return self._resolver_lote_producto_no_apto(
+                 alerta_id, 
+                 data.get('lote_id'), 
+                 usuario_id, 
+                 motivo_adicional="", 
+                 cantidad=cantidad, 
+                 motivo_id=motivo_id
+             )
 
         return self.resolver_cuarentena_lote_desde_alerta(data, usuario_id)
-
-    def _resolver_lote_insumo_no_apto_custom(self, alerta_id, lote_insumo_id, usuario_id, accion_ops):
-        from app.controllers.inventario_controller import InventarioController
-        from app.controllers.orden_produccion_controller import OrdenProduccionController
-
-        inventario_controller = InventarioController()
-        op_controller = OrdenProduccionController()
-
-        # 1. Retirar el insumo
-       
-        # 1. Utilizar el método unificado para retirar el insumo y gestionar OPs
-        # Asumimos que el motivo ID para alertas debe obtenerse o definirse. 
-        # Por simplicidad, usaremos un motivo genérico o buscaremos uno.
-        from app.models.motivo_desperdicio_model import MotivoDesperdicioModel
-        motivo_model = MotivoDesperdicioModel()
-        motivo_res = motivo_model.find_all({'descripcion': 'Insumo No Conforme'}, 1)
-        motivo_id = motivo_res['data'][0]['id'] if motivo_res.get('data') else 1 # Fallback ID 1
-
-        # Obtener cantidad total del lote para retirarlo todo
-        lote_res = inventario_controller.inventario_model.find_by_id(lote_insumo_id, 'id_lote')
-        cantidad_total = 0
-        if lote_res.get('success') and lote_res.get('data'):
-            lote = lote_res['data']
-            cantidad_total = float(lote.get('cantidad_actual', 0)) + float(lote.get('cantidad_en_cuarentena', 0))
-
-
-        accion_ops_mapped = 'replanificar' if accion_ops == 'replanificar' else accion_ops
-
-        res_retiro, _ = inventario_controller.retirar_lote_insumo_unificado(
-            lote_insumo_id, 
-            cantidad_total, 
-            motivo_id, 
-            f"Retiro por Alerta de Riesgo #{alerta_id}", 
-            usuario_id, 
-            accion_ops=accion_ops_mapped
-        )
-
-        if not res_retiro.get('success'):
-            return res_retiro, 500
-
-        # 2. Registrar resolución en Alerta
-
-        self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'lote_insumo', lote_insumo_id, 'resuelto', 'No Apto (Retirado)', usuario_id)
-
-        # 2. Obtener afectados
-        afectados_downstream_res = self.trazabilidad_model.obtener_trazabilidad_unificada('lote_insumo', lote_insumo_id, nivel='completo')
-        afectados_downstream = self._transformar_trazabilidad_a_diccionario(afectados_downstream_res)
-        
-        # 3. Procesar OPs según la decisión del usuario
-        ordenes_afectadas = afectados_downstream.get('ordenes_produccion', [])
-        
-        for op_data in ordenes_afectadas:
-            op_id = op_data['id']
-            if accion_ops == 'replanificar':
-                # Nueva lógica: Crear nueva OP y cancelar la anterior para mantener trazabilidad
-                res_replan = op_controller.replanificar_op_con_copia(op_id)
-                if res_replan.get('success'):
-                    nuevo_codigo = res_replan.get('data', {}).get('codigo')
-                    resolucion_texto = f'Replanificada (Nueva OP: {nuevo_codigo})'
-                else:
-                    # Fallback si falla la replanificación
-                    logger.error(f"Fallo al replanificar OP {op_id}: {res_replan.get('error')}")
-                    resolucion_texto = 'Error al replanificar'
-            else:
-                # Dejar como está (solo se marca resuelto en la alerta)
-                resolucion_texto = 'Mantenida (Insumo No Apto)'
-            
-            self.alerta_riesgo_model.registrar_resolucion_afectado(alerta_id, 'orden_produccion', op_id, 'resuelto', resolucion_texto, usuario_id)
-
-        # 4. Procesar Lotes de Producto (Siempre se marcan No Aptos si el insumo es No Apto, por seguridad)
-        # NOTA: Podríamos preguntar también, pero por defecto asumimos riesgo alto.
-        for lp_data in afectados_downstream.get('lotes_productos', []):
-            self._resolver_lote_producto_no_apto(alerta_id, lp_data['id'], usuario_id, motivo_adicional=f"originado por insumo no apto {lote_insumo_id}")
-        
-        self.alerta_riesgo_model.verificar_y_cerrar_alerta(alerta_id)
-        return {"success": True, "message": "Lote de insumo retirado y OPs procesadas según selección."}, 200
 
     def _ejecutar_resolver_op_individual_api(self, alerta_id, data, usuario_id):
         op_id = data.get('op_id')
@@ -1187,6 +1266,11 @@ class RiesgoController(BaseController):
                 else:
                     return {"success": False, "error": f"Error al replanificar: {res_replan.get('error')}"}, 500
             
+            elif sub_accion == 'reprogramar':
+                # Lógica simplificada para cambiar estado a pendiente
+                op_controller.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+                resolucion_texto = 'Reprogramada (Estado: Pendiente)'
+
             else:
                 return {"success": False, "error": "Acción desconocida."}, 400
 
@@ -1270,6 +1354,7 @@ class RiesgoController(BaseController):
     def _ejecutar_recibir_devolucion_api(self, alerta_id, data, usuario_id):
         lote_id = data.get('lote_id')
         devoluciones = data.get('devoluciones', [])
+        cantidad_manual = data.get('cantidad_total')
         
         if not lote_id:
             return {"success": False, "error": "Falta el ID del lote."}, 400
@@ -1278,7 +1363,15 @@ class RiesgoController(BaseController):
         lote_producto_model = LoteProductoModel()
         
         # Calcular total recibido
-        cantidad_total_recibida = sum(float(d.get('cantidad', 0)) for d in devoluciones)
+        cantidad_total_recibida = 0.0
+        detalle_devoluciones = ""
+
+        if devoluciones:
+            cantidad_total_recibida = sum(float(d.get('cantidad', 0)) for d in devoluciones)
+            detalle_devoluciones = ", ".join([f"Pedido #{d['pedido_id']}: {d['cantidad']}u" for d in devoluciones])
+        elif cantidad_manual is not None:
+             cantidad_total_recibida = float(cantidad_manual)
+             detalle_devoluciones = "Ingreso Manual"
         
         # Actualizar el lote: Estado RETIRADO y cantidad igual a lo recibido (para registro)
         resultado = lote_producto_model.update(lote_id, {
@@ -1288,7 +1381,6 @@ class RiesgoController(BaseController):
         
         if resultado.get('success'):
             # Construir mensaje de detalle
-            detalle_devoluciones = ", ".join([f"Pedido #{d['pedido_id']}: {d['cantidad']}u" for d in devoluciones])
             resolucion_texto = f'Retirado (Devolución Recibida: {cantidad_total_recibida}u). Detalle: {detalle_devoluciones}'
             
             self.alerta_riesgo_model.registrar_resolucion_afectado(

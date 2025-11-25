@@ -105,7 +105,24 @@ window.renderCalidadTab = async function(data, container, utils) {
 
     chartsHTML += '</div>';
 
-    // Row 3: Resultados Calidad + Desperdicios
+    // Row 3: Origen de Desperdicios (Pie)
+    chartsHTML += '<div class="row g-4 mb-4">';
+    chartsHTML += `
+    <div class="col-lg-6">
+        ${utils.createSmartCardHTML(
+            'chart-origen-desperdicios',
+            'Origen de Desperdicios',
+            'Distribución de desperdicios según su fuente (Producción, Insumos, Productos).',
+            data.origen_desperdicios.insight,
+            data.origen_desperdicios.tooltip
+        )}
+    </div>`;
+    
+    // Placeholder for symmetry if needed, or expand next row
+    chartsHTML += '</div>';
+
+    // Row 4: Resultados Calidad + Desperdicios
+    // Row 4: Resultados Calidad + Evolución Desperdicios
     chartsHTML += '<div class="row g-4 mb-4">';
     
     // Col 1: Resultados Calidad (Stacked Bar)
@@ -133,7 +150,7 @@ window.renderCalidadTab = async function(data, container, utils) {
     </div>`;
     chartsHTML += '</div>';
 
-    // Row 4: Top Items Desperdicio
+    // Row 5: Top Items Desperdicio
     chartsHTML += '<div class="row g-4 mb-4">';
     chartsHTML += `
     <div class="col-12">
@@ -219,6 +236,27 @@ window.renderCalidadTab = async function(data, container, utils) {
                 type: 'bar',
                 data: data.motivos_alerta.values,
                 itemStyle: { color: '#6610f2' } // Purple theme
+            }]
+        });
+    }
+
+    // Chart New: Origen Desperdicios (Pie)
+    if (data.origen_desperdicios && data.origen_desperdicios.data.length > 0) {
+        utils.createChart('chart-origen-desperdicios', {
+            tooltip: { trigger: 'item' },
+            legend: { top: '5%', left: 'center' },
+            series: [{
+                name: 'Origen',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false, position: 'center' },
+                emphasis: { 
+                    label: { show: true, fontSize: '16', fontWeight: 'bold' }
+                },
+                labelLine: { show: false },
+                data: data.origen_desperdicios.data
             }]
         });
     }
