@@ -75,6 +75,15 @@ class RegistroDesperdicioLoteInsumoModel(BaseModel):
             logger.error(f"Error en find_all_by_op_and_insumo: {str(e)}")
             return []
 
+    def find_all_by_op_id(self, orden_id: int):
+        """Obtiene todos los registros de desperdicio para una orden de producción específica."""
+        try:
+            result = self._get_query_builder().select('*').eq('orden_produccion_id', orden_id).execute()
+            return result.data if result.data else []
+        except Exception as e:
+            logger.error(f"Error en find_all_by_op_id: {str(e)}")
+            return []
+
     def get_enriched_historial_by_op(self, orden_id: int):
         """
         Obtiene un historial enriquecido de mermas de insumos para una OP específica.

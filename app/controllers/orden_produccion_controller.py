@@ -1230,48 +1230,60 @@ class OrdenProduccionController(BaseController):
                         if lid and iid:
                             mapa_lotes_insumos[lid] = iid
 
-                # Obtener Merma acumulada para restar del disponible
-                mermas_res = self.registro_merma_model.find_all({'orden_produccion_id': orden_id})
-                mapa_mermas = {}
-                if mermas_res.get('success'):
-                    for m in mermas_res.get('data', []):
-                        qty = float(m.get('cantidad', 0))
-                        lid = m.get('lote_insumo_id')
-                        # Intentar obtener insumo_id del mapa de lotes
-                        iid = mapa_lotes_insumos.get(lid)
+                # --- NUEVO CÁLCULO DE DISPONIBLE ---
+                mapa_reservado_activo = {}
+                mapa_consumido_total = {}
+
+                if reservas_op_res.get('success'):
+                    for res in reservas_op_res.get('data', []):
+                        iid = res.get('insumo_id') or res.get('id_insumo')
+                        qty = float(res.get('cantidad_reservada', 0))
+                        estado_res = res.get('estado', 'UNKNOWN')
+
                         if iid:
-                            mapa_mermas[iid] = mapa_mermas.get(iid, 0.0) + qty
-
+                            if estado_res == 'RESERVADO':
+                                mapa_reservado_activo[iid] = mapa_reservado_activo.get(iid, 0.0) + qty
+                            # Sumamos todo (RESERVADO y CONSUMIDO) para el total asignado
+                            mapa_consumido_total[iid] = mapa_consumido_total.get(iid, 0.0) + qty
+                
                 cantidad_producida_actual = float(orden_data.get('cantidad_producida', 0))
-
                 ingredientes_result = receta_model.get_ingredientes(receta_id)
+
                 if ingredientes_result.get('success'):
                     ingredientes_raw = ingredientes_result.get('data', [])
                     for ing in ingredientes_raw:
+                        key_insumo = ing.get('id_insumo')
                         cantidad_unitaria = float(ing.get('cantidad', 0))
+                        
+                        total_asignado_historico = mapa_consumido_total.get(key_insumo, 0.0)
+                        consumo_teorico = cantidad_unitaria * cantidad_producida_actual
+                        total_reservado_actualmente = mapa_reservado_activo.get(key_insumo, 0.0)
+
+                        # --- INICIO CORRECCIÓN DE CÁLCULO DE MERMA ---
+                        # Consultar explícitamente la merma registrada en la tabla.
+                        mermas_res = self.registro_merma_model.find_all_by_op_and_insumo(orden_id, key_insumo)
+                        merma_total_registrada = 0.0
+                        if mermas_res:
+                            merma_total_registrada = sum(float(m.get('cantidad', 0)) for m in mermas_res)
+
+                        # Lo disponible es lo asignado menos lo que se consumió teóricamente y menos la merma real reportada.
+                        disponible_real = total_asignado_historico - consumo_teorico - merma_total_registrada
+                        
+                        logger.info(
+                            f"Cálculo Disponible Insumo {key_insumo}: "
+                            f"Asignado={total_asignado_historico}, "
+                            f"Unitario={cantidad_unitaria}, "
+                            f"Producido={cantidad_producida_actual} -> "
+                            f"Teórico={consumo_teorico}, "
+                            f"Merma Registrada={merma_total_registrada} -> "
+                            f"Disponible={disponible_real}"
+                        )
+                        # --- FIN CORRECCIÓN ---
+
                         ing['cantidad_unitaria'] = cantidad_unitaria
                         ing['cantidad_total_requerida'] = round(cantidad_unitaria * cantidad_planificada, 4)
-                        
-                        # --- CÁLCULO DINÁMICO DEL DISPONIBLE PARA MERMA ---
-                        # 1. Total Asignado (Reservas actuales en DB, incluye lo refilleado)
-                        # Usamos 'id_insumo' que ahora viene asegurado desde el modelo (raw id de receta_ingredientes)
-                        key_insumo = ing.get('id_insumo')
-                            
-                        total_asignado_actual = mapa_reservas.get(key_insumo, 0.0)
-                        
-                        # 2. Consumo Teórico (Lo que "debería" haberse gastado para lo producido OK)
-                        consumo_teorico = cantidad_unitaria * cantidad_producida_actual
-
-                        # 3. Total Mermado (Lo que ya se perdió y se refilleó)
-                        total_merma = mapa_mermas.get(key_insumo, 0.0)
-                        
-                        # 4. Disponible Real = Asignado - Consumo Teórico - Merma
-                        disponible_real = max(0.0, total_asignado_actual - consumo_teorico - total_merma)
-                        
-                        logger.info(f"Cálculo Disponible Insumo {key_insumo}: Asignado={total_asignado_actual}, Unitario={cantidad_unitaria}, Producido={cantidad_producida_actual} -> Teórico={consumo_teorico}, Merma={total_merma} -> Disponible={disponible_real}")
-                        
                         ing['disponible_real'] = round(disponible_real, 4)
-                        ing['asignado_real'] = round(total_asignado_actual, 4)
+                        ing['asignado_real'] = round(total_asignado_historico, 4)
                         ingredientes.append(ing)
 
             # 3. Calcular Ritmo Objetivo
@@ -2121,8 +2133,8 @@ class OrdenProduccionController(BaseController):
 
     def reportar_merma_insumo(self, orden_id: int, data: Dict, usuario_id: int) -> tuple:
         """
-        Maneja el reporte de mermas de insumos en una OP en curso.
-        Soporta múltiples items. Ejecuta Paso A (Impacto) y Paso B (Resolución) para cada uno.
+        Maneja el reporte de mermas de insumos. Lógica unificada y simplificada.
+        Prioriza la REPOSICIÓN AUTOMÁTICA (Refill) solo si hay stock realmente libre.
         """
         from app.models.reserva_insumo import ReservaInsumoModel
         reserva_model = ReservaInsumoModel()
@@ -2133,231 +2145,78 @@ class OrdenProduccionController(BaseController):
             if not mermas:
                 return self.error_response("No se recibieron datos de mermas.", 400)
 
+            # --- Obtener datos clave una sola vez ---
+            orden_res = self.model.find_by_id(orden_id)
+            if not orden_res.get('success'): return self.error_response("Orden no encontrada", 404)
+            orden = orden_res.get('data', {})
+
+            # --- Procesar cada item de merma ---
             resultados_acumulados = []
-            escenario_global = "REFILL" # Empezamos optimistas
+            escenario_global = "REFILL"
 
             for item in mermas:
-                insumo_id = item.get('insumo_id') 
-                cantidad_perdida = float(item.get('cantidad_perdida'))
-                motivo_id = int(item.get('motivo_id'))
+                insumo_id = item.get('insumo_id')
+                cantidad_perdida = float(item.get('cantidad_perdida', 0))
+                motivo_id = int(item.get('motivo_id')) if item.get('motivo_id') else None
                 observacion = item.get('observacion', '')
 
-                if cantidad_perdida <= 0:
-                    continue
+                if cantidad_perdida <= 0 or not motivo_id: continue
 
-                # --- PASO A: VALIDACIÓN E IMPACTO SIMPLIFICADO ---
-                
-                # 1. Validar si la cantidad reportada es posible
-                reservas_res = reserva_model.find_all({'orden_produccion_id': orden_id, 'insumo_id': insumo_id})
-                total_asignado = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_res.get('data', []))
+                # 1. Registrar la merma para trazabilidad
+                self._registrar_merma_bd(orden_id, insumo_id, cantidad_perdida, motivo_id, observacion, usuario_id)
 
-                mermas_previas_res = registro_merma_model.find_all_by_op_and_insumo(orden_id, insumo_id)
-                merma_acumulada = sum(float(m.get('cantidad', 0)) for m in mermas_previas_res)
-
-                max_desperdiciable = total_asignado - merma_acumulada
-                if cantidad_perdida > max_desperdiciable:
-                    logger.warning(f"Merma reportada ({cantidad_perdida}) excede el máximo posible ({max_desperdiciable}). Se ajustará.")
-                    cantidad_perdida = max_desperdiciable
-
-                if cantidad_perdida <= 0:
-                    continue
-
-                # 2. Impactar stock físico y registrar merma
-                # Priorizamos consumir de lotes con estado RESERVADO
-                reservas_activas = [r for r in reservas_res.get('data', []) if r.get('estado') == 'RESERVADO']
-                
-                cantidad_restante_a_imputar = cantidad_perdida
-                for reserva in sorted(reservas_activas, key=lambda x: x['id']):
-                    if cantidad_restante_a_imputar <= 0: break
-
-                    lote_id = reserva['lote_inventario_id']
-                    cantidad_en_reserva = float(reserva.get('cantidad_reservada', 0))
-                    cantidad_a_tomar = min(cantidad_en_reserva, cantidad_restante_a_imputar)
-                    
-                    # Registrar merma por cada lote afectado
-                    registro_merma_model.create({
-                        'lote_insumo_id': lote_id, 'motivo_id': motivo_id, 'cantidad': cantidad_a_tomar,
-                        'created_at': datetime.now().isoformat(), 'usuario_id': usuario_id,
-                        'orden_produccion_id': orden_id, 'detalle': f"Merma: {observacion}", 'comentarios': observacion
-                    })
-
-                    # Descontar de la reserva y del lote físico
-                    self.inventario_controller.descontar_stock_fisico_y_reserva(reserva['id'], cantidad_a_tomar)
-                    
-                    cantidad_restante_a_imputar -= cantidad_a_tomar
-                
-                # Si aún queda merma por imputar, significa que se usó de stock ya 'CONSUMIDO'.
-                # Solo registramos la merma sin descontar stock. Asumimos el primer lote como fuente.
-                if cantidad_restante_a_imputar > 0 and reservas_res.get('data'):
-                    lote_id_fallback = reservas_res.get('data')[0]['lote_inventario_id']
-                    registro_merma_model.create({
-                        'lote_insumo_id': lote_id_fallback, 'motivo_id': motivo_id, 'cantidad': cantidad_restante_a_imputar,
-                        'created_at': datetime.now().isoformat(), 'usuario_id': usuario_id,
-                        'orden_produccion_id': orden_id, 'detalle': f"Merma (sobre consumido): {observacion}", 'comentarios': observacion
-                    })
-
-                self.insumo_controller.actualizar_stock_insumo(insumo_id)
-
-                # --- PASO B: RESOLUCIÓN AUTOMÁTICA ---
-                resolucion = self._resolver_escenarios_merma(orden_id, insumo_id, cantidad_perdida, usuario_id)
+                # 2. Evaluar y resolver escenarios (Refill, Parcial, Reset)
+                resolucion = self._resolver_escenarios_merma_unificado(orden, insumo_id, cantidad_perdida, usuario_id)
                 resultados_acumulados.append(resolucion)
                 
+                # Determinar el escenario más grave
                 esc_res = resolucion.get('escenario', 'REFILL')
                 if esc_res == 'RESET': escenario_global = 'RESET'
                 elif esc_res == 'PARCIAL' and escenario_global != 'RESET': escenario_global = 'PARCIAL'
 
-            datos_respuesta_api = {'escenario': escenario_global, 'detalles': resultados_acumulados}
-            mensaje_final = "Mermas registradas. Material repuesto automáticamente."
-
-            if escenario_global == 'RESET':
-                mensaje_final = "Mermas registradas. ¡Atención! Por falta crítica de stock, la orden fue devuelta a Planificación."
-            elif escenario_global == 'PARCIAL':
-                # Tomamos el mensaje y los datos del primer (y probablemente único) evento parcial.
-                detalle_parcial = next((res for res in resultados_acumulados if res.get('escenario') == 'PARCIAL'), None)
-                if detalle_parcial:
-                    mensaje_final = detalle_parcial.get('mensaje_usuario', "Mermas registradas con ajuste de meta.")
-                    datos_respuesta_api.update(detalle_parcial.get('datos_adicionales', {}))
-
-            return self.success_response(
-                message=mensaje_final,
-                data=datos_respuesta_api
-            )
+            # 3. Construir respuesta final basada en el escenario global
+            return self._construir_respuesta_merma(escenario_global, resultados_acumulados)
 
         except Exception as e:
             logger.error(f"Error en reportar_merma_insumo para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno: {str(e)}", 500)
 
-    def _resolver_escenarios_merma(self, orden_id: int, insumo_id: int, cantidad_perdida: float, usuario_id: int) -> Dict:
+    def _resolver_escenarios_merma_unificado(self, orden: Dict, insumo_id: str, cantidad_perdida: float, usuario_id: int) -> Dict:
         """
-        Evalúa los 3 escenarios (Refill, Quiebre Parcial, Reset) tras una merma.
-        Prioriza la REPOSICIÓN AUTOMÁTICA (Refill) si hay stock disponible.
+        Función unificada que evalúa y ejecuta la lógica para los 3 escenarios de merma.
         """
-        # 1. Buscar si hay más stock disponible (Refill)
-        # Usamos el helper existente que filtra por fecha y disponibilidad
+        orden_id = orden.get('id')
+
+        # ESCENARIO 1: REFILL (REPOSICIÓN AUTOMÁTICA)
         lotes_disponibles = self.inventario_controller._obtener_lotes_con_disponibilidad(insumo_id)
-        stock_disponible_total = sum(lote['disponibilidad'] for lote in lotes_disponibles)
+        stock_disponible_total = sum(lote.get('disponibilidad', 0) for lote in lotes_disponibles)
 
-        orden_res = self.model.find_by_id(orden_id)
-        orden = orden_res['data']
-
-        # ESCENARIO 1: REPOSICIÓN AUTOMÁTICA (Refill)
         if stock_disponible_total >= cantidad_perdida:
-            logger.info(f"Escenario 1 (Refill) para OP {orden_id}. Stock disponible ({stock_disponible_total}) cubre la pérdida ({cantidad_perdida}).")
-            
-            # --- INICIO DE LA CORRECCIÓN ---
-            # Delegar el consumo y descuento físico al controlador de inventario
             consumo_result = self.inventario_controller.consumir_stock_para_reposicion(
-                orden_produccion_id=orden_id,
-                insumo_id=insumo_id,
-                cantidad=cantidad_perdida,
-                usuario_id=usuario_id
+                orden_produccion_id=orden_id, insumo_id=insumo_id,
+                cantidad=cantidad_perdida, usuario_id=usuario_id
             )
-
-            if not consumo_result.get('success'):
-                logger.error(f"Fallo el REFILL automático para OP {orden_id}: {consumo_result.get('error')}")
-                # Si falla la reposición, caemos en escenario PARCIAL por defecto.
-                pass
-            else:
-                return {
-                    "escenario": "REFILL",
-                    "mensaje_usuario": "Material repuesto y consumido automáticamente. Continúe produciendo."
-                }
-            # --- FIN DE LA CORRECCIÓN ---
-
-        # Si no hay suficiente para reponer todo...
+            if consumo_result.get('success'):
+                return {"escenario": "REFILL", "mensaje_usuario": "Material repuesto automáticamente."}
         
-        # Obtener la receta para calcular rendimientos
-        receta_res = self.receta_model.find_by_id(orden['receta_id'], 'id')
-        receta = receta_res['data']
-        ingredientes_res = self.receta_model.get_ingredientes(orden['receta_id'])
-        ingredientes = ingredientes_res.get('data', [])
+        # --- Si no hay stock para refill, pasamos a escenarios de quiebre ---
         
-        # Encontrar cuánto de este insumo se necesita por unidad de producto
-        insumo_req_por_unidad = 0
-        for ing in ingredientes:
-            if ing['id_insumo'] == insumo_id:
-                insumo_req_por_unidad = float(ing['cantidad'])
-                break
+        # Calcular máxima producción posible con el stock restante
+        max_produccion_posible = self._calcular_max_produccion_posible(orden, insumo_id, stock_disponible_total)
         
-        if insumo_req_por_unidad <= 0:
-            # Error en receta? Asumimos no crítico o error
-            return {"escenario": "ERROR", "mensaje_usuario": "Error en datos de receta. Avise a soporte."}
-
-        # Calcular cuánto tenemos AHORA reservado (lo que quedó sano) + lo poco que haya disponible libre
-        # (En realidad, el escenario 2 dice "Con lo que me queda...". Asumimos que usa lo que quedó en la OP + lo que pueda rascar del almacén)
-        
-        # Stock total accesible = (Reservas actuales sanas de la OP) + (Stock disponible en almacén)
-        # Reservas actuales sanas = Ya las actualizamos en Paso A (quitamos lo perdido)
-        reservas_actuales_res = self.inventario_controller.reserva_insumo_model.find_all({'orden_produccion_id': orden_id, 'insumo_id': insumo_id, 'estado': 'RESERVADO'})
-        reservas_actuales_qty = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_actuales_res.get('data', []))
-        
-        stock_total_accesible = reservas_actuales_qty + stock_disponible_total
-        
-        max_produccion_posible = math.floor(stock_total_accesible / insumo_req_por_unidad)
-        
-        cantidad_planificada_original = float(orden.get('cantidad_planificada', 0))
-        
-        # ESCENARIO 3: PÉRDIDA TOTAL (Reset)
+        # ESCENARIO 3: RESET (PÉRDIDA TOTAL)
         if max_produccion_posible <= 0:
-            logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada. Se cancelará y creará una nueva.")
-            
-            # 1. Liberar solo el stock sano y no consumido
-            self.inventario_controller.liberar_stock_no_consumido_para_op(orden_id)
-            
-            # 2. Cancelar la OP actual con una observación clara
-            obs = f"{orden.get('observaciones', '')} | CANCELADA por pérdida total de insumo ID {insumo_id}. Replanificada automáticamente.".strip()
-            self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=obs)
+            return self._ejecutar_reset_op(orden, insumo_id, usuario_id)
 
-            # 3. Crear una nueva OP (copia) para replanificar
-            form_data_copia = {
-                'productos': [{'id': orden['producto_id'], 'cantidad': orden['cantidad_planificada']}],
-                'fecha_meta': orden.get('fecha_meta'),
-                'observaciones': f"Replanificación automática de OP-{orden.get('codigo')}.",
-                'id_op_padre': orden.get('id_op_padre') 
-            }
-            creacion_res = self.crear_orden(form_data_copia, usuario_id)
-
-            if not creacion_res.get('success'):
-                # Esto es un estado problemático, la OP original fue cancelada pero la nueva no se pudo crear.
-                error_msg = f"CRÍTICO: La OP {orden_id} fue cancelada pero no se pudo crear su reemplazo automático. Por favor, cree una nueva OP manualmente. Error: {creacion_res.get('error')}"
-                logger.error(error_msg)
-                return {"escenario": "ERROR", "mensaje_usuario": error_msg}
-
-            nueva_op = creacion_res['data'][0]
-            
-            return {
-                "escenario": "RESET",
-                "mensaje_usuario": f"Pérdida crítica de insumo. La orden actual ({orden.get('codigo')}) fue cancelada y se creó una nueva orden ({nueva_op.get('codigo')}) para ser replanificada."
-            }
-
-        # ESCENARIO 2: QUIEBRE PARCIAL (Ajuste de Meta)
+        # ESCENARIO 2: PARCIAL (AJUSTE DE META)
         else:
-            logger.info(f"Escenario 2 (Parcial) para OP {orden_id}. Se notifica al usuario. Nueva meta posible: {max_produccion_posible}.")
-
-            # 1. Si hay algo disponible en almacén (que no cubría todo pero ayuda), tómalo (Refill parcial)
-            if stock_disponible_total > 0:
-                cantidad_restante_tomar = stock_disponible_total
-                for lote in lotes_disponibles:
-                    if cantidad_restante_tomar <= 0: break
-                    cant = min(lote['disponibilidad'], cantidad_restante_tomar)
-                    self.inventario_controller.reserva_insumo_model.create({
-                        'orden_produccion_id': orden_id, 'lote_inventario_id': lote['id_lote'],
-                        'insumo_id': insumo_id, 'cantidad_reservada': cant, 'usuario_reserva_id': usuario_id
-                    })
-                    cantidad_restante_tomar -= cant
-
-            # 2. NO se recorta la OP actual. Solo se informa.
-            # self.model.update(orden_id, {'cantidad_planificada': max_produccion_posible}, 'id')
-            
-            # 3. NO se crea OP Hija automáticamente.
-            cantidad_faltante = cantidad_planificada_original - max_produccion_posible
-
+            # En este escenario solo informamos, no modificamos la OP.
             return {
                 "escenario": "PARCIAL",
-                "mensaje_usuario": f"Stock insuficiente. Ahora solo puedes producir un máximo de {max_produccion_posible} unidades. La meta original de {cantidad_planificada_original} se mantiene como referencia.",
+                "mensaje_usuario": f"Stock insuficiente. Ahora solo puedes producir un máximo de {max_produccion_posible:.2f} unidades.",
                 "datos_adicionales": {
                     "max_produccion_posible": max_produccion_posible,
-                    "cantidad_planificada_original": cantidad_planificada_original
+                    "cantidad_planificada_original": float(orden.get('cantidad_planificada', 0))
                 }
             }
 
@@ -2664,6 +2523,134 @@ class OrdenProduccionController(BaseController):
             # Como fallback seguro, mover a pendiente
             self.model.cambiar_estado(orden_id, 'PENDIENTE')
             return {'success': False, 'error': str(e)}
+    # endregion
+
+    # region Helpers de Reporte de Merma
+
+    def _registrar_merma_bd(self, orden_id, insumo_id, cantidad, motivo_id, observacion, usuario_id):
+        """Registra el desperdicio de insumo en la base de datos."""
+        from app.models.reserva_insumo import ReservaInsumoModel
+        from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
+        
+        reserva_model = ReservaInsumoModel()
+        registro_merma_model = RegistroDesperdicioLoteInsumoModel()
+
+        # Buscamos una reserva (cualquier estado) para obtener un lote fuente para la trazabilidad.
+        reservas_res = reserva_model.find_all({'orden_produccion_id': orden_id, 'insumo_id': insumo_id}, limit=1)
+        if not reservas_res.get('success') or not reservas_res.get('data'):
+            logger.warning(f"No se puede registrar merma para el insumo {insumo_id} en la OP {orden_id} porque no tiene reservas asociadas.")
+            return
+
+        lote_id_fuente = reservas_res.get('data')[0]['lote_inventario_id']
+
+        registro_merma_model.create({
+            'lote_insumo_id': lote_id_fuente, 'motivo_id': motivo_id,
+            'cantidad': cantidad, 'created_at': datetime.now().isoformat(),
+            'usuario_id': usuario_id, 'orden_produccion_id': orden_id,
+            'detalle': f"Merma: {observacion}", 'comentarios': observacion
+        })
+
+    def _calcular_max_produccion_posible(self, orden: Dict, insumo_id: str, stock_disponible_libre: float) -> float:
+        """Calcula la cantidad máxima de producto final que se puede fabricar con el stock restante."""
+        receta_id = orden.get('receta_id')
+        ingredientes_res = self.receta_model.get_ingredientes(receta_id)
+        if not ingredientes_res.get('success'): return 0
+
+        # Encontrar cuánto de este insumo se necesita por unidad de producto
+        insumo_req_por_unidad = 0
+        for ing in ingredientes_res.get('data', []):
+            if ing.get('id_insumo') == insumo_id:
+                insumo_req_por_unidad = float(ing.get('cantidad', 0))
+                break
+        
+        if insumo_req_por_unidad <= 0: return 0
+
+        # El stock total accesible es lo que quedó en la OP (reservado/consumido) + lo que hay libre en el almacén
+        reservas_op_res = self.inventario_controller.reserva_insumo_model.find_all({
+            'orden_produccion_id': orden.get('id'), 'insumo_id': insumo_id
+        })
+        
+        stock_en_op = 0
+        if reservas_op_res.get('success'):
+            stock_en_op = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_op_res.get('data', []))
+
+        # --- CORRECCIÓN FINAL: RESTAR LA MERMA YA REGISTRADA ---
+        mermas_res = self.registro_merma_model.find_all_by_op_and_insumo(orden.get('id'), insumo_id)
+        merma_total_registrada = 0.0
+        if mermas_res:
+            merma_total_registrada = sum(float(m.get('cantidad', 0)) for m in mermas_res)
+        
+        stock_neto_en_op = stock_en_op - merma_total_registrada
+        # ----------------------------------------------------
+
+        stock_total_accesible = stock_neto_en_op + stock_disponible_libre
+        
+        return math.floor(stock_total_accesible / insumo_req_por_unidad)
+
+    def _ejecutar_reset_op(self, orden: Dict, insumo_id: str, usuario_id: int) -> Dict:
+        """Cancela la OP actual, libera su stock y crea una nueva OP para replanificar."""
+        orden_id = orden.get('id')
+        logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada. Se cancelará y creará una nueva.")
+        
+        # 1. Liberar stock sano no consumido
+        self.inventario_controller.liberar_stock_no_consumido_para_op(orden_id)
+        
+        # 2. Cancelar la OP actual
+        obs = f"{orden.get('observaciones', '')} | CANCELADA por pérdida total de insumo ID {insumo_id}. Replanificada automáticamente.".strip()
+        self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=obs)
+
+        # 3. Crear una nueva OP (copia)
+        fecha_meta_valor = orden.get('fecha_meta')
+        fecha_meta_str = None
+        if isinstance(fecha_meta_valor, (datetime, date)):
+            fecha_meta_str = fecha_meta_valor.strftime('%Y-%m-%d')
+        elif isinstance(fecha_meta_valor, str):
+            # Tomar solo la parte de la fecha si es una cadena ISO
+            fecha_meta_str = fecha_meta_valor.split('T')[0]
+
+        form_data_copia = {
+            'productos': [{'id': orden['producto_id'], 'cantidad': orden['cantidad_planificada']}],
+            'fecha_meta': fecha_meta_str,
+            'observaciones': f"Replanificación automática de OP-{orden.get('codigo')}.",
+            'id_op_padre': orden.get('id_op_padre')
+        }
+        creacion_res = self.crear_orden(form_data_copia, usuario_id)
+
+        if not creacion_res.get('success'):
+            error_msg = f"CRÍTICO: La OP {orden_id} fue cancelada pero no se pudo crear su reemplazo. Por favor, cree una nueva OP manualmente. Error: {creacion_res.get('error')}"
+            logger.error(error_msg)
+            return {"escenario": "ERROR", "mensaje_usuario": error_msg}
+
+        nueva_op = creacion_res.get('data')[0]
+        mensaje = f"Pérdida crítica de insumo. La orden actual ({orden.get('codigo')}) fue cancelada y se creó una nueva ({nueva_op.get('codigo')}) para ser replanificada."
+        return {"escenario": "RESET", "mensaje_usuario": mensaje}
+
+    def _construir_respuesta_merma(self, escenario_global: str, resultados: List[Dict]) -> tuple:
+        """Construye la tupla de respuesta final para la API de merma."""
+        datos_api = {'escenario': escenario_global, 'detalles': resultados}
+        mensaje = "Mermas registradas. Material repuesto automáticamente."
+
+        if escenario_global == 'ERROR':
+            detalle_error = next((res for res in resultados if res.get('escenario') == 'ERROR'), None)
+            mensaje_error = "Ocurrió un error crítico al procesar la merma."
+            if detalle_error:
+                mensaje_error = detalle_error.get('mensaje_usuario', mensaje_error)
+            # Devolvemos una respuesta de error para que el frontend pueda manejarlo.
+            return self.error_response(mensaje_error, 500)
+
+        elif escenario_global == 'RESET':
+             detalle_reset = next((res for res in resultados if res.get('escenario') == 'RESET'), None)
+             if detalle_reset:
+                 mensaje = detalle_reset.get('mensaje_usuario', "¡Atención! Por falta crítica de stock, la orden fue devuelta a Planificación.")
+
+        elif escenario_global == 'PARCIAL':
+            detalle_parcial = next((res for res in resultados if res.get('escenario') == 'PARCIAL'), None)
+            if detalle_parcial:
+                mensaje = detalle_parcial.get('mensaje_usuario', "Mermas registradas con ajuste de meta.")
+                datos_api.update(detalle_parcial.get('datos_adicionales', {}))
+
+        return self.success_response(message=mensaje, data=datos_api)
+
     # endregion
 
 

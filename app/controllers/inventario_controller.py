@@ -274,19 +274,25 @@ class InventarioController(BaseController):
                 for merma in mermas_res:
                     lote_id = merma['lote_insumo_id']
                     mermas_por_lote[lote_id] = mermas_por_lote.get(lote_id, 0) + float(merma['cantidad'])
-
-            # 3. Calcular y devolver stock sano
-            insumos_a_actualizar = set()
+            
+            # --- CORRECCIÓN: Agregar reservas por lote antes de iterar ---
+            reservas_por_lote = {}
             for reserva in reservas:
                 lote_id = reserva['lote_inventario_id']
-                insumo_id = reserva['insumo_id']
+                if lote_id not in reservas_por_lote:
+                    reservas_por_lote[lote_id] = {'total_reservado': 0.0, 'insumo_id': reserva['insumo_id']}
+                reservas_por_lote[lote_id]['total_reservado'] += float(reserva.get('cantidad_reservada', 0))
+
+            # 3. Calcular y devolver stock sano, iterando sobre la agregación
+            insumos_a_actualizar = set()
+            for lote_id, reserva_data in reservas_por_lote.items():
+                insumo_id = reserva_data['insumo_id']
                 insumos_a_actualizar.add(insumo_id)
 
-                cantidad_original_reservada = float(reserva.get('cantidad_reservada', 0))
+                total_reservado_en_lote = reserva_data['total_reservado']
                 merma_en_lote = mermas_por_lote.get(lote_id, 0)
-
-                # Lo que se devuelve es lo que se reservó menos lo que se perdió de ese lote
-                cantidad_a_devolver = max(0, cantidad_original_reservada - merma_en_lote)
+                
+                cantidad_a_devolver = max(0, total_reservado_en_lote - merma_en_lote)
 
                 if cantidad_a_devolver > 0:
                     lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
@@ -303,7 +309,7 @@ class InventarioController(BaseController):
                         logger.info(f"Devueltas {cantidad_a_devolver} unidades al lote {lote_id} desde OP {orden_produccion_id}")
             
             # 4. Cambiar el estado de todas las reservas de la OP a 'CANCELADO'
-            self.reserva_insumo_model.db.table('reserva_insumos').update({'estado': 'CANCELADO'}).eq('orden_produccion_id', orden_produccion_id).execute()
+            self.reserva_insumo_model.db.table('reservas_insumos').update({'estado': 'CANCELADO'}).eq('orden_produccion_id', orden_produccion_id).execute()
 
             # 5. Actualizar stock consolidado de todos los insumos implicados
             for insumo_id in insumos_a_actualizar:
