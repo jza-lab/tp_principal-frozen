@@ -1816,11 +1816,87 @@ class OrdenProduccionController(BaseController):
                     response_message += " Orden completada."
 
             self.model.update(orden_id, update_data)
+
+            # --- NUEVA LÓGICA DE FINALIZACIÓN AUTOMÁTICA ---
+            # Después de actualizar, volvemos a cargar la orden para tener los datos más frescos
+            orden_actualizada_res = self.model.find_by_id(orden_id)
+            if orden_actualizada_res.get('success'):
+                orden_actualizada = orden_actualizada_res.get('data', {})
+                
+                # Recalculamos el máximo producible con el stock restante actual
+                max_producible_actual = self._calcular_max_produccion_posible_total(orden_actualizada)
+
+                cantidad_producida_final = float(orden_actualizada.get('cantidad_producida', 0))
+
+                # Usamos una pequeña tolerancia para comparaciones de punto flotante
+                if max_producible_actual is not None and cantidad_producida_final >= (max_producible_actual - 0.001):
+                    logger.info(f"OP {orden_id} ha alcanzado su máximo producible ({cantidad_producida_final}/{max_producible_actual}). Finalizando automáticamente.")
+                    
+                    self.model.cambiar_estado(orden_id, 'CONTROL_DE_CALIDAD')
+                    response_data['accion'] = 'finalizar_y_redirigir'
+                    response_message = "Límite de producción por stock alcanzado. La orden se ha enviado a Control de Calidad."
+
             return self.success_response(message=response_message, data=response_data)
 
         except Exception as e:
             logger.error(f"Error en reportar_avance para OP {orden_id}: {e}", exc_info=True)
             return self.error_response(f"Error interno del servidor: {str(e)}", 500)
+
+    def _calcular_max_produccion_posible_total(self, orden: Dict) -> Optional[float]:
+        """
+        Calcula la cantidad máxima de producto final que se puede fabricar con el stock restante,
+        considerando TODOS los ingredientes como posibles cuellos de botella.
+        """
+        try:
+            receta_id = orden.get('receta_id')
+            ingredientes_res = self.receta_model.get_ingredientes(receta_id)
+            if not ingredientes_res.get('success'): return None
+
+            # Obtener todas las reservas y mermas de una vez para eficiencia
+            reservas_op_res = self.inventario_controller.reserva_insumo_model.find_all({'orden_produccion_id': orden.get('id')})
+            mermas_op_res = self.registro_merma_model.find_all_by_op_id(orden.get('id'))
+            
+            mapa_stock_en_op = {}
+            if reservas_op_res.get('success'):
+                for r in reservas_op_res.get('data', []):
+                    insumo_id = r.get('insumo_id')
+                    if insumo_id:
+                        mapa_stock_en_op[insumo_id] = mapa_stock_en_op.get(insumo_id, 0.0) + float(r.get('cantidad_reservada', 0))
+
+            mapa_merma_registrada = {}
+            if mermas_op_res:
+                for m in mermas_op_res:
+                    # Necesitamos encontrar el insumo_id a partir del lote_id
+                    lote_id = m.get('lote_insumo_id')
+                    # Esto es ineficiente, una mejor estructura de datos ayudaría.
+                    # Por ahora, hacemos una consulta para cada uno.
+                    lote_info = self.inventario_controller.lote_insumo_model.find_by_id(lote_id, 'id_lote')
+                    if lote_info.get('success'):
+                        insumo_id = lote_info.get('data', {}).get('id_insumo')
+                        if insumo_id:
+                            mapa_merma_registrada[insumo_id] = mapa_merma_registrada.get(insumo_id, 0.0) + float(m.get('cantidad', 0))
+
+            max_produccion_por_ingrediente = []
+            for ing in ingredientes_res.get('data', []):
+                insumo_id = ing.get('id_insumo')
+                insumo_req_por_unidad = float(ing.get('cantidad', 0))
+                if insumo_req_por_unidad <= 0: continue
+
+                stock_en_op = mapa_stock_en_op.get(insumo_id, 0.0)
+                merma_registrada = mapa_merma_registrada.get(insumo_id, 0.0)
+                stock_neto_en_op = stock_en_op - merma_registrada
+                
+                # No consideramos stock libre, solo lo asignado a la OP
+                unidades_posibles_con_stock_op = math.floor(stock_neto_en_op / insumo_req_por_unidad)
+                max_produccion_por_ingrediente.append(unidades_posibles_con_stock_op)
+
+            if not max_produccion_por_ingrediente:
+                return None
+
+            return float(min(max_produccion_por_ingrediente))
+        except Exception as e:
+            logger.error(f"Error en _calcular_max_produccion_posible_total para OP {orden.get('id')}: {e}", exc_info=True)
+            return None
 
     def _gestionar_desperdicio_en_punto_de_control(self, orden_actual: Dict, desperdicio_total: Decimal, usuario_id: int, waste_list: Optional[List[Dict]] = None) -> Dict:
         """
@@ -2677,18 +2753,6 @@ class OrdenProduccionController(BaseController):
         return self.success_response(message=mensaje, data=datos_api)
 
     # endregion
-
-
-    def replanificar_op(self, op_id):
-        try:
-            resultado = self.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
-            if resultado.get('success'):
-                return self.success_response(message="Orden de producción replanificada correctamente.")
-            else:
-                return self.error_response(error="No se pudo replanificar la orden de producción.", status_code=500)
-        except Exception as e:
-            return self.error_response(error=f"Error interno: {str(e)}", status_code=500)
-        
     def _obtener_cantidad_insumo_en_curso(self, orden_produccion_id: int, insumo_id: int) -> float:
         """
         Calcula la cantidad de un insumo que ya ha sido pedida en OCs vinculadas a esta OP

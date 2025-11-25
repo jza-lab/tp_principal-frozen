@@ -487,6 +487,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     addActivityLog(`Desperdicio repuesto automáticamante. Continúe produciendo.`, 'success');
                     showNotification('✅ Desperdicio cubierto con stock. La orden sigue abierta.', 'success');
 
+                } else if (data.data?.accion === 'finalizar_y_redirigir') {
+                    // --- CASO: LÍMITE DE STOCK ALCANZADO ---
+                    const modalNotif = new bootstrap.Modal(document.getElementById('modalNotificacion'));
+                    const modalNotifLabel = document.getElementById('modalNotificacionLabel');
+                    const modalNotifBody = document.getElementById('modalNotificacionBody');
+                    
+                    modalNotifLabel.innerHTML = '🏁 Producción Finalizada';
+                    modalNotifBody.innerText = data.message;
+                    
+                    document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
+                        window.location.href = '/produccion/kanban/';
+                    }, { once: true });
+                    
+                    modalNotif.show();
+                    stopTimer();
+                    
                 } else if ((estado.cantidadProducida + estado.cantidadDesperdicio) >= estado.cantidadPlanificada) {
                     // Solo redirigir si el backend NO devolvió 'continuar' y alcanzamos el tope.
                     // (Aunque idealmente deberíamos confiar solo en el estado de la orden, esta lógica legacy se mantiene como fallback)
