@@ -1680,11 +1680,7 @@ class InventarioController(BaseController):
 
             # --- 2. Manejo de Foto ---
             foto_url_final = None
-            cc_controller = ControlCalidadInsumoController()
-            
-            if foto_file and foto_file.filename:
-                foto_url_final = cc_controller._subir_foto_y_obtener_url(foto_file, lote['id_lote'])
-            elif usar_foto_cuarentena:
+            if usar_foto_cuarentena:
                 cc_model = ControlCalidadInsumoModel()
                 historial = cc_model.find_by_lote_id(lote['id_lote'])
                 if historial.get('success') and historial.get('data'):

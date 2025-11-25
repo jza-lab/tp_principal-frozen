@@ -2344,7 +2344,16 @@ class OrdenProduccionController(BaseController):
             return {'success': False, 'error': str(e)}
     # endregion
 
-
+    def replanificar_op(self, op_id):
+        try:
+            resultado = self.cambiar_estado_orden_simple(op_id, 'PENDIENTE')
+            if resultado.get('success'):
+                return self.success_response(message="Orden de producción replanificada correctamente.")
+            else:
+                return self.error_response(error="No se pudo replanificar la orden de producción.", status_code=500)
+        except Exception as e:
+            return self.error_response(error=f"Error interno: {str(e)}", status_code=500)
+        
     def _obtener_cantidad_insumo_en_curso(self, orden_produccion_id: int, insumo_id: int) -> float:
         """
         Calcula la cantidad de un insumo que ya ha sido pedida en OCs vinculadas a esta OP

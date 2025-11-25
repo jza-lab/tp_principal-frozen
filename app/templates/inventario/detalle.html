@@ -341,7 +341,7 @@
                         <div class="col-md-8">
                             <p class="mb-1"><strong>Fecha:</strong> {{ registro.created_at.strftime('%Y-%m-%d %H:%M') if registro.created_at else 'N/A' }}</p>
                             <p class="mb-1"><strong>Cantidad:</strong> <span class="fw-bold text-danger">{{ registro.cantidad | round(2) }} {{ lote.insumo_unidad_medida }}</span></p>
-                            <p class="mb-1"><strong>Motivo:</strong> {{ registro.motivo.motivo or 'No especificado' }}</p>
+                            <p class="mb-1"><strong>Motivo:</strong> {{ registro['motivo'] or 'No especificado' }}</p>
                             <p class="mb-1"><strong>Detalle:</strong> {{ registro.detalle or 'No especificado' }}</p>
                             <p class="mb-1"><strong>Usuario:</strong> {{ registro.usuario.nombre or 'N/A' }}</p>
                             {% if registro.comentarios %}
