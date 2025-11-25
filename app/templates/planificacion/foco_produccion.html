@@ -233,6 +233,10 @@
                     <i class="bi bi-pause-fill"></i>
                     <span>Pausar Trabajo</span>
                 </button>
+                <button class="btn btn-action btn-warning text-dark" id="btn-reportar-merma" data-bs-toggle="modal" data-bs-target="#modalReportarMerma">
+                    <i class="bi bi-trash-fill"></i>
+                    <span>Reportar Merma</span>
+                </button>
             </div>
             {% endif %}
 
@@ -328,6 +332,52 @@
 {% include 'planificacion/modals/modal_pausar_produccion.html' %}
 {% include 'planificacion/modals/modal_traspaso_turno.html' %}
 
+<!-- Modal Reportar Merma -->
+<div class="modal fade" id="modalReportarMerma" tabindex="-1" aria-labelledby="modalReportarMermaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalReportarMermaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Reportar Merma de Insumo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Reporte la pérdida de insumos. El sistema ajustará el stock y la orden automáticamente.
+                    <br>
+                    <i class="bi bi-info-circle me-1"></i> Desperdicios guardados en tabla: <code>registros_desperdicio_lote_insumo</code>
+                </p>
+                
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered" id="tablaMermas">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35%;">Insumo</th>
+                                <th style="width: 20%;">Cantidad Perdida</th>
+                                <th style="width: 20%;">Motivo</th>
+                                <th style="width: 20%;">Observación</th>
+                                <th style="width: 5%;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyMermas">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="btnAgregarFilaMerma">
+                    <i class="bi bi-plus-lg"></i> Agregar Insumo
+                </button>
+
+                <div id="mermaResultAlert" class="alert d-none mt-3" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarMerma">Confirmar Reporte</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal de Confirmación Genérico para OP Hija -->
 <div class="modal fade" id="modalConfirmacionHija" tabindex="-1" aria-labelledby="modalConfirmacionHijaLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -359,6 +409,194 @@
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
         const TOLERANCIA_SOBREPRODUCCION = {{ tolerancia_sobreproduccion | tojson }};
         const TURNO_ACTUAL = {{ turno_actual | tojson }};
+        const INGREDIENTES_DATA = {{ ingredientes | tojson }}; // Nuevo: Ingredientes con cantidades totales
+        const MOTIVOS_MERMA_DATA = {{ motivos_merma | tojson }}; // Nuevo: Motivos para el JS
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const tbodyMermas = document.getElementById('tbodyMermas');
+            const btnAgregarFila = document.getElementById('btnAgregarFilaMerma');
+            const btnConfirmarMerma = document.getElementById('btnConfirmarMerma');
+            const alertBox = document.getElementById('mermaResultAlert');
+
+            // Función para crear una fila vacía
+            function agregarFila() {
+                const tr = document.createElement('tr');
+                
+                // Opciones de Insumos
+                let insumoOptions = '<option value="" selected disabled>Seleccione...</option>';
+                INGREDIENTES_DATA.forEach(ing => {
+                    if (ing.id_insumo) {
+                        // Guardamos el total requerido en data attribute
+                        insumoOptions += `<option value="${ing.id_insumo}" data-max="${ing.cantidad_total_requerida || 999999}" data-unit="${ing.unidad_medida}">${ing.nombre_insumo}</option>`;
+                    }
+                });
+
+                // Opciones de Motivos
+                let motivoOptions = '<option value="" selected disabled>Seleccione...</option>';
+                MOTIVOS_MERMA_DATA.forEach(m => {
+                    motivoOptions += `<option value="${m.id}">${m.descripcion}</option>`;
+                });
+
+                tr.innerHTML = `
+                    <td>
+                        <select class="form-select form-select-sm insumo-select" required onchange="updateMaxQuantity(this)">
+                            ${insumoOptions}
+                        </select>
+                        <small class="text-muted max-helper" style="font-size: 0.75rem;"></small>
+                    </td>
+                    <td>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control cantidad-input" step="0.01" min="0.01" required>
+                            <span class="input-group-text unit-text">-</span>
+                        </div>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm motivo-select" required>
+                            ${motivoOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-select-sm observacion-input" placeholder="...">
+                    </td>
+                    <td class="text-center align-middle">
+                        <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="this.closest('tr').remove()">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbodyMermas.appendChild(tr);
+            }
+
+            // Evento para actualizar visualmente el máximo y la unidad
+            window.updateMaxQuantity = function(selectElement) {
+                const selectedOption = selectElement.options[selectElement.selectedIndex];
+                const maxQty = selectedOption.getAttribute('data-max');
+                const unit = selectedOption.getAttribute('data-unit');
+                const row = selectElement.closest('tr');
+                
+                const inputQty = row.querySelector('.cantidad-input');
+                const unitText = row.querySelector('.unit-text');
+                const helperText = row.querySelector('.max-helper');
+
+                if (maxQty) {
+                    inputQty.max = maxQty;
+                    unitText.innerText = unit || 'u';
+                    helperText.innerText = `Max desperdiciable: ${maxQty} ${unit || ''}`;
+                } else {
+                    inputQty.removeAttribute('max');
+                    unitText.innerText = '-';
+                    helperText.innerText = '';
+                }
+            };
+
+            // Agregar primera fila al cargar modal (opcional, o dejar vacío)
+            // agregarFila(); 
+
+            if (btnAgregarFila) {
+                btnAgregarFila.addEventListener('click', agregarFila);
+            }
+
+            // Inicializar con una fila al abrir el modal si está vacío
+            const modalElement = document.getElementById('modalReportarMerma');
+            modalElement.addEventListener('shown.bs.modal', function () {
+                if (tbodyMermas.children.length === 0) {
+                    agregarFila();
+                }
+            });
+
+            if (btnConfirmarMerma) {
+                btnConfirmarMerma.addEventListener('click', function() {
+                    const rows = tbodyMermas.querySelectorAll('tr');
+                    const mermas = [];
+                    let valid = true;
+
+                    if (rows.length === 0) {
+                        alert("Debe agregar al menos un insumo.");
+                        return;
+                    }
+
+                    rows.forEach(row => {
+                        const insumoId = row.querySelector('.insumo-select').value;
+                        const cantidad = parseFloat(row.querySelector('.cantidad-input').value);
+                        const motivoId = row.querySelector('.motivo-select').value;
+                        const observacion = row.querySelector('.observacion-input').value;
+                        const maxQty = parseFloat(row.querySelector('.cantidad-input').max);
+
+                        if (!insumoId || !cantidad || !motivoId) {
+                            valid = false;
+                            row.classList.add('table-danger'); // Highlight error
+                        } else {
+                            row.classList.remove('table-danger');
+                        }
+
+                        if (cantidad > maxQty) {
+                            alert(`La cantidad para un insumo excede el máximo permitido (${maxQty}).`);
+                            valid = false;
+                            return;
+                        }
+
+                        mermas.push({
+                            insumo_id: insumoId,
+                            cantidad_perdida: cantidad,
+                            motivo_id: motivoId,
+                            observacion: observacion
+                        });
+                    });
+
+                    if (!valid) {
+                        alert('Por favor complete todos los campos obligatorios correctamente.');
+                        return;
+                    }
+
+                    btnConfirmarMerma.disabled = true;
+                    btnConfirmarMerma.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+                    alertBox.classList.add('d-none');
+                    alertBox.className = 'alert d-none mt-3';
+
+                    fetch(`/ordenes/${ORDEN_ID}/reportar-merma`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': "{{ csrf_token() }}"
+                        },
+                        body: JSON.stringify({ mermas: mermas }) // Enviar array dentro de objeto
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alertBox.classList.remove('d-none');
+                        if (data.success) {
+                            alertBox.classList.add('alert-success');
+                            alertBox.innerText = data.message;
+                            
+                            if (data.data && data.data.escenario) {
+                                const escenario = data.data.escenario;
+                                let badgeClass = 'bg-info';
+                                if (escenario === 'RESET') badgeClass = 'bg-danger';
+                                if (escenario === 'PARCIAL') badgeClass = 'bg-warning text-dark';
+                                alertBox.innerHTML += `<br><span class="badge ${badgeClass} mt-2">Escenario Global: ${escenario}</span>`;
+                            }
+
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 3000);
+                        } else {
+                            alertBox.classList.add('alert-danger');
+                            alertBox.innerText = data.error || 'Error al reportar merma.';
+                            btnConfirmarMerma.disabled = false;
+                            btnConfirmarMerma.innerText = 'Confirmar Reporte';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alertBox.classList.remove('d-none');
+                        alertBox.classList.add('alert-danger');
+                        alertBox.innerText = 'Error de conexión al servidor.';
+                        btnConfirmarMerma.disabled = false;
+                        btnConfirmarMerma.innerText = 'Confirmar Reporte';
+                    });
+                });
+            }
+        });
     </script>
     <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.2') }}"></script>
     <script src="{{ url_for('static', filename='js/planificacion/traspaso_turno.js') }}?v=1.0"></script>
