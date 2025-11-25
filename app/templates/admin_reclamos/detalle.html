@@ -14,6 +14,12 @@
 {% endblock %}
 
 {% block app_content %}
+<div class="btn-toolbar">
+            <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver
+        </a>
+</div>
+
 {% set estado_config = {
     'pendiente': {'class': 'bg-danger-soft text-danger', 'text': 'Pendiente (Admin)'},
     'respondida': {'class': 'bg-warning-soft text-warning', 'text': 'Respondido (Cliente)'},

@@ -3,6 +3,7 @@
 {% block title %}Gestión de Despachos y Envíos{% endblock %}
 
 {% block extra_css %}
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/despachos/gestion_despachos.css') }}">
     <style>
@@ -43,6 +44,11 @@
 {% endblock %}
 
 {% block app_content %}
+<div class="btn-toolbar">
+            <a href="#" onclick="history.back();" class="btn btn-outline-secondary me-2">
+            <i class="bi bi-arrow-left me-1"></i>Volver
+        </a>
+</div>
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800"><i class="bi bi-truck me-2"></i>Gestión de Despachos y Envíos</h1>
 
