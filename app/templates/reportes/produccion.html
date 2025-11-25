@@ -124,11 +124,18 @@
                 <div class="col-xl-6 col-lg-12 mb-4">
                     <div class="card shadow">
                         <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Eficiencia de Consumo (Plan vs Real)</h6>
-                            <select id="producto-filter-select" class="form-control form-control-sm" style="width: 200px;">
-                                <option value="">Todos (Top Desviaciones)</option>
-                                <!-- Opciones se llenarán dinámicamente -->
-                            </select>
+                            <h6 class="m-0 font-weight-bold text-primary">Eficiencia de Consumo (Estándar vs Real)</h6>
+                            <div class="input-group input-group-sm" style="width: 250px;">
+                                <input class="form-control" list="producto-filter-list" id="producto-filter-input" placeholder="Buscar producto...">
+                                <datalist id="producto-filter-list">
+                                    <!-- Opciones se llenarán dinámicamente -->
+                                </datalist>
+                                <div class="input-group-append">
+                                    <button class="btn btn-outline-secondary" type="button" id="clear-producto-filter">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <div class="card-body">
                             <p class="text-muted small mb-2">Visualiza la desviación entre lo planificado (Gris) y lo realmente consumido (Color). <br>

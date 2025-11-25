@@ -241,9 +241,11 @@
                                                     <h4><span class="badge bg-info">{{ op.resolucion_aplicada | replace('_', ' ') | title }}</span></h4>
                                                 {% elif op.estado_resolucion == 'pendiente' and alerta.estado == 'Pendiente' %}
                                                     <div class="d-grid gap-2 mt-3">
+                                                        {% if op.estado_previo != 'COMPLETADA' %}
                                                         <button class="btn btn-sm btn-success btn-resolver-op" data-op-id="{{ op.id }}" data-accion="continuar">
                                                             <i class="bi bi-play-circle me-1"></i> Continuar Producción
                                                         </button>
+                                                        {% endif %}
                                                         <button class="btn btn-sm btn-danger btn-resolver-op-modal" data-op-id="{{ op.id }}">
                                                             <i class="bi bi-stop-circle me-1"></i> Cancelar / Modificar
                                                         </button>
@@ -307,7 +309,7 @@
                                                             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                                                             <i class="bi bi-check-circle me-1"></i> Marcar como Apto
                                                         </button>
-                                                        <button class="btn btn-sm btn-danger btn-resolver-lote" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
+                                                        <button class="btn btn-sm btn-danger btn-resolver-lote-con-modal" data-lote-id="{{ lote.id_lote }}" data-tipo-lote="lote_producto" data-resolucion="no_apto">
                                                             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                                                             <i class="bi bi-x-circle me-1"></i> Marcar como No Apto
                                                         </button>
@@ -861,15 +863,25 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Acción de resolver lotes (Simple para Apto y Lote Producto)
+    // Acción de resolver lotes (Simple para Apto) con Confirmación
     document.querySelectorAll('.btn-resolver-lote').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation(); 
-            ejecutarResolucionLote(this);
+            const resolucion = this.dataset.resolucion;
+            const loteId = this.dataset.loteId;
+            const btn = this;
+            
+            showConfirmationModal(
+                'Confirmar Resolución',
+                `¿Está seguro de que desea marcar este lote como '${resolucion.replace('_', ' ')}'?`,
+                function() {
+                    ejecutarResolucionLote(btn);
+                }
+            );
         });
     });
 
-    // Acción de resolver lote insumo "No Apto" con modal
+    // Acción de resolver lote "No Apto" con modal (Insumo y Producto)
     document.querySelectorAll('.btn-resolver-lote-con-modal').forEach(button => {
         button.addEventListener('click', async function(e) {
             e.stopPropagation();
@@ -885,10 +897,12 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('container-motivos-producto').style.display = 'none';
             document.getElementById('motivo_desperdicio_insumo').value = '';
             document.getElementById('motivo_desperdicio_producto').value = '';
+            document.getElementById('cantidad_resolucion_no_apto').value = '';
 
             // Mostrar dropdown correcto
             if (tipoLote === 'lote_insumo') {
                 document.getElementById('container-motivos-insumo').style.display = 'block';
+                document.getElementById('modalResolucionInsumoLabel').textContent = 'Confirmar Insumo No Apto';
                 
                 // Verificar OPs afectadas solo para insumos
                 const spinner = this.querySelector('i');
@@ -911,10 +925,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
 
             } else {
-                // Mostrar container-motivos-producto O container-motivos-insumo si es producto
-                // Para simplificar, usamos container-motivos-insumo si no hay uno especifico, pero 
-                // aqui ya existe container-motivos-producto
+                // Producto
                 document.getElementById('container-motivos-producto').style.display = 'block';
+                document.getElementById('modalResolucionInsumoLabel').textContent = 'Confirmar Producto No Apto';
             }
 
             new bootstrap.Modal(document.getElementById('modalResolucionInsumo')).show();
@@ -1081,11 +1094,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Lógica de Resolución de OPs ---
     
-    // 1. Continuar Producción (Simple)
+    // 1. Continuar Producción (Simple) con Confirmación
     document.querySelectorAll('.btn-resolver-op').forEach(button => {
         button.addEventListener('click', function(e) {
             e.stopPropagation();
-            resolverOP(this.dataset.opId, 'continuar', 'Se verificó y está en condiciones.');
+            const opId = this.dataset.opId;
+            
+            showConfirmationModal(
+                'Confirmar Continuación',
+                '¿Está seguro de que desea continuar la producción de esta orden? Se asume que las condiciones de alerta han sido mitigadas.',
+                function() {
+                     resolverOP(opId, 'continuar', 'Se verificó y está en condiciones.');
+                }
+            );
         });
     });
 
@@ -1175,42 +1196,61 @@ document.addEventListener('DOMContentLoaded', function () {
             fetch(`/api/riesgos/lote_producto/${loteId}/pedidos_afectados`)
             .then(res => res.json())
             .then(data => {
-                if (data.success) {
-                    const container = document.getElementById('lista-pedidos-devolucion');
-                    container.innerHTML = '';
-                    document.getElementById('lote-id-devolucion').value = loteId;
-                    
-                    if (data.data.length === 0) {
-                        container.innerHTML = '<div class="alert alert-warning">No se encontraron pedidos asociados para este lote.</div>';
-                    } else {
-                        data.data.forEach(p => {
-                            const row = document.createElement('div');
-                            row.className = 'row mb-2 align-items-center';
-                            row.innerHTML = `
-                                <div class="col-md-6">
-                                    <strong>${p.pedido_codigo}</strong> <br>
-                                    <small class="text-muted">${p.cliente_nombre}</small>
+                // Preparamos el modal siempre, aunque falle la búsqueda de pedidos
+                const container = document.getElementById('lista-pedidos-devolucion');
+                container.innerHTML = '';
+                document.getElementById('lote-id-devolucion').value = loteId;
+
+                if (data.success && data.data && data.data.length > 0) {
+                    // Caso normal: Pedidos encontrados
+                    data.data.forEach(p => {
+                        const row = document.createElement('div');
+                        row.className = 'row mb-2 align-items-center';
+                        row.innerHTML = `
+                            <div class="col-md-6">
+                                <strong>${p.pedido_codigo}</strong> <br>
+                                <small class="text-muted">${p.cliente_nombre}</small>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">Enviado: ${p.cantidad_reservada}</span>
+                                    <input type="number" class="form-control input-cantidad-devolucion" 
+                                        data-pedido-id="${p.pedido_id}" 
+                                        value="${p.cantidad_reservada}" 
+                                        max="${p.cantidad_reservada}" min="0" step="any">
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text">Enviado: ${p.cantidad_reservada}</span>
-                                        <input type="number" class="form-control input-cantidad-devolucion" 
-                                            data-pedido-id="${p.pedido_id}" 
-                                            value="${p.cantidad_reservada}" 
-                                            max="${p.cantidad_reservada}" min="0" step="any">
-                                    </div>
-                                </div>
-                            `;
-                            container.appendChild(row);
-                        });
-                    }
-                    new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
+                            </div>
+                        `;
+                        container.appendChild(row);
+                    });
                 } else {
-                    showNotificationModal('Error', 'No se pudieron cargar los pedidos: ' + data.error, 'error');
+                    // Fallback: No se encontraron o hubo error
+                    const msg = (data.success && data.data.length === 0) 
+                        ? 'No se encontraron pedidos asociados, pero el lote tiene estado de devolución.'
+                        : 'Hubo un problema al buscar los pedidos. Ingrese el total manualmente.';
+                    
+                    container.innerHTML = `
+                        <div class="alert alert-warning">${msg}</div>
+                        <div class="mb-3">
+                            <label class="form-label">Cantidad Total Recibida</label>
+                            <input type="number" id="input-manual-total-devolucion" class="form-control" placeholder="Ej: 50.0" step="any">
+                        </div>
+                    `;
                 }
+                new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
             })
             .catch(err => {
-                showNotificationModal('Error', 'Error de conexión al cargar pedidos.', 'error');
+                 // Fallback completo en caso de error de red
+                 const container = document.getElementById('lista-pedidos-devolucion');
+                 document.getElementById('lote-id-devolucion').value = loteId;
+                 container.innerHTML = `
+                    <div class="alert alert-danger">Error de conexión al buscar pedidos. Ingrese el total manualmente.</div>
+                    <div class="mb-3">
+                        <label class="form-label">Cantidad Total Recibida</label>
+                        <input type="number" id="input-manual-total-devolucion" class="form-control" placeholder="Ej: 50.0" step="any">
+                    </div>
+                `;
+                new bootstrap.Modal(document.getElementById('modalRecibirDevolucion')).show();
             })
             .finally(() => {
                 if (spinner) spinner.classList.add('d-none');
@@ -1222,19 +1262,33 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('btnConfirmarDevolucion').addEventListener('click', function() {
         const loteId = document.getElementById('lote-id-devolucion').value;
         const inputs = document.querySelectorAll('.input-cantidad-devolucion');
-        const devoluciones = [];
+        const manualInput = document.getElementById('input-manual-total-devolucion');
+        
+        const payloadData = { lote_id: loteId };
         let totalRecibido = 0;
 
-        inputs.forEach(inp => {
-            const cant = parseFloat(inp.value) || 0;
-            if (cant > 0) {
-                devoluciones.push({
-                    pedido_id: inp.dataset.pedidoId,
-                    cantidad: cant
-                });
-                totalRecibido += cant;
+        if (manualInput) {
+            const val = parseFloat(manualInput.value);
+            if (!val || val <= 0) {
+                showNotificationModal('Error', 'Debe ingresar una cantidad total válida.', 'error');
+                return;
             }
-        });
+            payloadData.cantidad_total = val;
+            totalRecibido = val;
+        } else {
+            const devoluciones = [];
+            inputs.forEach(inp => {
+                const cant = parseFloat(inp.value) || 0;
+                if (cant > 0) {
+                    devoluciones.push({
+                        pedido_id: inp.dataset.pedidoId,
+                        cantidad: cant
+                    });
+                    totalRecibido += cant;
+                }
+            });
+            payloadData.devoluciones = devoluciones;
+        }
 
         const csrfToken = document.querySelector('input[name="csrf_token"]').value;
         
@@ -1250,10 +1304,7 @@ document.addEventListener('DOMContentLoaded', function () {
             },
             body: JSON.stringify({
                 accion: 'recibir_devolucion',
-                data: {
-                    lote_id: loteId,
-                    devoluciones: devoluciones
-                }
+                data: payloadData
             })
         })
         .then(response => response.json())

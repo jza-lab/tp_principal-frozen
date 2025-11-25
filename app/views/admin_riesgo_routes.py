@@ -178,7 +178,7 @@ def obtener_pedidos_lote_producto(lote_id):
     try:
         reserva_model = ReservaProductoModel()
         reservas_res = reserva_model.db.table('reservas_productos')\
-            .select('cantidad_reservada, pedido:pedidos(id, codigo, clientes(nombre))')\
+            .select('cantidad_reservada, pedido:pedidos(id, clientes(nombre))')\
             .eq('lote_producto_id', lote_id).execute()
         
         data = []
@@ -188,7 +188,7 @@ def obtener_pedidos_lote_producto(lote_id):
                 cliente = pedido.get('clientes') or {}
                 data.append({
                     'pedido_id': pedido.get('id'),
-                    'pedido_codigo': pedido.get('codigo') or f"#{pedido.get('id')}",
+                    'pedido_codigo':  f"#{pedido.get('id')}",
                     'cliente_nombre': cliente.get('nombre', 'Desconocido'),
                     'cantidad_reservada': r.get('cantidad_reservada', 0)
                 })

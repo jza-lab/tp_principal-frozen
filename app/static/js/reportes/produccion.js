@@ -306,10 +306,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // --- Eficiencia de Consumo Chart Logic ---
-    const productoFilterSelect = document.getElementById('producto-filter-select');
-    if (productoFilterSelect) {
-        productoFilterSelect.addEventListener('change', (event) => {
+    const productoFilterInput = document.getElementById('producto-filter-input');
+    const productoFilterList = document.getElementById('producto-filter-list');
+    const clearFilterBtn = document.getElementById('clear-producto-filter');
+
+    if (productoFilterInput) {
+        productoFilterInput.addEventListener('change', (event) => {
             loadEficienciaConsumoChart(15, event.target.value);
+        });
+        
+        // Also trigger on enter key for better UX
+        productoFilterInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                loadEficienciaConsumoChart(15, event.target.value);
+                productoFilterInput.blur();
+            }
+        });
+    }
+
+    if (clearFilterBtn && productoFilterInput) {
+        clearFilterBtn.addEventListener('click', () => {
+            productoFilterInput.value = '';
+            loadEficienciaConsumoChart(15, '');
         });
     }
 
@@ -338,14 +356,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     const narrative = result.data.narrative;
                     const products = result.data.products;
 
-                    // Poblar el dropdown de productos solo si está vacío (primera carga)
-                    // O mantenerlo si ya tiene datos. 
-                    if (productoFilterSelect && productoFilterSelect.options.length <= 1) {
+                    // Poblar el datalist de productos solo si está vacío
+                    if (productoFilterList && productoFilterList.options.length === 0) {
                          products.forEach(prod => {
                              const option = document.createElement('option');
                              option.value = prod;
-                             option.textContent = prod;
-                             productoFilterSelect.appendChild(option);
+                             productoFilterList.appendChild(option);
                          });
                     }
 
