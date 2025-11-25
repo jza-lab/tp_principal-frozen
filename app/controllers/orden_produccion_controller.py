@@ -1325,6 +1325,31 @@ class OrdenProduccionController(BaseController):
                 total_desperdicio = sum(Decimal(d.get('cantidad', 0)) for d in desperdicios_result.get('data', []))
             orden_data['total_desperdicio'] = total_desperdicio
 
+            # --- NUEVO: CÁLCULO DEL MÁXIMO PRODUCIBLE REAL ---
+            max_produccion_por_ingrediente = []
+            for ing in ingredientes:
+                cantidad_unitaria = float(ing.get('cantidad_unitaria', 0))
+                disponible_real = float(ing.get('disponible_real', 0))
+                if cantidad_unitaria > 0:
+                    unidades_posibles = math.floor(disponible_real / cantidad_unitaria)
+                    max_produccion_por_ingrediente.append(unidades_posibles)
+
+            cantidad_planificada = float(orden_data.get('cantidad_planificada', 0))
+            cantidad_ya_producida = float(orden_data.get('cantidad_producida', 0))
+
+            if max_produccion_por_ingrediente:
+                max_produccion_adicional_posible = min(max_produccion_por_ingrediente)
+            else:
+                max_produccion_adicional_posible = cantidad_planificada - cantidad_ya_producida
+
+            max_produccion_total_ajustada = min(
+                cantidad_ya_producida + max_produccion_adicional_posible,
+                cantidad_planificada
+            )
+            
+            # Este es el nuevo objetivo efectivo para la UI
+            orden_data['max_produccion_posible'] = max_produccion_total_ajustada
+
 
             # 4. Ensamblar todos los datos
             datos_completos = {

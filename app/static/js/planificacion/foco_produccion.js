@@ -308,18 +308,41 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ===== REPORTAR AVANCE =====
     function actualizarRestanteModal() {
-        const buenaReportada = parseFloat(document.getElementById('cantidad-buena').value) || 0;
-        // Modificado: El restante se calcula solo sobre la cantidad BUENA planificada vs producida.
-        // El desperdicio no resta de la meta si asumimos reposición infinita/automática.
-        const restante = estado.cantidadPlanificada - (estado.cantidadProducida + buenaReportada);
+        const cantidadBuenaInput = document.getElementById('cantidad-buena');
+        const buenaReportada = parseFloat(cantidadBuenaInput.value) || 0;
+        
+        // --- LÓGICA MEJORADA ---
+        // Determinar el objetivo real, dando prioridad al override dinámico.
+        let objetivoReal = estado.cantidadPlanificada;
+        if (estado.maxProducibleOverride !== undefined) {
+            objetivoReal = estado.maxProducibleOverride;
+        } else if (ORDEN_MAX_PRODUCCION_POSIBLE !== null && ORDEN_MAX_PRODUCCION_POSIBLE < estado.cantidadPlanificada) {
+            objetivoReal = ORDEN_MAX_PRODUCCION_POSIBLE;
+        }
+
+        const restante = objetivoReal - estado.cantidadProducida;
         cantidadRestanteInfo.textContent = `Restante: ${formatNumber(Math.max(0, restante), 2)} kg`;
+        
+        // Actualizar la validación máxima del input dinámicamente
+        cantidadBuenaInput.max = Math.max(0, restante);
     }
 
     btnReportarAvance.addEventListener('click', () => {
         actualizarRestanteModal(); // Calcular al abrir
     });
 
-    document.getElementById('cantidad-buena').addEventListener('input', actualizarRestanteModal);
+    document.getElementById('cantidad-buena').addEventListener('input', () => {
+        // La validación ahora está contenida en actualizarRestanteModal, pero la llamamos para el feedback visual
+        const cantidadBuenaInput = document.getElementById('cantidad-buena');
+        const valorActual = parseFloat(cantidadBuenaInput.value) || 0;
+        const maximoPermitido = parseFloat(cantidadBuenaInput.max);
+
+        if (valorActual > maximoPermitido) {
+            cantidadBuenaInput.classList.add('is-invalid');
+        } else {
+            cantidadBuenaInput.classList.remove('is-invalid');
+        }
+    });
     cantidadMalaInput.addEventListener('input', () => {
         actualizarRestanteModal();
         const cantidadMala = parseFloat(cantidadMalaInput.value) || 0;
@@ -488,11 +511,12 @@ document.addEventListener('DOMContentLoaded', function () {
     btnConfirmarReporte.addEventListener('click', (e) => {
         e.preventDefault();
         
-        const cantidadBuena = parseFloat(document.getElementById('cantidad-buena').value) || 0;
+        const cantidadBuenaInput = document.getElementById('cantidad-buena');
+        const cantidadBuena = parseFloat(cantidadBuenaInput.value) || 0;
         const cantidadMala = parseFloat(document.getElementById('cantidad-mala').value) || 0;
         const motivoDesperdicio = document.getElementById('motivo-desperdicio').value;
     
-        // Validaciones básicas de entrada
+        // --- VALIDACIONES MEJORADAS ---
         if (cantidadBuena < 0 || cantidadMala < 0) {
             showNotification('⚠️ Las cantidades no pueden ser negativas.', 'warning');
             return;
@@ -503,6 +527,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (cantidadMala > 0 && !motivoDesperdicio) {
             showNotification('⚠️ Debe seleccionar un motivo para el desperdicio.', 'warning');
+            return;
+        }
+
+        // Nueva validación contra el máximo permitido dinámico
+        const maximoPermitido = parseFloat(cantidadBuenaInput.max);
+        if (cantidadBuena > maximoPermitido) {
+            showNotification(`⚠️ La cantidad producida (${cantidadBuena}) excede el restante permitido (${maximoPermitido}).`, 'warning');
+            cantidadBuenaInput.classList.add('is-invalid');
             return;
         }
     
@@ -710,6 +742,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     `;
     document.head.appendChild(style);
+
+    // ===== FUNCIONES GLOBALES (PARA SER LLAMADAS DESDE EL TEMPLATE) =====
+    window.actualizarMaximoProducible = function(nuevoMaximo) {
+        // Esta función permite que el script en el HTML actualice el estado interno de este módulo.
+        // OJO: La constante ORDEN_MAX_PRODUCCION_POSIBLE no se puede reasignar.
+        // En su lugar, añadiremos una nueva variable al estado que tenga prioridad.
+        estado.maxProducibleOverride = nuevoMaximo;
+        
+        // Refrescamos la UI que depende de este valor
+        actualizarRestanteModal();
+    }
+
 
     // ===== INICIALIZACIÓN =====
     async function inicializarVista() {

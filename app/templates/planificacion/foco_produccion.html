@@ -147,6 +147,11 @@
                 <div class="objetivo-cantidad">
                     {{ orden.cantidad_planificada }} <span class="objetivo-unidad">{{ orden.producto_unidad_medida }}</span>
                 </div>
+                {% if orden.max_produccion_posible is defined and orden.max_produccion_posible < orden.cantidad_planificada %}
+                <div class="objetivo-sublabel">
+                    Máximo Producible: <strong>{{ "%.2f"|format(orden.max_produccion_posible) }} {{ orden.producto_unidad_medida }}</strong>
+                </div>
+                {% endif %}
             </div>
 
             {# Panel: Progreso Actual (Grid 2x2) #}
@@ -207,7 +212,8 @@
                     <span id="porcentaje-progreso">0%</span>
                 </div>
                 <div class="progress-bar-custom">
-                    <div class="progress-fill-custom" id="progress-bar" style="width: {% if orden.cantidad_planificada > 0 %}{{ ((orden.cantidad_producida or 0) / orden.cantidad_planificada) * 100 }}{% else %}0{% endif %}%;">
+                    {% set objetivo_progreso = orden.max_produccion_posible if (orden.max_produccion_posible is defined and orden.max_produccion_posible < orden.cantidad_planificada) else orden.cantidad_planificada %}
+                    <div class="progress-fill-custom" id="progress-bar" style="width: {% if objetivo_progreso > 0 %}{{ ((orden.cantidad_producida or 0) / objetivo_progreso) * 100 }}{% else %}0{% endif %}%;">
                         <div class="progress-shine"></div>
                     </div>
                 </div>
@@ -421,6 +427,7 @@
         const ORDEN_ID = {{ orden.id | tojson }};
         const ORDEN_FECHA_INICIO = {{ orden.fecha_inicio | tojson }};
         const ORDEN_CANTIDAD_PLANIFICADA = {{ orden.cantidad_planificada | tojson }};
+        const ORDEN_MAX_PRODUCCION_POSIBLE = {{ orden.max_produccion_posible | tojson if orden.max_produccion_posible is defined else 'null' }};
         const ORDEN_TOTAL_DESPERDICIO = {{ orden.total_desperdicio | tojson }};
         const ORDEN_RITMO_OBJETIVO = {{ orden.ritmo_objetivo or 5 | tojson }};
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
@@ -601,21 +608,52 @@
                             // Personalizar título según el escenario
                             let title = 'Reporte Exitoso';
                             if (escenario === 'PARCIAL') {
-                                title = '⚠️ Ajuste de Producción';
+                                title = 'Ajuste de Producción';
                             } else if (escenario === 'RESET') {
-                                title = '‼️ Orden Replanificada';
+                                title = 'Orden Replanificada';
                             } else if (escenario === 'REFILL') {
-                                title = '✅ Insumo Repuesto';
+                                title = 'Insumo Repuesto';
                             }
                             
                             modalNotifLabel.innerHTML = title;
                             modalNotifBody.innerText = data.message;
                             
-                            // Asegurarse de recargar la página o redirigir una vez que el modal se haya cerrado
+                            // --- LÓGICA DE ACTUALIZACIÓN DINÁMICA ---
                             document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
                                 if (escenario === 'RESET') {
                                     window.location.href = '/produccion/kanban/';
+                                } else if (escenario === 'PARCIAL' && data.data.max_produccion_posible !== undefined) {
+                                    const nuevoMaximo = data.data.max_produccion_posible;
+
+                                    // 1. Actualizar el estado interno del script principal
+                                    if (window.actualizarMaximoProducible) {
+                                        window.actualizarMaximoProducible(nuevoMaximo);
+                                    }
+
+                                    // 2. Actualizar el panel de objetivo
+                                    const objetivoPanel = document.querySelector('.objetivo-panel');
+                                    let sublabel = objetivoPanel.querySelector('.objetivo-sublabel');
+                                    if (!sublabel) {
+                                        sublabel = document.createElement('div');
+                                        sublabel.className = 'objetivo-sublabel';
+                                        objetivoPanel.appendChild(sublabel);
+                                    }
+                                    sublabel.innerHTML = `
+                                        <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                        Máximo Producible: <strong>${nuevoMaximo.toFixed(2)} {{ orden.producto_unidad_medida }}</strong>
+                                    `;
+
+                                    // 3. Recalcular y actualizar la barra de progreso
+                                    const cantidadProducidaActual = parseFloat(document.getElementById('cantidad-producida').textContent) || 0;
+                                    const progreso = (nuevoMaximo > 0) ? (cantidadProducidaActual / nuevoMaximo) * 100 : 0;
+                                    document.getElementById('progress-bar').style.width = `${Math.min(progreso, 100)}%`;
+                                    document.getElementById('porcentaje-progreso').textContent = `${progreso.toFixed(0)}%`;
+                                    
+                                    // 4. (Opcional) Refrescar datos de ingredientes si es necesario (ej. recargando la lista)
+                                    // Por ahora, solo refrescamos la UI principal.
+
                                 } else {
+                                    // Para REFILL u otros casos, la recarga sigue siendo una opción segura
                                     window.location.reload();
                                 }
                             }, { once: true });
