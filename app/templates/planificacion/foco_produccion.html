@@ -147,6 +147,11 @@
                 <div class="objetivo-cantidad">
                     {{ orden.cantidad_planificada }} <span class="objetivo-unidad">{{ orden.producto_unidad_medida }}</span>
                 </div>
+                {% if orden.max_produccion_posible is defined and orden.max_produccion_posible < orden.cantidad_planificada %}
+                <div class="objetivo-sublabel">
+                    Máximo Producible: <strong>{{ "%.2f"|format(orden.max_produccion_posible) }} {{ orden.producto_unidad_medida }}</strong>
+                </div>
+                {% endif %}
             </div>
 
             {# Panel: Progreso Actual (Grid 2x2) #}
@@ -207,7 +212,8 @@
                     <span id="porcentaje-progreso">0%</span>
                 </div>
                 <div class="progress-bar-custom">
-                    <div class="progress-fill-custom" id="progress-bar" style="width: {% if orden.cantidad_planificada > 0 %}{{ ((orden.cantidad_producida or 0) / orden.cantidad_planificada) * 100 }}{% else %}0{% endif %}%;">
+                    {% set objetivo_progreso = orden.max_produccion_posible if (orden.max_produccion_posible is defined and orden.max_produccion_posible < orden.cantidad_planificada) else orden.cantidad_planificada %}
+                    <div class="progress-fill-custom" id="progress-bar" style="width: {% if objetivo_progreso > 0 %}{{ ((orden.cantidad_producida or 0) / objetivo_progreso) * 100 }}{% else %}0{% endif %}%;">
                         <div class="progress-shine"></div>
                     </div>
                 </div>
@@ -232,6 +238,10 @@
                 <button class="btn btn-action btn-pausar" id="btn-pausar-reanudar" data-bs-toggle="modal" data-bs-target="#modalPausarProduccion">
                     <i class="bi bi-pause-fill"></i>
                     <span>Pausar Trabajo</span>
+                </button>
+                <button class="btn btn-action btn-warning text-dark" id="btn-reportar-merma" data-bs-toggle="modal" data-bs-target="#modalReportarMerma">
+                    <i class="bi bi-trash-fill"></i>
+                    <span>Reportar Merma</span>
                 </button>
             </div>
             {% endif %}
@@ -328,6 +338,52 @@
 {% include 'planificacion/modals/modal_pausar_produccion.html' %}
 {% include 'planificacion/modals/modal_traspaso_turno.html' %}
 
+<!-- Modal Reportar Merma -->
+<div class="modal fade" id="modalReportarMerma" tabindex="-1" aria-labelledby="modalReportarMermaLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="modalReportarMermaLabel"><i class="bi bi-exclamation-triangle-fill me-2"></i>Reportar Merma de Insumo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    Reporte la pérdida de insumos. El sistema ajustará el stock y la orden automáticamente.
+                    <br>
+                    <i class="bi bi-info-circle me-1"></i> Desperdicios guardados en tabla: <code>registros_desperdicio_lote_insumo</code>
+                </p>
+                
+                <div class="table-responsive mb-3">
+                    <table class="table table-sm table-bordered" id="tablaMermas">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 35%;">Insumo</th>
+                                <th style="width: 20%;">Cantidad Perdida</th>
+                                <th style="width: 20%;">Motivo</th>
+                                <th style="width: 20%;">Observación</th>
+                                <th style="width: 5%;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbodyMermas">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <button type="button" class="btn btn-sm btn-outline-secondary mb-3" id="btnAgregarFilaMerma">
+                    <i class="bi bi-plus-lg"></i> Agregar Insumo
+                </button>
+
+                <div id="mermaResultAlert" class="alert d-none mt-3" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-warning" id="btnConfirmarMerma">Confirmar Reporte</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Modal de Confirmación Genérico para OP Hija -->
 <div class="modal fade" id="modalConfirmacionHija" tabindex="-1" aria-labelledby="modalConfirmacionHijaLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -345,6 +401,24 @@
     </div>
 </div>
 
+<!-- Modal de Notificación Genérico -->
+<div class="modal fade" id="modalNotificacion" tabindex="-1" aria-labelledby="modalNotificacionLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNotificacionLabel">Aviso de Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modalNotificacionBody">
+        ...
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -353,12 +427,257 @@
         const ORDEN_ID = {{ orden.id | tojson }};
         const ORDEN_FECHA_INICIO = {{ orden.fecha_inicio | tojson }};
         const ORDEN_CANTIDAD_PLANIFICADA = {{ orden.cantidad_planificada | tojson }};
+        const ORDEN_MAX_PRODUCCION_POSIBLE = {{ orden.max_produccion_posible | tojson if orden.max_produccion_posible is defined else 'null' }};
         const ORDEN_TOTAL_DESPERDICIO = {{ orden.total_desperdicio | tojson }};
         const ORDEN_RITMO_OBJETIVO = {{ orden.ritmo_objetivo or 5 | tojson }};
         const MOTIVOS_PARO = {{ motivos_paro | tojson }};
         const MOTIVOS_DESPERDICIO = {{ motivos_desperdicio | tojson }};
         const TOLERANCIA_SOBREPRODUCCION = {{ tolerancia_sobreproduccion | tojson }};
         const TURNO_ACTUAL = {{ turno_actual | tojson }};
+        const INGREDIENTES_DATA = {{ ingredientes | tojson }}; // Nuevo: Ingredientes con cantidades totales
+        const MOTIVOS_MERMA_DATA = {{ motivos_merma | tojson }}; // Nuevo: Motivos para el JS
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const tbodyMermas = document.getElementById('tbodyMermas');
+            const btnAgregarFila = document.getElementById('btnAgregarFilaMerma');
+            const btnConfirmarMerma = document.getElementById('btnConfirmarMerma');
+            const alertBox = document.getElementById('mermaResultAlert');
+
+            // Función para crear una fila vacía
+            function agregarFila() {
+                const tr = document.createElement('tr');
+                
+                // Opciones de Insumos
+                let insumoOptions = '<option value="" selected disabled>Seleccione...</option>';
+                INGREDIENTES_DATA.forEach(ing => {
+                    if (ing.id_insumo) {
+                        // MODIFICADO: Usamos 'disponible_real' en lugar de 'cantidad_total_requerida'
+                        const disponible = ing.disponible_real !== undefined ? ing.disponible_real : (ing.cantidad_total_requerida || 999999);
+                        insumoOptions += `<option value="${ing.id_insumo}" data-max="${disponible}" data-unit="${ing.unidad_medida}">${ing.nombre_insumo} (Disp: ${disponible})</option>`;
+                    }
+                });
+
+                // Opciones de Motivos
+                let motivoOptions = '<option value="" selected disabled>Seleccione...</option>';
+                MOTIVOS_MERMA_DATA.forEach(m => {
+                    // FIX: Manejo seguro de la descripción
+                    const descripcion = m.descripcion || m.description || 'Sin descripción';
+                    motivoOptions += `<option value="${m.id}">${descripcion}</option>`;
+                });
+
+                tr.innerHTML = `
+                    <td>
+                        <select class="form-select form-select-sm insumo-select" required onchange="updateMaxQuantity(this)">
+                            ${insumoOptions}
+                        </select>
+                        <small class="text-muted max-helper" style="font-size: 0.75rem;"></small>
+                    </td>
+                    <td>
+                        <div class="input-group input-group-sm">
+                            <input type="number" class="form-control cantidad-input" step="0.01" min="0.01" required>
+                            <span class="input-group-text unit-text">-</span>
+                        </div>
+                    </td>
+                    <td>
+                        <select class="form-select form-select-sm motivo-select" required>
+                            ${motivoOptions}
+                        </select>
+                    </td>
+                    <td>
+                        <input type="text" class="form-control form-select-sm observacion-input" placeholder="...">
+                    </td>
+                    <td class="text-center align-middle">
+                        <button type="button" class="btn btn-outline-danger btn-sm border-0" onclick="this.closest('tr').remove()">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbodyMermas.appendChild(tr);
+            }
+
+            // Evento para actualizar visualmente el máximo y la unidad
+            window.updateMaxQuantity = function(selectElement) {
+                const selectedOption = selectElement.options[selectElement.selectedIndex];
+                const maxQty = selectedOption.getAttribute('data-max');
+                const unit = selectedOption.getAttribute('data-unit');
+                const row = selectElement.closest('tr');
+                
+                const inputQty = row.querySelector('.cantidad-input');
+                const unitText = row.querySelector('.unit-text');
+                const helperText = row.querySelector('.max-helper');
+
+                if (maxQty) {
+                    inputQty.max = maxQty;
+                    unitText.innerText = unit || 'u';
+                    helperText.innerText = `Max desperdiciable: ${maxQty} ${unit || ''}`;
+                } else {
+                    inputQty.removeAttribute('max');
+                    unitText.innerText = '-';
+                    helperText.innerText = '';
+                }
+            };
+
+            // Agregar primera fila al cargar modal (opcional, o dejar vacío)
+            // agregarFila(); 
+
+            if (btnAgregarFila) {
+                btnAgregarFila.addEventListener('click', agregarFila);
+            }
+
+            // Inicializar con una fila al abrir el modal si está vacío
+            const modalElement = document.getElementById('modalReportarMerma');
+            modalElement.addEventListener('shown.bs.modal', function () {
+                if (tbodyMermas.children.length === 0) {
+                    agregarFila();
+                }
+            });
+
+            if (btnConfirmarMerma) {
+                btnConfirmarMerma.addEventListener('click', function() {
+                    const rows = tbodyMermas.querySelectorAll('tr');
+                    const mermas = [];
+                    let valid = true;
+
+                    if (rows.length === 0) {
+                        alert("Debe agregar al menos un insumo.");
+                        return;
+                    }
+
+                    rows.forEach(row => {
+                        const insumoId = row.querySelector('.insumo-select').value;
+                        const cantidad = parseFloat(row.querySelector('.cantidad-input').value);
+                        const motivoId = row.querySelector('.motivo-select').value;
+                        const observacion = row.querySelector('.observacion-input').value;
+                        const maxQty = parseFloat(row.querySelector('.cantidad-input').max);
+
+                        if (!insumoId || !cantidad || !motivoId) {
+                            valid = false;
+                            row.classList.add('table-danger'); // Highlight error
+                        } else {
+                            row.classList.remove('table-danger');
+                        }
+
+                        if (cantidad > maxQty) {
+                            alert(`La cantidad para un insumo excede el máximo permitido (${maxQty}).`);
+                            valid = false;
+                            return;
+                        }
+
+                        mermas.push({
+                            insumo_id: insumoId,
+                            cantidad_perdida: cantidad,
+                            motivo_id: motivoId,
+                            observacion: observacion
+                        });
+                    });
+
+                    if (!valid) {
+                        alert('Por favor complete todos los campos obligatorios correctamente.');
+                        return;
+                    }
+
+                    btnConfirmarMerma.disabled = true;
+                    btnConfirmarMerma.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Procesando...';
+                    alertBox.classList.add('d-none');
+                    alertBox.className = 'alert d-none mt-3';
+
+                    fetch(`/ordenes/${ORDEN_ID}/reportar-merma`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': "{{ csrf_token() }}"
+                        },
+                        body: JSON.stringify({ mermas: mermas }) // Enviar array dentro de objeto
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        btnConfirmarMerma.disabled = false;
+                        btnConfirmarMerma.innerText = 'Confirmar Reporte';
+
+                        if (data.success) {
+                            const modalMermaInstance = bootstrap.Modal.getInstance(modalElement);
+                            if (modalMermaInstance) {
+                                modalMermaInstance.hide();
+                            }
+
+                            const escenario = data.data?.escenario || 'INFO';
+                            const modalNotif = new bootstrap.Modal(document.getElementById('modalNotificacion'));
+                            const modalNotifLabel = document.getElementById('modalNotificacionLabel');
+                            const modalNotifBody = document.getElementById('modalNotificacionBody');
+
+                            // Personalizar título según el escenario
+                            let title = 'Reporte Exitoso';
+                            if (escenario === 'PARCIAL') {
+                                title = 'Ajuste de Producción';
+                            } else if (escenario === 'RESET') {
+                                title = 'Orden Replanificada';
+                            } else if (escenario === 'REFILL') {
+                                title = 'Insumo Repuesto';
+                            }
+                            
+                            modalNotifLabel.innerHTML = title;
+                            modalNotifBody.innerText = data.message;
+                            
+                            // --- LÓGICA DE ACTUALIZACIÓN DINÁMICA ---
+                            document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
+                                if (escenario === 'RESET') {
+                                    window.location.href = '/produccion/kanban/';
+                                } else if (escenario === 'PARCIAL' && data.data.max_produccion_posible !== undefined) {
+                                    const nuevoMaximo = data.data.max_produccion_posible;
+
+                                    // 1. Actualizar el estado interno del script principal
+                                    if (window.actualizarMaximoProducible) {
+                                        window.actualizarMaximoProducible(nuevoMaximo);
+                                    }
+
+                                    // 2. Actualizar el panel de objetivo
+                                    const objetivoPanel = document.querySelector('.objetivo-panel');
+                                    let sublabel = objetivoPanel.querySelector('.objetivo-sublabel');
+                                    if (!sublabel) {
+                                        sublabel = document.createElement('div');
+                                        sublabel.className = 'objetivo-sublabel';
+                                        objetivoPanel.appendChild(sublabel);
+                                    }
+                                    sublabel.innerHTML = `
+                                        <i class="bi bi-exclamation-triangle-fill text-warning"></i>
+                                        Máximo Producible: <strong>${nuevoMaximo.toFixed(2)} {{ orden.producto_unidad_medida }}</strong>
+                                    `;
+
+                                    // 3. Recalcular y actualizar la barra de progreso
+                                    const cantidadProducidaActual = parseFloat(document.getElementById('cantidad-producida').textContent) || 0;
+                                    const progreso = (nuevoMaximo > 0) ? (cantidadProducidaActual / nuevoMaximo) * 100 : 0;
+                                    document.getElementById('progress-bar').style.width = `${Math.min(progreso, 100)}%`;
+                                    document.getElementById('porcentaje-progreso').textContent = `${progreso.toFixed(0)}%`;
+                                    
+                                    // 4. (Opcional) Refrescar datos de ingredientes si es necesario (ej. recargando la lista)
+                                    // Por ahora, solo refrescamos la UI principal.
+
+                                } else {
+                                    // Para REFILL u otros casos, la recarga sigue siendo una opción segura
+                                    window.location.reload();
+                                }
+                            }, { once: true });
+                            
+                            modalNotif.show();
+
+                        } else {
+                            // Mostrar error en el modal de merma
+                            alertBox.classList.remove('d-none');
+                            alertBox.classList.add('alert-danger');
+                            alertBox.innerText = data.error || 'Error al reportar merma.';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alertBox.classList.remove('d-none');
+                        alertBox.classList.add('alert-danger');
+                        alertBox.innerText = 'Error de conexión al servidor.';
+                        btnConfirmarMerma.disabled = false;
+                        btnConfirmarMerma.innerText = 'Confirmar Reporte';
+                    });
+                });
+            }
+        });
     </script>
     <script src="{{ url_for('static', filename='js/planificacion/foco_produccion.js', v='1.2') }}"></script>
     <script src="{{ url_for('static', filename='js/planificacion/traspaso_turno.js') }}?v=1.0"></script>

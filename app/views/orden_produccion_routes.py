@@ -20,6 +20,8 @@ from app.controllers.trazabilidad_controller import TrazabilidadController
 from app.controllers.pedido_controller import PedidoController
 from app.controllers.planificacion_controller import PlanificacionController
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
+from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
+from app.models.motivo_desperdicio_lote_model import MotivoDesperdicioLoteModel
 from app.utils.decorators import roles_required, permission_any_of
 from app.utils.decorators import permission_required
 from datetime import date, datetime, timedelta
@@ -264,12 +266,23 @@ def detalle(id):
     lotes_insumos_reservados_result = reserva_insumo_model.get_by_orden_produccion_id(id)
     lotes_insumos_reservados = lotes_insumos_reservados_result.get("data", [])
 
-    # --- OBTENER HISTORIAL DE DESPERDICIOS ---
+    # --- OBTENER HISTORIAL DE DESPERDICIOS (PRODUCTO) ---
     desperdicio_model = RegistroDesperdicioModel()
-    # Se asume la existencia de un método `find_all_enriched` para obtener datos relacionados
     desperdicios_result = desperdicio_model.find_all_enriched(filters={'orden_produccion_id': id}, order_by='fecha_registro.desc')
-    historial_desperdicios = desperdicios_result.get("data", [])
+    historial_desperdicios_producto = desperdicios_result.get("data", [])
     # --- FIN OBTENER HISTORIAL ---
+
+    # --- OBTENER HISTORIAL DE MERMAS (INSUMOS) ---
+    merma_model = RegistroDesperdicioLoteInsumoModel()
+    mermas_result = merma_model.get_enriched_historial_by_op(id)
+    historial_mermas_insumo = mermas_result.get("data", [])
+    # --- FIN OBTENER MERMAS ---
+
+    # --- OBTENER MOTIVOS DE DESPERDICIO DE INSUMO (Para el modal) ---
+    motivo_lote_model = MotivoDesperdicioLoteModel()
+    motivos_res = motivo_lote_model.get_all()
+    motivos_merma = motivos_res.get('data', []) if motivos_res.get('success') else []
+    # ----------------------------------------------------------------
 
     # No es necesario cargar la trazabilidad aquí, el frontend lo hace por API.
     # Se pasa un diccionario vacío para evitar errores en la plantilla.
@@ -283,7 +296,9 @@ def detalle(id):
         pedidos_asociados=pedidos_asociados,
         lotes_insumos_reservados=lotes_insumos_reservados,
         trazabilidad_resumen=trazabilidad_resumen,
-        historial_desperdicios=historial_desperdicios
+        historial_desperdicios_producto=historial_desperdicios_producto,
+        historial_mermas_insumo=historial_mermas_insumo,
+        motivos_merma=motivos_merma
     )
 
 
@@ -510,3 +525,26 @@ def api_confirmar_ampliacion_op(orden_id):
     usuario_id = get_jwt_identity()
     response, status_code = controller.confirmar_ampliacion_op_por_desperdicio(orden_id, data, usuario_id)
     return jsonify(response), status_code
+
+
+@orden_produccion_bp.route("/<int:id>/reportar-merma", methods=["POST"])
+@jwt_required()
+@permission_required(accion='produccion_ejecucion')
+def reportar_merma(id):
+    """
+    Reporta una merma de insumo en una OP en curso.
+    """
+    try:
+        controller = OrdenProduccionController()
+        usuario_id = get_jwt_identity()
+        datos_json = request.get_json()
+        
+        if not datos_json:
+            return jsonify({"success": False, "error": "Datos inválidos."}), 400
+
+        response, status_code = controller.reportar_merma_insumo(id, datos_json, usuario_id)
+        return jsonify(response), status_code
+
+    except Exception as e:
+        logger.error(f"Error en reportar_merma: {e}", exc_info=True)
+        return jsonify({"success": False, "error": "Error interno del servidor."}), 500

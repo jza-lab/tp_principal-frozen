@@ -111,16 +111,25 @@ class RecetaModel(BaseModel):
             # Supabase usa las FKs para inferir esta relación.
             # El campo 'materia_prima_id' en 'receta_ingredientes' apunta a 'id' en 'insumos_catalogo'.
             result = self.db.table('receta_ingredientes').select(
-                'cantidad, unidad_medida, insumos_catalogo(id_insumo, nombre, descripcion, codigo_interno)'
+                'cantidad, unidad_medida, id_insumo, insumos_catalogo(nombre, descripcion, codigo_interno)'
             ).eq('receta_id', receta_id).execute()
 
             if result.data:
                 # Aplanar la respuesta para que sea más fácil de usar en la plantilla
                 ingredientes_procesados = []
                 for item in result.data:
+                    # Asegurar que tenemos un ID confiable directamente de la tabla intermedia
+                    # El usuario confirmó que la columna es 'id_insumo'
+                    raw_id = item.get('id_insumo')
+                    
                     insumo_data = item.pop('insumos_catalogo')
                     if insumo_data:
-                        item['id_insumo'] = insumo_data.get('id_insumo')
+                        # Si el join trajo datos, usamos esos (aunque el ID debería ser el mismo)
+                        # Pero priorizamos el raw_id si insumo_data falló parcialmente
+                        if not raw_id:
+                             raw_id = insumo_data.get('id_insumo')
+                        
+                        item['id_insumo'] = raw_id
                         item['nombre_insumo'] = insumo_data.get('nombre')
                         item['descripcion_insumo'] = insumo_data.get('descripcion')
                         item['codigo_insumo'] = insumo_data.get('codigo_interno')
