@@ -8,42 +8,25 @@ class PagoModel(BaseModel):
     Modelo para interactuar con la tabla de pagos.
     """
     def __init__(self):
-        """
-        Inicializa el modelo estableciendo la conexión a la BD
-        y el nombre de la tabla.
-        """
         super().__init__()
 
     def get_table_name(self) -> str:
-        """
-        Devuelve el nombre de la tabla de la base de datos.
-        """
         return "pagos"
 
     def get_pagos_by_pedido_id(self, id_pedido: int) -> dict:
-        """
-        Obtiene todos los pagos asociados a un ID de pedido, incluyendo
-        el nombre del usuario que registró el pago.
-        """
         try:
             query = self.db.table(self.get_table_name()).select(
                 "*, usuario_registro:id_usuario_registro(nombre)"
             ).eq("id_pedido", id_pedido).order("created_at", desc=True)
             
             result = query.execute()
-            
-            # El BaseModel no tiene _handle_response, devolvemos directamente
             return {'success': True, 'data': result.data}
 
         except Exception as e:
             logger.error(f"Error al obtener pagos para el pedido {id_pedido}: {e}", exc_info=True)
-            # Retornar un diccionario de error estándar
             return {'success': False, 'error': str(e)}
 
     def find_by_id(self, id_pago: int) -> dict:
-        """
-        Busca un pago por su ID.
-        """
         try:
             query = self.db.table(self.get_table_name()).select("*").eq("id_pago", id_pago).maybe_single()
             result = query.execute()
@@ -54,4 +37,22 @@ class PagoModel(BaseModel):
                 return {'success': False, 'error': "Pago no encontrado."}
         except Exception as e:
             logger.error(f"Error al buscar pago por ID {id_pago}: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def get_pagos_en_rango(self, fecha_inicio, fecha_fin) -> dict:
+        """
+        Obtiene todos los pagos verificados registrados dentro del rango de fechas especificado.
+        Utiliza 'created_at' como fecha de referencia del flujo de caja.
+        """
+        try:
+            # Se asume que created_at es la fecha efectiva del ingreso del dinero
+            query = self.db.table(self.get_table_name()).select('*')\
+                .gte('created_at', fecha_inicio.isoformat())\
+                .lte('created_at', fecha_fin.isoformat())\
+                .eq('estado', 'verificado')
+            
+            result = query.execute()
+            return {'success': True, 'data': result.data}
+        except Exception as e:
+            logger.error(f"Error obteniendo pagos en rango {fecha_inicio} - {fecha_fin}: {e}")
             return {'success': False, 'error': str(e)}

@@ -11,9 +11,11 @@ from app.models.operacion_receta_rol_model import OperacionRecetaRolModel
 from app.models.rol import RoleModel
 from app.models.zona import ZonaModel
 from app.models.historial_costos_producto import HistorialCostosProductoModel
+from app.models.pago import PagoModel  # [MODIFICADO] Importar modelo de pagos
 from app.controllers.receta_controller import RecetaController
 from typing import Dict, List
 import calendar
+from collections import defaultdict  # [MODIFICADO] Para agrupar pagos
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +39,7 @@ class RentabilidadController(BaseController):
         self.historial_costos_model = HistorialCostosProductoModel()
         # Instanciamos RecetaController para reutilizar la lógica de costo de materia prima
         self.receta_controller = RecetaController()
+        self.pago_model = PagoModel()  # [MODIFICADO] Instanciar PagoModel
 
     def _should_include_order(self, pedido: Dict) -> bool:
         """
@@ -98,8 +101,8 @@ class RentabilidadController(BaseController):
 
     def obtener_datos_matriz_rentabilidad(self, fecha_inicio: str = None, fecha_fin: str = None) -> tuple:
         """
-        Orquesta el cálculo de métricas para todos los productos, con un rango de fechas opcional.
-        Calcula costos variables dinámicos y resta costos fijos globales y costos de envío del total facturado.
+        Calcula la rentabilidad basándose en los cobros reales (flujo de caja verificado)
+        para determinar la facturación realizada vs la pendiente.
         """
         # 1. Calcular duración del período para prorrateo de costos fijos
         months_duration = 1.0
@@ -174,12 +177,31 @@ class RentabilidadController(BaseController):
                 
                 items_res = query.execute()
                 items_filtrados = items_res.data if items_res.data else []
-
-            pass
                 
         except Exception as e:
             logger.error(f"Error al obtener datos de rentabilidad: {e}", exc_info=True)
             return self.error_response("Error al obtener datos.", 500)
+
+        # --- [MODIFICADO] Obtener Pagos Reales para los pedidos filtrados ---
+        pedido_ids = set()
+        for item in items_filtrados:
+            if item.get('pedido'):
+                pedido_ids.add(item['pedido']['id'])
+        
+        pagos_map = defaultdict(float)
+        if pedido_ids:
+            try:
+                pagos_res = self.pago_model.db.table('pagos')\
+                    .select('id_pedido, monto')\
+                    .in_('id_pedido', list(pedido_ids))\
+                    .eq('estado', 'verificado')\
+                    .execute()
+                
+                if pagos_res.data:
+                    for pago in pagos_res.data:
+                        pagos_map[pago['id_pedido']] += float(pago['monto'] or 0)
+            except Exception as e:
+                logger.error(f"Error obteniendo pagos para rentabilidad: {e}")
 
         # 4. Calcular métricas agregando item por item
         datos_por_producto = {pid: {'volumen': 0, 'facturacion': 0.0, 'costo_variable': 0.0} for pid in productos_info_actual.keys()}
@@ -189,11 +211,11 @@ class RentabilidadController(BaseController):
         total_volumen_ventas = 0
         total_margen_porcentual_acumulado = 0.0
         
-        total_proximo_a_facturar = 0.0 # New accumulator for Projected Revenue
+        total_proximo_a_facturar = 0.0 # Acumulador para Ingresos Proyectados
         
-        realized_order_ids = set() # Track IDs for shipping calculation
-        order_subtotals = {} # Track subtotal per order to calculate shipping gap
-        order_objects_map = {} # Map pedido_id -> pedido_dict for shipping calc
+        realized_order_ids = set() 
+        order_subtotals = {} 
+        order_objects_map = {} 
 
         # Iterar sobre cada item vendido
         for item in items_filtrados:
@@ -204,46 +226,57 @@ class RentabilidadController(BaseController):
             pedido = item.get('pedido', {})
             pid = pedido.get('id')
             
-            # Store order object for later
             if pid and pid not in order_objects_map:
                 order_objects_map[pid] = pedido
 
             cantidad = float(item.get('cantidad', 0))
             
-            # --- PRECIO VENTA (Safe Access) ---
+            # --- PRECIO VENTA ---
             precio_unitario_real = float(item.get('precio_unitario') or 0)
-            # Si el precio es 0 (o None), usamos el precio actual del producto como fallback
             if not precio_unitario_real:
                  precio_unitario_real = float(productos_info_actual[producto_id]['producto'].get('precio_unitario', 0) or 0)
             
-            # --- COSTO VARIABLE (Safe Access) ---
-            # SIMULADOR: Usar siempre el costo actual calculado dinámicamente
+            # --- COSTO VARIABLE ---
             costo_unitario_real = productos_info_actual[producto_id]['costos_actuales']['costo_variable_unitario']
 
-            facturacion_item = cantidad * precio_unitario_real
+            facturacion_total_item = cantidad * precio_unitario_real
+            costo_total_item = cantidad * costo_unitario_real
             
-            # --- FILTERING LOGIC ---
-            if self._should_include_order(pedido):
-                # Include in Realized Profitability
-                costo_item = cantidad * costo_unitario_real
-                
-                datos_por_producto[producto_id]['volumen'] += cantidad
-                datos_por_producto[producto_id]['facturacion'] += facturacion_item
-                datos_por_producto[producto_id]['costo_variable'] += costo_item
+            # --- [LOGICA CORREGIDA] Cálculo de Realizado vs Pendiente ---
+            precio_orden_total = float(pedido.get('precio_orden') or 0)
+            total_pagado_orden = pagos_map.get(pid, 0.0)
+            
+            # Ratio de pago (0.0 a 1.0)
+            ratio_pagado = 0.0
+            if precio_orden_total > 0:
+                ratio_pagado = total_pagado_orden / precio_orden_total
+                if ratio_pagado > 1.0: ratio_pagado = 1.0 
+            elif total_pagado_orden > 0:
+                ratio_pagado = 1.0
+            
+            # Distribuimos valores
+            facturacion_realizada = facturacion_total_item * ratio_pagado
+            costo_realizado = costo_total_item * ratio_pagado
+            
+            facturacion_pendiente = facturacion_total_item - facturacion_realizada
+            
+            # Acumulamos en "Realizado"
+            datos_por_producto[producto_id]['volumen'] += cantidad 
+            datos_por_producto[producto_id]['facturacion'] += facturacion_realizada
+            datos_por_producto[producto_id]['costo_variable'] += costo_realizado
 
-                total_facturacion_global += facturacion_item
-                total_costo_variable_global += costo_item
-                total_volumen_ventas += cantidad
-                
+            total_facturacion_global += facturacion_realizada
+            total_costo_variable_global += costo_realizado
+            total_volumen_ventas += cantidad
+            
+            # Acumulamos pendiente
+            total_proximo_a_facturar += facturacion_pendiente
+            
+            if ratio_pagado > 0:
                 realized_order_ids.add(pid)
-                
-                # Accumulate subtotal for shipping calculation
                 if pid not in order_subtotals:
                     order_subtotals[pid] = 0.0
-                order_subtotals[pid] += facturacion_item
-            else:
-                # Include in Projected Revenue
-                total_proximo_a_facturar += facturacion_item
+                order_subtotals[pid] += facturacion_realizada
 
         # Construir array final
         datos_matriz = []
@@ -259,7 +292,7 @@ class RentabilidadController(BaseController):
             margen_unitario_promedio = precio_promedio - costo_promedio
             margen_porcentual = (margen_total / facturacion * 100) if facturacion > 0 else 0
             
-            if volumen > 0:
+            if volumen > 0 and facturacion > 0:
                 total_margen_porcentual_acumulado += margen_porcentual
 
             datos_matriz.append({
@@ -276,13 +309,12 @@ class RentabilidadController(BaseController):
                 'detalles_costo': info['costos_actuales']
             })
 
-        # 5. Calcular Costos Fijos (Logic Updated to Month-by-Month)
+        # 5. Calcular Costos Fijos
         resultados_costos_fijos = self._calcular_costo_fijo_mensual_iterativo(fecha_inicio, fecha_fin)
         total_costos_fijos_global = resultados_costos_fijos['total']
         total_directos = resultados_costos_fijos['directos']
         total_indirectos = resultados_costos_fijos['indirectos']
 
-        # Fallback de seguridad si el cálculo iterativo falla o da 0 (ej. tabla historial vacía/error)
         if total_costos_fijos_global <= 0.0:
              try:
                 costos_fijos_resp = self.costo_fijo_model.find_all(filters={'activo': True})
@@ -300,47 +332,32 @@ class RentabilidadController(BaseController):
              except Exception as e: 
                 logger.error(f"Fallback Fixed Cost Calc Error: {e}")
 
-        # 6. Calcular Costos de Envío (Only for Realized Orders)
+        # 6. Calcular Costos de Envío (Solo para ordenes realizadas)
         total_costos_envio_global = 0.0
-        
-        # Filter the orders to only those that are realized
         pedidos_para_envio = [order_objects_map[pid] for pid in realized_order_ids if pid in order_objects_map]
         
-        # Method 1: Gap Analysis (Order Price - Sum of Items)
-        try:
-            for p in pedidos_para_envio:
-                pid = p.get('id')
-                precio_orden = float(p.get('precio_orden') or 0.0)
-                subtotal_items = float(order_subtotals.get(pid, 0.0))
-                
-                # If order price is greater than items subtotal, the difference is shipping/surcharge
-                if precio_orden > subtotal_items:
-                    diff = precio_orden - subtotal_items
-                    # Ensure diff is reasonable (sometimes rounding errors)
-                    if diff > 0.01: 
-                        total_costos_envio_global += diff
-        except Exception as e:
-            logger.error(f"Error calculating shipping gap: {e}")
-        
-        # Method 2: Zone Fallback (if Gap is 0)
-        # Only use if we detect NO shipping costs from gap analysis, which might mean precio_orden wasn't set correctly
-        if total_costos_envio_global < 1.0 and pedidos_para_envio:
-             total_costos_envio_global = self._calcular_costos_envio(pedidos_para_envio)
+        # Método: Calcular envío y aplicar ratio de pago global para esas órdenes
+        if pedidos_para_envio:
+             costo_envio_teorico = self._calcular_costos_envio(pedidos_para_envio)
+             
+             fact_teorica_envio = sum(float(p.get('precio_orden') or 0) for p in pedidos_para_envio)
+             fact_real_envio = sum(pagos_map.get(p['id'], 0) for p in pedidos_para_envio)
+             
+             ratio_global_envio = (fact_real_envio / fact_teorica_envio) if fact_teorica_envio > 0 else 0
+             total_costos_envio_global = costo_envio_teorico * ratio_global_envio
 
         margen_contribucion_global = total_facturacion_global - total_costo_variable_global
         rentabilidad_neta_global = margen_contribucion_global - total_costos_fijos_global - total_costos_envio_global
         rentabilidad_porcentual_global = (rentabilidad_neta_global / total_facturacion_global * 100) if total_facturacion_global > 0 else 0
         
         # 7. Punto de Equilibrio
-        # PE = Costos Fijos Totales / (Margen Contribución Total / Ventas Totales)
-        # Formula alternative: PE = Costos Fijos / Porcentaje Margen Contribucion (expressed as 0.X)
         punto_equilibrio = 0.0
         if total_facturacion_global > 0 and margen_contribucion_global > 0:
             ratio_margen = margen_contribucion_global / total_facturacion_global
             if ratio_margen > 0:
                 punto_equilibrio = total_costos_fijos_global / ratio_margen
 
-        productos_con_ventas_count = len([p for p in datos_matriz if p['volumen_ventas'] > 0])
+        productos_con_ventas_count = len([p for p in datos_matriz if p['facturacion_total'] > 0])
         promedio_ventas = total_volumen_ventas / productos_con_ventas_count if productos_con_ventas_count > 0 else 0
         promedio_margen = total_margen_porcentual_acumulado / productos_con_ventas_count if productos_con_ventas_count > 0 else 0
 
@@ -354,7 +371,6 @@ class RentabilidadController(BaseController):
             'costos_envio_total': round(total_costos_envio_global, 2),
             'rentabilidad_neta': round(rentabilidad_neta_global, 2),
             'rentabilidad_porcentual': round(rentabilidad_porcentual_global, 2),
-            # New KPI
             'proximo_a_facturar': round(total_proximo_a_facturar, 2),
             'punto_equilibrio': round(punto_equilibrio, 2)
         }
@@ -366,77 +382,52 @@ class RentabilidadController(BaseController):
 
         return self.success_response(data={'productos': datos_matriz, 'totales_globales': totales_globales, 'promedios': promedios_matriz})
 
-    # ... (helper methods unchanged) ...
     def _calcular_costo_fijo_mensual_iterativo(self, fecha_inicio_str: str, fecha_fin_str: str) -> Dict:
         """
         Calcula el costo fijo para el periodo.
-        
-        CORRECCIÓN DE ERRORES:
-        - Parseo robusto de fechas para evitar caídas por formatos mixtos (ISO/String).
-        - Filtrado de registros de historial inválidos para evitar errores de ordenamiento.
-        - Validación segura de fecha de creación.
         """
         resultado = {'total': 0.0, 'directos': 0.0, 'indirectos': 0.0}
         now = datetime.now()
 
-        # --- Función Auxiliar de Parseo Robusto ---
         def parse_date_naive(date_str):
             if not date_str: return None
             try:
-                # 1. Limpieza básica
                 s = str(date_str).strip()
-                # 2. Intentar fromisoformat (Maneja 'T' y timezones en Py3.11+)
                 try:
                     dt = datetime.fromisoformat(s.replace('Z', '+00:00'))
                 except ValueError:
-                    # 3. Fallback manual para formatos comunes de SQL
-                    # "2023-11-24 15:30:00" o "2023-11-24 15:30:00.123"
                     if ' ' in s:
                         s = s.replace(' ', 'T')
-                    # Si tiene punto (milisegundos) y offset simple
                     if '+' in s and '.' in s: 
-                        # A veces fromisoformat falla con ciertas precisiones, simplificamos
                         s = s.split('+')[0]
                     dt = datetime.fromisoformat(s)
-                
-                # 4. Retornar Naive (sin zona horaria) para comparar
                 return dt.replace(tzinfo=None)
             except Exception as e:
-                # Loguear error pero no romper ejecución
                 logger.warning(f"Error parseando fecha '{date_str}': {e}")
                 return None
 
-        # 1. Determinar Fechas Inicio/Fin
         start_date = parse_date_naive(fecha_inicio_str) or (now - timedelta(days=30))
         end_date = parse_date_naive(fecha_fin_str)
         if not end_date:
             end_date = now
         elif len(str(fecha_fin_str)) == 10:
-            # Si es YYYY-MM-DD, ir al final del día
             end_date = end_date.replace(hour=23, minute=59, second=59)
 
         try:
-            # 2. Obtener Costos Fijos Activos
             costos_res = self.costo_fijo_model.find_all(filters={'activo': True})
             if not costos_res.get('success'):
                 return resultado
             costos_activos = [c for c in costos_res.get('data', []) if c.get('activo') is True]
             
-            # 3. Obtener Historial Completo
             historial_res = self.costo_fijo_model.db.table('historial_costos_fijos').select('*').execute()
             all_history = historial_res.data if historial_res.data else []
             
-            # 4. Procesar Historial (Validando fechas)
             history_by_cost = {}
             for h in all_history:
                 try:
-                    # Validar ID
                     cid = int(h['costo_fijo_id'])
-                    
-                    # Validar Fecha
                     dt_val = parse_date_naive(h.get('fecha_cambio'))
-                    
-                    if dt_val: # Solo agregamos si la fecha es válida
+                    if dt_val:
                         h['fecha_cambio_dt'] = dt_val
                         if cid not in history_by_cost: 
                             history_by_cost[cid] = []
@@ -444,83 +435,56 @@ class RentabilidadController(BaseController):
                 except Exception:
                     continue
             
-            # Ordenar Historial (Ahora es seguro porque filtramos Nones)
             for cid in history_by_cost:
                 history_by_cost[cid].sort(key=lambda x: x['fecha_cambio_dt'])
 
-            # 5. Determinar Estrategia
-            # "Vol. Mes" siempre es el mes actual. "Vol. Trimestre" es Actual + 2 pasados.
-            # Usamos la duración para distinguir el modo.
             dias_duracion = (end_date - start_date).total_seconds() / 86400
             
-            # --- MODO A: Vol. Mes (Solo Actual) ---
             if dias_duracion <= 35:
                 for costo in costos_activos:
-                    # En modo "Mes Actual", asumimos que todos los activos cuentan con su valor actual.
-                    # Ignoramos created_at estricto para no ocultar costos recién creados en el reporte del mes.
                     monto = float(costo.get('monto_mensual') or 0)
-                    
                     resultado['total'] += monto
                     if costo.get('tipo') == 'Directo':
                         resultado['directos'] += monto
                     else:
                         resultado['indirectos'] += monto
-                
                 return resultado
 
-            # --- MODO B: Vol. Trimestre / Anual (Iterativo con Historial) ---
             months_to_process = []
             current = start_date.replace(day=1)
             
-            # Iterar meses
             while current.year < end_date.year or (current.year == end_date.year and current.month <= end_date.month):
                 months_to_process.append((current.year, current.month))
-                
                 next_month = current.month + 1
                 next_year = current.year
                 if next_month > 12:
                     next_month = 1
                     next_year += 1
                 current = current.replace(year=next_year, month=next_month, day=1)
-                
                 if current.year > end_date.year + 1: break 
 
-            # Definir la fecha actual para comparar
             now_year = now.year
             now_month = now.month
 
             for year, month in months_to_process:
                 last_day = calendar.monthrange(year, month)[1]
                 month_end_dt = datetime(year, month, last_day, 23, 59, 59)
-                
                 is_current_month = (year == now_year and month == now_month)
 
                 for costo in costos_activos:
                     cid = int(costo['id'])
                     historial_especifico = history_by_cost.get(cid, [])
 
-                    # 1. Validar existencia INTELIGENTE
-                    # Si tiene historial válido para esa fecha, LO CONTAMOS (aunque created_at sea posterior).
-                    # Esto permite "retroactivos" manuales.
                     tiene_historial_previo = any(h['fecha_cambio_dt'] <= month_end_dt for h in historial_especifico)
-                    
                     if not tiene_historial_previo:
-                         # Si no tiene historial antiguo, respetamos la fecha de creación original
                          if not self._existia_en_fecha(costo, month_end_dt):
                             continue
 
                     monto_mensual = 0.0
-
                     if is_current_month:
-                        # Si es el mes actual, usamos SIEMPRE el valor activo actual
                         monto_mensual = float(costo.get('monto_mensual') or 0)
                     else:
-                        # Si hay historial (o asumimos estabilidad), calculamos valor
-                        monto_mensual = self._obtener_monto_vigente_dt(
-                            costo, 
-                            month_end_dt, 
-                            historial_especifico
-                        )
+                        monto_mensual = self._obtener_monto_vigente_dt(costo, month_end_dt, historial_especifico)
                     
                     resultado['total'] += monto_mensual
                     if costo.get('tipo') == 'Directo':
@@ -530,47 +494,33 @@ class RentabilidadController(BaseController):
 
         except Exception as e:
             logger.error(f"Error CRITICO en cálculo costos fijos: {e}", exc_info=True)
-            # En caso de emergencia, retornar 0 para no romper el frontend
             return resultado
 
         return resultado
 
     def _existia_en_fecha(self, costo: Dict, fecha_limite_dt: datetime) -> bool:
-        """Verifica si el costo fijo ya había sido creado."""
         created_at_str = costo.get('created_at') or costo.get('fecha_creacion')
         if not created_at_str:
             return True
-        
         try:
-            # Parseo manual robusto similar al de arriba
             s = str(created_at_str).strip()
             if ' ' in s: s = s.replace(' ', 'T')
-            # Limpiar timezone si existe
             if '+' in s: s = s.split('+')[0]
             if 'Z' in s: s = s.replace('Z', '')
-            
             created_at_dt = datetime.fromisoformat(s)
-            
             if fecha_limite_dt < created_at_dt:
                 return False
             return True
         except Exception:
-            # Si falla el parseo, asumimos que existe para no ocultar costos
             return True
 
     def _obtener_monto_vigente_dt(self, costo, fecha_limite_dt, historial):
-        """
-        Determina el valor del costo comparando objetos datetime naive.
-        """
         monto_actual_modelo = float(costo.get('monto_mensual') or 0)
-
         if not historial:
             return monto_actual_modelo
 
-        # 1. Buscar hacia ATRÁS (El último registro <= fecha)
         registro_previo = None
         for h in historial:
-            # historial ya está ordenado y validado
             if h['fecha_cambio_dt'] <= fecha_limite_dt:
                 registro_previo = h
             else:
@@ -579,7 +529,6 @@ class RentabilidadController(BaseController):
         if registro_previo:
             return float(registro_previo['monto_nuevo'])
         
-        # 2. Buscar hacia ADELANTE (El primer registro > fecha)
         primer_cambio_futuro = None
         for h in historial:
             if h['fecha_cambio_dt'] > fecha_limite_dt:
@@ -587,21 +536,14 @@ class RentabilidadController(BaseController):
                 break
         
         if primer_cambio_futuro:
-            # FIX: Si el monto anterior es 0, asumimos que es un registro inicial
-            # y usamos el monto_nuevo como valor vigente (evita caídas a 0 en retroactivos).
             val_anterior = float(primer_cambio_futuro['monto_anterior'])
             if val_anterior == 0.0:
                 return float(primer_cambio_futuro['monto_nuevo'])
             return val_anterior
 
-        # 3. Fallback
         return monto_actual_modelo
 
     def _calcular_costos_envio(self, pedidos_data: List[Dict]) -> float:
-        """
-        Calcula el costo total de envíos basado en las direcciones de entrega de los pedidos.
-        Optimizado para usar datos de dirección ya cargados si existen.
-        """
         total_costo = 0.0
         if not pedidos_data:
             return total_costo
@@ -610,7 +552,6 @@ class RentabilidadController(BaseController):
             zonas_res = self.zona_model.find_all()
             zonas = zonas_res.get('data', []) if zonas_res.get('success') else []
             
-            # Recopilar IDs de direcciones faltantes (si el objeto 'direccion' no vino populado)
             ids_to_fetch = []
             for p in pedidos_data:
                 if p.get('id_direccion_entrega') and not p.get('direccion'):
@@ -625,14 +566,11 @@ class RentabilidadController(BaseController):
                     logger.warning(f"Error fetching extra addresses: {e}")
 
             for pedido in pedidos_data:
-                # Intentar obtener CP del objeto anidado primero
                 cp_str = None
-                
                 direccion_obj = pedido.get('direccion')
                 if direccion_obj and isinstance(direccion_obj, dict):
                     cp_str = direccion_obj.get('codigo_postal')
                 
-                # Si no, buscar en el mapa extra
                 if not cp_str:
                     dir_id = pedido.get('id_direccion_entrega')
                     if dir_id and dir_id in extra_dirs_map:
@@ -642,7 +580,6 @@ class RentabilidadController(BaseController):
                     continue
                 
                 try:
-                    # Limpiar CP de caracteres no numéricos para coincidir mejor
                     import re
                     cp_limpio = re.sub(r'\D', '', str(cp_str))
                     if not cp_limpio:
@@ -651,15 +588,12 @@ class RentabilidadController(BaseController):
                     cp = int(cp_limpio)
                     precio_zona = 0.0
                     
-                    found = False
                     for zona in zonas:
-                        # Asegurar que los límites de zona sean enteros
                         z_ini = int(zona.get('codigo_postal_inicio') or 0)
                         z_fin = int(zona.get('codigo_postal_fin') or 99999)
                         
                         if z_ini <= cp <= z_fin:
                             precio_zona = float(zona.get('precio', 0))
-                            found = True
                             break
                     
                     total_costo += precio_zona
@@ -672,9 +606,6 @@ class RentabilidadController(BaseController):
         return total_costo
 
     def _calcular_costos_unitarios_dinamicos(self, producto: Dict, roles_map: Dict[int, float]) -> Dict:
-        """
-        Calcula el costo unitario variable (Materia Prima + Mano de Obra) dinámicamente.
-        """
         producto_id = producto.get('id')
         costo_materia_prima = 0.0
         costo_mano_obra = 0.0
@@ -695,7 +626,6 @@ class RentabilidadController(BaseController):
                 operaciones_resp = self.operacion_receta_model.find_by_receta_id(receta_id)
                 if operaciones_resp.get('success'):
                     for op in operaciones_resp.get('data', []):
-                        # --- AÑADIR TIEMPO DE PREPARACIÓN PARA IGUALAR LÓGICA DEL FORMULARIO ---
                         t_prep = float(op.get('tiempo_preparacion') or 0)
                         t_ejec = float(op.get('tiempo_ejecucion_unitario') or 0)
                         
@@ -721,16 +651,11 @@ class RentabilidadController(BaseController):
         }
 
     def obtener_evolucion_producto(self, producto_id: int) -> tuple:
-        """
-        Devuelve la evolución de ventas y margen para un producto en los últimos 12 meses.
-        Only include Realized Sales.
-        """
         producto_result = self.producto_model.find_by_id(producto_id)
         if not producto_result.get('success') or not producto_result.get('data'):
             return self.error_response("Producto no encontrado", 404)
         producto_data = producto_result.get('data')
         
-        # Calcular costos dinámicos actuales para fallback
         roles_resp = self.rol_model.find_all()
         roles_map = {r['id']: float(r.get('costo_por_hora') or 0) for r in roles_resp.get('data', [])} if roles_resp.get('success') else {}
         costos_actuales = self._calcular_costos_unitarios_dinamicos(producto_data, roles_map)
@@ -740,9 +665,7 @@ class RentabilidadController(BaseController):
         fecha_inicio = fecha_fin - timedelta(days=365)
         
         try:
-            # --- FIX: Fallback query logic here too ---
             try:
-                # Eliminar codigo_pedido
                 items_result = self.pedido_item_model.db.table('pedido_items').select(
                     'cantidad, precio_unitario, costo_unitario, pedido:pedidos!pedido_items_pedido_id_fkey!inner(fecha_solicitud, condicion_venta, estado)'
                 ).eq('producto_id', producto_id).gte('pedido.fecha_solicitud', fecha_inicio.isoformat()).neq('pedido.estado', 'CANCELADO').execute()
@@ -765,7 +688,6 @@ class RentabilidadController(BaseController):
                 if not pedido or not pedido.get('fecha_solicitud'):
                     continue
                 
-                # --- FILTERING LOGIC (Same as Main) ---
                 if not self._should_include_order(pedido):
                     continue
 
@@ -773,12 +695,10 @@ class RentabilidadController(BaseController):
                 mes_key = datetime.fromisoformat(fecha_str).strftime('%Y-%m')
                 cantidad = float(item.get('cantidad', 0))
                 
-                # Usar precio/costo histórico o fallback
                 precio = float(item.get('precio_unitario') or 0)
                 if not precio:
                     precio = float(producto_data.get('precio_unitario', 0) or 0)
                 
-                # SIMULADOR: Usar siempre el costo actual
                 costo = costo_fallback
 
                 margen_unitario = precio - costo
@@ -883,7 +803,6 @@ class RentabilidadController(BaseController):
 
         items_result = None
         try:
-            # --- FIX: Try-catch for missing columns ---
             try:
                 # Eliminar codigo_pedido de la consulta
                 items_result = self.producto_model.db.table('pedido_items').select(
@@ -916,11 +835,9 @@ class RentabilidadController(BaseController):
             if not pedido:
                 continue
             
-            # --- FILTERING LOGIC (Same as Main) ---
             if not self._should_include_order(pedido):
                 continue
 
-            # --- VALORES REALES vs FALLBACK (handled by .get() logic) ---
             cantidad = float(item.get('cantidad', 0))
             
             precio_real = float(item.get('precio_unitario') or 0)
@@ -929,7 +846,6 @@ class RentabilidadController(BaseController):
             
             fecha = pedido.get('fecha_solicitud')
             
-            # SIMULADOR: Usar siempre el costo actual
             costo_real = costo_fallback
             
             subtotal = cantidad * precio_real
@@ -939,22 +855,18 @@ class RentabilidadController(BaseController):
             pedido_id = pedido.get('id')
             codigo_pedido = f"#{pedido_id}"
 
-            # Historial Ventas (Gráfico)
             historial_ventas.append({'fecha': fecha, 'cantidad': cantidad, 'cliente': cliente_nombre, 'subtotal': subtotal})
             
-            # Historial Precios (Gráfico)
             if fecha:
                 fecha_corta = fecha.split('T')[0]
                 if fecha_corta not in historial_precios:
                      historial_precios[fecha_corta] = round(precio_real, 2)
 
-            # Clientes
             if cliente_nombre not in clientes:
                 clientes[cliente_nombre] = {'facturacion': 0, 'unidades': 0}
             clientes[cliente_nombre]['facturacion'] += subtotal
             clientes[cliente_nombre]['unidades'] += cantidad
             
-            # Pedidos Relacionados (Tabla)
             pedidos_relacionados.append({
                 'id': pedido_id,
                 'codigo': codigo_pedido,
@@ -971,7 +883,6 @@ class RentabilidadController(BaseController):
         historial_precios_ordenado = sorted(historial_precios.items(), key=lambda x: x[0])
         costos_info = self._calcular_costo_producto(producto_data)
         
-        # Ordenar pedidos por fecha desc
         pedidos_relacionados.sort(key=lambda x: x['fecha'], reverse=True)
 
         return self.success_response(data={

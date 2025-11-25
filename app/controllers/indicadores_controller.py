@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, date
 from dateutil import parser
 from app.models.orden_produccion import OrdenProduccionModel
 from app.models.control_calidad_producto import ControlCalidadProductoModel
+from app.models.pago import PagoModel
 from app.models.registro_desperdicio_lote_producto_model import RegistroDesperdicioLoteProductoModel
 from app.models.registro_desperdicio_model import RegistroDesperdicioModel
 from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
@@ -57,6 +58,7 @@ class IndicadoresController:
         self.nota_credito_model = NotaCreditoModel()
         self.alerta_riesgo_model = AlertaRiesgoModel()
         self.reclamo_proveedor_model = ReclamoProveedorModel()
+        self.pago_model = PagoModel()
         
     def _parsear_fechas(self, fecha_inicio_str, fecha_fin_str, default_days=30):
         if fecha_inicio_str:
@@ -1033,6 +1035,7 @@ class IndicadoresController:
         elif mes: contexto = 'mes'
         elif ano: contexto = 'ano'
         
+        # 1. Ventas (Devengado): Se mantiene la lógica de Pedidos
         estados_ventas = [
             estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
             estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
@@ -1041,35 +1044,16 @@ class IndicadoresController:
         data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
         ventas_totales = sum(float(p.get('precio_orden') or 0) for p in data_ventas)
 
-        flujo_caja_real = 0.0
-        ids_pago_parcial = []
-        
-        for p in data_ventas:
-            estado_pago = p.get('estado_pago', '').lower()
-            precio = float(p.get('precio_orden') or 0)
-            
-            if estado_pago == 'pagado':
-                flujo_caja_real += precio
-            elif estado_pago == 'pagado parcialmente':
-                ids_pago_parcial.append(p['id'])
-                
-        from app.models.pago import PagoModel
-        pago_model = PagoModel()
-        
-        if ids_pago_parcial:
-            try:
-                pagos_parciales_res = pago_model.db.table('pagos').select('monto')\
-                    .in_('id_pedido', ids_pago_parcial)\
-                    .eq('estado', 'verificado')\
-                    .execute()
-                data_parciales = pagos_parciales_res.data if pagos_parciales_res.data else []
-                flujo_caja_real += sum(float(pg.get('monto') or 0) for pg in data_parciales)
-            except Exception as e:
-                logger.error(f"Error consultando pagos parciales: {e}")
+        # 2. Flujo de Caja (Percibido): [MODIFICADO] Se usan los PAGOS reales
+        pagos_res = self.pago_model.get_pagos_en_rango(fecha_inicio, fecha_fin)
+        data_pagos = pagos_res.get('data', []) if pagos_res.get('success') else []
+        flujo_caja_real = sum(float(p.get('monto') or 0) for p in data_pagos)
 
-        ingreso_pendiente = ventas_totales - flujo_caja_real
-        if ingreso_pendiente < 0: ingreso_pendiente = 0
+        # 3. Ingreso Pendiente (Estimado): Diferencia entre lo vendido y lo recaudado en este periodo
+        # Se usa max(0, ...) para evitar números negativos si se cobran deudas viejas
+        ingreso_pendiente = max(0, ventas_totales - flujo_caja_real)
 
+        # 4. Costos y Egresos (Estimados): Se mantiene igual
         ordenes_res = self.orden_produccion_model.get_all_in_date_range(fecha_inicio, fecha_fin)
         costo_total = 0.0
         dias_periodo = max((fecha_fin - fecha_inicio).days, 1)
@@ -1089,12 +1073,11 @@ class IndicadoresController:
             costo_total = costo_mp + costo_mo + gastos_fijos_periodo
 
         beneficio_bruto = ventas_totales - costo_total
-        margen_beneficio = (beneficio_bruto / ventas_totales) * 100 if ventas_totales > 0 else 0
         
         kpis = {
-            "ventas_totales": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales (Pendiente)"},
-            "flujo_caja_real": {"valor": round(flujo_caja_real, 2), "etiqueta": "Flujo de Caja (Recibido)"},
-            "ingreso_pendiente": {"valor": round(ingreso_pendiente, 2), "etiqueta": "Cuentas por Cobrar"},
+            "ventas_totales": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales (Devengado)"},
+            "flujo_caja_real": {"valor": round(flujo_caja_real, 2), "etiqueta": "Flujo de Caja (Percibido Real)"},
+            "ingreso_pendiente": {"valor": round(ingreso_pendiente, 2), "etiqueta": "Por Cobrar (Estimado)"},
             "costo_total": {"valor": round(costo_total, 2), "etiqueta": "Egresos Totales (Est.)"},
             "beneficio_bruto": {"valor": round(beneficio_bruto, 2), "etiqueta": "Resultado Operativo"},
             "facturacion_total": {"valor": round(ventas_totales, 2), "etiqueta": "Ventas Totales"}
@@ -1154,6 +1137,7 @@ class IndicadoresController:
         freq = 'month' if contexto == 'ano' else 'day'
         bucket_fmt = '%Y-%m' if freq == 'month' else '%Y-%m-%d'
 
+        # 1. Ventas (Igual que antes)
         estados_ventas = [
             estados.OV_COMPLETADO, estados.OV_LISTO_PARA_ENTREGA, estados.OV_EN_TRANSITO,
             estados.OV_EN_PROCESO, estados.OV_ITEM_ALISTADO, estados.OV_PLANIFICADA
@@ -1163,42 +1147,32 @@ class IndicadoresController:
         data_ventas = ventas_res.get('data', []) if ventas_res.get('success') else []
 
         ventas_map = defaultdict(float)
-        caja_map = defaultdict(float)
-        
-        ids_parciales = []
-        mapa_fechas_parciales = {} 
-
         for p in data_ventas:
             if not p.get('fecha_solicitud'): continue
             dt = datetime.fromisoformat(p['fecha_solicitud'])
             key = dt.strftime(bucket_fmt)
-            
-            precio = float(p.get('precio_orden') or 0)
-            ventas_map[key] += precio
-            
-            estado_pago = p.get('estado_pago', '').lower()
-            if estado_pago == 'pagado':
-                caja_map[key] += precio
-            elif estado_pago == 'pagado parcialmente':
-                ids_parciales.append(p['id'])
-                mapa_fechas_parciales[p['id']] = key
+            ventas_map[key] += float(p.get('precio_orden') or 0)
 
-        if ids_parciales:
-            from app.models.pago import PagoModel
-            pago_model = PagoModel()
+        # 2. Caja Real (Nueva lógica usando Pagos) [MODIFICADO]
+        caja_map = defaultdict(float)
+        pagos_res = self.pago_model.get_pagos_en_rango(fecha_inicio, fecha_fin)
+        data_pagos = pagos_res.get('data', []) if pagos_res.get('success') else []
+
+        for p in data_pagos:
+            if not p.get('created_at'): continue
             try:
-                pagos_res = pago_model.db.table('pagos').select('id_pedido, monto')\
-                    .in_('id_pedido', ids_parciales)\
-                    .eq('estado', 'verificado')\
-                    .execute()
-                if pagos_res.data:
-                    for pg in pagos_res.data:
-                        pid = pg['id_pedido']
-                        if pid in mapa_fechas_parciales:
-                            key = mapa_fechas_parciales[pid]
-                            caja_map[key] += float(pg['monto'])
-            except Exception as e:
-                logger.error(f"Error sumando parciales en grafica: {e}")
+                # Manejar fecha con posible Z timezone
+                fecha_str = p['created_at'].replace('Z', '+00:00')
+                dt = datetime.fromisoformat(fecha_str).date()
+            except ValueError:
+                 dt = datetime.strptime(p['created_at'][:10], '%Y-%m-%d').date()
+            
+            if freq == 'month':
+                 key = dt.strftime('%Y-%m')
+            else:
+                 key = dt.strftime('%Y-%m-%d')
+            
+            caja_map[key] += float(p.get('monto') or 0)
 
         filled_labels, filled_ventas = self._fill_time_series_gaps(dict(ventas_map), fecha_inicio, fecha_fin, freq)
         _, filled_caja = self._fill_time_series_gaps(dict(caja_map), fecha_inicio, fecha_fin, freq)
@@ -1216,9 +1190,9 @@ class IndicadoresController:
         total_ventas = sum(filled_ventas)
         total_caja = sum(filled_caja)
         if total_ventas > total_caja * 1.2:
-            insight = "Las ventas superan significativamente al flujo de caja real (Crédito)."
+            insight = "Las ventas superan significativamente al flujo de caja (Crédito)."
         elif total_caja > total_ventas:
-            insight = "El flujo de caja supera a las ventas del periodo (Cobros atrasados)."
+            insight = "El flujo de caja supera a las ventas (Recupero de deuda o anticipos)."
 
         return {
             "categories": display_labels,
@@ -1227,7 +1201,7 @@ class IndicadoresController:
                 {"name": "Flujo Caja (Percibido)", "data": filled_caja}
             ],
             "insight": insight,
-            "tooltip": "Comparativa entre lo facturado (Ventas) y lo realmente cobrado (Flujo de Caja)."
+            "tooltip": "Comparativa entre lo facturado (Ventas) y lo cobrado realmente en banco/caja (Pagos)."
         }
 
     def _obtener_descomposicion_costos_con_detalle(self, fecha_inicio, fecha_fin, gastos_fijos_total):
