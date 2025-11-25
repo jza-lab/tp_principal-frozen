@@ -52,11 +52,19 @@ def index():
     cantidad_completadas = respuesta3.get('data', {}).get('cantidad', 0)
     ordenes_totales = int(cantidad_aprobadas) + int(cantidad_completadas)
 
-    filtros = {'estado': 'LISTA PARA PRODUCIR', 'fecha_planificada_desde': fecha_inicio_iso, 'fecha_planificada_hasta': fecha_fin_iso}
+    filtros = {'estado': 'LISTA PARA PRODUCIR'}
     if is_operario:
         filtros['operario_responsable_id'] = user_id
     respuesta_ordenes, _ = orden_produccion_controller.obtener_ordenes(filtros)
     ordenes_listas_para_producir = respuesta_ordenes.get('data', [])
+    
+    # Obtener órdenes en espera de insumo
+    filtros_espera = {'estado': 'EN ESPERA'}
+    if is_operario:
+        filtros_espera['operario_responsable_id'] = user_id
+    respuesta_ordenes_espera, _ = orden_produccion_controller.obtener_ordenes(filtros_espera)
+    ordenes_en_espera_de_insumo = respuesta_ordenes_espera.get('data', [])
+
 
     asistencia = usuario_controller.obtener_porcentaje_asistencia()
     
@@ -152,6 +160,7 @@ def index():
                            asistencia=asistencia,
                            ordenes_pendientes=ordenes_pendientes,
                            ordenes_aprobadas=ordenes_listas_para_producir,
+                           ordenes_en_espera_de_insumo=ordenes_en_espera_de_insumo,
                            ordenes_totales=ordenes_totales,
                            notificaciones=notificaciones,
                            alertas_stock_count=alertas_stock_count,

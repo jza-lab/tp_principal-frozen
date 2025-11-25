@@ -356,11 +356,11 @@
                 {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.rol != 'VENDEDOR' and not is_supervisor_calidad %}
                 <div class="stat-card-item">
                     <div class="card stat-card h-100 border-0 shadow rounded-4">
-                        <a href="{{ url_for('orden_produccion.listar', estado='EN_PROCESO') }}" style="text-decoration: none;">
+                        <a href="{{ url_for('produccion_kanban.tablero_produccion') }}" style="text-decoration: none;">
                             <div class="card-body">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <div class="stat-label mb-1 text-muted">Órdenes en Proceso</div>
+                                        <div class="stat-label mb-1 text-muted">Órdenes en Línea</div>
                                         <div class="stat-value text-primary">{{ ordenesproduccion_proceso_count }}</div>
                                         {% if ordenesproduccion_proceso_list %}
                                         <ul class="small text-start ps-3 mt-1 mb-0" style="min-height: 50px;">
@@ -562,39 +562,83 @@
             <!-- Bottom Row: Orders and Notifications -->
             <div class="row g-4">
                 {% if ('produccion_consulta' is has_permission or 'gestionar_orden_de_produccion' is has_permission) and current_user.roles.codigo != 'SUPERVISOR_CALIDAD' %}
-                <div class="col-lg-7"> 
+                <div class="col-lg-7">
                     <div class="card h-100 shadow border-0 rounded-4">
                         <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
                             <h5 class="mb-0 text-dark fw-bold">
-                                <i class="bi bi-clock-history text-primary me-2"></i>
-                                Órdenes de Producción Aprobadas
+                                <i class="bi bi-play-circle-fill text-primary me-2"></i>
+                                Órdenes de Producción para Iniciar
                             </h5>
                             <a href="{{ url_for('orden_produccion.listar') }}" class="btn btn-outline-primary btn-sm rounded-pill px-3">
                                 Ver todas
                             </a>
                         </div>
                         <div class="card-body px-0 pb-3">
-                            {% if ordenes_aprobadas %}
+                            {% if ordenes_en_espera_de_insumo or ordenes_aprobadas %}
                             <div class="list-group list-group-flush">
-                                {% for orden in ordenes_aprobadas %}
+                                
+                                <!-- Sección: En Espera de Insumo -->
+                                {% if ordenes_en_espera_de_insumo %}
+                                <div class="list-group-item pt-3 pb-2">
+                                    <h6 class="text-warning small text-uppercase fw-bold">
+                                        <i class="bi bi-hourglass-split me-2"></i>En Espera de Insumo
+                                    </h6>
+                                </div>
+                                {% for orden in ordenes_en_espera_de_insumo %}
                                 <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 px-4 d-flex justify-content-between align-items-center border-0 hover-bg-light">
-                                    
                                     <div class="me-3" style="flex-grow: 1;">
                                         <h6 class="mb-1 fw-bold text-dark text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
                                         <p class="mb-1 small text-muted">
                                             <span class="badge bg-light text-secondary border me-2">
                                                 <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
                                             </span>
-                                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
-                                                <i class="bi bi-person me-1"></i> {{ orden.supervisor_nombre or 'N/A' }}
+                                            <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                                                <i class="bi bi-hourglass-split me-1"></i> {{ orden.estado | replace('_', ' ') | title }}
                                             </span>
                                         </p>
+                                        {% if orden.fecha_planificada %}
                                         <small class="text-muted">
                                             <i class="bi bi-calendar-event me-1"></i> Planificada: {{ orden.fecha_planificada }}
                                         </small>
+                                        {% endif %}
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-light text-warning border p-2" title="No se puede iniciar hasta que lleguen los insumos">
+                                            <i class="bi bi-exclamation-triangle-fill fs-6"></i>
+                                        </span>
+                                    </div>
+                                </a>
+                                {% endfor %}
+                                {% endif %}
+
+                                <!-- Sección: Listas para Producir -->
+                                {% if ordenes_aprobadas %}
+                                <div class="list-group-item pt-3 pb-2">
+                                    <h6 class="text-success small text-uppercase fw-bold">
+                                        <i class="bi bi-check-circle-fill me-2"></i>Listas para Producir
+                                    </h6>
+                                </div>
+                                {% for orden in ordenes_aprobadas %}
+                                <a href="{{ url_for('orden_produccion.detalle', id=orden.id) }}" class="list-group-item list-group-item-action py-3 px-4 d-flex justify-content-between align-items-center border-0 hover-bg-light">
+                                    <div class="me-3" style="flex-grow: 1;">
+                                        <h6 class="mb-1 fw-bold text-dark text-truncate">{{ orden.producto_nombre or 'Producto no definido' }}</h6>
+                                        <p class="mb-1 small text-muted">
+                                            <span class="badge bg-light text-secondary border me-2">
+                                                <i class="bi bi-box-seam me-1"></i> {{ orden.cantidad_planificada }} uds.
+                                            </span>
+                                             <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                                <i class="bi bi-check-circle me-1"></i> {{ orden.estado | replace('_', ' ') | title }}
+                                            </span>
+                                        </p>
+                                        {% if orden.fecha_planificada %}
+                                        <small class="text-muted">
+                                            <i class="bi bi-calendar-event me-1"></i> Planificada: {{ orden.fecha_planificada }}
+                                        </small>
+                                        {% endif %}
                                     </div>
                                     
                                     <div>
+                                        {% if 'produccion_ejecucion' is has_permission %}
                                         <form method="POST" action="{{ url_for('orden_produccion.iniciar', id=orden.id) }}"
                                             style="display: inline;" class="confirm-form" data-title="Confirmar Inicio"
                                             data-message="¿Está seguro de que desea iniciar esta orden de producción?"
@@ -604,9 +648,12 @@
                                                 <i class="bi bi-play-fill me-1"></i> Iniciar
                                             </button>
                                         </form>
+                                        {% endif %}
                                     </div>
                                 </a>
                                 {% endfor %}
+                                {% endif %}
+
                             </div>
                             {% else %}
                             <div class="text-center py-5">
