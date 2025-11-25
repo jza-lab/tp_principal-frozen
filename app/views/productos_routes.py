@@ -37,7 +37,7 @@ costo_fijo_controller = CostoFijoController()
 
 
 @productos_bp.route("/catalogo/nuevo", methods=["GET", "POST"])
-@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario')
+@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'gestionar_catalogo_de_productos')
 def crear_producto():
     try:
         if request.method == "POST":
@@ -162,7 +162,7 @@ def obtener_producto_por_id(id_producto):
 @productos_bp.route(
     "/catalogo/actualizar/<int:id_producto>", methods=["GET", "POST", "PUT"]
 )
-@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario')
+@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'gestionar_catalogo_de_productos')
 def actualizar_producto(id_producto):
     try:
         if request.method == "PUT" or request.method == "POST":
@@ -250,7 +250,7 @@ def actualizar_precio(id_producto):
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
 @productos_bp.route("/catalogo/eliminar/<string:id_producto>", methods=["DELETE"])
-@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario')
+@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'gestionar_catalogo_de_productos')
 def eliminar_producto(id_producto):
     try:
         response, status = producto_controller.eliminar_producto_logico(id_producto)
@@ -261,7 +261,7 @@ def eliminar_producto(id_producto):
 
 
 @productos_bp.route("/catalogo/habilitar/<string:id_producto>", methods=["POST"])
-@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario')
+@permission_any_of('gestionar_orden_de_produccion', 'gestionar_inventario', 'gestionar_catalogo_de_productos')
 def habilitar_producto(id_producto):
     try:
         response, status = producto_controller.habilitar_producto(id_producto)

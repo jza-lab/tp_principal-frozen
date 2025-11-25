@@ -17,7 +17,7 @@
                             <label for="costo_por_hora" class="form-label">Costo por Hora</label>
                             <div class="input-group">
                                 <span class="input-group-text">$</span>
-                                <input type="number" class="form-control" id="costo_por_hora" name="costo_por_hora" step="0.01" min="0" max="999999" value="{{ rol.costo_por_hora if rol.costo_por_hora else '' }}">
+                                <input type="number" class="form-control" id="costo_por_hora" name="costo_por_hora" step="0.01" min="1" max="999999" value="{{ rol.costo_por_hora if rol.costo_por_hora else '' }}">
                             </div>
                             <div class="form-text">Deje este campo en blanco para no asignar un costo.</div>
                         </div>

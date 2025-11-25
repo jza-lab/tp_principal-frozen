@@ -14,7 +14,11 @@
         <div class="form-header">
             <i class="bi bi-person-badge fs-1 mb-3"></i>
             <h2 class="mb-1">
-                {% if is_new %}Crear Nuevo Empleado{% else %}Editar Empleado{% endif %}
+                    {% if is_new %}
+                        Crear Nuevo Empleado
+                    {% else %}
+                        Editar Empleado
+                    {% endif %}
             </h2>
             <p class="mb-0 opacity-75">
                 {% if is_new %}Complete la información en 3 simples pasos{% else %}Modificar información del empleado {%

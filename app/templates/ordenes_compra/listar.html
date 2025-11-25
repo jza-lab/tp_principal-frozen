@@ -232,7 +232,7 @@
                 {# Visible solo para Logística (NO Supervisor de Calidad) #}
                 {% elif orden.estado == 'APROBADA' and current_user.rol != 'SUPERVISOR_CALIDAD' %}
                     
-                    {% if has_permission('logistica_recepcion_oc') %}
+                    {% if has_permission('logistica_recepcion_oc') and current_user.rol != 'GERENTE' %}
                     <div>
                         <form method="POST"
                             action="{{ url_for('orden_compra.marcar_en_transito', id=orden.id, estado=request.args.get('estado', '')) }}"
@@ -251,7 +251,7 @@
                 {# Visible para Supervisor de Calidad O para Logística #}
                 {% elif orden.estado == 'EN_TRANSITO' %}
                     
-                    {% if has_permission('logistica_recepcion_oc') %}
+                    {% if (has_permission('logistica_recepcion_oc') or current_user.rol == 'SUPERVISOR_CALIDAD') and current_user.rol != 'GERENTE' %}
                     <div>
                         <form method="POST"
                             action="{{ url_for('orden_compra.marcar_en_recepcion', id=orden.id, estado=request.args.get('estado', '')) }}"
@@ -269,7 +269,7 @@
                 {# --- ESTADO: EN RECEPCION --- #}
                 {% elif orden.estado == 'EN_RECEPCION' %}
                     
-                    {% if has_permission('logistica_recepcion_oc') and current_user.rol != 'ADMIN' %}
+                    {% if (has_permission('logistica_recepcion_oc') and current_user.rol != 'ADMIN' and current_user.rol != 'GERENTE') or current_user.rol == 'SUPERVISOR_CALIDAD' %}
                         <a href="{{ url_for('orden_compra.detalle', id=orden.id) }}" class="btn btn-sm btn-success"
                             title="Procesar Mercadería">
                             <i class="bi bi-box-seam"></i> Procesar
