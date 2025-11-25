@@ -650,7 +650,7 @@ class OrdenCompraController:
                 'descripcion_problema': descripcion,
                 'usuario_creador_id': get_current_user().id
             }
-            self.reclamo_proveedor_controller.crear_reclamo(reclamo_data)
+            self.reclamo_proveedor_controller.create(reclamo_data)
             logger.info(f"Reclamo creado automáticamente para la OC {orden_data.get('codigo_oc')}.")
         except Exception as e_reclamo:
             logger.error(f"Error al crear el reclamo automático para la OC {orden_data.get('codigo_oc')}: {e_reclamo}")
@@ -968,32 +968,24 @@ class OrdenCompraController:
 
                 # 6. Escenario Exitoso (Recepción Perfecta)
                 else:
+                    # Recepción Perfecta
                     self.model.update(orden_id, {'estado': 'RECEPCION_COMPLETA'})
 
-                    # Verificar OP vinculada
-                    id_op_vinculada = orden_actual.get('orden_produccion_id')
-                    if id_op_vinculada:
-                        # Verificar si TODAS las OCs de esa OP están completas
-                        todas_ocs_res = self.model.get_all({'orden_produccion_id': id_op_vinculada})
-                        if todas_ocs_res.get('success'):
-                            todas_ocs = todas_ocs_res.get('data', [])
-                            # Actualizar estado en memoria de la actual
-                            for oc in todas_ocs:
-                                if oc['id'] == orden_id: oc['estado'] = 'RECEPCION_COMPLETA'
-
-                            if all(oc.get('estado') == 'RECEPCION_COMPLETA' for oc in todas_ocs):
-                                logger.info(f"Todas las OCs completas. Actualizando OP {id_op_vinculada}.")
-                                orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
-                    else:
-                        # Es una OC manual sin OP, verificar stock general
-                        orden_produccion_controller.verificar_y_actualizar_ordenes_en_espera()
-
-                    # Cerrar OC padre si existe
+                    # Cerrar OC padre si esta era una hija
                     id_padre = orden_actual.get('complementa_a_orden_id')
                     if id_padre:
                         self.model.update(id_padre, {'estado': 'RECEPCION_COMPLETA'})
 
-                    return {'success': True, 'message': f'Recepción Completa. {lotes_creados} lotes ingresados.'}
+                    resultado = {'success': True, 'message': f'Recepción Completa. {lotes_creados} lotes ingresados.'}
+
+                # --- PASO FINAL: VERIFICAR OP VINCULADA SIEMPRE ---
+                # Si entró stock (parcial o total), intentamos desbloquear la OP
+                id_op_vinculada = orden_actual.get('orden_produccion_id')
+                if id_op_vinculada:
+                    logger.info(f"[Recepción] Stock ingresado para OP {id_op_vinculada}. Ejecutando verificación de suficiencia...")
+                    orden_produccion_controller.verificar_y_actualizar_op_especifica(id_op_vinculada)
+
+                return resultado
 
             else:
                 return {'success': False, 'error': 'Paso inválido.'}
@@ -1001,6 +993,7 @@ class OrdenCompraController:
         except Exception as e:
             logger.error(f"Error procesando recepción: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
+
 
     # --- INICIO DE LA MODIFICACIÓN ---
     def crear_oc_hija_desde_fallo(self, orden_padre_id, usuario_id):

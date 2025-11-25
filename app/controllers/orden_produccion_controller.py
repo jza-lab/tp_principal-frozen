@@ -298,86 +298,103 @@ class OrdenProduccionController(BaseController):
     def verificar_y_actualizar_op_especifica(self, orden_produccion_id: int) -> Dict:
         """
         Verifica una orden de producción específica por su ID.
-        Si la OP está 'EN ESPERA' y su stock ya está disponible (porque sus OCs se completaron),
-        la pasa a 'LISTA PARA PRODUCIR'.
+        Si la OP está 'EN ESPERA' y su stock ya está disponible (ya sea por reservas previas
+        o por stock libre en almacén), la pasa a 'LISTA PARA PRODUCIR'.
         """
-        logger.info(f"Iniciando verificación específica para OP ID: {orden_produccion_id}.")
+        logger.info(f"=== [DEBUG OP] Inicio verificación y actualización para OP ID: {orden_produccion_id} ===")
+
         try:
             # 1. Obtener la orden específica
             orden_res = self.model.find_by_id(orden_produccion_id)
             if not orden_res.get('success') or not orden_res.get('data'):
-                msg = f"No se encontró la OP con ID {orden_produccion_id} para la verificación."
-                logger.warning(msg)
+                msg = f"No se encontró la OP con ID {orden_produccion_id}."
+                logger.warning(f"[DEBUG OP] {msg}")
                 return {'success': False, 'error': msg}
 
             orden = orden_res['data']
+            estado_actual = orden.get('estado')
+
+            logger.info(f"[DEBUG OP] Estado actual de la OP: {estado_actual}")
 
             # Solo actuar si está 'EN ESPERA'
-            if orden.get('estado') != 'EN ESPERA':
-                msg = f"La OP {orden_produccion_id} no está 'EN ESPERA' (estado actual: {orden.get('estado')}). No se requiere acción."
-                logger.info(msg)
+            if estado_actual != 'EN ESPERA':
+                msg = f"La OP {orden_produccion_id} no está 'EN ESPERA'. No se requiere acción."
+                logger.info(f"[DEBUG OP] {msg}")
                 return {'success': True, 'message': msg}
 
-            # --- NUEVA LÓGICA: Verificar si YA está cubierta (por la OC que acaba de llegar) ---
+            # -----------------------------------------------------------------------------------
+            # PASO A: Verificar si YA está cubierta por reservas existentes
+            # (Ej: Acaba de llegar una OC vinculada y se hizo la reserva automática)
+            # -----------------------------------------------------------------------------------
+            logger.info(f"[DEBUG OP] Paso A: Verificando cobertura por reservas existentes...")
             esta_cubierta = self.inventario_controller.verificar_cobertura_reservas_op(orden)
 
             if esta_cubierta:
-                logger.info(f"OP {orden_produccion_id} tiene cobertura completa de reservas. Avanzando estado.")
+                logger.info(f"[DEBUG OP] ¡Cobertura COMPLETA detectada! Avanzando estado directamente.")
 
                 nuevo_estado = 'LISTA PARA PRODUCIR'
-                self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+                cambio_res = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
 
-                return {'success': True, 'message': f"OP {orden_produccion_id} actualizada a {nuevo_estado} (Insumos ya reservados)."}
+                if cambio_res.get('success'):
+                    return {'success': True, 'message': f"OP {orden_produccion_id} actualizada a {nuevo_estado} (Insumos ya reservados)."}
+                else:
+                    logger.error(f"[DEBUG OP] Fallo al cambiar estado a {nuevo_estado}: {cambio_res.get('error')}")
+                    return {'success': False, 'error': cambio_res.get('error')}
+
+            logger.info(f"[DEBUG OP] La OP no está cubierta al 100% por reservas previas.")
+
             # -----------------------------------------------------------------------------------
+            # PASO B: Verificar si hay Stock Libre para cubrir lo que falta
+            # (Fallback: Intenta reservar del stock general si no se reservó al recibir la OC)
+            # -----------------------------------------------------------------------------------
+            logger.info(f"[DEBUG OP] Paso B: Buscando stock libre en almacén para cubrir faltantes...")
 
-            # 2. Verificar stock (la lógica de OCs ya se cumplió si llegamos aquí)
-            logger.debug(f"Verificando stock para OP {orden_produccion_id}...")
             verificacion_result = self.inventario_controller.verificar_stock_para_op(orden)
 
             if not verificacion_result.get('success'):
-                error_msg = f"Fallo la verificación de stock para OP {orden_produccion_id}: {verificacion_result.get('error')}"
-                logger.warning(error_msg)
+                error_msg = f"Fallo técnico verificando stock: {verificacion_result.get('error')}"
+                logger.error(f"[DEBUG OP] {error_msg}")
                 return {'success': False, 'error': error_msg}
 
             insumos_faltantes = verificacion_result['data']['insumos_faltantes']
+            logger.info(f"[DEBUG OP] Insumos faltantes detectados (tras verificar stock libre): {len(insumos_faltantes)}")
 
-            # 3. Si no hay faltantes, proceder a reservar y cambiar estado
+            # 3. Si NO hay faltantes (hay stock libre suficiente), proceder a reservar
             if not insumos_faltantes:
-                logger.info(f"Stock completo encontrado para OP {orden_produccion_id}. Procediendo a reservar...")
+                logger.info(f"[DEBUG OP] Stock completo encontrado en almacén. Procediendo a reservar...")
 
-                usuario_creador_id = orden.get('usuario_creador_id')
-                if not usuario_creador_id:
-                    error_msg = f"La OP {orden_produccion_id} no tiene un usuario creador. No se puede reservar el stock."
-                    logger.error(error_msg)
-                    return {'success': False, 'error': error_msg}
+                usuario_creador_id = orden.get('usuario_creador_id') or 1
 
-                # Reservar el stock
+                # Llamada a la función de reserva (que ahora soporta reservas parciales/complementarias)
                 reserva_result = self.inventario_controller.reservar_stock_insumos_para_op(orden, usuario_creador_id)
+
                 if not reserva_result.get('success'):
-                    error_msg = f"Stock disponible para OP {orden_produccion_id}, pero la reserva falló: {reserva_result.get('error')}"
-                    logger.error(error_msg)
+                    error_msg = f"Stock disponible, pero falló la reserva: {reserva_result.get('error')}"
+                    logger.error(f"[DEBUG OP] {error_msg}")
                     return {'success': False, 'error': error_msg}
+
+                logger.info(f"[DEBUG OP] Reserva exitosa. Cambiando estado a LISTA PARA PRODUCIR.")
 
                 # Cambiar el estado
                 nuevo_estado = 'LISTA PARA PRODUCIR'
-                cambio_estado_result = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
+                cambio_res = self.model.cambiar_estado(orden_produccion_id, nuevo_estado)
 
-                if cambio_estado_result.get('success'):
-                    msg = f"Éxito: La OP {orden_produccion_id} ha sido actualizada a '{nuevo_estado}'."
-                    logger.info(msg)
-                    return {'success': True, 'message': msg}
+                if cambio_res.get('success'):
+                    return {'success': True, 'message': f"Stock reservado y OP actualizada a {nuevo_estado}."}
                 else:
-                    error_msg = f"Fallo al cambiar el estado de la OP {orden_produccion_id}: {cambio_estado_result.get('error')}"
-                    logger.error(error_msg)
-                    return {'success': False, 'error': error_msg}
+                    return {'success': False, 'error': cambio_res.get('error')}
+
             else:
-                # Esto no debería pasar si la lógica de la OC funcionó bien, pero es una salvaguarda.
-                msg = f"Stock aún insuficiente para OP {orden_produccion_id} después de la recepción de OC. Verificación manual requerida."
-                logger.warning(msg)
-                return {'success': False, 'error': msg}
+                # Si hay faltantes, se queda en espera
+                logger.warning(f"[DEBUG OP] Aún faltan insumos. La OP se mantiene EN ESPERA.")
+                # Opcional: Loguear qué falta
+                for falta in insumos_faltantes:
+                    logger.info(f"   -> Faltante: {falta.get('nombre')} (Falta: {falta.get('cantidad_faltante')})")
+
+                return {'success': False, 'error': "Stock aún insuficiente."}
 
         except Exception as e:
-            logger.error(f"Error inesperado procesando la OP {orden_produccion_id} en la verificación específica: {e}", exc_info=True)
+            logger.error(f"[DEBUG OP] Error inesperado procesando la OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def verificar_y_actualizar_ordenes_en_espera(self) -> Dict:
@@ -1207,19 +1224,19 @@ class OrdenProduccionController(BaseController):
                 # --- NUEVO: Obtener reservas para calcular 'Max Desperdiciable' ---
                 # Usamos el modelo del controlador de inventario ya instanciado
                 reserva_model = self.inventario_controller.reserva_insumo_model
-                
+
                 # Buscamos TODAS las reservas (Reservado/Consumido) asociadas a esta OP
                 reservas_op_res = reserva_model.find_all({'orden_produccion_id': orden_id})
                 mapa_reservas = {}
                 mapa_lotes_insumos = {} # Para mapear lotes a insumos y calcular merma
-                
+
                 if reservas_op_res.get('success'):
                     for res in reservas_op_res.get('data', []):
                         # Intentamos ambas variantes comunes por seguridad
                         iid = res.get('insumo_id') or res.get('id_insumo')
                         lid = res.get('lote_inventario_id')
                         qty = float(res.get('cantidad_reservada', 0))
-                        
+
                         if iid:
                             mapa_reservas[iid] = mapa_reservas.get(iid, 0.0) + qty
                             # Log para depuración
@@ -1245,7 +1262,7 @@ class OrdenProduccionController(BaseController):
                                 mapa_reservado_activo[iid] = mapa_reservado_activo.get(iid, 0.0) + qty
                             # Sumamos todo (RESERVADO y CONSUMIDO) para el total asignado
                             mapa_consumido_total[iid] = mapa_consumido_total.get(iid, 0.0) + qty
-                
+
                 cantidad_producida_actual = float(orden_data.get('cantidad_producida', 0))
                 ingredientes_result = receta_model.get_ingredientes(receta_id)
 
@@ -1254,7 +1271,7 @@ class OrdenProduccionController(BaseController):
                     for ing in ingredientes_raw:
                         key_insumo = ing.get('id_insumo')
                         cantidad_unitaria = float(ing.get('cantidad', 0))
-                        
+
                         total_asignado_historico = mapa_consumido_total.get(key_insumo, 0.0)
                         consumo_teorico = cantidad_unitaria * cantidad_producida_actual
                         total_reservado_actualmente = mapa_reservado_activo.get(key_insumo, 0.0)
@@ -1268,7 +1285,7 @@ class OrdenProduccionController(BaseController):
 
                         # Lo disponible es lo asignado menos lo que se consumió teóricamente y menos la merma real reportada.
                         disponible_real = total_asignado_historico - consumo_teorico - merma_total_registrada
-                        
+
                         logger.info(
                             f"Cálculo Disponible Insumo {key_insumo}: "
                             f"Asignado={total_asignado_historico}, "
@@ -1346,7 +1363,7 @@ class OrdenProduccionController(BaseController):
                 cantidad_ya_producida + max_produccion_adicional_posible,
                 cantidad_planificada
             )
-            
+
             # Este es el nuevo objetivo efectivo para la UI
             orden_data['max_produccion_posible'] = max_produccion_total_ajustada
 
@@ -2193,7 +2210,7 @@ class OrdenProduccionController(BaseController):
                 # 2. Evaluar y resolver escenarios (Refill, Parcial, Reset)
                 resolucion = self._resolver_escenarios_merma_unificado(orden, insumo_id, cantidad_perdida, usuario_id)
                 resultados_acumulados.append(resolucion)
-                
+
                 # Determinar el escenario más grave
                 esc_res = resolucion.get('escenario', 'REFILL')
                 if esc_res == 'RESET': escenario_global = 'RESET'
@@ -2223,12 +2240,12 @@ class OrdenProduccionController(BaseController):
             )
             if consumo_result.get('success'):
                 return {"escenario": "REFILL", "mensaje_usuario": "Material repuesto automáticamente."}
-        
+
         # --- Si no hay stock para refill, pasamos a escenarios de quiebre ---
-        
+
         # Calcular máxima producción posible con el stock restante
         max_produccion_posible = self._calcular_max_produccion_posible(orden, insumo_id, stock_disponible_total)
-        
+
         # ESCENARIO 3: RESET (PÉRDIDA TOTAL)
         if max_produccion_posible <= 0:
             return self._ejecutar_reset_op(orden, insumo_id, usuario_id)
@@ -2556,7 +2573,7 @@ class OrdenProduccionController(BaseController):
         """Registra el desperdicio de insumo en la base de datos."""
         from app.models.reserva_insumo import ReservaInsumoModel
         from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
-        
+
         reserva_model = ReservaInsumoModel()
         registro_merma_model = RegistroDesperdicioLoteInsumoModel()
 
@@ -2587,14 +2604,14 @@ class OrdenProduccionController(BaseController):
             if ing.get('id_insumo') == insumo_id:
                 insumo_req_por_unidad = float(ing.get('cantidad', 0))
                 break
-        
+
         if insumo_req_por_unidad <= 0: return 0
 
         # El stock total accesible es lo que quedó en la OP (reservado/consumido) + lo que hay libre en el almacén
         reservas_op_res = self.inventario_controller.reserva_insumo_model.find_all({
             'orden_produccion_id': orden.get('id'), 'insumo_id': insumo_id
         })
-        
+
         stock_en_op = 0
         if reservas_op_res.get('success'):
             stock_en_op = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_op_res.get('data', []))
@@ -2604,22 +2621,22 @@ class OrdenProduccionController(BaseController):
         merma_total_registrada = 0.0
         if mermas_res:
             merma_total_registrada = sum(float(m.get('cantidad', 0)) for m in mermas_res)
-        
+
         stock_neto_en_op = stock_en_op - merma_total_registrada
         # ----------------------------------------------------
 
         stock_total_accesible = stock_neto_en_op + stock_disponible_libre
-        
+
         return math.floor(stock_total_accesible / insumo_req_por_unidad)
 
     def _ejecutar_reset_op(self, orden: Dict, insumo_id: str, usuario_id: int) -> Dict:
         """Cancela la OP actual, libera su stock y crea una nueva OP para replanificar."""
         orden_id = orden.get('id')
         logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada. Se cancelará y creará una nueva.")
-        
+
         # 1. Liberar stock sano no consumido
         self.inventario_controller.liberar_stock_no_consumido_para_op(orden_id)
-        
+
         # 2. Cancelar la OP actual
         obs = f"{orden.get('observaciones', '')} | CANCELADA por pérdida total de insumo ID {insumo_id}. Replanificada automáticamente.".strip()
         self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=obs)
@@ -2688,7 +2705,7 @@ class OrdenProduccionController(BaseController):
                 return self.error_response(error="No se pudo replanificar la orden de producción.", status_code=500)
         except Exception as e:
             return self.error_response(error=f"Error interno: {str(e)}", status_code=500)
-        
+
     def _obtener_cantidad_insumo_en_curso(self, orden_produccion_id: int, insumo_id: int) -> float:
         """
         Calcula la cantidad de un insumo que ya ha sido pedida en OCs vinculadas a esta OP
@@ -2800,7 +2817,7 @@ class OrdenProduccionController(BaseController):
 
             # --- FIX: Excluir usuario_creador_id de load() ---
             data_to_load = {k: v for k, v in nueva_op_data.items() if k != 'usuario_creador_id'}
-            
+
 
             # Validar datos sin campos de solo lectura
             validated_data = self.schema.load(data_to_load)
