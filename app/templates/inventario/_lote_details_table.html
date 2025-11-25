@@ -16,12 +16,12 @@
             <td>{{ lote.numero_lote_proveedor or 'N/A' }}</td>
             
             <td class="text-end fw-bold">
-                {% if lote.cantidad_en_cuarentena > 0 or lote.cantidad_reservada > 0 %}
+                {% if (lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0) or (lote.cantidad_reservada and lote.cantidad_reservada > 0) %}
                     <div class="d-flex flex-column text-end" style="font-size: 0.9em; line-height: 1.4;">
-                        {% if lote.cantidad_reservada > 0 %}
+                        {% if lote.cantidad_reservada and lote.cantidad_reservada > 0 %}
                             <span class="text-info">{{ lote.cantidad_reservada | round(2) }} <small>(Res)</small></span>
                         {% endif %}
-                        {% if lote.cantidad_en_cuarentena > 0 %}
+                        {% if lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0 %}
                             <span class="text-warning">{{ lote.cantidad_en_cuarentena | round(2) }} <small>(Cuar)</small></span>
                         {% endif %}
                         <span class="text-muted">{{ lote.cantidad_actual | round(2) }} <small>(Disp)</small></span>
