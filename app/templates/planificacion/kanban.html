@@ -278,12 +278,30 @@
                                         <span>⏱️ Trabajando desde hace {{ orden.tiempo_transcurrido or '0m' }}</span>
                                     </div>
                                 {% else %}
-                                    {# Órdenes pendientes: Solo cantidad #}
-                                    <div class="quantity-display">
-                                        <i class="bi bi-box-seam"></i>
-                                        <span class="qty-value">{{ orden.cantidad_planificada }}</span>
-                                        <span class="qty-unit">kg</span>
-                                    </div>
+                                    {# Órdenes pendientes o en proceso: Mostrar cantidad #}
+                                    {% if estado_key in ['EN_PROCESO', 'CONTROL_DE_CALIDAD', 'COMPLETADA'] %}
+                                        <div class="quantity-display" style="padding: 0.5rem 0;">
+                                            <div class="d-flex justify-content-around align-items-center text-center w-100">
+                                                <div>
+                                                    <small class="text-muted d-block">Planificado</small>
+                                                    <span class="fw-bold fs-5">{{ orden.cantidad_planificada|round(1) }}</span>
+                                                    <small class="text-muted">kg</small>
+                                                </div>
+                                                <div class="vr mx-2"></div>
+                                                <div>
+                                                    <small class="text-muted d-block">Producido</small>
+                                                    <span class="fw-bold fs-5">{{ (orden.cantidad_producida or 0)|round(1) }}</span>
+                                                    <small class="text-muted">kg</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="quantity-display">
+                                            <i class="bi bi-box-seam"></i>
+                                            <span class="qty-value">{{ orden.cantidad_planificada }}</span>
+                                            <span class="qty-unit">kg</span>
+                                        </div>
+                                    {% endif %}
                                 {% endif %}
                             </div>
                             
