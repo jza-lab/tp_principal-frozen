@@ -1223,7 +1223,8 @@ class OrdenProduccionController(BaseController):
                         if iid:
                             mapa_reservas[iid] = mapa_reservas.get(iid, 0.0) + qty
                             # Log para depuración
-                            logger.info(f"Reserva encontrada para insumo {iid}: {qty}")
+                            estado_res = res.get('estado', 'UNKNOWN')
+                            logger.info(f"Reserva encontrada para insumo {iid}: {qty} (Estado: {estado_res})")
                         else:
                             logger.warning(f"Reserva sin ID de insumo detectada: {res}")
                         if lid and iid:
@@ -1258,8 +1259,6 @@ class OrdenProduccionController(BaseController):
                             
                         total_asignado_actual = mapa_reservas.get(key_insumo, 0.0)
                         
-                        logger.info(f"Ingrediente {key_insumo}: Asignado={total_asignado_actual} (En mapa: {key_insumo in mapa_reservas})")
-                        
                         # 2. Consumo Teórico (Lo que "debería" haberse gastado para lo producido OK)
                         consumo_teorico = cantidad_unitaria * cantidad_producida_actual
 
@@ -1267,11 +1266,12 @@ class OrdenProduccionController(BaseController):
                         total_merma = mapa_mermas.get(key_insumo, 0.0)
                         
                         # 4. Disponible Real = Asignado - Consumo Teórico - Merma
-                        # Restamos la merma porque el 'Asignado' creció con el refill, 
-                        # pero ese crecimiento solo cubre la pérdida, no agrega capacidad nueva.
                         disponible_real = max(0.0, total_asignado_actual - consumo_teorico - total_merma)
                         
+                        logger.info(f"Cálculo Disponible Insumo {key_insumo}: Asignado={total_asignado_actual}, Unitario={cantidad_unitaria}, Producido={cantidad_producida_actual} -> Teórico={consumo_teorico}, Merma={total_merma} -> Disponible={disponible_real}")
+                        
                         ing['disponible_real'] = round(disponible_real, 4)
+                        ing['asignado_real'] = round(total_asignado_actual, 4)
                         ingredientes.append(ing)
 
             # 3. Calcular Ritmo Objetivo
@@ -1595,7 +1595,9 @@ class OrdenProduccionController(BaseController):
         try:
             fecha_meta_str = orden.get('fecha_meta')
             if fecha_meta_str:
-                fecha_meta = date.fromisoformat(fecha_meta_str)
+                # Handle ISO format with or without time (T or space separator)
+                fecha_clean = fecha_meta_str.split('T')[0].split(' ')[0]
+                fecha_meta = date.fromisoformat(fecha_clean)
                 dias_disponibles = (fecha_meta - date.today()).days
 
                 if dias_disponibles > 0:
@@ -2145,90 +2147,126 @@ class OrdenProduccionController(BaseController):
 
                 # --- PASO A: IMPACTO INMEDIATO ---
                 
-                # 1. Encontrar las reservas de ese insumo para esta OP
-                # Solo buscamos RESERVADO. Si buscamos CONSUMIDO corremos riesgo de descontar stock físico dos veces.
+                # 1. Encontrar TODAS las reservas (RESERVADO o CONSUMIDO)
+                # Necesitamos buscar también CONSUMIDO porque al iniciar la OP, el stock se consume pero sigue asignado lógicamente
                 reservas_res = reserva_model.find_all({
                     'orden_produccion_id': orden_id, 
-                    'insumo_id': insumo_id, 
-                    'estado': 'RESERVADO'
+                    'insumo_id': insumo_id
                 })
+                
                 if not reservas_res.get('success') or not reservas_res.get('data'):
-                    # Si no hay reservas, no podemos descontar nada específico de la OP.
-                    # Podría ser un error de validación o que ya se consumió todo.
                     logger.warning(f"Intento de reportar merma en OP {orden_id} para insumo {insumo_id} sin reservas activas.")
                     continue
                 
                 reservas = reservas_res.get('data', [])
-                reservas.sort(key=lambda x: x['id'])
+                # Priorizar RESERVADO primero para consumir lo que falte físicamente, luego CONSUMIDO para imputar
+                reservas.sort(key=lambda x: (0 if x.get('estado') == 'RESERVADO' else 1, x['id']))
+
+                # 1.1 Calcular merma previa para validar tope
+                merma_previa_total = 0.0
+                mermas_previas_res = registro_merma_model.find_all({'orden_produccion_id': orden_id})
+                if mermas_previas_res.get('success'):
+                    for m in mermas_previas_res.get('data', []):
+                        # Filtrar por lote/insumo si es posible, o asumir que el modelo trae todo.
+                        # Para ser exactos, deberíamos filtrar por los lotes asociados a este insumo.
+                        # Simplificación: Asumimos que el controlador de mermas guarda el ID del insumo? No, guarda lote_id.
+                        # Necesitamos mapear lotes a insumo.
+                        pass # (Omitido por complejidad de query, confiamos en el tope iterativo abajo)
 
                 cantidad_restante_a_descontar = cantidad_perdida
                 
-                # Validación de tope: No reportar más de lo reservado (disponible en línea)
+                # Validación de tope: Total Reservado (Histórico)
                 total_reservado = sum(float(r.get('cantidad_reservada', 0)) for r in reservas)
-                if cantidad_restante_a_descontar > total_reservado:
-                    # Ajustar al máximo posible para no romper lógica negativa
-                    logger.warning(f"Cantidad reportada {cantidad_perdida} excede reserva {total_reservado}. Ajustando.")
-                    cantidad_restante_a_descontar = total_reservado
-                    cantidad_perdida = total_reservado # Ajustamos la variable base también para el Paso B
+                
+                # IMPORTANTE: Necesitamos restar lo que YA se reportó como merma de este total reservado
+                # Para no permitir reportar merma infinita sobre una reserva CONSUMIDA.
+                # Solución: Iterar reservas y ver cuánto "cupo" le queda a cada una es difícil si no guardamos "merma imputada a reserva".
+                # Alternativa: Calcular merma total acumulada de ESTE insumo.
+                
+                lotes_ids_insumo = set(r['lote_inventario_id'] for r in reservas)
+                merma_acumulada_insumo = 0.0
+                if mermas_previas_res.get('success'):
+                    for m in mermas_previas_res.get('data', []):
+                        if m.get('lote_insumo_id') in lotes_ids_insumo:
+                            merma_acumulada_insumo += float(m.get('cantidad', 0))
+
+                disponible_para_merma = max(0.0, total_reservado - merma_acumulada_insumo)
+
+                if cantidad_restante_a_descontar > disponible_para_merma:
+                    logger.warning(f"Cantidad reportada {cantidad_perdida} excede disponible real {disponible_para_merma} (Total {total_reservado} - Merma {merma_acumulada_insumo}). Ajustando.")
+                    cantidad_restante_a_descontar = disponible_para_merma
+                    cantidad_perdida = disponible_para_merma
 
                 for reserva in reservas:
                     if cantidad_restante_a_descontar <= 0:
                         break
                     
-                    cantidad_en_reserva = float(reserva.get('cantidad_reservada', 0))
-                    cantidad_a_quitar = min(cantidad_en_reserva, cantidad_restante_a_descontar)
-
-                    # Actualizar Reserva (Reducir cantidad y marcar consumo)
-                    # Si la reserva se consume completa, cambiamos estado a CONSUMIDO en lugar de borrar.
-                    # Si es parcial, creamos un registro CONSUMIDO por lo gastado y reducimos la RESERVADA.
-                    nueva_cantidad_reserva = cantidad_en_reserva - cantidad_a_quitar
+                    # Cuánto 'cupo' tiene esta reserva?
+                    # Si es RESERVADO: Todo su valor.
+                    # Si es CONSUMIDO: Todo su valor (porque representa stock ya gastado que ahora etiquetamos como merma).
+                    # PERO debemos distribuir el 'merma_acumulada_insumo' entre ellas para saber cuál ya se llenó.
+                    # Esto es complejo. Simplificación:
+                    # Asumimos que 'disponible_para_merma' es global. Consumimos reservas en orden.
                     
-                    if nueva_cantidad_reserva <= 0.001: # Tolerancia float
-                        # Se consumió toda la reserva -> Cambiar estado
-                        reserva_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
-                    else:
-                        # Se consumió parte -> Reducir original y crear nueva CONSUMIDA
-                        reserva_model.update(reserva['id'], {'cantidad_reservada': nueva_cantidad_reserva}, 'id')
-                        
-                        # Crear registro de consumo por la diferencia
-                        datos_consumo_parcial = {
-                            'orden_produccion_id': orden_id,
-                            'lote_inventario_id': reserva['lote_inventario_id'],
-                            'insumo_id': insumo_id,
-                            'cantidad_reservada': cantidad_a_quitar,
-                            'usuario_reserva_id': usuario_id,
-                            'estado': 'CONSUMIDO'
-                        }
-                        reserva_model.create(datos_consumo_parcial)
-
-                    # Actualizar Stock Físico (Lote)
+                    cantidad_en_reserva = float(reserva.get('cantidad_reservada', 0))
+                    cantidad_a_tomar = min(cantidad_en_reserva, cantidad_restante_a_descontar)
+                    
+                    # Si es CONSUMIDO, no restamos stock físico (ya se hizo), solo registramos.
+                    estado_reserva = reserva.get('estado')
+                    
                     lote_id = reserva['lote_inventario_id']
-                    lote_res = self.inventario_controller.inventario_model.find_by_id(lote_id, 'id_lote')
-                    if lote_res.get('success'):
-                        lote = lote_res['data']
-                        cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
-                        nueva_cantidad_actual = max(0, cantidad_actual_lote - cantidad_a_quitar)
-                        
-                        update_lote_data = {'cantidad_actual': nueva_cantidad_actual}
-                        if nueva_cantidad_actual == 0:
-                            update_lote_data['estado'] = 'agotado'
-                        
-                        self.inventario_controller.inventario_model.update(lote_id, update_lote_data, 'id_lote')
-                        
-                        # Registrar Desperdicio
-                        datos_desperdicio = {
-                            'lote_insumo_id': lote_id,
-                            'motivo_id': motivo_id,
-                            'cantidad': cantidad_a_quitar,
-                            'created_at': datetime.now().isoformat(),
-                            'usuario_id': usuario_id,
-                            'orden_produccion_id': orden_id, # Incluir la OP
-                            'detalle': f"Merma reportada en OP-{orden_id}: {observacion}",
-                            'comentarios': observacion
-                        }
-                        registro_merma_model.create(datos_desperdicio)
+                    
+                    # Registrar Desperdicio (SIEMPRE)
+                    datos_desperdicio = {
+                        'lote_insumo_id': lote_id,
+                        'motivo_id': motivo_id,
+                        'cantidad': cantidad_a_tomar,
+                        'created_at': datetime.now().isoformat(),
+                        'usuario_id': usuario_id,
+                        'orden_produccion_id': orden_id,
+                        'detalle': f"Merma reportada en OP-{orden_id}: {observacion}",
+                        'comentarios': observacion
+                    }
+                    registro_merma_model.create(datos_desperdicio)
 
-                    cantidad_restante_a_descontar -= cantidad_a_quitar
+                    if estado_reserva == 'RESERVADO':
+                        # Actualizar Reserva y Stock Físico
+                        nueva_cantidad_reserva = cantidad_en_reserva - cantidad_a_tomar
+                        
+                        if nueva_cantidad_reserva <= 0.001:
+                            reserva_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
+                        else:
+                            reserva_model.update(reserva['id'], {'cantidad_reservada': nueva_cantidad_reserva}, 'id')
+                            # Crear registro split de lo consumido por merma
+                            datos_consumo_parcial = {
+                                'orden_produccion_id': orden_id,
+                                'lote_inventario_id': lote_id,
+                                'insumo_id': insumo_id,
+                                'cantidad_reservada': cantidad_a_tomar,
+                                'usuario_reserva_id': usuario_id,
+                                'estado': 'CONSUMIDO'
+                            }
+                            reserva_model.create(datos_consumo_parcial)
+
+                        # Actualizar Stock Físico (Lote)
+                        lote_res = self.inventario_controller.inventario_model.find_by_id(lote_id, 'id_lote')
+                        if lote_res.get('success'):
+                            lote = lote_res['data']
+                            cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
+                            nueva_cantidad_actual = max(0, cantidad_actual_lote - cantidad_a_tomar)
+                            
+                            update_lote_data = {'cantidad_actual': nueva_cantidad_actual}
+                            if nueva_cantidad_actual == 0:
+                                update_lote_data['estado'] = 'agotado'
+                            
+                            self.inventario_controller.inventario_model.update(lote_id, update_lote_data, 'id_lote')
+
+                    elif estado_reserva == 'CONSUMIDO':
+                        # No tocamos stock físico ni reserva (ya está consumida).
+                        # Solo consumimos del "cupo global" de merma.
+                        pass
+
+                    cantidad_restante_a_descontar -= cantidad_a_tomar
 
                 # Actualizar stock general del insumo
                 self.insumo_controller.actualizar_stock_insumo(insumo_id)
