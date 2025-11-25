@@ -1,6 +1,6 @@
 from app.models.base_model import BaseModel
 from typing import Dict, List, Optional
-from decimal import Decimal 
+from decimal import Decimal
 from datetime import date, datetime, timedelta
 import logging
 from uuid import UUID
@@ -191,47 +191,92 @@ class InventarioModel(BaseModel):
             logger.error(f"Error obteniendo stock consolidado (FIXED): {str(e)}")
             return {'success': False, 'error': str(e)}
 
-    def get_all_lotes_for_view(self, filtros: Optional[Dict] = None) -> Dict:
+    def get_all_lotes_for_view(self, filtros: Optional[Dict] = None):
         """
-        Obtiene todos los lotes con detalles del insumo y proveedor para la vista de listado.
+        Obtiene todos los lotes de INSUMOS con datos enriquecidos.
+        Calcula 'cantidad_reservada' sumando la tabla 'reserva_insumos'.
         """
         try:
-            # 1. Construir la consulta base pidiendo explícitamente los datos relacionados.
+            # 1. Consulta base de lotes
             query = self.db.table(self.get_table_name()).select(
-                '*, insumo:insumos_catalogo(nombre), proveedor:proveedores(nombre)'
+                '*, insumo:insumos_catalogo(nombre, unidad_medida), proveedor:proveedores(nombre)'
             )
 
-            # 2. Aplicar filtros dinámicamente
             if filtros:
                 for key, value in filtros.items():
-                    if value:
-                        if key in ['documento_ingreso'] and isinstance(value, str):
-                            query = query.ilike(key, f'%{value}%')
-                        else:
-                            query = query.eq(key, value)
+                    # Manejo de filtros especiales (ej: ilike)
+                    if isinstance(value, tuple) and len(value) == 2:
+                        op, val = value
+                        if op == 'ilike': query = query.ilike(key, f'%{val}%')
+                        elif op == 'in': query = query.in_(key, val)
+                        else: query = query.eq(key, val) # Fallback
+                    else:
+                        query = query.eq(key, value)
 
-            # 3. Ejecutar la consulta de lotes
-            result = query.order('f_ingreso', desc=True).execute()
+            lotes_result = query.order('created_at', desc=True).execute()
 
-            if not result.data:
-                return {'success': True, 'data': []}
+            if not hasattr(lotes_result, 'data'):
+                 return {'success': True, 'data': []}
 
-            # 4. Aplanar los datos para que la plantilla los pueda usar fácilmente.
-            for lote in result.data:
+            lotes_data = lotes_result.data
+
+            # --- NUEVO: Obtener reservas activas de insumos ---
+            # Buscamos en la tabla 'reserva_insumos' (o 'reservas_insumos' según tu DB)
+            # Asumo 'reserva_insumos' basado en tus controladores anteriores.
+            reservas_result = self.db.table('reservas_insumos').select(
+                'lote_inventario_id, cantidad_reservada'
+            ).eq('estado', 'RESERVADO').execute()
+
+            reservas_map = {}
+            if hasattr(reservas_result, 'data'):
+                for reserva in reservas_result.data:
+                    # Nota: Verifica si en tu DB es 'lote_inventario_id' o 'lote_id'
+                    lote_id = reserva.get('lote_inventario_id')
+                    cantidad = float(reserva.get('cantidad_reservada', 0))
+                    reservas_map[lote_id] = reservas_map.get(lote_id, 0.0) + cantidad
+            # --------------------------------------------------
+
+            # 3. Enriquecer los datos
+            enriched_data = []
+            for lote in lotes_data:
+                # Aplanar datos anidados
                 if lote.get('insumo'):
-                    lote['insumo_nombre'] = lote['insumo'].get('nombre', 'Insumo no encontrado')
+                    lote['insumo_nombre'] = lote['insumo']['nombre']
+                    lote['insumo_unidad_medida'] = lote['insumo']['unidad_medida']
                 else:
-                    lote['insumo_nombre'] = 'Insumo no especificado'
+                    lote['insumo_nombre'] = 'Desconocido'
+                    lote['insumo_unidad_medida'] = ''
 
                 if lote.get('proveedor'):
-                    lote['proveedor_nombre'] = lote['proveedor'].get('nombre', 'Proveedor sin nombre')
+                    lote['proveedor_nombre'] = lote['proveedor']['nombre']
                 else:
-                    lote['proveedor_nombre'] = 'Proveedor no especificado'
+                    lote['proveedor_nombre'] = 'N/A'
 
-            return {'success': True, 'data': result.data}
+                # Limpiar objetos
+                lote.pop('insumo', None)
+                lote.pop('proveedor', None)
+
+                # --- ASIGNAR CANTIDAD RESERVADA ---
+                lote_id = lote.get('id_lote')
+                lote['cantidad_reservada'] = reservas_map.get(lote_id, 0.0)
+                # ----------------------------------
+
+                # Corrección visual de estado 'VENCIDO' (si aplica)
+                if lote.get('f_vencimiento'):
+                    try:
+                        # Asegurar formato fecha
+                        venc_str = lote['f_vencimiento']
+                        venc = datetime.fromisoformat(venc_str).date() if 'T' in venc_str else date.fromisoformat(venc_str)
+                        if venc <= date.today() and lote.get('estado') not in ['agotado', 'retirado']:
+                             lote['estado_visual'] = 'VENCIDO' # Usamos un campo visual para no tocar el real
+                    except: pass
+
+                enriched_data.append(lote)
+
+            return {'success': True, 'data': enriched_data}
 
         except Exception as e:
-            logger.error(f"Error obteniendo lotes para la vista (robusto): {e}")
+            logger.error(f"Error obteniendo lotes de insumos: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def get_lote_detail_for_view(self, id_lote: str) -> Dict:
@@ -325,7 +370,7 @@ class InventarioModel(BaseModel):
             for insumo_id in todos_los_insumos_con_movimiento:
                 fisico = stock_fisico_map.get(insumo_id, 0.0)
                 reservado = reservas_map.get(insumo_id, 0.0)
-                
+
                 # --- INICIO DE LA CORRECCIÓN 2 ---
                 disponible_calculado = fisico - reservado
 
