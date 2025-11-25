@@ -2299,23 +2299,35 @@ class OrdenProduccionController(BaseController):
         
         # ESCENARIO 3: PÉRDIDA TOTAL (Reset)
         if max_produccion_posible <= 0:
-            logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada.")
+            logger.info(f"Escenario 3 (Reset) para OP {orden_id}. No se puede producir nada. Se cancelará y creará una nueva.")
             
-            # 1. Liberar reservas de OTROS insumos
+            # 1. Liberar reservas de OTROS insumos de la orden fallida
             self.inventario_controller.liberar_stock_reservado_para_op(orden_id)
             
-            # 2. Resetear OP a PLANIFICACION (o PENDIENTE si no existe ese estado)
-            # Y agregar observación
-            obs = f"{orden.get('observaciones', '')} | RESET por Pérdida Total de insumo {insumo_id}.".strip()
-            self.model.cambiar_estado(orden_id, 'PENDIENTE', observaciones=obs)
-            
-            # 3. Alertar Compras (Generar OC automática por todo lo que falta ahora?)
-            # El sistema detectará la falta al intentar planificar de nuevo o en el tablero de compras.
-            # Podríamos llamar explícitamente a generar OC, pero "volver a planificación" suele ser suficiente trigger.
+            # 2. Cancelar la OP actual con una observación clara
+            obs = f"{orden.get('observaciones', '')} | CANCELADA por pérdida total de insumo ID {insumo_id}. Replanificada automáticamente.".strip()
+            self.model.cambiar_estado(orden_id, 'CANCELADA', observaciones=obs)
+
+            # 3. Crear una nueva OP (copia) para replanificar
+            form_data_copia = {
+                'productos': [{'id': orden['producto_id'], 'cantidad': orden['cantidad_planificada']}],
+                'fecha_meta': orden.get('fecha_meta'),
+                'observaciones': f"Replanificación automática de OP-{orden.get('codigo')}.",
+                'id_op_padre': orden.get('id_op_padre') 
+            }
+            creacion_res = self.crear_orden(form_data_copia, usuario_id)
+
+            if not creacion_res.get('success'):
+                # Esto es un estado problemático, la OP original fue cancelada pero la nueva no se pudo crear.
+                error_msg = f"CRÍTICO: La OP {orden_id} fue cancelada pero no se pudo crear su reemplazo automático. Por favor, cree una nueva OP manualmente. Error: {creacion_res.get('error')}"
+                logger.error(error_msg)
+                return {"escenario": "ERROR", "mensaje_usuario": error_msg}
+
+            nueva_op = creacion_res['data'][0]
             
             return {
                 "escenario": "RESET",
-                "mensaje_usuario": "Pérdida crítica. La orden ha sido devuelta a Planificación y los insumos sanos liberados."
+                "mensaje_usuario": f"Pérdida crítica de insumo. La orden actual ({orden.get('codigo')}) fue cancelada y se creó una nueva orden ({nueva_op.get('codigo')}) para ser replanificada."
             }
 
         # ESCENARIO 2: QUIEBRE PARCIAL (Ajuste de Meta)

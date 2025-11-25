@@ -589,38 +589,41 @@
 
                         if (data.success) {
                             const modalMermaInstance = bootstrap.Modal.getInstance(modalElement);
-                            modalMermaInstance.hide();
-
-                            const escenario = data.data?.escenario;
-
-                            if (escenario === 'PARCIAL') {
-                                const modalNotif = new bootstrap.Modal(document.getElementById('modalNotificacion'));
-                                document.getElementById('modalNotificacionLabel').innerText = 'Ajuste de Producción';
-                                document.getElementById('modalNotificacionBody').innerText = data.message;
-                                
-                                // Recargar la página cuando el usuario cierre el modal
-                                document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
-                                    window.location.reload();
-                                }, { once: true });
-                                
-                                modalNotif.show();
-
-                            } else {
-                                // Comportamiento para REFILL, RESET u otros casos
-                                alertBox.classList.remove('d-none');
-                                alertBox.classList.add('alert-success');
-                                alertBox.innerText = data.message;
-                                 if (escenario) {
-                                    let badgeClass = 'bg-info';
-                                    if (escenario === 'RESET') badgeClass = 'bg-danger';
-                                    alertBox.innerHTML += `<br><span class="badge ${badgeClass} mt-2">Escenario: ${escenario}</span>`;
-                                }
-                                setTimeout(() => {
-                                    window.location.reload();
-                                }, 3000);
+                            if (modalMermaInstance) {
+                                modalMermaInstance.hide();
                             }
 
+                            const escenario = data.data?.escenario || 'INFO';
+                            const modalNotif = new bootstrap.Modal(document.getElementById('modalNotificacion'));
+                            const modalNotifLabel = document.getElementById('modalNotificacionLabel');
+                            const modalNotifBody = document.getElementById('modalNotificacionBody');
+
+                            // Personalizar título según el escenario
+                            let title = 'Reporte Exitoso';
+                            if (escenario === 'PARCIAL') {
+                                title = '⚠️ Ajuste de Producción';
+                            } else if (escenario === 'RESET') {
+                                title = '‼️ Orden Replanificada';
+                            } else if (escenario === 'REFILL') {
+                                title = '✅ Insumo Repuesto';
+                            }
+                            
+                            modalNotifLabel.innerHTML = title;
+                            modalNotifBody.innerText = data.message;
+                            
+                            // Asegurarse de recargar la página o redirigir una vez que el modal se haya cerrado
+                            document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
+                                if (escenario === 'RESET') {
+                                    window.location.href = '/produccion/kanban/';
+                                } else {
+                                    window.location.reload();
+                                }
+                            }, { once: true });
+                            
+                            modalNotif.show();
+
                         } else {
+                            // Mostrar error en el modal de merma
                             alertBox.classList.remove('d-none');
                             alertBox.classList.add('alert-danger');
                             alertBox.innerText = data.error || 'Error al reportar merma.';
