@@ -247,34 +247,73 @@ class InventarioController(BaseController):
             logger.error(f"Error crítico al consumir stock para OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
-    def liberar_stock_reservado_para_op(self, orden_produccion_id: int) -> dict:
+    def liberar_stock_no_consumido_para_op(self, orden_produccion_id: int, insumo_id_perdido: int = None) -> dict:
         """
-        Libera el stock reservado para una OP, por ejemplo, si se cancela.
-        NO afecta el stock físico, solo elimina los registros de reserva.
+        Libera el stock de una OP cancelada o reseteada, devolviendo solo el stock "sano".
+        1. Obtiene todas las reservas (RESERVADO y CONSUMIDO).
+        2. Obtiene todos los registros de merma.
+        3. Calcula el stock sano remanente por lote (Reservado - Mermado) y lo devuelve al inventario.
+        4. Cambia el estado de todos los registros de reserva de la OP a 'CANCELADO'.
         """
+        from app.models.registro_desperdicio_lote_insumo_model import RegistroDesperdicioLoteInsumoModel
+        registro_merma_model = RegistroDesperdicioLoteInsumoModel()
+
         try:
-            reservas_res = self.reserva_insumo_model.find_all(
-                filters={'orden_produccion_id': orden_produccion_id}
-            )
+            # 1. Obtener todas las reservas de la OP
+            reservas_res = self.reserva_insumo_model.find_all(filters={'orden_produccion_id': orden_produccion_id})
             if not reservas_res.get('success') or not reservas_res.get('data'):
                 logger.warning(f"No se encontraron reservas para liberar para la OP {orden_produccion_id}")
                 return {'success': True}
-
+            
             reservas = reservas_res.get('data', [])
-            insumos_afectados = set()
-            for reserva in reservas:
-                insumos_afectados.add(reserva['insumo_id'])
-                self.reserva_insumo_model.delete(reserva['id'], 'id')
+            
+            # 2. Obtener todas las mermas de la OP
+            mermas_res = registro_merma_model.find_all_by_op_id(orden_produccion_id)
+            mermas_por_lote = {}
+            if mermas_res:
+                for merma in mermas_res:
+                    lote_id = merma['lote_insumo_id']
+                    mermas_por_lote[lote_id] = mermas_por_lote.get(lote_id, 0) + float(merma['cantidad'])
 
-            # Es importante actualizar el stock para que la disponibilidad refleje la liberación
-            for insumo_id in insumos_afectados:
+            # 3. Calcular y devolver stock sano
+            insumos_a_actualizar = set()
+            for reserva in reservas:
+                lote_id = reserva['lote_inventario_id']
+                insumo_id = reserva['insumo_id']
+                insumos_a_actualizar.add(insumo_id)
+
+                cantidad_original_reservada = float(reserva.get('cantidad_reservada', 0))
+                merma_en_lote = mermas_por_lote.get(lote_id, 0)
+
+                # Lo que se devuelve es lo que se reservó menos lo que se perdió de ese lote
+                cantidad_a_devolver = max(0, cantidad_original_reservada - merma_en_lote)
+
+                if cantidad_a_devolver > 0:
+                    lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+                    if lote_res.get('success'):
+                        lote = lote_res['data']
+                        cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
+                        nueva_cantidad_lote = cantidad_actual_lote + cantidad_a_devolver
+                        
+                        update_data = {'cantidad_actual': nueva_cantidad_lote}
+                        if lote.get('estado') in ['agotado', 'retirado']:
+                            update_data['estado'] = 'disponible'
+
+                        self.inventario_model.update(lote_id, update_data, 'id_lote')
+                        logger.info(f"Devueltas {cantidad_a_devolver} unidades al lote {lote_id} desde OP {orden_produccion_id}")
+            
+            # 4. Cambiar el estado de todas las reservas de la OP a 'CANCELADO'
+            self.reserva_insumo_model.db.table('reserva_insumos').update({'estado': 'CANCELADO'}).eq('orden_produccion_id', orden_produccion_id).execute()
+
+            # 5. Actualizar stock consolidado de todos los insumos implicados
+            for insumo_id in insumos_a_actualizar:
                 self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
-            logger.info(f"Reservas liberadas para la OP {orden_produccion_id}")
+            logger.info(f"Stock sano liberado y reservas canceladas para la OP {orden_produccion_id}")
             return {'success': True}
 
         except Exception as e:
-            logger.error(f"Error crítico al liberar stock para OP {orden_produccion_id}: {e}", exc_info=True)
+            logger.error(f"Error crítico al liberar stock no consumido para OP {orden_produccion_id}: {e}", exc_info=True)
             return {'success': False, 'error': str(e)}
 
     def consumir_stock_por_cantidad_producto(self, receta_id: int, cantidad_producto: float, op_id_referencia: int, motivo: str, usuario_id: int = None) -> dict:
