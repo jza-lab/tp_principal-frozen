@@ -22,8 +22,8 @@ $(document).ready(function() {
 
     // --- Filtro de Fechas ---
     function initializeDateFilter() {
-        const start = moment().subtract(29, 'days');
-        const end = moment();
+        const start = moment().startOf('month');
+        const end = moment().endOf('month');
 
         $('#daterange-materia-prima').daterangepicker({
             startDate: start,
@@ -31,16 +31,16 @@ $(document).ready(function() {
             opens: 'left',
             locale: { format: 'YYYY-MM-DD', applyLabel: "Aplicar", cancelLabel: "Cancelar" },
             ranges: {
-               'Hoy': [moment(), moment()],
-               'Últimos 7 Días': [moment().subtract(6, 'days'), moment()],
+               'Hoy': [moment().startOf('day'), moment().endOf('day')],
+               'Últimos 7 Días': [moment().subtract(6, 'days').startOf('day'), moment().endOf('day')],
                'Este Mes': [moment().startOf('month'), moment().endOf('month')]
             }
         }, function(start, end) {
-            loadEficienciaData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+            loadEficienciaData(start.format(), end.format());
         });
 
         // Cargar datos iniciales
-        loadEficienciaData(start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'));
+        loadEficienciaData(start.format(), end.format());
     }
 
     // --- Carga de Datos ---

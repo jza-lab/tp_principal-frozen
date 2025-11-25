@@ -332,9 +332,9 @@ class ReporteProduccionController:
                 for ing in recetas_response.get('data', []):
                     ingredientes_map[ing['receta_id']].append(ing)
 
-            # 5. Procesar los datos
-            consumo_por_producto = defaultdict(lambda: {'planificado': 0.0, 'real': 0.0})
-            detalle_por_producto = defaultdict(list)
+            # 5. Procesar los datos para obtener una lista detallada por insumo
+            # Esta será la base para la tabla y para el gráfico.
+            detalle_consumo_por_insumo = []
 
             for op in ops:
                 receta_id = op.get('receta_id')
@@ -343,14 +343,12 @@ class ReporteProduccionController:
                 
                 cantidad_producida = float(op.get('cantidad_producida', 0))
                 producto_nombre = op.get('producto_nombre', 'Desconocido')
-
-                consumo_op_planificado = 0.0
-                consumo_op_real = 0.0
                 
                 ingredientes = ingredientes_map.get(receta_id, [])
                 for ing in ingredientes:
                     cantidad_receta = float(ing.get('cantidad', 0))
                     insumo_id = ing.get('insumo_id')
+                    insumo_nombre = ing.get('insumo_nombre', 'Insumo Desconocido')
                     
                     # Consumo planificado (teórico) para la producción real
                     consumo_teorico = cantidad_producida * cantidad_receta
@@ -359,39 +357,46 @@ class ReporteProduccionController:
                     desperdicio = desperdicios_map[op['id']][insumo_id]
                     consumo_real_insumo = consumo_teorico + desperdicio
                     
-                    consumo_op_planificado += consumo_teorico
-                    consumo_op_real += consumo_real_insumo
+                    # Añadir a la lista de detalle
+                    detalle_consumo_por_insumo.append({
+                        'orden_id': op.get('id'),
+                        'documento_op': op.get('documento_op', f"OP-{op.get('id')}")[:10],
+                        'fecha_fin': op.get('fecha_fin'),
+                        'producto_nombre': producto_nombre,
+                        'insumo_nombre': insumo_nombre,
+                        'consumo_planificado': round(consumo_teorico, 2),
+                        'consumo_real': round(consumo_real_insumo, 2)
+                    })
+            
+            # 6. Agrupar los datos para el gráfico y la tabla desde la lista detallada
+            consumo_agregado_por_producto = defaultdict(lambda: {'planificado': 0.0, 'real': 0.0})
+            detalle_agrupado_por_producto = defaultdict(list)
 
-                # Acumular para el gráfico agregado
-                consumo_por_producto[producto_nombre]['planificado'] += consumo_op_planificado
-                consumo_por_producto[producto_nombre]['real'] += consumo_op_real
+            for detalle in detalle_consumo_por_insumo:
+                prod_nombre = detalle['producto_nombre']
                 
-                # Guardar para la tabla de detalle
-                detalle_por_producto[producto_nombre].append({
-                    'orden_id': op.get('id'),
-                    'documento_op': op.get('documento_op', f"OP-{op.get('id')}")[:10],
-                    'fecha_fin': op.get('fecha_fin'),
-                    'cantidad_planificada': op.get('cantidad_planificada'),
-                    'cantidad_producida': cantidad_producida,
-                    'consumo_planificado': round(consumo_op_planificado, 2),
-                    'consumo_real': round(consumo_op_real, 2)
-                })
+                # Acumular para el gráfico
+                consumo_agregado_por_producto[prod_nombre]['planificado'] += detalle['consumo_planificado']
+                consumo_agregado_por_producto[prod_nombre]['real'] += detalle['consumo_real']
+                
+                # Agrupar para la tabla
+                detalle_agrupado_por_producto[prod_nombre].append(detalle)
 
-            # Formatear la salida para el gráfico principal
-            data_agregada = [
+            # 7. Formatear la salida final
+            data_agregada_final = [
                 {
                     'producto': prod,
                     'planificado': round(valores['planificado'], 2),
                     'real': round(valores['real'], 2)
                 }
-                for prod, valores in consumo_por_producto.items()
+                for prod, valores in consumo_agregado_por_producto.items()
             ]
 
             return {
                 'success': True,
                 'data': {
-                    'data_agregada': data_agregada,
-                    'data_detalle': dict(detalle_por_producto)
+                    'data_agregada': data_agregada_final,
+                    'data_detalle': dict(detalle_agrupado_por_producto)
                 }
             }
 
