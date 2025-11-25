@@ -1173,8 +1173,7 @@ class InventarioController(BaseController):
                 comentarios=motivo_final,
                 orden_compra_id=None,
                 resultado_inspeccion=resultado_inspeccion or 'Cuarentena Manual',
-                foto_url=foto_url,
-                cantidad_inspeccionada=cantidad_a_mover
+                foto_url=foto_url
             )
 
             if not registro_cc_result.get('success'):
