@@ -2206,15 +2206,21 @@ class OrdenProduccionController(BaseController):
                 if esc_res == 'RESET': escenario_global = 'RESET'
                 elif esc_res == 'PARCIAL' and escenario_global != 'RESET': escenario_global = 'PARCIAL'
 
+            datos_respuesta_api = {'escenario': escenario_global, 'detalles': resultados_acumulados}
             mensaje_final = "Mermas registradas. Material repuesto automáticamente."
+
             if escenario_global == 'RESET':
                 mensaje_final = "Mermas registradas. ¡Atención! Por falta crítica de stock, la orden fue devuelta a Planificación."
             elif escenario_global == 'PARCIAL':
-                mensaje_final = "Mermas registradas. Se ajustó la meta de producción por falta de stock."
+                # Tomamos el mensaje y los datos del primer (y probablemente único) evento parcial.
+                detalle_parcial = next((res for res in resultados_acumulados if res.get('escenario') == 'PARCIAL'), None)
+                if detalle_parcial:
+                    mensaje_final = detalle_parcial.get('mensaje_usuario', "Mermas registradas con ajuste de meta.")
+                    datos_respuesta_api.update(detalle_parcial.get('datos_adicionales', {}))
 
             return self.success_response(
                 message=mensaje_final,
-                data={'escenario': escenario_global, 'detalles': resultados_acumulados}
+                data=datos_respuesta_api
             )
 
         except Exception as e:
@@ -2314,11 +2320,10 @@ class OrdenProduccionController(BaseController):
 
         # ESCENARIO 2: QUIEBRE PARCIAL (Ajuste de Meta)
         else:
-            logger.info(f"Escenario 2 (Parcial) para OP {orden_id}. Se reduce meta a {max_produccion_posible}.")
-            
+            logger.info(f"Escenario 2 (Parcial) para OP {orden_id}. Se notifica al usuario. Nueva meta posible: {max_produccion_posible}.")
+
             # 1. Si hay algo disponible en almacén (que no cubría todo pero ayuda), tómalo (Refill parcial)
             if stock_disponible_total > 0:
-                # ... lógica de reserva similar al Refill ...
                 cantidad_restante_tomar = stock_disponible_total
                 for lote in lotes_disponibles:
                     if cantidad_restante_tomar <= 0: break
@@ -2329,35 +2334,19 @@ class OrdenProduccionController(BaseController):
                     })
                     cantidad_restante_tomar -= cant
 
-            # 2. Recortar OP actual
-            self.model.update(orden_id, {'cantidad_planificada': max_produccion_posible}, 'id')
+            # 2. NO se recorta la OP actual. Solo se informa.
+            # self.model.update(orden_id, {'cantidad_planificada': max_produccion_posible}, 'id')
             
-            # 3. Crear OP Hija (Deuda)
+            # 3. NO se crea OP Hija automáticamente.
             cantidad_faltante = cantidad_planificada_original - max_produccion_posible
-            if cantidad_faltante > 0:
-                datos_hija = {
-                    'producto_id': orden['producto_id'],
-                    'cantidad_planificada': cantidad_faltante,
-                    'receta_id': orden['receta_id'],
-                    'fecha_meta': orden.get('fecha_meta'),
-                    'prioridad': 'ALTA', # Deuda suele ser urgente
-                    'id_op_padre': orden_id,
-                    'estado': 'PENDIENTE',
-                    'observaciones': f"OP Hija por Quiebre Parcial en OP-{orden.get('codigo')}. Faltante por merma."
-                }
-                # Usamos crear_orden interno, ojo que espera form_data con 'productos' lista
-                # Mejor construimos form_data simulado
-                form_data_hija = {
-                    'productos': [{'id': orden['producto_id'], 'cantidad': cantidad_faltante}],
-                    'fecha_meta': orden.get('fecha_meta'),
-                    'id_op_padre': orden_id,
-                    'observaciones': datos_hija['observaciones']
-                }
-                self.crear_orden(form_data_hija, usuario_id)
 
             return {
                 "escenario": "PARCIAL",
-                "mensaje_usuario": f"Stock insuficiente para el total. Meta ajustada a {max_produccion_posible} u. Se generó una OP pendiente por el resto ({cantidad_faltante} u)."
+                "mensaje_usuario": f"Stock insuficiente. Ahora solo puedes producir un máximo de {max_produccion_posible} unidades. La meta original de {cantidad_planificada_original} se mantiene como referencia.",
+                "datos_adicionales": {
+                    "max_produccion_posible": max_produccion_posible,
+                    "cantidad_planificada_original": cantidad_planificada_original
+                }
             }
 
     def obtener_ordenes_para_kanban_hoy(self, filtros: Optional[Dict] = None) -> tuple:

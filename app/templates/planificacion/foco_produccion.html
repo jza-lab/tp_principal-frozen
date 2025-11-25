@@ -395,6 +395,24 @@
     </div>
 </div>
 
+<!-- Modal de Notificación Genérico -->
+<div class="modal fade" id="modalNotificacion" tabindex="-1" aria-labelledby="modalNotificacionLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNotificacionLabel">Aviso de Producción</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="modalNotificacionBody">
+        ...
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -566,27 +584,46 @@
                     })
                     .then(response => response.json())
                     .then(data => {
-                        alertBox.classList.remove('d-none');
+                        btnConfirmarMerma.disabled = false;
+                        btnConfirmarMerma.innerText = 'Confirmar Reporte';
+
                         if (data.success) {
-                            alertBox.classList.add('alert-success');
-                            alertBox.innerText = data.message;
-                            
-                            if (data.data && data.data.escenario) {
-                                const escenario = data.data.escenario;
-                                let badgeClass = 'bg-info';
-                                if (escenario === 'RESET') badgeClass = 'bg-danger';
-                                if (escenario === 'PARCIAL') badgeClass = 'bg-warning text-dark';
-                                alertBox.innerHTML += `<br><span class="badge ${badgeClass} mt-2">Escenario Global: ${escenario}</span>`;
+                            const modalMermaInstance = bootstrap.Modal.getInstance(modalElement);
+                            modalMermaInstance.hide();
+
+                            const escenario = data.data?.escenario;
+
+                            if (escenario === 'PARCIAL') {
+                                const modalNotif = new bootstrap.Modal(document.getElementById('modalNotificacion'));
+                                document.getElementById('modalNotificacionLabel').innerText = 'Ajuste de Producción';
+                                document.getElementById('modalNotificacionBody').innerText = data.message;
+                                
+                                // Recargar la página cuando el usuario cierre el modal
+                                document.getElementById('modalNotificacion').addEventListener('hidden.bs.modal', function () {
+                                    window.location.reload();
+                                }, { once: true });
+                                
+                                modalNotif.show();
+
+                            } else {
+                                // Comportamiento para REFILL, RESET u otros casos
+                                alertBox.classList.remove('d-none');
+                                alertBox.classList.add('alert-success');
+                                alertBox.innerText = data.message;
+                                 if (escenario) {
+                                    let badgeClass = 'bg-info';
+                                    if (escenario === 'RESET') badgeClass = 'bg-danger';
+                                    alertBox.innerHTML += `<br><span class="badge ${badgeClass} mt-2">Escenario: ${escenario}</span>`;
+                                }
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 3000);
                             }
 
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 3000);
                         } else {
+                            alertBox.classList.remove('d-none');
                             alertBox.classList.add('alert-danger');
                             alertBox.innerText = data.error || 'Error al reportar merma.';
-                            btnConfirmarMerma.disabled = false;
-                            btnConfirmarMerma.innerText = 'Confirmar Reporte';
                         }
                     })
                     .catch(error => {
