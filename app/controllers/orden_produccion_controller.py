@@ -2137,7 +2137,7 @@ class OrdenProduccionController(BaseController):
             escenario_global = "REFILL" # Empezamos optimistas
 
             for item in mermas:
-                insumo_id = item.get('insumo_id') # FIX: No castear a int, es UUID
+                insumo_id = item.get('insumo_id') 
                 cantidad_perdida = float(item.get('cantidad_perdida'))
                 motivo_id = int(item.get('motivo_id'))
                 observacion = item.get('observacion', '')
@@ -2145,160 +2145,77 @@ class OrdenProduccionController(BaseController):
                 if cantidad_perdida <= 0:
                     continue
 
-                # --- PASO A: IMPACTO INMEDIATO ---
+                # --- PASO A: VALIDACIÓN E IMPACTO SIMPLIFICADO ---
                 
-                # 1. Encontrar TODAS las reservas (RESERVADO o CONSUMIDO)
-                # Necesitamos buscar también CONSUMIDO porque al iniciar la OP, el stock se consume pero sigue asignado lógicamente
-                reservas_res = reserva_model.find_all({
-                    'orden_produccion_id': orden_id, 
-                    'insumo_id': insumo_id
-                })
-                
-                if not reservas_res.get('success') or not reservas_res.get('data'):
-                    logger.warning(f"Intento de reportar merma en OP {orden_id} para insumo {insumo_id} sin reservas activas.")
+                # 1. Validar si la cantidad reportada es posible
+                reservas_res = reserva_model.find_all({'orden_produccion_id': orden_id, 'insumo_id': insumo_id})
+                total_asignado = sum(float(r.get('cantidad_reservada', 0)) for r in reservas_res.get('data', []))
+
+                mermas_previas_res = registro_merma_model.find_all_by_op_and_insumo(orden_id, insumo_id)
+                merma_acumulada = sum(float(m.get('cantidad', 0)) for m in mermas_previas_res)
+
+                max_desperdiciable = total_asignado - merma_acumulada
+                if cantidad_perdida > max_desperdiciable:
+                    logger.warning(f"Merma reportada ({cantidad_perdida}) excede el máximo posible ({max_desperdiciable}). Se ajustará.")
+                    cantidad_perdida = max_desperdiciable
+
+                if cantidad_perdida <= 0:
                     continue
+
+                # 2. Impactar stock físico y registrar merma
+                # Priorizamos consumir de lotes con estado RESERVADO
+                reservas_activas = [r for r in reservas_res.get('data', []) if r.get('estado') == 'RESERVADO']
                 
-                reservas = reservas_res.get('data', [])
-                # Priorizar RESERVADO primero para consumir lo que falte físicamente, luego CONSUMIDO para imputar
-                reservas.sort(key=lambda x: (0 if x.get('estado') == 'RESERVADO' else 1, x['id']))
+                cantidad_restante_a_imputar = cantidad_perdida
+                for reserva in sorted(reservas_activas, key=lambda x: x['id']):
+                    if cantidad_restante_a_imputar <= 0: break
 
-                # 1.1 Calcular merma previa para validar tope
-                merma_previa_total = 0.0
-                mermas_previas_res = registro_merma_model.find_all({'orden_produccion_id': orden_id})
-                if mermas_previas_res.get('success'):
-                    for m in mermas_previas_res.get('data', []):
-                        # Filtrar por lote/insumo si es posible, o asumir que el modelo trae todo.
-                        # Para ser exactos, deberíamos filtrar por los lotes asociados a este insumo.
-                        # Simplificación: Asumimos que el controlador de mermas guarda el ID del insumo? No, guarda lote_id.
-                        # Necesitamos mapear lotes a insumo.
-                        pass # (Omitido por complejidad de query, confiamos en el tope iterativo abajo)
-
-                cantidad_restante_a_descontar = cantidad_perdida
-                
-                # Validación de tope: Total Reservado (Histórico)
-                total_reservado = sum(float(r.get('cantidad_reservada', 0)) for r in reservas)
-                
-                # IMPORTANTE: Necesitamos restar lo que YA se reportó como merma de este total reservado
-                # Para no permitir reportar merma infinita sobre una reserva CONSUMIDA.
-                # Solución: Iterar reservas y ver cuánto "cupo" le queda a cada una es difícil si no guardamos "merma imputada a reserva".
-                # Alternativa: Calcular merma total acumulada de ESTE insumo.
-                
-                lotes_ids_insumo = set(r['lote_inventario_id'] for r in reservas)
-                merma_acumulada_insumo = 0.0
-                if mermas_previas_res.get('success'):
-                    for m in mermas_previas_res.get('data', []):
-                        if m.get('lote_insumo_id') in lotes_ids_insumo:
-                            merma_acumulada_insumo += float(m.get('cantidad', 0))
-
-                disponible_para_merma = max(0.0, total_reservado - merma_acumulada_insumo)
-
-                if cantidad_restante_a_descontar > disponible_para_merma:
-                    logger.warning(f"Cantidad reportada {cantidad_perdida} excede disponible real {disponible_para_merma} (Total {total_reservado} - Merma {merma_acumulada_insumo}). Ajustando.")
-                    cantidad_restante_a_descontar = disponible_para_merma
-                    cantidad_perdida = disponible_para_merma
-
-                for reserva in reservas:
-                    if cantidad_restante_a_descontar <= 0:
-                        break
-                    
-                    # Cuánto 'cupo' tiene esta reserva?
-                    # Si es RESERVADO: Todo su valor.
-                    # Si es CONSUMIDO: Todo su valor (porque representa stock ya gastado que ahora etiquetamos como merma).
-                    # PERO debemos distribuir el 'merma_acumulada_insumo' entre ellas para saber cuál ya se llenó.
-                    # Esto es complejo. Simplificación:
-                    # Asumimos que 'disponible_para_merma' es global. Consumimos reservas en orden.
-                    
-                    cantidad_en_reserva = float(reserva.get('cantidad_reservada', 0))
-                    cantidad_a_tomar = min(cantidad_en_reserva, cantidad_restante_a_descontar)
-                    
-                    # Si es CONSUMIDO, no restamos stock físico (ya se hizo), solo registramos.
-                    estado_reserva = reserva.get('estado')
-                    
                     lote_id = reserva['lote_inventario_id']
+                    cantidad_en_reserva = float(reserva.get('cantidad_reservada', 0))
+                    cantidad_a_tomar = min(cantidad_en_reserva, cantidad_restante_a_imputar)
                     
-                    # Registrar Desperdicio (SIEMPRE)
-                    datos_desperdicio = {
-                        'lote_insumo_id': lote_id,
-                        'motivo_id': motivo_id,
-                        'cantidad': cantidad_a_tomar,
-                        'created_at': datetime.now().isoformat(),
-                        'usuario_id': usuario_id,
-                        'orden_produccion_id': orden_id,
-                        'detalle': f"Merma reportada en OP-{orden_id}: {observacion}",
-                        'comentarios': observacion
-                    }
-                    registro_merma_model.create(datos_desperdicio)
+                    # Registrar merma por cada lote afectado
+                    registro_merma_model.create({
+                        'lote_insumo_id': lote_id, 'motivo_id': motivo_id, 'cantidad': cantidad_a_tomar,
+                        'created_at': datetime.now().isoformat(), 'usuario_id': usuario_id,
+                        'orden_produccion_id': orden_id, 'detalle': f"Merma: {observacion}", 'comentarios': observacion
+                    })
 
-                    if estado_reserva == 'RESERVADO':
-                        # Actualizar Reserva y Stock Físico
-                        nueva_cantidad_reserva = cantidad_en_reserva - cantidad_a_tomar
-                        
-                        if nueva_cantidad_reserva <= 0.001:
-                            reserva_model.update(reserva['id'], {'estado': 'CONSUMIDO'}, 'id')
-                        else:
-                            reserva_model.update(reserva['id'], {'cantidad_reservada': nueva_cantidad_reserva}, 'id')
-                            # Crear registro split de lo consumido por merma
-                            datos_consumo_parcial = {
-                                'orden_produccion_id': orden_id,
-                                'lote_inventario_id': lote_id,
-                                'insumo_id': insumo_id,
-                                'cantidad_reservada': cantidad_a_tomar,
-                                'usuario_reserva_id': usuario_id,
-                                'estado': 'CONSUMIDO'
-                            }
-                            reserva_model.create(datos_consumo_parcial)
+                    # Descontar de la reserva y del lote físico
+                    self.inventario_controller.descontar_stock_fisico_y_reserva(reserva['id'], cantidad_a_tomar)
+                    
+                    cantidad_restante_a_imputar -= cantidad_a_tomar
+                
+                # Si aún queda merma por imputar, significa que se usó de stock ya 'CONSUMIDO'.
+                # Solo registramos la merma sin descontar stock. Asumimos el primer lote como fuente.
+                if cantidad_restante_a_imputar > 0 and reservas_res.get('data'):
+                    lote_id_fallback = reservas_res.get('data')[0]['lote_inventario_id']
+                    registro_merma_model.create({
+                        'lote_insumo_id': lote_id_fallback, 'motivo_id': motivo_id, 'cantidad': cantidad_restante_a_imputar,
+                        'created_at': datetime.now().isoformat(), 'usuario_id': usuario_id,
+                        'orden_produccion_id': orden_id, 'detalle': f"Merma (sobre consumido): {observacion}", 'comentarios': observacion
+                    })
 
-                        # Actualizar Stock Físico (Lote)
-                        lote_res = self.inventario_controller.inventario_model.find_by_id(lote_id, 'id_lote')
-                        if lote_res.get('success'):
-                            lote = lote_res['data']
-                            cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
-                            nueva_cantidad_actual = max(0, cantidad_actual_lote - cantidad_a_tomar)
-                            
-                            update_lote_data = {'cantidad_actual': nueva_cantidad_actual}
-                            if nueva_cantidad_actual == 0:
-                                update_lote_data['estado'] = 'agotado'
-                            
-                            self.inventario_controller.inventario_model.update(lote_id, update_lote_data, 'id_lote')
-
-                    elif estado_reserva == 'CONSUMIDO':
-                        # No tocamos stock físico ni reserva (ya está consumida).
-                        # Solo consumimos del "cupo global" de merma.
-                        pass
-
-                    cantidad_restante_a_descontar -= cantidad_a_tomar
-
-                # Actualizar stock general del insumo
                 self.insumo_controller.actualizar_stock_insumo(insumo_id)
 
-                # --- PASO B: RESOLUCIÓN AUTOMÁTICA (Por ítem) ---
+                # --- PASO B: RESOLUCIÓN AUTOMÁTICA ---
                 resolucion = self._resolver_escenarios_merma(orden_id, insumo_id, cantidad_perdida, usuario_id)
                 resultados_acumulados.append(resolucion)
                 
-                # Determinar el escenario global más crítico
                 esc_res = resolucion.get('escenario', 'REFILL')
-                if esc_res == 'RESET':
-                    escenario_global = 'RESET'
-                elif esc_res == 'PARCIAL' and escenario_global != 'RESET':
-                    escenario_global = 'PARCIAL'
+                if esc_res == 'RESET': escenario_global = 'RESET'
+                elif esc_res == 'PARCIAL' and escenario_global != 'RESET': escenario_global = 'PARCIAL'
 
-            # Si hubo un RESET, el mensaje debe ser contundente.
-            mensaje_final = "Mermas registradas correctamente."
+            mensaje_final = "Mermas registradas. Material repuesto automáticamente."
             if escenario_global == 'RESET':
-                mensaje_final = "Mermas registradas. Debido a la falta crítica de stock, la orden ha sido devuelta a Planificación."
+                mensaje_final = "Mermas registradas. ¡Atención! Por falta crítica de stock, la orden fue devuelta a Planificación."
             elif escenario_global == 'PARCIAL':
-                mensaje_final = "Mermas registradas. Se ajustó la meta de producción por falta de stock completo."
-            else:
-                mensaje_final = "Mermas registradas. Material repuesto automáticamente."
+                mensaje_final = "Mermas registradas. Se ajustó la meta de producción por falta de stock."
 
             return self.success_response(
                 message=mensaje_final,
                 data={'escenario': escenario_global, 'detalles': resultados_acumulados}
             )
-
-        except Exception as e:
-            logger.error(f"Error en reportar_merma_insumo para OP {orden_id}: {e}", exc_info=True)
-            return self.error_response(f"Error interno: {str(e)}", 500)
 
         except Exception as e:
             logger.error(f"Error en reportar_merma_insumo para OP {orden_id}: {e}", exc_info=True)
@@ -2321,29 +2238,25 @@ class OrdenProduccionController(BaseController):
         if stock_disponible_total >= cantidad_perdida:
             logger.info(f"Escenario 1 (Refill) para OP {orden_id}. Stock disponible ({stock_disponible_total}) cubre la pérdida ({cantidad_perdida}).")
             
-            # Crear nuevas reservas por la cantidad perdida
-            cantidad_restante = cantidad_perdida
-            from app.models.reserva_insumo import ReservaInsumoModel
-            reserva_model = ReservaInsumoModel()
+            # --- INICIO DE LA CORRECCIÓN ---
+            # Delegar el consumo y descuento físico al controlador de inventario
+            consumo_result = self.inventario_controller.consumir_stock_para_reposicion(
+                orden_produccion_id=orden_id,
+                insumo_id=insumo_id,
+                cantidad=cantidad_perdida,
+                usuario_id=usuario_id
+            )
 
-            for lote in lotes_disponibles:
-                if cantidad_restante <= 0: break
-                cantidad_tomar = min(lote['disponibilidad'], cantidad_restante)
-                
-                datos_reserva = {
-                    'orden_produccion_id': orden_id,
-                    'lote_inventario_id': lote['id_lote'],
-                    'insumo_id': insumo_id,
-                    'cantidad_reservada': cantidad_tomar,
-                    'usuario_reserva_id': usuario_id
+            if not consumo_result.get('success'):
+                logger.error(f"Fallo el REFILL automático para OP {orden_id}: {consumo_result.get('error')}")
+                # Si falla la reposición, caemos en escenario PARCIAL por defecto.
+                pass
+            else:
+                return {
+                    "escenario": "REFILL",
+                    "mensaje_usuario": "Material repuesto y consumido automáticamente. Continúe produciendo."
                 }
-                reserva_model.create(datos_reserva)
-                cantidad_restante -= cantidad_tomar
-            
-            return {
-                "escenario": "REFILL",
-                "mensaje_usuario": "Material repuesto automáticamente de otros lotes. Continúe produciendo."
-            }
+            # --- FIN DE LA CORRECCIÓN ---
 
         # Si no hay suficiente para reponer todo...
         

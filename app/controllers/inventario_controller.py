@@ -374,24 +374,26 @@ class InventarioController(BaseController):
 
     def _obtener_lotes_con_disponibilidad(self, insumo_id: int, fecha_limite_validez: date = None) -> List[Dict]:
         """
-        Obtiene lotes activos y calcula disponibilidad real.
-        NUEVO: Si 'fecha_limite_validez' está presente, excluye lotes que venzan ANTES de esa fecha.
+        Obtiene lotes con stock físicamente disponible y calcula la cantidad real disponible.
+        FILTRA lotes no aptos (cuarentena, agotados, etc.) y aquellos cuya disponibilidad neta es cero o menos.
         """
-        # 1. Obtener todos los lotes activos
-        estados_fisicos = ['disponible', 'reservado', 'cuarentena', 'EN REVISION']
-        lotes_activos_res = self.inventario_model.find_all(
-            filters={'id_insumo': insumo_id, 'estado': ('in', estados_fisicos)},
+        # 1. Obtener solo lotes potencialmente útiles ('disponible' o 'reservado')
+        estados_validos = ['disponible', 'reservado']
+        lotes_potenciales_res = self.inventario_model.find_all(
+            filters={'id_insumo': insumo_id, 'estado': ('in', estados_validos)},
             order_by='f_ingreso.asc' # FIFO
         )
-        if not lotes_activos_res.get('success'):
+
+        if not lotes_potenciales_res.get('success') or not lotes_potenciales_res.get('data'):
             return []
 
-        lotes_activos = lotes_activos_res.get('data', [])
-        if not lotes_activos:
+        lotes_potenciales = lotes_potenciales_res.get('data', [])
+        
+        # 2. Obtener todas las reservas activas para estos lotes
+        lote_ids = [lote['id_lote'] for lote in lotes_potenciales]
+        if not lote_ids:
             return []
 
-        # 2. Obtener reservas existentes (lógica existente...)
-        lote_ids = [lote['id_lote'] for lote in lotes_activos]
         reservas_res = self.reserva_insumo_model.find_all(
             filters={
                 'lote_inventario_id': ('in', lote_ids),
@@ -405,36 +407,30 @@ class InventarioController(BaseController):
                 lote_id = reserva['lote_inventario_id']
                 reservas_por_lote[lote_id] = reservas_por_lote.get(lote_id, 0) + float(reserva['cantidad_reservada'])
 
-        lotes_validos = []
-
-        # 3. Calcular disponibilidad y FILTRAR POR FECHA
-        for lote in lotes_activos:
-            # --- FILTRO DE VENCIMIENTO (NUEVO) ---
-            if fecha_limite_validez and lote.get('f_vencimiento'): # Asegúrate que el campo en DB sea f_vencimiento o fecha_vencimiento
+        lotes_disponibles = []
+        
+        # 3. Calcular disponibilidad real y aplicar todos los filtros
+        for lote in lotes_potenciales:
+            # Filtro de vencimiento
+            if fecha_limite_validez and lote.get('f_vencimiento'):
                 try:
-                    # Manejo robusto de fecha
-                    vencimiento_str = lote.get('f_vencimiento') or lote.get('fecha_vencimiento')
-                    if 'T' in vencimiento_str:
-                        vencimiento = date.fromisoformat(vencimiento_str.split('T')[0])
-                    else:
-                        vencimiento = date.fromisoformat(vencimiento_str)
-
-                    # REGLA: Si vence ANTES de la fecha requerida, no sirve.
+                    vencimiento_str = lote.get('f_vencimiento')
+                    vencimiento = date.fromisoformat(vencimiento_str.split('T')[0])
                     if vencimiento < fecha_limite_validez:
-                        # logger.debug(f"Lote {lote.get('numero_lote_proveedor')} vencido para la fecha requerida. Ignorando.")
-                        continue
+                        continue # Lote vencido, saltar
                 except (ValueError, TypeError):
-                    pass # Si la fecha es inválida, por seguridad asumimos que sirve (o ignoramos, según política)
-            # -------------------------------------
+                    pass # Fecha inválida, se procesa
 
             cantidad_fisica = float(lote.get('cantidad_actual', 0))
             cantidad_reservada = reservas_por_lote.get(lote['id_lote'], 0)
-            disponibilidad = max(0, cantidad_fisica - cantidad_reservada)
+            disponibilidad_neta = cantidad_fisica - cantidad_reservada
 
-            lote['disponibilidad'] = disponibilidad
-            lotes_validos.append(lote)
+            # Filtro de disponibilidad > 0
+            if disponibilidad_neta > 0.001: # Usar tolerancia pequeña
+                lote['disponibilidad'] = disponibilidad_neta
+                lotes_disponibles.append(lote)
 
-        return lotes_validos
+        return lotes_disponibles
 
     def verificar_stock_para_op(self, orden_produccion: Dict, fecha_requisito: date = None) -> dict:
         """
@@ -1919,3 +1915,86 @@ class InventarioController(BaseController):
         except Exception as e:
             logger.error(f"Error en verificar_cobertura_reservas_op: {e}", exc_info=True)
             return False
+
+    def consumir_stock_para_reposicion(self, orden_produccion_id: int, insumo_id: int, cantidad: float, usuario_id: int) -> dict:
+        """
+        Consume una cantidad específica de un insumo para reponer una merma en una OP activa.
+        Crea una reserva en estado CONSUMIDO y descuenta el stock físico del lote.
+        """
+        try:
+            lotes_disponibles = self._obtener_lotes_con_disponibilidad(insumo_id)
+            stock_total_disponible = sum(lote['disponibilidad'] for lote in lotes_disponibles)
+
+            if stock_total_disponible < cantidad:
+                return {'success': False, 'error': 'Stock insuficiente para la reposición.'}
+
+            cantidad_restante = cantidad
+            for lote in lotes_disponibles:
+                if cantidad_restante <= 0:
+                    break
+
+                cantidad_a_tomar = min(lote['disponibilidad'], cantidad_restante)
+                
+                if cantidad_a_tomar > 0:
+                    # Crear registro de trazabilidad
+                    datos_reserva = {
+                        'orden_produccion_id': orden_produccion_id,
+                        'lote_inventario_id': lote['id_lote'],
+                        'insumo_id': insumo_id,
+                        'cantidad_reservada': cantidad_a_tomar,
+                        'usuario_reserva_id': usuario_id,
+                        'estado': 'CONSUMIDO' # Directo a consumido
+                    }
+                    self.reserva_insumo_model.create(datos_reserva)
+
+                    # Descontar stock físico
+                    nueva_cantidad_actual = float(lote.get('cantidad_actual', 0)) - cantidad_a_tomar
+                    update_data = {'cantidad_actual': nueva_cantidad_actual}
+                    if nueva_cantidad_actual <= 0.001:
+                        update_data['estado'] = 'agotado'
+                    
+                    self.inventario_model.update(lote['id_lote'], update_data, 'id_lote')
+
+                    cantidad_restante -= cantidad_a_tomar
+            
+            self.insumo_controller.actualizar_stock_insumo(insumo_id)
+            return {'success': True}
+
+        except Exception as e:
+            logger.error(f"Error en consumir_stock_para_reposicion: {e}", exc_info=True)
+            return {'success': False, 'error': str(e)}
+
+    def descontar_stock_fisico_y_reserva(self, reserva_id: int, cantidad_a_descontar: float):
+        """
+        Descuenta una cantidad del stock físico de un lote y actualiza la reserva correspondiente.
+        """
+        try:
+            reserva_res = self.reserva_insumo_model.find_by_id(reserva_id, 'id')
+            if not reserva_res.get('success'): return
+
+            reserva = reserva_res['data']
+            lote_id = reserva['lote_inventario_id']
+            cantidad_reservada_actual = float(reserva.get('cantidad_reservada', 0))
+
+            # Actualizar reserva
+            nueva_cantidad_reservada = cantidad_reservada_actual - cantidad_a_descontar
+            if nueva_cantidad_reservada <= 0.001:
+                self.reserva_insumo_model.update(reserva_id, {'estado': 'CONSUMIDO'}, 'id')
+            else:
+                self.reserva_insumo_model.update(reserva_id, {'cantidad_reservada': nueva_cantidad_reservada}, 'id')
+
+            # Actualizar lote físico
+            lote_res = self.inventario_model.find_by_id(lote_id, 'id_lote')
+            if lote_res.get('success'):
+                lote = lote_res['data']
+                cantidad_actual_lote = float(lote.get('cantidad_actual', 0))
+                nueva_cantidad_lote = max(0, cantidad_actual_lote - cantidad_a_descontar)
+                
+                update_data = {'cantidad_actual': nueva_cantidad_lote}
+                if nueva_cantidad_lote <= 0.001:
+                    update_data['estado'] = 'agotado'
+                
+                self.inventario_model.update(lote_id, update_data, 'id_lote')
+
+        except Exception as e:
+            logger.error(f"Error en descontar_stock_fisico_y_reserva para reserva {reserva_id}: {e}")
