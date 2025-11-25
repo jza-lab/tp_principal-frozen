@@ -466,12 +466,21 @@ class ClienteController(BaseController):
             
             pedidos_enriquecidos = []
             if pedidos_response.get('success'):
+                from app.controllers.pago_controller import PagoController
+                pago_controller = PagoController()
                 pedidos_crudos = pedidos_response.get('data', [])
                 for pedido_base in pedidos_crudos:
                     # Obtener el pedido completo, que ya incluye los items
                     pedido_completo_resp, _ = self.pedido_controller.obtener_pedido_por_id(pedido_base['id'])
                     if pedido_completo_resp.get('success'):
-                        pedidos_enriquecidos.append(pedido_completo_resp.get('data'))
+                        pedido = pedido_completo_resp.get('data')
+                        
+                        # Calcular saldo pendiente
+                        pagos_res, _ = pago_controller.get_pagos_by_pedido_id(pedido['id'])
+                        total_pagado = sum(p['monto'] for p in pagos_res.get('data', []))
+                        pedido['saldo_pendiente'] = pedido['precio_orden'] - total_pagado
+                        
+                        pedidos_enriquecidos.append(pedido)
 
             # 3. Combinar los datos
             perfil_completo = cliente_data

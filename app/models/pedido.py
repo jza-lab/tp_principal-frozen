@@ -171,7 +171,7 @@ class PedidoModel(BaseModel):
             if 'id' in pedido_data:
                 pedido_data.pop('id')
                 pedido_data.setdefault('condicion_venta', 'contado')
-                pedido_data.setdefault('pago', 'pendiente')
+                pedido_data.setdefault('estado_pago', 'pendiente')
 
             # Eliminar la clave 'token_seguimiento' si existe, para evitar errores de BD.
             pedido_data.pop('token_seguimiento', None)

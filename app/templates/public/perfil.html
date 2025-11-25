@@ -109,9 +109,10 @@
                             <td>{{ pedido.fecha_solicitud }}</td>
                             <td>
                                 {% if pedido.estado_pago != 'Pagado' and pedido.estado != 'CANCELADO' %}
-                                <button class="btn btn-success btn-sm mb-1 btn-pagar" 
-                                        data-id="{{ pedido.id }}" 
-                                        data-monto="{{ pedido.precio_orden }}">
+                                <button class="btn btn-success btn-sm mb-1 btn-pagar"
+                                        data-id="{{ pedido.id }}"
+                                        data-monto="{{ pedido.precio_orden }}"
+                                        data-saldo="{{ pedido.saldo_pendiente }}">
                                     <i class="bi bi-credit-card"></i> Pagar
                                 </button>
                                 {% endif %}
@@ -199,7 +200,10 @@
                     
                     <div class="mb-3 text-center">
                         <h3 class="text-primary" id="pago_monto_display">$0.00</h3>
-                        <p class="text-muted">Total a Pagar</p>
+                        <p class="text-muted">Total del Pedido</p>
+                        <hr>
+                        <h4 class="text-danger" id="pago_saldo_display">$0.00</h4>
+                        <p class="text-muted">Saldo Pendiente</p>
                     </div>
 
                     <div class="mb-3">
@@ -254,11 +258,13 @@
             btn.addEventListener('click', function() {
                 const pedidoId = this.dataset.id;
                 const monto = this.dataset.monto;
-                
+                const saldo = this.dataset.saldo;
+
                 document.getElementById('pago_pedido_id').value = pedidoId;
                 document.getElementById('pago_monto_hidden').value = monto;
                 document.getElementById('pago_monto_display').textContent = `$${parseFloat(monto).toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
-                
+                document.getElementById('pago_saldo_display').textContent = `$${parseFloat(saldo).toLocaleString('es-AR', {minimumFractionDigits: 2})}`;
+
                 paymentModal.show();
             });
         });

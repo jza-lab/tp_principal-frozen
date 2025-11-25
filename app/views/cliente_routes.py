@@ -79,6 +79,11 @@ def perfil():
             cliente_data['reclamos'] = reclamos_response.get('data', [])
         else:
             cliente_data['reclamos'] = []
+
+        # Marcar pedidos pagados
+        if 'pedidos' in cliente_data:
+            for pedido in cliente_data['pedidos']:
+                pedido['pagado'] = pedido.get('estado_pago') == 'Pagado'
             
         return render_template('public/perfil.html', cliente=cliente_data)
     else:

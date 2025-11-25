@@ -86,10 +86,15 @@
                             </td>
                             <td>{{ lote.numero_lote or 'N/A' }}</td>
                             <td class="text-end fw-bold">
-                                {% if lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0 %}
+                                {% if (lote.cantidad_en_cuarentena and lote.cantidad_en_cuarentena > 0) or (lote.cantidad_reservada and lote.cantidad_reservada > 0) %}
                                     <div style="line-height: 1.2;">
-                                        <span style="font-size: 1em;">{{ lote.cantidad_actual | round(1) }}</span> <small class="text-success" style="font-size: 0.7em;">(Disp)</small><br>
-                                        <span style="font-size: 1em;">{{ lote.cantidad_en_cuarentena | round(1) }}</span> <small class="text-warning" style="font-size: 0.7em;">(Cuar)</small>
+                                        {% if lote.cantidad_reservada > 0 %}
+                                            <span style="font-size: 1em;">{{ lote.cantidad_reservada | round(1) }}</span> <small class="text-info" style="font-size: 0.7em;">(Res)</small><br>
+                                        {% endif %}
+                                        {% if lote.cantidad_en_cuarentena > 0 %}
+                                            <span style="font-size: 1em;">{{ lote.cantidad_en_cuarentena | round(1) }}</span> <small class="text-warning" style="font-size: 0.7em;">(Cuar)</small><br>
+                                        {% endif %}
+                                        <span style="font-size: 1em;">{{ lote.cantidad_actual | round(1) }}</span> <small class="text-success" style="font-size: 0.7em;">(Disp)</small>
                                     </div>
                                 {% else %}
                                     {{ lote.cantidad_actual | round(1) }} <small class="text-muted" style="font-size: 0.8em;">unid.</small>
