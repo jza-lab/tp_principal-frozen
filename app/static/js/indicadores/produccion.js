@@ -151,6 +151,9 @@ window.renderProduccionTab = function(data, container) {
     const colorPalo = [[0.65, '#dc3545'], [0.85, '#ffc107'], [1, '#198754']];
 
     window.createChart('oee-gauge-chart', {
+        tooltip: {
+            formatter: '<b>OEE Global: {c}%</b><br>El OEE (Overall Equipment Effectiveness) mide la eficiencia general de los equipos combinando Disponibilidad, Rendimiento y Calidad.'
+        },
         series: [{
             type: 'gauge',
             startAngle: 180,

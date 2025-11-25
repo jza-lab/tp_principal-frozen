@@ -1885,13 +1885,14 @@ class IndicadoresController:
 
     def _calcular_tasa_rechazo_proveedores(self, fecha_inicio, fecha_fin):
         lotes_rechazados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('RECHAZADO', fecha_inicio, fecha_fin)
-        lotes_recibidos_res = self.orden_compra_model.count_by_estado_in_date_range(estados.OC_RECEPCION_COMPLETA, fecha_inicio, fecha_fin)
+        lotes_aprobados_res = self.control_calidad_insumo_model.count_by_decision_in_date_range('APROBADO', fecha_inicio, fecha_fin)
         
         lotes_rechazados = lotes_rechazados_res.get('count', 0)
-        lotes_recibidos = lotes_recibidos_res.get('count', 0)
+        lotes_aprobados = lotes_aprobados_res.get('count', 0)
+        lotes_inspeccionados = lotes_rechazados + lotes_aprobados
 
-        tasa = (lotes_rechazados / lotes_recibidos) * 100 if lotes_recibidos > 0 else 0
-        return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_recibidos}
+        tasa = (lotes_rechazados / lotes_inspeccionados) * 100 if lotes_inspeccionados > 0 else 0
+        return {"valor": round(tasa, 2), "rechazados": lotes_rechazados, "recibidos": lotes_inspeccionados}
 
     def _calcular_rotacion_inventario(self, fecha_inicio, fecha_fin):
         try:
