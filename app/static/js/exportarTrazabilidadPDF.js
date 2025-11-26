@@ -52,11 +52,11 @@ async function captureDiagramImage() {
     const wasTabActive = tabPane ? tabPane.classList.contains('active') : true;
     const wasAccordionShown = accordionCollapse ? accordionCollapse.classList.contains('show') : true;
     const originalActiveTabLink = wasTabActive ? null : document.querySelector('.nav-tabs .nav-link.active, .nav-tabs-custom .nav-link-custom.active');
-    
+
     // Guardar la vista original (zoom y posición) para restaurarla después
-    const originalView = window.visNetwork ? { 
-        scale: window.visNetwork.getScale(), 
-        position: window.visNetwork.getViewPosition() 
+    const originalView = window.visNetwork ? {
+        scale: window.visNetwork.getScale(),
+        position: window.visNetwork.getViewPosition()
     } : null;
 
     try {
@@ -80,7 +80,7 @@ async function captureDiagramImage() {
                 setTimeout(resolve, 500);
             });
         }
-        
+
         elementToCapture.scrollIntoView({ behavior: 'instant', block: 'start' });
 
         if (window.visNetwork) {
@@ -114,7 +114,7 @@ async function captureDiagramImage() {
 
                 await new Promise(r => setTimeout(r, 500)); // Espera para el redibujado final
             } else {
-                 console.log("Diagrama vacío, no se requiere ajuste de zoom.");
+                console.log("Diagrama vacío, no se requiere ajuste de zoom.");
             }
             // ¡FIN DE LA CORRECCIÓN!
         }
@@ -126,7 +126,7 @@ async function captureDiagramImage() {
             logging: false,
             backgroundColor: '#FFFFFF',
         });
-        
+
         return canvas.toDataURL('image/png', 1.0);
 
     } catch (error) {
@@ -142,7 +142,7 @@ async function captureDiagramImage() {
                 animation: false
             });
         }
-        
+
         if (!wasAccordionShown && accordionCollapse) {
             console.log("Restaurando acordeón a estado colapsado.");
             new bootstrap.Collapse(accordionCollapse, { toggle: false }).hide();
@@ -191,6 +191,9 @@ function findNodeData(traceData, entityType, entityId) {
  */
 function formatEntityType(type) {
     if (!type) return '';
+    if (ENTITY_TYPE_LABELS[type]) {
+        return ENTITY_TYPE_LABELS[type].singular;
+    }
     return (type.charAt(0).toUpperCase() + type.slice(1)).replace(/_/g, ' ');
 }
 
@@ -213,12 +216,12 @@ function formatValue(value, format) {
                     return value.split('T')[0];
                 }
                 return new Date(date.getTime() + date.getTimezoneOffset() * 60000)
-                       .toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    .toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
             case 'html':
                 if (value.includes('<li>')) {
                     return value.match(/<li>(.*?)<\/li>/g)
-                                .map(li => '• ' + li.replace(/<\/?li>/g, '').trim())
-                                .join('\n');
+                        .map(li => '• ' + li.replace(/<\/?li>/g, '').trim())
+                        .join('\n');
                 }
                 return value.replace(/<[^>]+>/g, '');
             default:
@@ -257,7 +260,7 @@ function getOriginSubtitle(traceData, entityType, entityId) {
 
     const originType = originNode.group;
     const originData = originNode.data;
-    
+
     if (originType === 'ingreso_manual') {
         return 'Origen: Ingreso Manual';
     }
@@ -266,7 +269,7 @@ function getOriginSubtitle(traceData, entityType, entityId) {
         const proveedor = originData.proveedores ? originData.proveedores.nombre : 'N/A';
         return `Origen: ${originNode.label} (${proveedor})`;
     }
-    
+
     // Para otros tipos de origen, solo mostramos la etiqueta del nodo
     if (originNode.label) {
         return `Origen: ${originNode.label}`;
@@ -277,7 +280,7 @@ function getOriginSubtitle(traceData, entityType, entityId) {
 
 function getStatusInfo(status) {
     if (!status) return { class: 'pending', width: '0%', label: 'N/A' };
-    
+
     const statusMap = {
         'aprobada': { class: 'completed', width: '100%', color: '#28a745' },
         'aprobado': { class: 'completed', width: '100%', color: '#28a745' },
@@ -302,9 +305,17 @@ function getStatusInfo(status) {
 
     const normalizedStatus = status.toLowerCase().trim();
     const info = statusMap[normalizedStatus] || { class: 'pending', width: '10%', color: '#6c757d' };
-    
+
     return { ...info, label: formatEntityType(status) };
 }
+const ENTITY_TYPE_LABELS = {
+    'orden_compra': { singular: 'Orden de Compra', plural: 'Órdenes de Compra' },
+    'lote_insumo': { singular: 'Lote de Insumo', plural: 'Lotes de Insumo' },
+    'orden_produccion': { singular: 'Orden de Producción', plural: 'Órdenes de Producción' },
+    'lote_producto': { singular: 'Lote de Producto', plural: 'Lotes de Producto' },
+    'pedido': { singular: 'Pedido', plural: 'Pedidos' },
+    'ingreso_manual': { singular: 'Ingreso Manual', plural: 'Ingresos Manuales' }
+};
 
 // --- DESCRIPCIONES DE SECCIONES ---
 const SECTION_DESCRIPTIONS = {
@@ -324,11 +335,11 @@ const CATEGORY_DESCRIPTIONS = {
 
 // --- MAPA DE CAMPOS DE ENTIDAD ---
 const ENTITY_FIELDS_MAP = {
-    'orden_compra': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Proveedor', value: data => data.proveedores?.nombre }, { label: 'CUIT', value: data => data.proveedores?.cuit }, { label: 'Fecha Creación', value: data => data.fecha_creacion, format: 'date' }, { label: 'Monto Total', value: data => data.total || data.monto_total, format: 'currency' } ],
-    'lote_insumo': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Insumo', value: data => data.insumos_catalogo?.nombre }, { label: 'Código Insumo', value: data => data.insumos_catalogo?.codigo || data.insumos_catalogo?.codigo_interno }, { label: 'Lote Prov.', value: data => data.numero_lote_proveedor }, { label: 'Cantidad', value: data => `${data.cantidad_inicial || ''} ${data.unidad_medida || ''}`.trim() }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
-    'orden_produccion': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Cantidad Planif.', value: data => data.cantidad_planificada }, { label: 'Fecha Meta', value: data => data.fecha_meta, format: 'date' } ],
-    'lote_producto': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Nro. Lote', value: data => data.numero_lote }, { label: 'Cantidad', value: data => data.cantidad_inicial }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' } ],
-    'pedido': [ { label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Cliente', value: data => data.clientes?.nombre || data.clientes?.razon_social }, { label: 'CUIT Cliente', value: data => data.clientes?.cuit }, { label: 'Fecha Entrega', value: data => data.fecha_entrega, format: 'date' }, { label: 'Monto Total', value: data => data.precio_orden || data.monto_total, format: 'currency' }, { label: 'Items', value: data => data.items?.map(i => `<li>${i.cantidad} x ${i.productos?.nombre || 'N/A'}</li>`).join('') || 'No hay items.', format: 'html'} ]
+    'orden_compra': [{ label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Proveedor', value: data => data.proveedores?.nombre }, { label: 'CUIT', value: data => data.proveedores?.cuit }, { label: 'Fecha Creación', value: data => data.fecha_creacion, format: 'date' }, { label: 'Monto Total', value: data => data.total || data.monto_total, format: 'currency' }],
+    'lote_insumo': [{ label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Insumo', value: data => data.insumos_catalogo?.nombre }, { label: 'Código Insumo', value: data => data.insumos_catalogo?.codigo || data.insumos_catalogo?.codigo_interno }, { label: 'Lote Prov.', value: data => data.numero_lote_proveedor }, { label: 'Cantidad', value: data => `${data.cantidad_inicial || ''} ${data.unidad_medida || ''}`.trim() }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' }],
+    'orden_produccion': [{ label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Cantidad Planif.', value: data => data.cantidad_planificada }, { label: 'Fecha Meta', value: data => data.fecha_meta, format: 'date' }],
+    'lote_producto': [{ label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Producto', value: data => data.productos?.nombre }, { label: 'Código Prod.', value: data => data.productos?.codigo }, { label: 'Nro. Lote', value: data => data.numero_lote }, { label: 'Cantidad', value: data => data.cantidad_inicial }, { label: 'Vencimiento', value: data => data.fecha_vencimiento, format: 'date' }],
+    'pedido': [{ label: 'Estado', value: data => data.estado, isStatus: true }, { label: 'Cliente', value: data => data.clientes?.nombre || data.clientes?.razon_social }, { label: 'CUIT Cliente', value: data => data.clientes?.cuit }, { label: 'Fecha Entrega', value: data => data.fecha_entrega, format: 'date' }, { label: 'Monto Total', value: data => data.precio_orden || data.monto_total, format: 'currency' }, { label: 'Items', value: data => data.items?.map(i => `<li>${i.cantidad} x ${i.productos?.nombre || 'N/A'}</li>`).join('') || 'No hay items.', format: 'html' }]
 };
 
 
@@ -367,7 +378,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
         doc.text(companyInfo.domicilio || '', PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 11);
         doc.text(`CUIT: ${companyInfo.cuit || ''}`, PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 15);
-        
+
         const dateText = `Generado: ${new Date().toLocaleDateString('es-ES')}`;
         doc.text(dateText, PDF_GLOBALS.PAGE_W - PDF_GLOBALS.MARGIN, PDF_GLOBALS.MARGIN + 5, { align: 'right' });
 
@@ -406,10 +417,10 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         }
         return false;
     }
-    
+
     function drawSectionTitle(title) {
         if (PDF_GLOBALS.Y_CURSOR > PDF_GLOBALS.MARGIN + 30) {
-             PDF_GLOBALS.Y_CURSOR += 5;
+            PDF_GLOBALS.Y_CURSOR += 5;
         }
         checkPageBreak(15);
         doc.setFont('Helvetica', 'bold');
@@ -418,16 +429,16 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         doc.text(title, PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
         PDF_GLOBALS.Y_CURSOR += 8;
     }
-    
+
     function drawDescriptionText(text) {
         if (!text) return;
         doc.setFont('Helvetica', 'normal');
         doc.setFontSize(10);
         doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
-        
+
         const splitText = doc.splitTextToSize(text, PDF_GLOBALS.CONTENT_W);
         checkPageBreak((splitText.length * 5) + 6);
-        
+
         doc.text(splitText, PDF_GLOBALS.MARGIN, PDF_GLOBALS.Y_CURSOR);
         PDF_GLOBALS.Y_CURSOR += (splitText.length * 5) + 6;
     }
@@ -458,7 +469,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         const entityCode = data.codigo || data.numero_lote || data.id || '';
         const entityIdForSubtitle = data.id_lote || data.id;
         const originSubtitle = getOriginSubtitle(traceData, type, entityIdForSubtitle);
-        
+
         let tempY = 0;
         tempY += 10;
 
@@ -466,12 +477,12 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         if (originSubtitle) {
             tempY += 6;
         }
-        
+
         const statusField = fields.find(f => f.isStatus);
         if (statusField && statusField.value(data)) {
             tempY += 15;
         }
-        
+
         fields.forEach(field => {
             if (field.isStatus) return;
             const value = formatValue(field.value(data), field.format);
@@ -479,17 +490,17 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
             tempY += (splitValue.length * 5) + 3;
         });
         const cardContentHeight = tempY + 5;
-        
+
         checkPageBreak(cardContentHeight);
-        
+
         const startY = PDF_GLOBALS.Y_CURSOR;
-        
+
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(PDF_GLOBALS.COLOR_PRIMARY);
         doc.text(`${formatEntityType(type)}: ${entityCode}`, PDF_GLOBALS.MARGIN + 5, startY + 8);
         PDF_GLOBALS.Y_CURSOR = startY + 12;
-        
+
         // --- INICIO: DIBUJAR EL SUBTÍTULO DE ORIGEN ---
         if (originSubtitle) {
             doc.setFont('Helvetica', 'normal');
@@ -521,11 +532,11 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
         doc.setFontSize(10);
         fields.forEach(field => {
             if (field.isStatus) return;
-            
+
             const label = field.label + ':';
             const value = formatValue(field.value(data), field.format);
             const splitValue = doc.splitTextToSize(value, PDF_GLOBALS.CONTENT_W - 65);
-            
+
             checkPageBreak((splitValue.length * 5) + 3);
 
             doc.setFont('Helvetica', 'bold');
@@ -535,14 +546,14 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
             doc.setFont('Helvetica', 'normal');
             doc.setTextColor(PDF_GLOBALS.COLOR_MUTED);
             doc.text(splitValue, PDF_GLOBALS.MARGIN + 65, PDF_GLOBALS.Y_CURSOR);
-            
+
             PDF_GLOBALS.Y_CURSOR += (splitValue.length * 5) + 3;
         });
 
         const cardHeight = PDF_GLOBALS.Y_CURSOR - startY;
         doc.setDrawColor(PDF_GLOBALS.COLOR_BORDER);
         doc.roundedRect(PDF_GLOBALS.MARGIN, startY, PDF_GLOBALS.CONTENT_W, cardHeight + 4, 3, 3, 'S');
-        
+
         PDF_GLOBALS.Y_CURSOR += 10;
     }
 
@@ -585,7 +596,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
     drawSectionTitle('Información de Entidad Principal');
     drawDescriptionText(SECTION_DESCRIPTIONS.main);
     drawEntityCard(entityType, mainEntityData, traceData);
-    
+
     // Diagrama
     drawSectionTitle('Diagrama de Trazabilidad');
     drawDescriptionText(SECTION_DESCRIPTIONS.diagram);
@@ -643,7 +654,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
     for (const section of sections) {
         drawSectionTitle(section.title);
         drawDescriptionText(SECTION_DESCRIPTIONS[section.key]);
-        
+
         if (!section.items || section.items.length === 0) {
             checkPageBreak(10);
             doc.setFont('Helvetica', 'italic');
@@ -658,7 +669,7 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
             (acc[item.tipo] = acc[item.tipo] || []).push(item);
             return acc;
         }, {});
-        
+
         const sortedTypes = Object.keys(groupedItems).sort((a, b) => {
             let indexA = typeOrder.indexOf(a);
             let indexB = typeOrder.indexOf(b);
@@ -667,10 +678,17 @@ async function generatePdfManually(companyInfo, traceData, diagramImage, entityT
 
         for (const type of sortedTypes) {
             const itemsOfType = groupedItems[type];
-            let label = formatEntityType(type) + (itemsOfType.length > 1 ? 's' : '');
+            let label;
+            if (ENTITY_TYPE_LABELS[type]) {
+                label = itemsOfType.length > 1 ? ENTITY_TYPE_LABELS[type].plural : ENTITY_TYPE_LABELS[type].singular;
+            } else {
+                // Fallback genérico
+                label = formatEntityType(type) + (itemsOfType.length > 1 ? 's' : '');
+            }
+
             drawCategorySubtitle(label);
             drawDescriptionText(CATEGORY_DESCRIPTIONS[type]);
-            
+
             for (const item of itemsOfType) {
                 const nodeData = findNodeData(traceData, item.tipo, item.id);
                 drawEntityCard(item.tipo, nodeData, traceData);
